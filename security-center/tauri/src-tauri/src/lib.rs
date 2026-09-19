@@ -879,7 +879,13 @@ fn run_json_helper(
     if !output.status.success() {
         if let Ok(value) = serde_json::from_str::<Value>(&stdout) {
             if let Some(error) = value.get("error").and_then(Value::as_str) {
-                return Err(error.chars().take(240).collect());
+                let problem = value.get("problem").and_then(Value::as_str).unwrap_or("");
+                let detail = if problem.is_empty() {
+                    error.to_string()
+                } else {
+                    format!("[{problem}] {error}")
+                };
+                return Err(detail.chars().take(240).collect());
             }
         }
         let detail = String::from_utf8_lossy(&output.stderr).trim().to_string();
@@ -1046,6 +1052,7 @@ fn backup_operation(operation: &str, extra: &[String]) -> Result<Value, String> 
         return Ok(json!({
             "ok": false,
             "destination_unavailable": true,
+            "problem": status.get("destination_problem").cloned().unwrap_or_else(|| json!("CHECK_DESTINATION")),
             "message": "The configured Restic destination is not available. Reconnect it or choose another destination."
         }));
     }

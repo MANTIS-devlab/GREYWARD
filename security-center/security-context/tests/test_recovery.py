@@ -76,17 +76,32 @@ class ResticBackupTests(unittest.TestCase):
             state_path = root / "state.json"
             destination = root / "mounted"
             destination.mkdir()
+            mount = {"target": "/mnt/drive", "source": "/dev/test", "filesystem": "ext4", "uuid": "test-uuid"}
             previous = {
                 "schema": "greyward.restic-backup/v1",
                 "destination": "/mnt/previous",
                 "repository": "/mnt/previous/.greyward-restic",
                 "repository_id": "restic:previous",
             }
-            with patch.object(restic_backup, "CONFIG_PATH", config_path), patch.object(restic_backup, "STATE_PATH", state_path), patch.object(restic_backup, "destination", return_value=destination), patch.object(restic_backup, "restic", side_effect=restic_backup.BackupError("repository could not be initialized")):
+            with patch.object(restic_backup, "CONFIG_PATH", config_path), patch.object(restic_backup, "STATE_PATH", state_path), patch.object(restic_backup, "_validated_destination", return_value=(destination, mount)), patch.object(restic_backup, "restic", side_effect=restic_backup.BackupError("repository could not be initialized")):
                 restic_backup.atomic_write(config_path, previous)
                 with self.assertRaises(restic_backup.BackupError):
                     restic_backup.configure(str(destination), "secret", "secret")
             self.assertEqual(json.loads(config_path.read_text(encoding="utf-8")), previous)
+
+    def test_configuration_records_mount_identity(self):
+        with tempfile.TemporaryDirectory() as root:
+            root = Path(root)
+            config_path = root / "config.json"
+            state_path = root / "state.json"
+            destination = root / "mounted"
+            destination.mkdir()
+            mount = {"target": "/mnt/drive", "source": "/dev/test", "filesystem": "ext4", "uuid": "test-uuid"}
+            with patch.object(restic_backup, "CONFIG_PATH", config_path), patch.object(restic_backup, "STATE_PATH", state_path), patch.object(restic_backup, "_validated_destination", return_value=(destination, mount)), patch.object(restic_backup, "restic", return_value=self._result("")), patch.object(restic_backup, "repository_identity", return_value="restic:new"):
+                restic_backup.configure(str(destination), "secret", "secret")
+            value = json.loads(config_path.read_text(encoding="utf-8"))
+            self.assertEqual(value["mount"], mount)
+            self.assertEqual(value["repository_id"], "restic:new")
 
     def test_backup_requires_a_configured_destination(self):
         with tempfile.TemporaryDirectory() as root, patch.object(restic_backup, "CONFIG_PATH", Path(root) / "config.json"), patch.object(restic_backup, "STATE_PATH", Path(root) / "state.json"), patch.object(restic_backup, "sources", return_value=[Path(root) / "Documents"]):
@@ -95,12 +110,103 @@ class ResticBackupTests(unittest.TestCase):
                 restic_backup.backup("secret")
 
     def test_mount_probe_timeout_is_reported_as_destination_failure(self):
-        with tempfile.TemporaryDirectory(dir=Path.cwd()) as root:
+        with tempfile.TemporaryDirectory() as root, tempfile.TemporaryDirectory() as home:
             destination = Path(root) / "mounted"
             destination.mkdir()
-            with patch("greyward_security_context.restic_backup.shutil.which", return_value="/usr/bin/findmnt"), patch.object(restic_backup.subprocess, "run", side_effect=subprocess.TimeoutExpired("findmnt", 8)):
+            with patch.object(restic_backup.Path, "home", return_value=Path(home)), patch("greyward_security_context.restic_backup.shutil.which", return_value="/usr/bin/findmnt"), patch.object(restic_backup.subprocess, "run", side_effect=subprocess.TimeoutExpired("findmnt", 8)):
                 with self.assertRaisesRegex(restic_backup.BackupError, "mount could not be validated"):
                     restic_backup.destination(str(destination))
+
+    def test_home_destination_is_rejected_before_mount_probe(self):
+        with tempfile.TemporaryDirectory() as home:
+            destination = Path(home) / "backup"
+            destination.mkdir()
+            with patch.object(restic_backup.Path, "home", return_value=Path(home)), patch.object(restic_backup.subprocess, "run") as probe:
+                with self.assertRaisesRegex(restic_backup.BackupError, "outside the home directory"):
+                    restic_backup.destination(str(destination))
+            probe.assert_not_called()
+
+    def test_non_mounted_directory_is_rejected(self):
+        with tempfile.TemporaryDirectory() as root, tempfile.TemporaryDirectory() as home:
+            destination = Path(root) / "backup"
+            destination.mkdir()
+            result = subprocess.CompletedProcess(["findmnt"], 0, stdout="/ /dev/root ext4 root-uuid\n", stderr="")
+            with patch.object(restic_backup.Path, "home", return_value=Path(home)), patch("greyward_security_context.restic_backup.shutil.which", return_value="/usr/bin/findmnt"), patch.object(restic_backup.subprocess, "run", return_value=result):
+                with self.assertRaisesRegex(restic_backup.BackupError, "not mounted"):
+                    restic_backup.destination(str(destination))
+
+    def test_valid_mount_subdirectory_is_accepted(self):
+        with tempfile.TemporaryDirectory() as root, tempfile.TemporaryDirectory() as home:
+            destination = Path(root) / "mounted" / "backup"
+            destination.mkdir(parents=True)
+            result = subprocess.CompletedProcess(["findmnt"], 0, stdout="/run/media/test/device /dev/sdb1 ext4 test-uuid\n", stderr="")
+            with patch.object(restic_backup.Path, "home", return_value=Path(home)), patch("greyward_security_context.restic_backup.shutil.which", return_value="/usr/bin/findmnt"), patch.object(restic_backup.subprocess, "run", return_value=result):
+                self.assertEqual(restic_backup.destination(str(destination)), destination.resolve())
+
+    def test_malformed_mount_probe_is_reported_as_validation_failure(self):
+        with tempfile.TemporaryDirectory() as root, tempfile.TemporaryDirectory() as home:
+            destination = Path(root) / "backup"
+            destination.mkdir()
+            result = subprocess.CompletedProcess(["findmnt"], 0, stdout="/run/media/test/device\n", stderr="")
+            with patch.object(restic_backup.Path, "home", return_value=Path(home)), patch("greyward_security_context.restic_backup.shutil.which", return_value="/usr/bin/findmnt"), patch.object(restic_backup.subprocess, "run", return_value=result):
+                with self.assertRaisesRegex(restic_backup.BackupError, "mount could not be validated"):
+                    restic_backup.destination(str(destination))
+
+    def test_missing_mount_provider_is_reported_explicitly(self):
+        with tempfile.TemporaryDirectory() as root, tempfile.TemporaryDirectory() as home:
+            destination = Path(root) / "backup"
+            destination.mkdir()
+            with patch.object(restic_backup.Path, "home", return_value=Path(home)), patch("greyward_security_context.restic_backup.shutil.which", return_value=None):
+                with self.assertRaisesRegex(restic_backup.BackupError, "findmnt is unavailable"):
+                    restic_backup.destination(str(destination))
+
+    def test_mount_command_failure_is_reported_as_validation_failure(self):
+        with tempfile.TemporaryDirectory() as root, tempfile.TemporaryDirectory() as home:
+            destination = Path(root) / "backup"
+            destination.mkdir()
+            result = subprocess.CompletedProcess(["findmnt"], 1, stdout="", stderr="findmnt: failed")
+            with patch.object(restic_backup.Path, "home", return_value=Path(home)), patch("greyward_security_context.restic_backup.shutil.which", return_value="/usr/bin/findmnt"), patch.object(restic_backup.subprocess, "run", return_value=result):
+                with self.assertRaisesRegex(restic_backup.BackupError, "mount could not be validated"):
+                    restic_backup.destination(str(destination))
+
+    def test_symlink_destination_is_rejected_before_mount_probe(self):
+        with tempfile.TemporaryDirectory() as root, tempfile.TemporaryDirectory() as home:
+            target = Path(root) / "target"
+            target.mkdir()
+            link = Path(root) / "link"
+            try:
+                link.symlink_to(target, target_is_directory=True)
+            except OSError as error:
+                self.skipTest(f"directory symlinks are unavailable: {error}")
+            with patch.object(restic_backup.Path, "home", return_value=Path(home)), patch.object(restic_backup.subprocess, "run") as probe:
+                with self.assertRaisesRegex(restic_backup.BackupError, "available directory"):
+                    restic_backup.destination(str(link))
+            probe.assert_not_called()
+
+    def test_restic_rejects_disappeared_mount_before_creating_password_file(self):
+        with tempfile.TemporaryDirectory() as root, tempfile.TemporaryDirectory() as home:
+            destination = Path(root) / "mounted"
+            destination.mkdir()
+            config_path = Path(root) / "config.json"
+            mount = {"target": "/run/media/test/device", "source": "/dev/sdb1", "filesystem": "ext4", "uuid": "test-uuid"}
+            with patch.object(restic_backup, "CONFIG_PATH", config_path), patch.object(restic_backup.Path, "home", return_value=Path(home)), patch("greyward_security_context.restic_backup.shutil.which", return_value="/usr/bin/findmnt"), patch.object(restic_backup.subprocess, "run", return_value=subprocess.CompletedProcess(["findmnt"], 0, stdout="/ /dev/root ext4 root-uuid\n", stderr="")), patch.object(restic_backup, "password_file") as password:
+                restic_backup.atomic_write(config_path, {"destination": str(destination), "repository": str(restic_backup.repository(destination)), "mount": mount})
+                with self.assertRaisesRegex(restic_backup.BackupError, "not mounted"):
+                    restic_backup.restic(["snapshots"], "secret")
+            password.assert_not_called()
+
+    def test_restic_rejects_a_different_filesystem_at_the_same_mountpoint(self):
+        with tempfile.TemporaryDirectory() as root, tempfile.TemporaryDirectory() as home:
+            destination = Path(root) / "mounted"
+            destination.mkdir()
+            config_path = Path(root) / "config.json"
+            mount = {"target": "/run/media/test/device", "source": "/dev/sdb1", "filesystem": "ext4", "uuid": "test-uuid"}
+            current = subprocess.CompletedProcess(["findmnt"], 0, stdout="/run/media/test/device /dev/sdc1 ext4 replacement-uuid\n", stderr="")
+            with patch.object(restic_backup, "CONFIG_PATH", config_path), patch.object(restic_backup.Path, "home", return_value=Path(home)), patch("greyward_security_context.restic_backup.shutil.which", return_value="/usr/bin/findmnt"), patch.object(restic_backup.subprocess, "run", return_value=current), patch.object(restic_backup, "password_file") as password:
+                restic_backup.atomic_write(config_path, {"destination": str(destination), "repository": str(restic_backup.repository(destination)), "mount": mount})
+                with self.assertRaisesRegex(restic_backup.BackupError, "mount identity has changed"):
+                    restic_backup.restic(["snapshots"], "secret")
+            password.assert_not_called()
 
     def test_status_does_not_require_a_passphrase_or_run_check(self):
         with tempfile.TemporaryDirectory() as root, patch.object(restic_backup, "CONFIG_PATH", Path(root) / "config.json"), patch.object(restic_backup, "STATE_PATH", Path(root) / "state.json"):
@@ -108,6 +214,20 @@ class ResticBackupTests(unittest.TestCase):
             value = restic_backup.status()
             self.assertTrue(value["configured"])
             self.assertIsNone(value["last_check_at"])
+
+    def test_status_preserves_the_current_destination_problem(self):
+        with tempfile.TemporaryDirectory() as root, tempfile.TemporaryDirectory() as home:
+            root = Path(root)
+            destination = root / "mounted"
+            destination.mkdir()
+            config_path = root / "config.json"
+            state_path = root / "state.json"
+            mount = {"target": "/run/media/test/device", "source": "/dev/sdb1", "filesystem": "ext4", "uuid": "test-uuid"}
+            with patch.object(restic_backup, "CONFIG_PATH", config_path), patch.object(restic_backup, "STATE_PATH", state_path), patch.object(restic_backup.Path, "home", return_value=Path(home)), patch("greyward_security_context.restic_backup.shutil.which", return_value="/usr/bin/findmnt"), patch.object(restic_backup.subprocess, "run", return_value=subprocess.CompletedProcess(["findmnt"], 0, stdout="/ /dev/root ext4 root-uuid\n", stderr="")):
+                restic_backup.atomic_write(config_path, {"destination": str(destination), "repository": str(restic_backup.repository(destination)), "mount": mount, "repository_id": "restic:test"})
+                value = restic_backup.status()
+            self.assertFalse(value["destination_available"])
+            self.assertEqual(value["destination_problem"], "DESTINATION_NOT_MOUNTED")
 
     def test_status_does_not_report_stale_operation_without_configuration(self):
         with tempfile.TemporaryDirectory() as root, patch.object(restic_backup, "CONFIG_PATH", Path(root) / "config.json"), patch.object(restic_backup, "STATE_PATH", Path(root) / "state.json"):
@@ -177,6 +297,7 @@ class ResticBackupTests(unittest.TestCase):
             run.return_value = self._result("\n".join([
                 json.dumps({"struct_type": "node", "path": f"{home}/Documents", "type": "dir"}),
                 json.dumps({"struct_type": "node", "path": f"{home}/Documents/report.txt", "type": "file"}),
+                json.dumps({"struct_type": "node", "path": f"{home}2/Documents/other.txt", "type": "file"}),
             ]))
             value = restic_backup.list_files("secret")
             self.assertEqual(value["files"], [f"{home}/Documents", f"{home}/Documents/report.txt"])
