@@ -57,8 +57,10 @@ foreach ($entry in $canonicalIndexEntries) {
 $mapPath = Join-Path $repo 'docs\REPOSITORY_MAP.md'
 $map = Get-Content -Raw -LiteralPath $mapPath
 $mapPathTokens = [regex]::Matches($map, '`([^`\r\n]+)`') | ForEach-Object { $_.Groups[1].Value }
+$optionalRepositoryPaths = @('.secrets/', 'environment/packer_cache/')
 foreach ($token in ($mapPathTokens | Sort-Object -Unique)) {
     if ($token -match '^(environment|security-center|packaging|branding|tests|tools|docs|spikes|\.secrets|AGENTS\.md)/') {
+        if ($token -in $optionalRepositoryPaths) { continue }
         Test-RepositoryPath -path $token -source 'docs/REPOSITORY_MAP.md'
     }
 }
@@ -91,7 +93,7 @@ $obsoletePatterns = @(
     'tools/greyward-dev/dms-test-guest.sh',
     'security-center/crates/greyward-security-center/'
 )
-$currentFiles = $markdownFiles | Where-Object { $_.FullName -notmatch '\\docs\\(history|decisions)\\' }
+$currentFiles = $markdownFiles | Where-Object { $_.FullName -notmatch '[/\\]docs[/\\](history|decisions)[/\\]' }
 foreach ($file in $currentFiles) {
     $text = Get-Content -Raw -LiteralPath $file.FullName
     foreach ($pattern in $obsoletePatterns) {
