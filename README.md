@@ -20,6 +20,20 @@
 </p>
 
 <p align="center">
+  <a href="https://sourceforge.net/projects/greyward/files/v0.1.0-alpha.1/">
+    <img alt="Download GREYWARD Alpha" src="https://img.shields.io/badge/Download-0.1%20Alpha-C9CCD1?style=for-the-badge&labelColor=24262A">
+  </a>
+</p>
+
+<p align="center">
+  <a href="INSTALL.md">Install & test</a>
+  ·
+  <a href="HARDWARE_TESTING.md">Hardware testing</a>
+  ·
+  <a href="CONTRIBUTING.md">Contribute</a>
+</p>
+
+<p align="center">
   <a href="#why-greyward">Why GREYWARD?</a>
   ·
   <a href="#security-direction">Security</a>
@@ -407,7 +421,8 @@ cargo clippy --workspace --all-targets --locked -- -D warnings
 node --test tauri/frontend/ux-contract.test.mjs
 ```
 
-Technical references: [architecture](ARCHITECTURE.md) ·
+Technical references: [install & test](INSTALL.md) ·
+[architecture](ARCHITECTURE.md) ·
 [threat model](THREAT_MODEL.md) · [testing](TESTING.md) ·
 [hardware testing](HARDWARE_TESTING.md) ·
 [privilege model](docs/security/privilege-model.md)
