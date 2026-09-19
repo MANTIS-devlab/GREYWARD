@@ -35,8 +35,8 @@
 
 <p align="center">
   <img
-    src="docs/assets/screenshots/security-center-network-activity.png"
-    alt="GREYWARD desktop with Security Center showing application network activity"
+    src="docs/assets/screenshots/greyward-desktop-security-center.png"
+    alt="GREYWARD desktop with Security Center, terminal, and security notifications"
     width="960">
 </p>
 
@@ -191,12 +191,7 @@ GREYWARD is meant to feel like GREYWARD.
 
 Its shell, system surfaces, Security Center, notifications, settings and interaction patterns share a deliberate visual direction.
 
-<p align="center">
-  <img
-    src="docs/assets/screenshots/security-center-network-activity.png"
-    alt="GREYWARD desktop and Security Center"
-    width="920">
-</p>
+![GREYWARD Security Center](docs/assets/screenshots/greyward-desktop-security-center.png)
 
 The current language is dark, restrained and metallic: graphite surfaces, silver accents, controlled transparency and relatively low visual noise.
 
@@ -227,12 +222,9 @@ The desktop is still evolving. Accessibility, consistency, multi-display behavio
 
 Security Center exposes the system's security state without pretending uncertainty does not exist.
 
-<p align="center">
-  <img
-    src="docs/assets/screenshots/security-center-updates.png"
-    alt="GREYWARD Security Center unified update view"
-    width="900">
-</p>
+| Network Activity | Unified updates |
+| :---: | :---: |
+| <img src="docs/assets/screenshots/security-center-network-activity.png" alt="GREYWARD Security Center Network Activity view" width="460"> | <img src="docs/assets/screenshots/security-center-updates.png" alt="GREYWARD Security Center unified update view" width="460"> |
 
 | Area             | Current integration                                                       |
 | ---------------- | ------------------------------------------------------------------------- |
@@ -243,6 +235,15 @@ Security Center exposes the system's security state without pretending uncertain
 | **Updates**      | DNF5, Flatpak, fwupd and ClamAV databases                                 |
 | **Devices**      | USBGuard and device history                                               |
 | **Recovery**     | Btrfs recovery points and Restic backup/restore                           |
+
+<p align="center">
+  <img
+    src="docs/assets/screenshots/greyward-desktop-threat-notification.png"
+    alt="GREYWARD threat notification visible while working in Collabora Office"
+    width="920">
+</p>
+
+<p align="center"><sub>Security notifications remain visible across ordinary desktop workflows.</sub></p>
 
 Its posture model distinguishes:
 
