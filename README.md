@@ -30,7 +30,7 @@
   ·
   <a href="HARDWARE_TESTING.md">Hardware testing</a>
   ·
-  <a href="CONTRIBUTING.md">Contribute</a>
+  <a href="CONTRIBUTING.md">Contribution guide</a>
 </p>
 
 <p align="center">
@@ -40,7 +40,7 @@
   ·
   <a href="#a-desktop-of-its-own">Desktop</a>
   ·
-  <a href="#contribute">Contribute</a>
+  <a href="#contribute">Why contribute?</a>
   ·
   <a href="#ai-disclosure">AI disclosure</a>
 </p>
