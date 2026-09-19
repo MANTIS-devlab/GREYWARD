@@ -14,12 +14,10 @@ fn bounded_text(value: &str, maximum: usize) -> String {
 pub fn notification_class(kind: SecurityEventKind) -> NotificationClass {
     match kind {
         SecurityEventKind::UsbDeviceBlocked => NotificationClass::ActionRequired,
-        SecurityEventKind::MicrophoneStarted | SecurityEventKind::CameraStarted => {
-            NotificationClass::OngoingState
-        }
-        SecurityEventKind::PublicIpExposed | SecurityEventKind::PublicIpProtected => {
-            NotificationClass::OngoingState
-        }
+        SecurityEventKind::MicrophoneStarted
+        | SecurityEventKind::CameraStarted
+        | SecurityEventKind::PublicIpExposed
+        | SecurityEventKind::PublicIpProtected => NotificationClass::OngoingState,
         SecurityEventKind::InboundAttackActivity | SecurityEventKind::AppConnectionBlocked => {
             NotificationClass::Aggregatable
         }
@@ -58,7 +56,8 @@ pub fn context_summary(
                 PostureState::ReviewNeeded | PostureState::ActionRequired
             )
         })
-        .count() as u32;
+        .count();
+    let review_count = u32::try_from(review_count).unwrap_or(u32::MAX);
     let fresh_until = snapshot
         .checks
         .iter()
@@ -98,6 +97,11 @@ pub const OPENSNITCH_CONTEXT_SUMMARY_PATH: &str =
 
 /// Reads the already-redacted, bounded summary emitted by the privileged
 /// `OpenSnitch` control plane. Consumers never decode `OpenSnitch` protobuf data.
+///
+/// # Errors
+///
+/// Returns an error when the summary cannot be read, decoded, or has an
+/// unsupported schema.
 pub fn load_opensnitch_context_summary(
     path: impl AsRef<std::path::Path>,
 ) -> Result<SecurityContextSummary, String> {

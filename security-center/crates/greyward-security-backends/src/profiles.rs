@@ -216,7 +216,7 @@ impl SystemProfileOps {
             "802-3-ethernet.cloned-mac-address"
         }
     }
-    fn nm(&self, args: &[&str]) -> Result<String, ProfileError> {
+    fn nm(args: &[&str]) -> Result<String, ProfileError> {
         let output = bounded_output("nmcli", args).map_err(|error| {
             if error.kind() == std::io::ErrorKind::NotFound {
                 ProfileError::NativeUnavailable
@@ -230,16 +230,15 @@ impl SystemProfileOps {
         Ok(String::from_utf8_lossy(&output.stdout).trim().to_owned())
     }
     fn read_mac_policy(&self) -> MacPolicy {
-        match self
-            .nm(&[
-                "-g",
-                self.mac_field(),
-                "connection",
-                "show",
-                &self.connection,
-            ])
-            .ok()
-            .as_deref()
+        match Self::nm(&[
+            "-g",
+            self.mac_field(),
+            "connection",
+            "show",
+            &self.connection,
+        ])
+        .ok()
+        .as_deref()
         {
             Some(value) if value.eq_ignore_ascii_case("stable") => MacPolicy::Stable,
             Some(value) if value.eq_ignore_ascii_case("random") => MacPolicy::RandomOnReconnect,
@@ -247,7 +246,7 @@ impl SystemProfileOps {
         }
     }
 
-    fn read_vpn_active(&self) -> Option<bool> {
+    fn read_vpn_active() -> Option<bool> {
         let output = bounded_output(
             "nmcli",
             &["-t", "-f", "TYPE,STATE", "connection", "show", "--active"],
@@ -272,9 +271,7 @@ impl NativeProfileOps for SystemProfileOps {
         {
             return Err(ProfileError::StateChanged);
         }
-        let mac = self
-            .nm(&["-g", "GENERAL.HWADDR", "device", "show", &self.interface])
-            .ok();
+        let mac = Self::nm(&["-g", "GENERAL.HWADDR", "device", "show", &self.interface]).ok();
         let policy = self.read_mac_policy();
         let profile = [
             PrivacyProfile::Standard,
@@ -290,7 +287,7 @@ impl NativeProfileOps for SystemProfileOps {
             mac_policy: policy,
             actual_mac: mac,
             firewall_zone: facts.trust_zone,
-            vpn_active: self.read_vpn_active(),
+            vpn_active: Self::read_vpn_active(),
             public_ip_expectation: "Not assessed in the local posture path".into(),
         })
     }
@@ -300,7 +297,7 @@ impl NativeProfileOps for SystemProfileOps {
             MacPolicy::RandomOnReconnect => "random",
             MacPolicy::Unknown => return Err(ProfileError::UnsupportedConnection),
         };
-        self.nm(&[
+        Self::nm(&[
             "connection",
             "modify",
             &self.connection,
@@ -336,7 +333,7 @@ impl NativeProfileOps for SystemProfileOps {
         if !output.status.success() {
             return Err(ProfileError::CommandFailed);
         }
-        self.nm(&[
+        Self::nm(&[
             "connection",
             "modify",
             &self.connection,
