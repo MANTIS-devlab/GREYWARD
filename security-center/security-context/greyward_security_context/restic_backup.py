@@ -12,7 +12,7 @@ import subprocess
 import sys
 import tempfile
 from contextlib import contextmanager
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 try:
     import fcntl
@@ -44,10 +44,30 @@ def problem_for(error: BaseException | str) -> str:
     text = str(error).lower()
     if any(token in text for token in ("wrong password", "incorrect password", "invalid password", "no key found")):
         return "CHECK_PASSPHRASE"
+    if "outside the home" in text:
+        return "DESTINATION_IN_HOME"
+    if "not an available directory" in text:
+        return "DESTINATION_INVALID"
+    if "not writable" in text:
+        return "DESTINATION_NOT_WRITABLE"
+    if "not mounted" in text:
+        return "DESTINATION_NOT_MOUNTED"
+    if "mount could not be validated" in text:
+        return "DESTINATION_MOUNT_VALIDATION"
+    if "findmnt is unavailable" in text:
+        return "DESTINATION_MOUNT_PROVIDER"
+    if "mount identity is not recorded" in text:
+        return "DESTINATION_IDENTITY_MISSING"
+    if "mount identity" in text or "mount has changed" in text:
+        return "DESTINATION_CHANGED"
+    if "configured restic repository" in text:
+        return "REPOSITORY_MISMATCH"
     if any(token in text for token in ("destination", "mounted", "writable")):
         return "CHECK_DESTINATION"
     if "already running" in text or "lock" in text:
         return "TRY_LATER"
+    if "repository" in text or "restic" in text:
+        return "REPOSITORY_INACCESSIBLE"
     if "unavailable" in text or "failed to start" in text:
         return "SERVICE_UNAVAILABLE"
     return "TRY_AGAIN"
@@ -185,24 +205,79 @@ def operation_lock():
         handle.close()
 
 
-def destination(path_text: str) -> Path:
-    path = Path(path_text).expanduser().resolve()
-    if not path.is_dir() or path.is_symlink():
-        raise BackupError("The backup destination is not an available directory")
-    if not os.access(path, os.W_OK | os.X_OK):
-        raise BackupError("The backup destination is not writable")
-    home = Path.home().resolve()
-    if path == home or home in path.parents:
-        raise BackupError("Choose a mounted destination outside the home directory")
+def _mount_identity(path: Path) -> dict[str, str]:
     if shutil.which("findmnt") is None:
         raise BackupError("findmnt is unavailable; the destination cannot be validated")
     try:
-        probe = subprocess.run(["findmnt", "-T", str(path), "-no", "TARGET"], capture_output=True, text=True, check=False, timeout=MOUNT_PROBE_TIMEOUT)
+        probe = subprocess.run(
+            ["findmnt", "-T", str(path), "-no", "TARGET,SOURCE,FSTYPE,UUID"],
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=MOUNT_PROBE_TIMEOUT,
+        )
     except (OSError, subprocess.SubprocessError) as error:
         raise BackupError("The destination mount could not be validated") from error
-    if probe.returncode != 0 or not probe.stdout.strip():
+    if probe.returncode != 0:
+        raise BackupError("The destination mount could not be validated")
+    lines = [line.strip() for line in probe.stdout.splitlines() if line.strip()]
+    if len(lines) != 1:
+        raise BackupError("The destination mount could not be validated")
+    fields = lines[0].split()
+    if len(fields) != 4:
+        raise BackupError("The destination mount could not be validated")
+    target, source, filesystem, uuid = fields
+    if target == "/":
         raise BackupError("The destination is not mounted")
-    return path
+    return {"target": target, "source": source, "filesystem": filesystem, "uuid": uuid}
+
+
+def _validated_destination(path_text: str) -> tuple[Path, dict[str, str]]:
+    requested = Path(path_text).expanduser()
+    try:
+        if requested.is_symlink():
+            raise BackupError("The backup destination is not an available directory")
+        path = requested.resolve(strict=True)
+    except BackupError:
+        raise
+    except (OSError, RuntimeError) as error:
+        raise BackupError("The backup destination is not an available directory") from error
+    if not path.is_dir():
+        raise BackupError("The backup destination is not an available directory")
+    home = Path.home().resolve()
+    if path == home or home in path.parents:
+        raise BackupError("Choose a mounted destination outside the home directory")
+    mount = _mount_identity(path)
+    if not os.access(path, os.W_OK | os.X_OK):
+        raise BackupError("The backup destination is not writable")
+    return path, mount
+
+
+def destination(path_text: str) -> Path:
+    return _validated_destination(path_text)[0]
+
+
+def _validated_configuration(config: dict) -> tuple[Path, dict[str, str]]:
+    destination_text = config.get("destination")
+    repo = config.get("repository")
+    if not isinstance(destination_text, str) or not destination_text:
+        raise BackupError("No backup destination has been configured")
+    if not isinstance(repo, str) or not repo:
+        raise BackupError("No backup destination has been configured")
+    path, mount = _validated_destination(destination_text)
+    try:
+        configured_repo = Path(repo).expanduser().resolve()
+        expected_repo = repository(path).resolve()
+    except (OSError, RuntimeError) as error:
+        raise BackupError("The configured Restic repository could not be resolved") from error
+    if configured_repo != expected_repo:
+        raise BackupError("The configured Restic repository does not match the destination")
+    recorded_mount = config.get("mount")
+    if not isinstance(recorded_mount, dict):
+        raise BackupError("The configured backup destination mount identity is not recorded; choose it again")
+    if recorded_mount != mount:
+        raise BackupError("The configured backup destination mount identity has changed; choose it again")
+    return path, mount
 
 
 def repository(path: Path) -> Path:
@@ -235,9 +310,8 @@ def password_file(password: str):
 
 def restic(argv: list[str], password: str, timeout: int = 7200) -> subprocess.CompletedProcess[str]:
     config = load_config()
-    repo = config.get("repository")
-    if not isinstance(repo, str) or not repo:
-        raise BackupError("No backup destination has been configured")
+    _validated_configuration(config)
+    repo = config["repository"]
     if shutil.which("restic") is None:
         raise BackupError("Restic is unavailable")
     temporary = password_file(password)
@@ -261,8 +335,7 @@ def configure(path_text: str, password: str, confirm: str) -> dict:
     requested = str(path_text or "").strip()
     if not requested:
         raise BackupError("Choose a mounted backup destination before configuring Restic")
-    path = Path(requested).expanduser().resolve()
-    path = destination(str(path))
+    path, mount = _validated_destination(requested)
     repo = repository(path)
     try:
         previous_config = CONFIG_PATH.read_text(encoding="utf-8")
@@ -270,7 +343,7 @@ def configure(path_text: str, password: str, confirm: str) -> dict:
         previous_config = None
     except OSError as error:
         raise BackupError("The existing backup configuration could not be read safely") from error
-    atomic_write(CONFIG_PATH, {"schema": "greyward.restic-backup/v1", "destination": str(path), "repository": str(repo), "configured_at": stamp()})
+    atomic_write(CONFIG_PATH, {"schema": "greyward.restic-backup/v1", "destination": str(path), "repository": str(repo), "mount": mount, "configured_at": stamp()})
     try:
         try:
             restic(["init"], password)
@@ -279,7 +352,7 @@ def configure(path_text: str, password: str, confirm: str) -> dict:
                 raise
         restic(["snapshots", "--latest", "1"], password)
         identifier = repository_identity(password)
-        atomic_write(CONFIG_PATH, {"schema": "greyward.restic-backup/v1", "destination": str(path), "repository": str(repo), "repository_id": identifier, "configured_at": stamp()})
+        atomic_write(CONFIG_PATH, {"schema": "greyward.restic-backup/v1", "destination": str(path), "repository": str(repo), "mount": mount, "repository_id": identifier, "configured_at": stamp()})
     except BackupError:
         try:
             if previous_config is None:
@@ -303,18 +376,20 @@ def status() -> dict:
     record = _repository_record(state, identifier) if identifier else {}
     path = config.get("destination")
     available = False
-    if isinstance(path, str):
+    destination_problem = None
+    if configured:
         try:
-            destination(path)
+            _validated_configuration(config)
             available = True
-        except BackupError:
-            available = False
+        except BackupError as error:
+            destination_problem = problem_for(error)
     operation = record.get("operation") if configured and identifier else None
     return {
         "ok": True,
         "configured": configured,
         "destination": path,
         "destination_available": available,
+        "destination_problem": destination_problem,
         "repository_id": identifier,
         "last_backup_at": record.get("last_backup_at") if configured and identifier else None,
         "last_backup_status": record.get("last_backup_status") if configured and identifier else None,
@@ -482,7 +557,7 @@ def _restore_candidate_kind(value: dict) -> str:
 def list_files(password: str) -> dict:
     result = restic(["ls", "latest", "--json"], password)
     candidates_by_path = {}
-    home = str(Path.home().resolve()).replace("\\", "/")
+    home = PurePosixPath(str(Path.home().resolve()).replace("\\", "/"))
     for line in result.stdout.splitlines():
         try:
             value = json.loads(line)
@@ -491,7 +566,11 @@ def list_files(password: str) -> dict:
         path = value.get("path") if isinstance(value, dict) else None
         if isinstance(path, str):
             path = path.replace("\\", "/")
-        if isinstance(path, str) and (path == home or path.startswith(home + "/")):
+        if isinstance(path, str):
+            try:
+                PurePosixPath(path).relative_to(home)
+            except ValueError:
+                continue
             candidates_by_path[path] = {"path": path, "kind": _restore_candidate_kind(value)}
     available = [candidates_by_path[path] for path in sorted(candidates_by_path)]
     shown = available[:MAX_RESTORE_CANDIDATES]
@@ -572,5 +651,5 @@ def command_line(argv: list[str] | None = None) -> int:
         print(json.dumps(value, sort_keys=True, separators=(",", ":")))
         return 0
     except BackupError as error:
-        print(json.dumps({"ok": False, "error": str(error)[:MAX_TEXT]}, separators=(",", ":")))
+        print(json.dumps({"ok": False, "error": str(error)[:MAX_TEXT], "problem": problem_for(error)}, separators=(",", ":")))
         return 1

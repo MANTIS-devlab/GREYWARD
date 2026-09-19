@@ -31,6 +31,12 @@ pub fn load_accepted_deviations() -> Vec<String> {
         .take(MAX_ACCEPTED_DEVIATIONS)
         .collect()
 }
+/// Updates the bounded list of accepted check deviations and persists it.
+///
+/// # Errors
+///
+/// Returns an error when `check_id` is invalid, the state directory cannot be
+/// resolved or created, or the updated list cannot be serialized or written.
 pub fn set_accepted_deviation(check_id: &str, accepted: bool) -> Result<Vec<String>, String> {
     if check_id.is_empty()
         || check_id.len() > 96
@@ -255,9 +261,10 @@ pub fn evaluate_facts_with_deviations(
         Requiredness::Recommended,
         match flatpak.availability {
             FlatpakAvailability::Available => RuntimeAvailability::Available,
-            FlatpakAvailability::Partial => RuntimeAvailability::Failed,
+            FlatpakAvailability::Partial | FlatpakAvailability::Error => {
+                RuntimeAvailability::Failed
+            }
             FlatpakAvailability::Unavailable => RuntimeAvailability::Absent,
-            FlatpakAvailability::Error => RuntimeAvailability::Failed,
             FlatpakAvailability::Unknown => RuntimeAvailability::Unsupported,
         },
         if matches!(flatpak.availability, FlatpakAvailability::Available) {
