@@ -1,0 +1,297 @@
+--- a/quickshell/dms/Modules/Notifications/Popup/NotificationPopup.qml
++++ b/quickshell/dms/Modules/Notifications/Popup/NotificationPopup.qml
+@@ -10,6 +10,9 @@
+ 
+ PanelWindow {
+     id: win
++    // GREYWARD identity only; upstream policy, DND and other apps stay unchanged.
++    readonly property bool greywardSecurity: notificationData?.desktopEntry === "systems.mantis.greyward.securitycenter"
++    readonly property color securityAccent: notificationData?.notification?.hints?.["x-greyward-severity"] === "CRITICAL" ? "#eeaaa7" : "#e5c084"
+ 
+     readonly property bool connectedFrameMode: CompositorService.usesConnectedFrameChromeForScreen(win.screen)
+     readonly property string notifBarSide: {
+@@ -116,10 +119,10 @@
+ 
+     readonly property bool compactMode: SettingsData.notificationCompactMode
+     readonly property real cardPadding: compactMode ? Theme.notificationCardPaddingCompact : Theme.notificationCardPadding
+-    readonly property real popupIconSize: compactMode ? Theme.notificationIconSizeCompact : Theme.notificationIconSizeNormal
++    readonly property real popupIconSize: win.greywardSecurity ? 36 : compactMode ? Theme.notificationIconSizeCompact : Theme.notificationIconSizeNormal
+     readonly property real contentSpacing: compactMode ? Theme.spacingXS : Theme.spacingS
+     readonly property real contentBottomClearance: 8
+-    readonly property real actionButtonHeight: compactMode ? 20 : 24
++    readonly property real actionButtonHeight: win.greywardSecurity ? 32 : compactMode ? 20 : 24
+     readonly property real collapsedContentHeight: Math.max(popupIconSize, Theme.fontSizeSmall * 1.2 + Theme.fontSizeMedium * 1.2 + Theme.fontSizeSmall * 1.2 * (compactMode ? 1 : 2)) + contentBottomClearance
+     readonly property real privacyCollapsedContentHeight: Math.max(popupIconSize, Theme.fontSizeSmall * 1.2 + Theme.fontSizeMedium * 1.2) + contentBottomClearance
+     readonly property real basePopupHeight: cardPadding * 2 + collapsedContentHeight + actionButtonHeight + contentSpacing
+@@ -684,7 +687,7 @@
+             sourceWidth: Math.max(0, content.width - (content.cardInset * 2))
+             sourceHeight: Math.max(0, content.height - (content.cardInset * 2))
+             targetRadius: win.connectedFrameMode ? Theme.connectedSurfaceRadius : Theme.cornerRadius
+-            targetColor: win.connectedFrameMode ? Theme.notificationFloatingSurface : Theme.readableSurface
++            targetColor: win.greywardSecurity ? "#1b232a" : win.connectedFrameMode ? Theme.notificationFloatingSurface : Theme.readableSurface
+             borderColor: win.notificationData && win.notificationData.urgency === NotificationUrgency.Critical ? Theme.withAlpha(Theme.primary, 0.3) : Theme.withAlpha(Theme.outline, 0.08)
+             borderWidth: win.notificationData && win.notificationData.urgency === NotificationUrgency.Critical ? 2 : 0
+         }
+@@ -707,12 +710,12 @@
+ 
+                 GradientStop {
+                     position: 0
+-                    color: Theme.primary
++                    color: win.greywardSecurity ? win.securityAccent : Theme.primary
+                 }
+ 
+                 GradientStop {
+                     position: 0.02
+-                    color: Theme.primary
++                    color: win.greywardSecurity ? win.securityAccent : Theme.primary
+                 }
+ 
+                 GradientStop {
+@@ -727,8 +730,8 @@
+             anchors.margins: content.cardInset
+             radius: win.connectedFrameMode ? Theme.connectedSurfaceRadius : Theme.cornerRadius
+             color: "transparent"
+-            border.color: win.connectedFrameMode ? Theme.withAlpha(BlurService.borderColor, 0) : BlurService.borderColor
+-            border.width: win.connectedFrameMode ? 0 : BlurService.borderWidth
++            border.color: win.greywardSecurity ? "#586571" : win.connectedFrameMode ? Theme.withAlpha(BlurService.borderColor, 0) : BlurService.borderColor
++            border.width: win.greywardSecurity ? 1 : win.connectedFrameMode ? 0 : BlurService.borderWidth
+             z: 100
+             scale: content.chromeScale
+             transformOrigin: Item.Center
+@@ -957,7 +960,7 @@
+                     StyledText {
+                         text: notificationData ? (notificationData.summary || "") : ""
+                         color: Theme.surfaceText
+-                        font.pixelSize: SettingsData.notificationSummaryFontSize || Theme.fontSizeMedium
++                        font.pixelSize: win.greywardSecurity ? 14 : SettingsData.notificationSummaryFontSize || Theme.fontSizeMedium
+                         font.weight: Font.Medium
+                         width: parent.width
+                         elide: Text.ElideRight
+@@ -972,8 +975,8 @@
+ 
+                         text: notificationData ? (notificationData.htmlBody || "") : ""
+                         textFormat: Text.StyledText
+-                        color: Theme.surfaceVariantText
+-                        font.pixelSize: SettingsData.notificationBodyFontSize || Theme.fontSizeSmall
++                        color: win.greywardSecurity ? "#c2cbd2" : Theme.surfaceVariantText
++                        font.pixelSize: win.greywardSecurity ? 13 : SettingsData.notificationBodyFontSize || Theme.fontSizeSmall
+                         width: parent.width
+                         elide: descriptionExpanded ? Text.ElideNone : Text.ElideRight
+                         horizontalAlignment: Text.AlignLeft
+@@ -1007,7 +1010,7 @@
+ 
+                     StyledText {
+                         text: I18n.tr("Message Content", "notification privacy mode placeholder")
+-                        color: Theme.surfaceVariantText
++                        color: win.greywardSecurity ? "#c2cbd2" : Theme.surfaceVariantText
+                         font.pixelSize: Theme.fontSizeSmall
+                         width: parent.width
+                         visible: SettingsData.notificationPopupPrivacyMode && !descriptionExpanded && win.hasExpandableBody
+@@ -1052,7 +1055,7 @@
+             }
+ 
+             Row {
+-                visible: cardHoverHandler.hovered
++                visible: win.greywardSecurity || cardHoverHandler.hovered
+                 opacity: visible ? 1 : 0
+                 anchors.right: clearButton.visible ? clearButton.left : parent.right
+                 anchors.rightMargin: clearButton.visible ? contentSpacing : Theme.spacingL
+@@ -1077,7 +1080,7 @@
+                         width: Math.max(actionText.implicitWidth + Theme.spacingM, Theme.notificationActionMinWidth)
+                         height: actionButtonHeight
+                         radius: Theme.notificationButtonCornerRadius
+-                        color: isHovered ? Theme.withAlpha(Theme.primary, Theme.stateLayerHover) : Theme.withAlpha(Theme.primary, 0)
++                        color: win.greywardSecurity ? (isHovered ? "#3b4954" : "#2b3740") : isHovered ? Theme.withAlpha(Theme.primary, Theme.stateLayerHover) : Theme.withAlpha(Theme.primary, 0)
+ 
+                         StyledText {
+                             id: actionText
+@@ -1128,7 +1131,7 @@
+                 width: Math.max(clearTextLabel.implicitWidth + Theme.spacingM, Theme.notificationActionMinWidth)
+                 height: actionButtonHeight
+                 radius: Theme.notificationButtonCornerRadius
+-                color: isHovered ? Theme.withAlpha(Theme.primary, Theme.stateLayerHover) : Theme.withAlpha(Theme.primary, 0)
++                color: win.greywardSecurity ? (isHovered ? "#3b4954" : "#2b3740") : isHovered ? Theme.withAlpha(Theme.primary, Theme.stateLayerHover) : Theme.withAlpha(Theme.primary, 0)
+                 z: 20
+ 
+                 StyledText {
+--- a/quickshell/dms/Modules/Notifications/Center/NotificationCard.qml
++++ b/quickshell/dms/Modules/Notifications/Center/NotificationCard.qml
+@@ -8,6 +8,9 @@
+ 
+ Rectangle {
+     id: root
++    // GREYWARD identity only; upstream policy, DND and other apps stay unchanged.
++    readonly property bool greywardSecurity: notificationGroup?.latestNotification?.desktopEntry === "systems.mantis.greyward.securitycenter"
++    readonly property color securityAccent: notificationGroup?.latestNotification?.notification?.hints?.["x-greyward-severity"] === "CRITICAL" ? "#eeaaa7" : "#e5c084"
+ 
+     property var notificationGroup
+     property bool expanded: (NotificationService.expandedGroups[notificationGroup && notificationGroup.key] || false)
+@@ -34,11 +37,11 @@
+ 
+     readonly property bool compactMode: SettingsData.notificationCompactMode
+     readonly property real cardPadding: compactMode ? Theme.notificationCardPaddingCompact : Theme.notificationCardPadding
+-    readonly property real iconSize: compactMode ? Theme.notificationIconSizeCompact : Theme.notificationIconSizeNormal
++    readonly property real iconSize: root.greywardSecurity ? 36 : compactMode ? Theme.notificationIconSizeCompact : Theme.notificationIconSizeNormal
+     readonly property real contentSpacing: compactMode ? Theme.spacingXS : Theme.spacingS
+     readonly property real collapsedDismissOffset: 5
+     readonly property real badgeSize: compactMode ? 16 : 18
+-    readonly property real actionButtonHeight: compactMode ? 20 : 24
++    readonly property real actionButtonHeight: root.greywardSecurity ? 32 : compactMode ? 20 : 24
+     readonly property real collapsedContentHeight: Math.max(iconSize, Theme.fontSizeSmall * 1.2 + Theme.fontSizeMedium * 1.2 + Theme.fontSizeSmall * 1.2 * (compactMode ? 1 : 2))
+     readonly property real baseCardHeight: cardPadding * 2 + collapsedContentHeight + actionButtonHeight + contentSpacing
+     readonly property bool connectedFrameMode: FrameTransitionState.effectiveConnectedFrameModeActive
+@@ -147,13 +150,14 @@
+     }
+ 
+     color: {
++        if (root.greywardSecurity) return isGroupSelected && keyboardNavigationActive ? "#303c46" : "#1b232a";
+         if (isGroupSelected && keyboardNavigationActive) {
+             return Theme.primaryPressed;
+         }
+         if (keyboardNavigationActive && expanded && selectedNotificationIndex >= 0) {
+             return Theme.primaryHoverLight;
+         }
+-        return Theme.notificationFloatingSurfaceHigh;
++        return root.greywardSecurity ? "#1b232a" : Theme.notificationFloatingSurfaceHigh;
+     }
+     border.color: {
+         if (isGroupSelected && keyboardNavigationActive) {
+@@ -163,9 +167,9 @@
+             return Theme.primaryPressed;
+         }
+         if (notificationGroup?.latestNotification?.urgency === NotificationUrgency.Critical) {
+-            return Theme.primarySelected;
+-        }
+-        return Theme.outlineMedium;
++            return root.greywardSecurity ? root.securityAccent : Theme.primarySelected;
++        }
++        return root.greywardSecurity ? "#586571" : Theme.outlineMedium;
+     }
+     border.width: {
+         if (isGroupSelected && keyboardNavigationActive) {
+@@ -412,7 +416,7 @@
+ 
+                     text: fullText
+                     textFormat: Text.StyledText
+-                    color: Theme.surfaceVariantText
++                    color: root.greywardSecurity ? "#c2cbd2" : Theme.surfaceVariantText
+                     font.pixelSize: Theme.fontSizeSmall
+                     width: parent.width
+                     elide: Text.ElideRight
+@@ -583,7 +587,7 @@
+                             return expandedBaseHeight;
+                         }
+                         radius: Theme.cornerRadius
+-                        color: isSelected ? Theme.primaryPressed : Theme.notificationNestedSurface
++                        color: root.greywardSecurity ? (isSelected ? "#303c46" : "#25313a") : isSelected ? Theme.primaryPressed : Theme.notificationNestedSurface
+                         border.color: isSelected ? Theme.withAlpha(Theme.primary, 0.4) : Theme.outlineMedium
+                         border.width: 1
+ 
+@@ -726,7 +730,7 @@
+ 
+                                         text: modelData?.htmlBody || ""
+                                         textFormat: Text.StyledText
+-                                        color: Theme.surfaceVariantText
++                                        color: root.greywardSecurity ? "#c2cbd2" : Theme.surfaceVariantText
+                                         font.pixelSize: Theme.fontSizeSmall
+                                         width: parent.width
+                                         elide: messageExpanded ? Text.ElideNone : Text.ElideRight
+--- a/quickshell/dms/Services/NotificationService.qml
++++ b/quickshell/dms/Services/NotificationService.qml
+@@ -714,7 +714,8 @@
+                 }
+             }
+ 
+-            const shouldShowPopup = !root.popupsDisabled && !SessionData.doNotDisturb && !policy.disablePopup;
++            const quietSecurityUpdate = notif.desktopEntry === "systems.mantis.greyward.securitycenter" && !!notif.hints?.["x-greyward-quiet"];
++            const shouldShowPopup = !quietSecurityUpdate && !root.popupsDisabled && !SessionData.doNotDisturb && !policy.disablePopup;
+             const isTransient = notif.transient;
+             const shouldKeepInCenter = !isTransient && !policy.hideFromCenter;
+ 
+@@ -738,7 +739,7 @@
+                 root.allWrappers.push(wrapper);
+                 if (shouldKeepInCenter) {
+                     root.notifications.push(wrapper);
+-                    if (_shouldSaveToHistory(wrapper.urgency, policy.disableHistory)) {
++                    if (!quietSecurityUpdate && _shouldSaveToHistory(wrapper.urgency, policy.disableHistory)) {
+                         root.addToHistory(wrapper);
+                     }
+                 }
+@@ -1195,6 +1196,12 @@
+             }
+ 
+             groups[groupKey].notifications.unshift(notif);
++            // Keep Security Center priority stable without hiding live activity.
++            if (notif.desktopEntry === "systems.mantis.greyward.securitycenter")
++                groups[groupKey].notifications.sort((a, b) => {
++                    const rank = {CRITICAL: 0, ACTION: 1, WARNING: 2, INFO: 3};
++                    return (rank[a.notification?.hints?.["x-greyward-severity"]] ?? 3) - (rank[b.notification?.hints?.["x-greyward-severity"]] ?? 3);
++                });
+             groups[groupKey].latestNotification = groups[groupKey].notifications[0];
+             groups[groupKey].count = groups[groupKey].notifications.length;
+ 
+@@ -1233,6 +1240,12 @@
+             }
+ 
+             groups[groupKey].notifications.unshift(notif);
++            // Keep Security Center priority stable without hiding live activity.
++            if (notif.desktopEntry === "systems.mantis.greyward.securitycenter")
++                groups[groupKey].notifications.sort((a, b) => {
++                    const rank = {CRITICAL: 0, ACTION: 1, WARNING: 2, INFO: 3};
++                    return (rank[a.notification?.hints?.["x-greyward-severity"]] ?? 3) - (rank[b.notification?.hints?.["x-greyward-severity"]] ?? 3);
++                });
+             groups[groupKey].latestNotification = groups[groupKey].notifications[0];
+             groups[groupKey].count = groups[groupKey].notifications.length;
+ 
+--- a/quickshell/dms/Modules/Notifications/Center/HistoryNotificationCard.qml
++++ b/quickshell/dms/Modules/Notifications/Center/HistoryNotificationCard.qml
+@@ -6,6 +6,7 @@
+ 
+ Rectangle {
+     id: root
++    readonly property bool greywardSecurity: historyItem?.desktopEntry === "systems.mantis.greyward.securitycenter"
+ 
+     required property var historyItem
+     property bool isSelected: false
+@@ -47,6 +48,7 @@
+     }
+ 
+     color: {
++        if (root.greywardSecurity) return isSelected && keyboardNavigationActive ? "#303c46" : "#1b232a";
+         if (isSelected && keyboardNavigationActive)
+             return Theme.primaryPressed;
+         return Theme.notificationFloatingSurfaceHigh;
+@@ -55,8 +57,8 @@
+         if (isSelected && keyboardNavigationActive)
+             return Theme.withAlpha(Theme.primary, 0.5);
+         if (historyItem.urgency === 2)
+-            return Theme.primarySelected;
+-        return Theme.outlineMedium;
++            return root.greywardSecurity ? "#986968" : Theme.primarySelected;
++        return root.greywardSecurity ? "#586571" : Theme.outlineMedium;
+     }
+     border.width: {
+         if (isSelected && keyboardNavigationActive)
+@@ -82,11 +84,11 @@
+             orientation: Gradient.Horizontal
+             GradientStop {
+                 position: 0.0
+-                color: Theme.primary
++                color: root.greywardSecurity ? "#986968" : Theme.primary
+             }
+             GradientStop {
+                 position: 0.02
+-                color: Theme.primary
++                color: root.greywardSecurity ? "#986968" : Theme.primary
+             }
+             GradientStop {
+                 position: 0.021
+@@ -233,7 +235,7 @@
+ 
+                     text: historyItem.htmlBody || historyItem.body || ""
+                     textFormat: Text.StyledText
+-                    color: Theme.surfaceVariantText
++                    color: root.greywardSecurity ? "#c2cbd2" : Theme.surfaceVariantText
+                     font.pixelSize: Theme.fontSizeSmall
+                     width: parent.width
+                     elide: descriptionExpanded ? Text.ElideNone : Text.ElideRight

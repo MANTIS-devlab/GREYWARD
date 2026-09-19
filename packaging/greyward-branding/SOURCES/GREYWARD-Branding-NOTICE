@@ -1,0 +1,10 @@
+GREYWARD identity artwork in this package is reserved branding and is not part
+of the repository's general GPL-3.0-only grant, to the extent MANTIS SYSTEMS
+owns the relevant rights. The package's scripts, service files, stylesheets,
+and configuration remain GPL-3.0-only.
+
+Source forks remain permitted under GPL terms but do not automatically receive
+permission to use GREYWARD branding as the identity of a modified distribution.
+Third-party material retains its own terms.
+
+See the repository LICENSING.md and branding/LICENSE for the complete policy.

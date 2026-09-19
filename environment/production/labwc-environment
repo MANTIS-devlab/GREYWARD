@@ -1,0 +1,13 @@
+XDG_CURRENT_DESKTOP=Labwc:GREYWARD
+XDG_SESSION_DESKTOP=labwc
+XDG_DATA_DIRS=/usr/local/share:/var/lib/flatpak/exports/share:/usr/share
+XKB_DEFAULT_MODEL=pc105
+XKB_DEFAULT_LAYOUT=fr
+GDK_BACKEND=wayland,x11
+# Keep GTK 3 applications aligned with the system-wide dark Adwaita default.
+GTK_THEME=Adwaita:dark
+QT_QPA_PLATFORM=wayland;xcb
+# Allow applications to fall back to software rendering when necessary,
+# without forcing the installed user's Labwc desktop away from hardware
+# acceleration when a working renderer is available.
+WLR_RENDERER_ALLOW_SOFTWARE=1

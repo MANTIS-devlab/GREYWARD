@@ -1,0 +1,3 @@
+# GREYWARD keeps Software focused on discovery and installation. Update Center
+# remains the canonical application-update workflow.
+hide-auto-update-options: true

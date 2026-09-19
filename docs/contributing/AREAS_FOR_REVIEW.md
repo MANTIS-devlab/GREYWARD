@@ -1,0 +1,23 @@
+# Areas for external review
+
+These are real review surfaces in the current repository, not placeholder
+"good first issues." Coordinate before changing high-risk boundaries.
+
+| Subsystem | Why review is useful | Relevant paths | Useful expertise | Validation | Risk |
+|---|---|---|---|---|---|
+| Privileged interfaces | Root D-Bus mutations are wheel-group gated and several methods use validated JSON envelopes; authorization and parser boundaries deserve independent attack review | `docs/security/privilege-model.md`, `security-center/security-context/{dbus,polkit,systemd}/`, `greyward_security_context/` | D-Bus, Polkit, Python security, systemd sandboxing, SELinux | Python service-hardening/file/network/update tests; installed D-Bus tests | High |
+| Network authority and reconciliation | NetworkManager, firewalld, OpenSnitch, and systemd-resolved can restart or disagree; VPN/split-DNS cases remain broad | `control_plane.py`, `secure_dns_reconciler.py`, `network_location.py`, Rust network adapters | Linux networking, NetworkManager, nftables/firewalld, DNS, VPNs | `test_network_protection.py`, `test_secure_dns.py`, runtime reconnect/fault tests | High |
+| Rust posture model | Typed state is strong but policy definitions, aggregation precedence, and adapter complexity need simplification/review | `security-center/crates/greyward-security-domain/`, `greyward-security-backends/` | Rust, API design, security evidence models | Cargo fmt/test/Clippy; fixture compatibility | Medium |
+| Security Context user service | One service owns many read/control facades; interface cohesion and failure isolation should be challenged | `greyward_security_context/user_bus.py`, `session10_bus.py`, service unit | Python architecture, D-Bus, reliability | full Python suite and installed user-bus checks | High |
+| Update semantics | DNF5 offline update, system Flatpak, fwupd, recovery point, and cancellation can partially succeed | `update_center.py`, `update_center_bus.py`, `bin/greyward-update-action` | Fedora/DNF5, transactional systems, fault injection | update tests plus low-space/network-loss/reboot runtime matrix | High |
+| Recovery and backup | Btrfs points and Restic backups cover different failure classes; restore/retention semantics need destructive-test review | `recovery.py`, `restic_backup.py`, recovery frontend | Btrfs, Restic, disaster recovery, UX | recovery Python tests and clean-system restore drills | High |
+| Crypto policy | Some overrides clearly reduce legacy surface; Camellia removal and redundant RSA minimum have uncertain incremental value | `environment/production/crypto-policy/GREYWARD.pmod`, `docs/security/crypto-policy.md` | applied cryptography, Fedora crypto-policies, interoperability | generated backend diff and TLS/SSH/VPN compatibility matrix | High |
+| File Security | Scan/quarantine lifecycle is bounded but complex; ClamAV must remain an additional file layer rather than an endpoint-security claim | `clamav_service.py`, `file_security.py`, `safe_open.py` | secure file handling, TOCTOU, malware tooling | file/ClamAV/Safe Open tests and installed service tests | High |
+| Desktop accessibility | Current visual direction needs keyboard, focus, contrast, scaling, screen-reader, and reduced-motion review | `security-center/tauri/frontend/`, DMS settings/patches, Labwc theme | accessibility, Wayland UI, CSS/QML | frontend tests plus real Wayland assistive-tech testing | Medium |
+| Hardware validation | No complete durable bare-metal matrix is recorded | `HARDWARE_TESTING.md`, image/session/production acceptance | Linux drivers, firmware, QA | hardware issue template and repeatable test sequence | Medium |
+| Image/supply chain | Offline payload verification exists, but reproducible builds, builder trust, and signing/publication need deeper work | `environment/image/`, `environment/production/artifact-policy.json`, packaging specs | Fedora image build, RPM/OSTree/Flatpak supply chain | image unit tests, networkless resolution, checksum/media verification | High |
+| Licensing/provenance | Brand reservations depend on actual ownership and retained source records | `LICENSING.md`, `branding/LICENSE`, `branding/PROVENANCE.md`, notices | open-source licensing, trademark, asset provenance | manual file inventory and history review | High |
+| UI consistency | Security Center implements many workflows with repeated state/render patterns that may be reducible without changing behavior | `tauri/frontend/app.js`, `styles.css`, `i18n.js` | frontend architecture, UX systems | all Node tests and screenshot/interaction review | Medium |
+
+Risk means consequence of a wrong change, not difficulty. A review-only issue
+that produces a precise finding is a valuable contribution.

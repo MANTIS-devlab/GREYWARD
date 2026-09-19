@@ -1,0 +1,113 @@
+<labwc_config>
+  <core>
+    <decoration>server</decoration>
+    <gap>0</gap>
+    <xwaylandPersistence>yes</xwaylandPersistence>
+  </core>
+
+  <!-- GREYWARD-OWNED: placement:start -->
+  <placement>
+    <policy>cascade</policy>
+    <cascadeOffset x="40" y="32" />
+  </placement>
+  <!-- GREYWARD-OWNED: placement:end -->
+
+  <theme>
+    <name>Greyward</name>
+    <fallbackAppIcon>greyward</fallbackAppIcon>
+    <titlebar>
+      <layout>icon:iconify,max,close</layout>
+      <showTitle>yes</showTitle>
+    </titlebar>
+    <cornerRadius>10</cornerRadius>
+    <keepBorder>yes</keepBorder>
+    <!-- Keep the native controls visible for maximized Chromium/Brave windows.
+         Labwc cannot merge server-side controls into Brave's tab strip. -->
+    <maximizedDecoration>titlebar</maximizedDecoration>
+    <dropShadows>yes</dropShadows>
+    <font name="Inter" size="10" />
+  </theme>
+
+  <!-- GREYWARD-OWNED: brave-decorations:start -->
+  <!-- Brave's Flatpak may identify its Wayland toplevel by either the
+       application ID or the executable name. Force Labwc server decorations
+       so the standard minimize/maximize/close controls remain available. -->
+  <windowRules>
+    <windowRule identifier="com.brave.Browser" serverDecoration="yes" />
+    <windowRule identifier="brave" serverDecoration="yes" />
+  </windowRules>
+  <!-- GREYWARD-OWNED: brave-decorations:end -->
+
+  <!-- GREYWARD-OWNED: focus:start -->
+  <focus>
+    <followMouse>no</followMouse>
+    <raiseOnFocus>yes</raiseOnFocus>
+  </focus>
+  <!-- GREYWARD-OWNED: focus:end -->
+
+  <!-- GREYWARD-OWNED: snapping:start -->
+  <snapping>
+    <range inner="10" outer="10" />
+    <cornerRange>50</cornerRange>
+    <topMaximize>yes</topMaximize>
+    <notifyClient>always</notifyClient>
+  </snapping>
+  <!-- GREYWARD-OWNED: snapping:end -->
+
+  <!-- GREYWARD-OWNED: desktops:start -->
+  <desktops number="4" popupTime="500" prefix="Workspace" />
+  <!-- GREYWARD-OWNED: desktops:end -->
+
+  <!-- DMS owns desktop/background behavior; suppress Labwc's built-in root menu. -->
+  <mouse>
+    <default />
+    <context name="Root">
+      <mousebind button="Left" action="Press">
+        <action name="None" />
+      </mousebind>
+      <mousebind button="Left" action="Release">
+        <action name="None" />
+      </mousebind>
+      <mousebind button="Left" action="Click">
+        <action name="None" />
+      </mousebind>
+      <mousebind button="Right" action="Press">
+        <action name="None" />
+      </mousebind>
+      <mousebind button="Right" action="Release">
+        <action name="None" />
+      </mousebind>
+      <mousebind button="Right" action="Click">
+        <action name="None" />
+      </mousebind>
+    </context>
+  </mouse>
+
+  <keyboard>
+    <default />
+    <keybind key="W-Return">
+      <action name="Execute" command="uwsm app -- /usr/bin/env GREYWARD_TERMINAL_BRIEF=1 SHELL=/usr/bin/zsh blackbox-terminal" />
+    </keybind>
+    <keybind key="W-q">
+      <action name="Close" />
+    </keybind>
+    <keybind key="W-a">
+      <action name="ToggleMaximize" />
+    </keybind>
+    <!-- DMS Settings is the production general-settings surface. -->
+    <keybind key="W-s">
+      <action name="Execute" command="/usr/local/bin/greyward-dms ipc call settings toggle" />
+    </keybind>
+    <keybind key="W-Space">
+      <action name="Execute" command="/usr/local/bin/greyward-dms ipc call spotlight toggle" />
+    </keybind>
+    <keybind key="W-l">
+      <action name="Execute" command="/usr/local/bin/greyward-session-lock" />
+    </keybind>
+    <keybind key="W-1"><action name="GoToDesktop" to="1" /></keybind>
+    <keybind key="W-2"><action name="GoToDesktop" to="2" /></keybind>
+    <keybind key="W-3"><action name="GoToDesktop" to="3" /></keybind>
+    <keybind key="W-4"><action name="GoToDesktop" to="4" /></keybind>
+  </keyboard>
+
+</labwc_config>

@@ -1,0 +1,19 @@
+[Unit]
+Description=GREYWARD Plymouth update status
+Documentation=man:systemd-system-update-generator(8)
+DefaultDependencies=no
+# systemd-system-update-generator creates this marker only for an offline
+# system update transaction. The unit is not part of an ordinary boot.
+ConditionPathExists=/system-update
+After=plymouth-start.service
+Before=dnf5-offline-transaction.service system-update.target shutdown.target
+Conflicts=shutdown.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/plymouth change-mode --updates
+ExecStart=/usr/bin/plymouth display-message "--text=GREYWARD system update in progress"
+RemainAfterExit=yes
+
+[Install]
+WantedBy=system-update.target

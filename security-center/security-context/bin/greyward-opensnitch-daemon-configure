@@ -1,0 +1,2 @@
+#!/bin/sh
+exec /usr/bin/python3 /usr/lib/greyward-security-context/greyward_opensnitch_daemon_configure.py

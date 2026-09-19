@@ -1,0 +1,12 @@
+; GREYWARD's DMS greeter needs service status metadata to render session
+; readiness. It does not need to read, write, start, or stop user units.
+(block greyward_dms_greeter
+  (typeattributeset cil_gen_require (xdm_t systemd_unit_file_t etc_t root_t var_t))
+  (allow xdm_t systemd_unit_file_t (service (status)))
+  (allow xdm_t etc_t (service (status)))
+
+  ; DMS currently attempts two broad startup watches. Keep them denied while
+  ; suppressing the expected noise; no root or /var filesystem access is added.
+  (dontaudit xdm_t root_t (dir (watch)))
+  (dontaudit xdm_t var_t (dir (watch)))
+)

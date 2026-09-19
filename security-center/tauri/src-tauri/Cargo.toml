@@ -1,0 +1,27 @@
+[package]
+name = "greyward-security-center"
+version = "0.1.0"
+description = "GREYWARD Security Center Tauri application"
+authors = ["MANTIS SYSTEMS"]
+edition = "2024"
+license.workspace = true
+
+[lib]
+name = "greyward_security_center_lib"
+crate-type = ["lib", "cdylib", "staticlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+chrono.workspace = true
+dbus = "0.9.12"
+greyward-security-backends = { path = "../../crates/greyward-security-backends" }
+greyward-security-domain = { path = "../../crates/greyward-security-domain" }
+serde = { version = "1", features = ["derive"] }
+serde_json.workspace = true
+tauri = { version = "2", features = [] }
+
+
+[features]
+custom-protocol = ["tauri/custom-protocol"]

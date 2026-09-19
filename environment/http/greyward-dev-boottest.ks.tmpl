@@ -1,0 +1,38 @@
+#version=F44
+# Development-only encrypted bootstrap for the disposable GREYWARD-BOOTTEST VM.
+text
+repo --name=fedora --mirrorlist=https://mirrors.fedoraproject.org/mirrorlist?repo=fedora-44&arch=x86_64
+repo --name=updates --mirrorlist=https://mirrors.fedoraproject.org/mirrorlist?repo=updates-released-f44&arch=x86_64
+url --mirrorlist=https://mirrors.fedoraproject.org/mirrorlist?repo=fedora-44&arch=x86_64
+
+lang en_US.UTF-8
+keyboard --vckeymap=fr --xlayouts='fr'
+timezone Europe/Paris --utc
+network __NETWORK_CONFIGURATION__ --hostname=greyward-boottest --activate
+rootpw --lock
+user --name=stendev --groups=wheel --password=__BOOTSTRAP_PASSWORD__ --plaintext --gecos="GREYWARD Boot Test"
+sshkey --username=stendev "__SSH_PUBLIC_KEY__"
+selinux --enforcing
+firewall --enabled --service=ssh
+services --enabled=sshd,NetworkManager,chronyd,hypervkvpd
+firstboot --disable
+zerombr
+clearpart --all --initlabel
+autopart --type=btrfs --encrypted --passphrase=__BOOTSTRAP_PASSWORD__
+bootloader --timeout=1
+reboot --eject
+
+%packages
+@^workstation-product-environment
+openssh-server
+hyperv-daemons
+%end
+
+%post --erroronfail --log=/root/greyward-kickstart-post.log
+set -euxo pipefail
+install -d -m 0755 /etc/sudoers.d
+printf '%s\n' 'stendev ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/90-greyward-dev
+chmod 0440 /etc/sudoers.d/90-greyward-dev
+systemctl enable sshd NetworkManager hypervkvpd
+printf '%s\n' 'GREYWARD DEVELOPMENT BOOTSTRAP COMPLETE' > /etc/greyward-development-bootstrap
+%end

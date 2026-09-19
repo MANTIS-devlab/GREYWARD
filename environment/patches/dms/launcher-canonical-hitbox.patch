@@ -1,0 +1,56 @@
+--- a/quickshell/dms/Modules/Plugins/BasePill.qml
++++ b/quickshell/dms/Modules/Plugins/BasePill.qml
+@@ -21,6 +21,9 @@ Item {
+     property bool isLast: false
+     property real sectionSpacing: 0
+     property bool enableBackgroundHover: true
++    property bool extendHitboxToBarEdge: true
++    property real hitboxWidth: width
++    property real hitboxHeight: height
+     property bool enableCursor: true
+     readonly property bool isMouseHovered: mouseArea.containsMouse
+     property bool isLeftBarEdge: false
+@@ -134,9 +137,9 @@ Item {
+         id: mouseArea
+         z: -1
+-        x: -root.leftMargin
+-        y: -root.topMargin
+-        width: root.width + root.leftMargin + root.rightMargin
+-        height: root.height + root.topMargin + root.bottomMargin
++        x: (root.width - root.hitboxWidth) / 2 - (root.extendHitboxToBarEdge ? root.leftMargin : 0)
++        y: (root.height - root.hitboxHeight) / 2 - (root.extendHitboxToBarEdge ? root.topMargin : 0)
++        width: root.hitboxWidth + (root.extendHitboxToBarEdge ? root.leftMargin + root.rightMargin : 0)
++        height: root.hitboxHeight + (root.extendHitboxToBarEdge ? root.topMargin + root.bottomMargin : 0)
+         hoverEnabled: true
+         cursorShape: root.enableCursor ? Qt.PointingHandCursor : Qt.ArrowCursor
+         acceptedButtons: Qt.LeftButton | Qt.RightButton
+--- a/quickshell/dms/Modules/DankBar/Widgets/LauncherButton.qml
++++ b/quickshell/dms/Modules/DankBar/Widgets/LauncherButton.qml
+@@ -14,0 +14,6 @@
++    readonly property real launcherVisualSize: SettingsData.launcherLogoMode === "apps"
++        ? Theme.barIconSize(root.barThickness, -4, root.barConfig?.maximizeWidgetIcons, root.barConfig?.iconScale)
++        : Theme.barIconSize(root.barThickness, SettingsData.launcherLogoSizeOffset, root.barConfig?.maximizeWidgetIcons, root.barConfig?.iconScale)
++    extendHitboxToBarEdge: false
++    hitboxWidth: Math.max(visualWidth, launcherVisualSize)
++    hitboxHeight: Math.max(visualHeight, launcherVisualSize)
+--- a/quickshell/dms/Modules/DankBar/BarCanvas.qml
++++ b/quickshell/dms/Modules/DankBar/BarCanvas.qml
+@@ -170,18 +170,0 @@
+-    MouseArea {
+-        anchors.fill: parent
+-        acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
+-        z: -999
+-        onClicked: {
+-            const activePopout = PopoutManager.getActivePopout(barWindow.screen);
+-            if (activePopout) {
+-                if (activePopout.dashVisible !== undefined) {
+-                    activePopout.dashVisible = false;
+-                } else if (activePopout.notificationHistoryVisible !== undefined) {
+-                    activePopout.notificationHistoryVisible = false;
+-                } else {
+-                    activePopout.close();
+-                }
+-            }
+-            TrayMenuManager.closeAllMenus();
+-        }
+-    }

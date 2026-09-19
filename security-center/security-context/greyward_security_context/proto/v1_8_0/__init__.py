@@ -1,0 +1,1 @@
+"""OpenSnitch v1.8.0 protobuf bindings."""

@@ -1,0 +1,191 @@
+#!/usr/bin/python3
+"""Fixed privileged update transaction for the GREYWARD Update Center."""
+import argparse
+import json
+import os
+import re
+import subprocess
+import sys
+from pathlib import Path
+
+
+DNF = "/usr/bin/dnf5"
+FLATPAK = "/usr/bin/flatpak"
+FWUPD = "/usr/bin/fwupdmgr"
+OFFLINE_DIR = Path("/usr/lib/sysimage/libdnf5/offline")
+SYSTEM_UPDATE_LINK = Path("/system-update")
+OPTIONAL_REPO = "fedora-cisco-openh264"
+OPTIONAL_PACKAGES = ("openh264", "mozilla-openh264")
+PROVIDER_TIMEOUT = 1800
+RPM_QUERY_TIMEOUT = 30
+PACKAGE_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9+_.:-]*$")
+OPERATION_ID = re.compile(r"^dnf5-[0-9]{1,20}$")
+MAX_DRIVER_PACKAGES = 32
+
+env = os.environ.copy()
+env["LC_ALL"] = "C"
+env["LANG"] = "C"
+
+
+def emit(event, **values):
+    print(json.dumps({"greyward_update_event": event, **values}, sort_keys=True, separators=(",", ":")), flush=True)
+
+
+def run(command, *, timeout, extra_env=None):
+    """Run a fixed native-provider operation without polluting the event stream."""
+    command_env = env.copy()
+    command_env.update(extra_env or {})
+    result = subprocess.run(command, env=command_env, capture_output=True, text=True, check=False, timeout=timeout)
+    if result.stdout:
+        print(result.stdout, end="", file=sys.stderr)
+    if result.stderr:
+        print(result.stderr, end="", file=sys.stderr)
+    return result
+
+
+def optional_repo_failure(result):
+    output = f"{result.stdout}\n{result.stderr}".lower()
+    placeholder = subprocess.run(
+        ["/usr/bin/rpm", "-q", "--quiet", "noopenh264"],
+        env=env,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        check=False,
+        timeout=RPM_QUERY_TIMEOUT,
+    )
+    return (
+        placeholder.returncode == 0
+        and (OPTIONAL_REPO in output or any(package in output for package in OPTIONAL_PACKAGES))
+        and ("download" in output or "mirror" in output or "repo" in output)
+    )
+
+
+def validate_driver_packages(packages):
+    if len(packages) > MAX_DRIVER_PACKAGES or any(not PACKAGE_NAME.fullmatch(package) for package in packages):
+        raise ValueError("invalid essential driver package list")
+    return list(dict.fromkeys(packages))
+
+
+def offline_restart_is_scheduled():
+    try:
+        return SYSTEM_UPDATE_LINK.is_symlink() and SYSTEM_UPDATE_LINK.resolve(strict=False) == OFFLINE_DIR
+    except OSError:
+        return False
+
+
+def load_recovery_create():
+    for path in (Path("/usr/lib/greyward-security-context"), Path(__file__).resolve().parents[1]):
+        if str(path) not in sys.path:
+            sys.path.insert(0, str(path))
+    from greyward_security_context.recovery import create
+    return create
+
+
+def prepare_dnf(driver_packages):
+    if driver_packages:
+        # DNF5's `do` command combines unlike actions in one transaction.  A
+        # second `install --offline` command could replace the stored upgrade,
+        # so keep the reviewed upgrade and essential-driver install atomic.
+        command = [
+            DNF, "do", "--offline", "--assumeyes",
+            "--action=upgrade", "*",
+            "--action=install", *driver_packages,
+        ]
+    else:
+        command = [DNF, "upgrade", "--offline", "--assumeyes"]
+    result = run(command, timeout=PROVIDER_TIMEOUT)
+    optional_repo_skipped = False
+    if result.returncode != 0 and optional_repo_failure(result):
+        result = run([*command, f"--disablerepo={OPTIONAL_REPO}"], timeout=PROVIDER_TIMEOUT)
+        optional_repo_skipped = result.returncode == 0
+    if result.returncode != 0:
+        return result.returncode, optional_repo_skipped
+
+    status = run([DNF, "offline-upgrade", "status"], timeout=120)
+    if status.returncode != 0:
+        return status.returncode, optional_repo_skipped
+
+    # The Update Center owns the visible restart action.  Ask DNF5 to create
+    # /system-update now, while this one authenticated helper is still active,
+    # but explicitly suppress its immediate reboot.  A later logind reboot can
+    # then enter the prepared offline transaction without another password.
+    scheduled = run(
+        [DNF, "offline", "reboot", "--assumeyes"],
+        timeout=120,
+        extra_env={"DNF_SYSTEM_UPGRADE_NO_REBOOT": "1"},
+    )
+    if scheduled.returncode != 0 or not offline_restart_is_scheduled():
+        return scheduled.returncode or 1, optional_repo_skipped
+    return 0, optional_repo_skipped
+
+
+def apply(args):
+    if not OPERATION_ID.fullmatch(args.operation_id):
+        raise ValueError("invalid update operation id")
+    driver_packages = validate_driver_packages(args.driver_package)
+    if driver_packages and not args.system:
+        raise ValueError("driver packages require the system update provider")
+    if not (args.system or args.system_flatpak or args.firmware):
+        raise ValueError("no privileged update provider was selected")
+
+    results = []
+    recovery_point = None
+    optional_repo_skipped = False
+    if args.system:
+        emit("phase", phase="CHECKPOINTING", message="Creating a local recovery point before the system update.")
+        recovery_point = load_recovery_create()("pre-update", args.operation_id)
+        if not recovery_point.get("id") or recovery_point.get("status") != "valid":
+            raise RuntimeError("The recovery helper did not create a valid safety point.")
+        emit("recovery", recovery_point={"id": recovery_point["id"], "status": recovery_point["status"]})
+        emit("phase", phase="PREPARING_RESTART", message="Downloading and preparing the system update for the next restart.")
+        returncode, optional_repo_skipped = prepare_dnf(driver_packages)
+        if returncode != 0:
+            emit("provider", provider="DNF5", state="DEGRADED", reason="DNF5 could not prepare the offline update.")
+            return returncode
+        results.append({"provider": "DNF5", "state": "SUCCESS", "reason": "The native offline system update is prepared."})
+        emit("provider", **results[-1])
+
+    if args.system_flatpak:
+        emit("phase", phase="UPDATING_APPLICATIONS", message="Updating system applications through Flatpak.")
+        result = run([FLATPAK, "update", "--system", "--noninteractive"], timeout=PROVIDER_TIMEOUT)
+        state = "SUCCESS" if result.returncode == 0 else "DEGRADED"
+        reason = "System applications were updated through Flatpak." if result.returncode == 0 else "System Flatpak reported a failure."
+        results.append({"provider": "Flatpak (system)", "state": state, "reason": reason})
+        emit("provider", **results[-1])
+
+    if args.firmware:
+        emit("phase", phase="UPDATING_FIRMWARE", message="Applying the available firmware updates.")
+        result = run([FWUPD, "update", "--assume-yes"], timeout=PROVIDER_TIMEOUT)
+        state = "SUCCESS" if result.returncode == 0 else "DEGRADED"
+        reason = "Firmware updates completed through fwupd." if result.returncode == 0 else "fwupd reported a failure."
+        results.append({"provider": "fwupd", "state": state, "reason": reason})
+        emit("provider", **results[-1])
+
+    emit(
+        "complete",
+        recovery_point={"id": recovery_point["id"], "status": recovery_point["status"]} if recovery_point else None,
+        optional_repo_skipped=optional_repo_skipped,
+        provider_results=results,
+    )
+    return 0
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(description="GREYWARD fixed native-provider update transaction")
+    subparsers = parser.add_subparsers(dest="command", required=True)
+    apply_parser = subparsers.add_parser("apply")
+    apply_parser.add_argument("--operation-id", required=True)
+    apply_parser.add_argument("--system", action="store_true")
+    apply_parser.add_argument("--system-flatpak", action="store_true")
+    apply_parser.add_argument("--firmware", action="store_true")
+    apply_parser.add_argument("--driver-package", action="append", default=[])
+    args = parser.parse_args(argv)
+    try:
+        return apply(args)
+    except (OSError, subprocess.SubprocessError, RuntimeError, ValueError) as error:
+        print(str(error), file=sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

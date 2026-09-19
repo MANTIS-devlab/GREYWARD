@@ -1,0 +1,130 @@
+#!/usr/bin/python3
+"""Run the unattended GREYWARD system-update boundary.
+
+This entrypoint is root-owned and is only called by the root systemd timer.
+It performs a read-only DNF5 check first, then delegates the mutation to the
+same fixed native-provider helper used by Update Center. It never evaluates
+shell text, accepts user arguments, or installs a passwordless Polkit rule.
+"""
+
+import fcntl
+import os
+import pwd
+import subprocess
+import time
+from pathlib import Path
+
+
+DNF = "/usr/bin/dnf5"
+UPDATE_HELPER = "/usr/libexec/greyward-update-action"
+NOTIFY_SEND = "/usr/bin/notify-send"
+RUNUSER = "/usr/sbin/runuser"
+LOCK = Path("/run/lock/greyward-auto-update.lock")
+SYSTEM_UPDATE = Path("/system-update")
+CHECK_TIMEOUT = 20 * 60
+APPLY_TIMEOUT = 45 * 60
+
+
+def run(argv, timeout):
+    environment = os.environ.copy()
+    environment.update({"LC_ALL": "C", "LANG": "C"})
+    return subprocess.run(
+        argv,
+        capture_output=True,
+        text=True,
+        check=False,
+        env=environment,
+        timeout=timeout,
+    )
+
+
+def active_users():
+    runtime_root = Path("/run/user")
+    if not runtime_root.is_dir():
+        return []
+    users = []
+    for runtime in sorted(runtime_root.iterdir()):
+        if not runtime.name.isdigit() or not (runtime / "bus").is_socket():
+            continue
+        uid = int(runtime.name)
+        if uid < 1000:
+            continue
+        try:
+            account = pwd.getpwuid(uid)
+        except KeyError:
+            continue
+        state = subprocess.run(
+            ["/usr/bin/loginctl", "show-user", str(uid), "--property=State", "--value"],
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=10,
+        )
+        if state.returncode != 0 or state.stdout.strip() not in {"active", "online"}:
+            continue
+        users.append((account, runtime))
+    return users
+
+
+def notify(title, body):
+    delivered = False
+    for account, runtime in active_users():
+        environment = {
+            "DBUS_SESSION_BUS_ADDRESS": f"unix:path={runtime / 'bus'}",
+            "XDG_RUNTIME_DIR": str(runtime),
+            "HOME": account.pw_dir,
+            "LANG": "C",
+            "LC_ALL": "C",
+        }
+        result = subprocess.run(
+            [RUNUSER, "-u", account.pw_name, "--", NOTIFY_SEND,
+             "--app-name=GREYWARD Security Center",
+             "--icon=greyward-security-status",
+             title, body],
+            env=environment,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=15,
+        )
+        delivered = delivered or result.returncode == 0
+    return delivered
+
+
+def main():
+    if os.geteuid() != 0:
+        print("greyward-auto-update must run as root", flush=True)
+        return 2
+    LOCK.parent.mkdir(mode=0o755, exist_ok=True)
+    with LOCK.open("w", encoding="ascii") as handle:
+        fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        if SYSTEM_UPDATE.is_symlink():
+            notify("System restart required", "A previously prepared GREYWARD system update is waiting for restart.")
+            return 0
+
+        check = run([DNF, "check-upgrade", "--json"], CHECK_TIMEOUT)
+        if check.returncode == 0:
+            return 0
+        if check.returncode != 100:
+            detail = (check.stderr or check.stdout).strip().splitlines()[-1:] or ["DNF5 update check failed."]
+            print(detail[0][:240], flush=True)
+            notify("Automatic update failed", detail[0][:240])
+            return check.returncode or 1
+
+        operation_id = f"dnf5-{int(time.time())}"
+        apply_result = run(
+            [UPDATE_HELPER, "apply", "--operation-id", operation_id, "--system"],
+            APPLY_TIMEOUT,
+        )
+        if apply_result.returncode != 0 or not SYSTEM_UPDATE.is_symlink():
+            detail = (apply_result.stderr or apply_result.stdout).strip().splitlines()[-1:] or ["The system update could not be prepared."]
+            print(detail[0][:240], flush=True)
+            notify("Automatic update failed", detail[0][:240])
+            return apply_result.returncode or 1
+
+        notify("System update ready", "GREYWARD prepared the system update. Restart required to finish.")
+        return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -1,0 +1,8 @@
+#!/bin/sh
+# Keep wildcard handling out of swayidle's shell command parsing.
+set -eu
+case "${1:-}" in
+  off) exec /usr/bin/wlopm --off '*' ;;
+  on) exec /usr/bin/wlopm --on '*' ;;
+  *) printf 'usage: %s {on|off}\n' "$0" >&2; exit 2 ;;
+esac

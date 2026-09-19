@@ -1,0 +1,14 @@
+{
+  "id": "greywardSecure",
+  "name": "GREYWARD Security Center",
+  "description": "GREYWARD-native posture and live privacy activity in one compact taskbar surface",
+  "version": "3.0.0",
+  "author": "MANTIS SYSTEMS",
+  "type": "widget",
+  "capabilities": ["dankbar-widget", "security-context-shell-summary", "security-context-privacy-capsule", "privacy-profile-control"],
+  "component": "./SecureWidget.qml",
+  "icon": "security",
+  "requires_dms": ">=1.5.3",
+  "dependencies": ["gdbus", "greyward-security-context"],
+  "permissions": ["settings_read", "process"]
+}

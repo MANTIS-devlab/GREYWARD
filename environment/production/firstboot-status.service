@@ -1,0 +1,19 @@
+[Unit]
+Description=GREYWARD first-boot setup status display
+DefaultDependencies=no
+After=local-fs.target
+Before=greyward-production-firstboot.service systemd-user-sessions.service getty@tty1.service greetd.service graphical.target shutdown.target
+Conflicts=shutdown.target
+ConditionPathExists=/var/lib/greyward/installer/production-pending
+
+[Service]
+Type=simple
+ExecStart=/usr/local/libexec/greyward-firstboot-status
+Restart=always
+RestartSec=5s
+StandardInput=null
+StandardOutput=null
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,160 @@
+/* GREYWARD local Cockpit branding for Anaconda Web UI.
+ *
+ * Cockpit serves this file before the Fedora package branding when it is
+ * installed in /etc/cockpit/branding.  The selectors are limited to the
+ * Anaconda Web UI so other Cockpit pages retain their normal system theme.
+ */
+#badge {
+  inline-size: 225px;
+  block-size: 80px;
+  background-image: url("greyward-symbol.svg");
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+}
+
+#brand::before {
+  content: "GREYWARD · ${NAME} <b>${VARIANT}</b>";
+}
+
+.anaconda {
+  color-scheme: dark;
+  --brand-default-light: #B8C4D0;
+  --brand-default: #59616A;
+  --brand-default-dark: #0B0D10;
+  --pf-t--global--color--brand--default: #B8C4D0;
+  --pf-t--global--color--brand--hover: #E6E9ED;
+  --pf-t--global--background--color--primary--default: #0B0D10;
+  --pf-t--global--background--color--secondary--default: #12161B;
+  --pf-t--global--background--color--floating--default: #1B2229;
+  --pf-t--global--color--text--default: #E6E9ED;
+  --pf-t--global--color--text--subtle: #B8C4D0;
+  --pf-t--global--border--color--default: #39434D;
+  --pf-t--global--border--color--high-contrast: #59616A;
+}
+
+.anaconda .logo {
+  background-image: url("greyward-symbol.svg");
+  filter: none;
+  mix-blend-mode: normal;
+}
+
+.anaconda .pf-v6-c-masthead,
+.anaconda .pf-v6-c-page__sidebar,
+.anaconda .pf-v6-c-wizard__nav {
+  background-color: #12161B;
+  color: #E6E9ED;
+}
+
+.anaconda .pf-v6-c-masthead h1,
+.anaconda .pf-v6-c-page__sidebar,
+.anaconda .pf-v6-c-wizard__nav,
+.anaconda .pf-v6-c-wizard__nav-link {
+  color: #E6E9ED;
+}
+
+.anaconda .pf-v6-c-page__main-container,
+.anaconda .pf-v6-c-page__main,
+.anaconda .pf-v6-c-page__main-section,
+.anaconda .pf-v6-c-page__main-group,
+.anaconda .pf-v6-c-wizard__main,
+.anaconda .pf-v6-c-wizard__footer {
+  background-color: #0B0D10;
+  color: #E6E9ED;
+}
+
+.anaconda .pf-v6-c-page__main-group > .pf-v6-c-page__main-section:first-child {
+  --_text: #E6E9ED;
+  background: #12161B;
+}
+
+.anaconda .pf-v6-c-page__main-group > .pf-v6-c-page__main-section:first-child .pf-v6-c-content,
+.anaconda #toggle-kebab path {
+  color: #E6E9ED;
+  fill: #E6E9ED;
+}
+
+.anaconda .pf-v6-c-card,
+.anaconda .pf-v6-c-form-control,
+.anaconda .pf-v6-c-select,
+.anaconda .pf-v6-c-text-input-group,
+.anaconda textarea,
+.anaconda input,
+.anaconda select {
+  background-color: #12161B;
+  color: #E6E9ED;
+  border-color: #59616A;
+}
+
+.anaconda .pf-v6-c-wizard__nav-link.pf-m-current {
+  color: #E6E9ED;
+  background-color: #1B2229;
+}
+
+.anaconda .pf-v6-c-button.pf-m-primary {
+  --pf-v6-c-button--m-primary--BackgroundColor: #59616A;
+  --pf-v6-c-button--m-primary--Color: #FFFFFF;
+}
+
+/* PatternFly inherits muted foreground tokens from Fedora's light base
+ * stylesheet. They become unreadable on GREYWARD dark surfaces, especially
+ * in error dialogs, select menus, helper text, and disabled actions. */
+.anaconda :is(
+  h1, h2, h3, h4, h5, h6, p, span, label, legend, small, strong, em,
+  a, button, [role="button"], input, textarea, select, option,
+  .pf-v6-c-button, .pf-v6-c-form__label, .pf-v6-c-helper-text,
+  .pf-v6-c-helper-text__item, .pf-v6-c-menu__item,
+  .pf-v6-c-modal-box, .pf-v6-c-modal-box__title
+) {
+  color: #FFFFFF !important;
+}
+
+.anaconda :is(a, a:hover, a:focus, a:active) {
+  color: #FFFFFF !important;
+  text-decoration-color: #FFFFFF;
+}
+
+.anaconda :is(input, textarea, select, .pf-v6-c-form-control,
+  .pf-v6-c-select, .pf-v6-c-text-input-group) {
+  background-color: #12161B;
+  color: #FFFFFF !important;
+  border-color: #7B8794;
+}
+
+.anaconda :is(input, textarea)::placeholder {
+  color: #FFFFFF !important;
+  opacity: 0.82;
+}
+
+.anaconda :is(.pf-v6-c-button, button, [role="button"]) {
+  color: #FFFFFF !important;
+  background-color: #2A3138;
+  border-color: #7B8794;
+}
+
+.anaconda :is(.pf-v6-c-button, button, [role="button"]):hover,
+.anaconda :is(.pf-v6-c-button, button, [role="button"]):focus-visible {
+  color: #FFFFFF !important;
+  background-color: #3A4652;
+  border-color: #B8C4D0;
+}
+
+.anaconda :is(.pf-v6-c-button, button, [role="button"]):disabled,
+.anaconda :is(.pf-v6-c-button, button, [role="button"])[aria-disabled="true"] {
+  color: #FFFFFF !important;
+  background-color: #3A424B;
+  border-color: #7B8794;
+  opacity: 1;
+}
+
+.anaconda .pf-v6-c-button.pf-m-primary {
+  color: #FFFFFF !important;
+  background-color: #59616A;
+  border-color: #B8C4D0;
+}
+
+.anaconda .pf-v6-c-button.pf-m-primary:hover,
+.anaconda .pf-v6-c-button.pf-m-primary:focus-visible {
+  color: #FFFFFF !important;
+  background-color: #6E7C8B;
+}

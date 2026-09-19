@@ -1,0 +1,5 @@
+#!/usr/bin/python3
+import sys
+sys.path.insert(0, "/usr/lib/greyward-security-context")
+from greyward_security_context.recovery import command_line
+raise SystemExit(command_line())

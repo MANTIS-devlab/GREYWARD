@@ -1,0 +1,18 @@
+--- a/quickshell/dms/Modules/DankBar/Widgets/AppsDock.qml
++++ b/quickshell/dms/Modules/DankBar/Widgets/AppsDock.qml
+@@ -419,6 +419,6 @@ BasePill {
+     Component {
+         id: rowLayout
+         Row {
+-            spacing: Theme.spacingXS
++            spacing: Theme.spacingS
+ 
+             Repeater {
+@@ -436,6 +436,6 @@ BasePill {
+     Component {
+         id: columnLayout
+         Column {
+-            spacing: Theme.spacingXS
++            spacing: Theme.spacingS
+ 
+             Repeater {

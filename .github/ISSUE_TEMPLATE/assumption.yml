@@ -1,0 +1,36 @@
+name: Challenge an assumption
+description: Question architecture, security reasoning, scope, or a usability tradeoff
+title: "[Design challenge] "
+labels: ["design", "review"]
+body:
+  - type: textarea
+    id: assumption
+    attributes:
+      label: Assumption or decision being challenged
+      description: Quote or link to the code, policy, or documented property.
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Why it may be wrong
+      description: Threat, failure mode, upstream mechanism, usability cost, or contrary evidence.
+    validations:
+      required: true
+  - type: textarea
+    id: consequence
+    attributes:
+      label: Consequence
+      description: What breaks or becomes misleading if the assumption remains?
+    validations:
+      required: true
+  - type: textarea
+    id: alternative
+    attributes:
+      label: Alternative
+      description: A better design, upstream solution, deletion, or experiment, if known.
+  - type: textarea
+    id: validation
+    attributes:
+      label: How to evaluate the question
+      description: Tests, measurements, review, or runtime evidence that would resolve it.

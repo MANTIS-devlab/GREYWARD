@@ -1,0 +1,30 @@
+[Unit]
+Description=GREYWARD canonical DMS shell v1.5.3
+PartOf=graphical-session.target
+After=graphical-session.target
+# The user unit is enabled globally for the production account, but Labwc is
+# responsible for creating WAYLAND_DISPLAY. Prevent an early user-manager
+# start from launching DMS before the compositor socket exists; the Labwc
+# autostart imports the variable and starts this unit at the right boundary.
+ConditionEnvironment=WAYLAND_DISPLAY
+[Service]
+Type=simple
+ExecStartPre=/usr/local/libexec/greyward-dms-session-migrate
+ExecStart=/usr/local/bin/greyward-dms run --session
+Restart=on-failure
+RestartSec=2
+SuccessExitStatus=143 SIGTERM
+Environment=QT_QPA_PLATFORM=wayland
+Environment=QT_WAYLAND_DISABLE_WINDOWDECORATION=1
+# The pinned upstream DMS backend contains an unconditional cleartext
+# ip-api.com geolocation seed. Route all non-local plain HTTP from the DMS
+# process tree to a closed loopback port: HTTPS remains available to reviewed
+# plugins, while the upstream request fails locally without disclosure or its
+# former network timeout.
+Environment=HTTP_PROXY=http://127.0.0.1:9
+Environment=http_proxy=http://127.0.0.1:9
+Environment="NO_PROXY=localhost,127.0.0.1,::1"
+Environment="no_proxy=localhost,127.0.0.1,::1"
+
+[Install]
+WantedBy=graphical-session.target

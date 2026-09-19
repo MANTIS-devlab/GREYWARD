@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Keep the login background identical to the canonical desktop wallpaper.
+# This helper runs before every greetd start so the cache remains correct after
+# a greeter restart, cache cleanup, or a repaired production install.
+source=/usr/share/backgrounds/greyward/greyward-wallpaper-black-art-4k.jpg
+target=/var/cache/dms-greeter/greeter_wallpaper_override.jpg
+
+test -s "$source"
+install -d -o greeter -g greeter -m 2770 "$(dirname "$target")"
+temporary=$(mktemp "${target}.XXXXXX")
+trap 'rm -f -- "$temporary"' EXIT
+install -o greeter -g greeter -m 0644 "$source" "$temporary"
+cmp -s "$source" "$temporary"
+mv -f -- "$temporary" "$target"
+chown greeter:greeter "$target"
+chmod 0644 "$target"
+trap - EXIT

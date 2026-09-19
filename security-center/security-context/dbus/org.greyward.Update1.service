@@ -1,0 +1,3 @@
+[D-BUS Service]
+Name=org.greyward.Update1
+SystemdService=greyward-update-center.service

@@ -1,0 +1,3 @@
+[D-BUS Service]
+Name=systems.mantis.greyward.OpenSnitchPolicy1
+SystemdService=greyward-opensnitch-policy.service

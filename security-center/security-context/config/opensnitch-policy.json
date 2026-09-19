@@ -1,0 +1,1 @@
+{"default_action":"allow","default_duration":"once","interactive_prompts":false,"dns_policy":{"enforce":true,"ports":[53,853]},"threat_intel":{"enabled":true,"provider":"feodo-recommended"},"rules":[]}

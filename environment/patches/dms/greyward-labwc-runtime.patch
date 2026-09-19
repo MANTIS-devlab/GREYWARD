@@ -1,0 +1,24 @@
+--- a/quickshell/dms/Services/PopoutService.qml
++++ b/quickshell/dms/Services/PopoutService.qml
+@@ -78,8 +78,21 @@
+         }
+     }
+ 
++    Timer {
++        id: labwcDeferredUnloadTimer
++        interval: 30000
++        repeat: false
++        onTriggered: root._flushPendingUnloads()
++    }
++
+     function _scheduleUnload(key) {
+         _pendingUnloads[key] = true;
++        // DMS otherwise retains every closed popout until the session locks.
++        // In the canonical Labwc shell, reclaim hidden QML surfaces after a
++        // brief idle period rather than making ordinary Settings/launcher use
++        // a permanent memory-cost increase for the rest of the session.
++        if (CompositorService.isLabwc)
++            labwcDeferredUnloadTimer.restart();
+     }
+ 
+     function _flushPendingUnloads() {

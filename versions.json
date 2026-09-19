@@ -1,0 +1,27 @@
+{
+  "fedora": {
+    "release": 44,
+    "compose": "1.7",
+    "edition": "Workstation environment via Everything netinstall",
+    "iso": "Fedora-Everything-netinst-x86_64-44-1.7.iso",
+    "url": "https://download.fedoraproject.org/pub/fedora/linux/releases/44/Everything/x86_64/iso/Fedora-Everything-netinst-x86_64-44-1.7.iso",
+    "checksumUrl": "https://mirrors.fedoraproject.org/mirrorlist?repo=fedora-44&arch=x86_64",
+    "certificateUrl": "https://fedoraproject.org/fedora.gpg",
+    "signingFingerprint": "36F612DCF27F7D1A48A835E4DBFCF71C6D9F90A6",
+    "sha256": "bd285201494dd0ba09b54d05ac707de1401668b8512a573edb5922dcf9d7067e"
+  },
+  "packer": {
+    "version": "1.16.0",
+    "hypervPlugin": "1.1.5"
+  },
+  "hyprland": {
+    "version": "0.56.2",
+    "repository": "sdegler/hyprland",
+    "package": "hyprland"
+  },
+  "quickshell": {
+    "version": "0.3.0",
+    "repository": "errornointernet/quickshell",
+    "package": "quickshell"
+  }
+}

@@ -1,0 +1,3 @@
+[D-BUS Service]
+Name=systems.mantis.greyward.SecurityContext1
+SystemdService=greyward-security-context-user.service

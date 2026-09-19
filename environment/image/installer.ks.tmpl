@@ -1,0 +1,180 @@
+# GREYWARD internal alpha installer. The production payload is copied from the
+# ISO and finalized locally on the first reboot. No internet is required.
+#version=F44
+graphical
+cdrom
+
+lang en_US.UTF-8
+keyboard --vckeymap=fr --xlayouts='fr'
+timezone Europe/Paris --utc
+firstboot --disable
+network --hostname=greyward
+# Leave root and the normal account unspecified so the visible graphical
+# Anaconda account page must collect the user's credentials. Root remains
+# locked by the normal Fedora policy when no root password is supplied.
+selinux --enforcing
+firewall --enabled
+services --enabled=NetworkManager,chronyd
+zerombr
+clearpart --all --initlabel
+autopart --type=btrfs --encrypted
+# Leave enough time for the first encrypted-disk boot hand-off to remain
+# visible in VM consoles and on physical hardware. Anaconda owns the final
+# reboot; the explicit --eject prevents installer media from winning the next
+# firmware boot when the platform honors optical eject.
+bootloader --timeout=5
+reboot --eject
+
+# Generated from the complete, baseline-checked RPM closure. The builder
+# excludes openssh-server and both Initial Setup implementations.
+%include /run/install/repo/greyward/production/offline/installer-packages.ks
+
+%post --nochroot --erroronfail --log=/mnt/sysroot/root/greyward-installer-post.log
+set -euxo pipefail
+# Anaconda normally exposes the boot media at /run/install/repo.  The exact
+# mount can differ between source discovery paths, however, so resolve it by
+# the payload marker instead of assuming that one directory is still mounted
+# when a nochroot %post runs.  Do not create the target stage until the source
+# has been found; otherwise a later first-boot failure hides an install-time
+# media/copy failure.
+media_root=''
+for candidate in \
+  /run/install/repo \
+  /run/install/source \
+  /run/install/isodir \
+  /run/media \
+  /media \
+  /mnt; do
+  if [[ -r "$candidate/greyward/production/payload.sha256" ]]; then
+    media_root="$candidate"
+    break
+  fi
+done
+if [[ -z "$media_root" ]]; then
+  media_marker=$(find /run/install /run/media /media /mnt -xdev -type f \
+    -path '*/greyward/production/payload.sha256' -print -quit 2>/dev/null || true)
+  if [[ -n "$media_marker" ]]; then
+    media_root="${media_marker%/greyward/production/payload.sha256}"
+  fi
+fi
+# Last-resort recovery for optical media whose mount was released before
+# %post. This is deliberately read-only and only accepts the same marker.
+temporary_media_mount=''
+if [[ -z "$media_root" ]]; then
+  temporary_media_mount=/run/install/greyward-media
+  install -d -m 0755 "$temporary_media_mount"
+  for device in /dev/sr* /dev/cdrom; do
+    [[ -e "$device" ]] || continue
+    if mount -o ro "$device" "$temporary_media_mount" 2>/dev/null; then
+      if [[ -r "$temporary_media_mount/greyward/production/payload.sha256" ]]; then
+        media_root="$temporary_media_mount"
+        break
+      fi
+      umount "$temporary_media_mount" 2>/dev/null || true
+    fi
+  done
+fi
+if [[ -z "$media_root" ]]; then
+  echo 'GREYWARD production payload is not available from the installer media.' >&2
+  echo 'GREYWARD expected: <media-root>/greyward/production/payload.sha256' >&2
+  findmnt -rn -o TARGET,SOURCE,FSTYPE 2>/dev/null || true
+  ls -la /run/install /run/media /media /mnt 2>&1 || true
+  exit 1
+fi
+media_stage="$media_root/greyward/production"
+# Keep the immutable production payload on the installed root filesystem.
+# Fedora's automatic Btrfs layout may mount /var as a separate subvolume;
+# copying the payload there from nochroot %post can otherwise place it below
+# the mount boundary and make it disappear on the first boot. The pending and
+# status markers remain under /var because systemd observes them there.
+target_stage=/mnt/sysroot/usr/lib/greyward/installer/production
+echo "GREYWARD installer: using production payload from $media_stage"
+install -d -m 0755 "$target_stage"
+cp -a "$media_stage/." "$target_stage/"
+if [[ ! -r "$target_stage/payload.sha256" ]]; then
+  echo "GREYWARD installer: payload copy did not create $target_stage/payload.sha256" >&2
+  exit 1
+fi
+# Verify the exact tree Anaconda copied before installing anything into the
+# target. A failure here preserves a useful report in the installed root and
+# prevents a later first-boot checksum failure from hiding the copy boundary.
+payload_check=/mnt/sysroot/root/greyward-payload-check.log
+if ! (cd "$target_stage" && \
+  sha256sum --quiet -c payload.sha256 >"$payload_check" 2>&1); then
+  echo 'GREYWARD production payload verification failed during Anaconda %post.' >&2
+  sed -n '1,40p' "$payload_check" >&2
+  exit 1
+fi
+rm -f "$payload_check"
+if [[ -n "$temporary_media_mount" ]]; then
+  umount "$temporary_media_mount" 2>/dev/null || true
+fi
+# Prime the installed initramfs before the first reboot. The first LUKS unlock
+# happens before the first-boot production service can run, so selecting the
+# theme only from the post-reboot provisioner would make the first prompt use
+# Fedora's default Plymouth presentation.
+branding_rpm=$(find "$target_stage/rpms" -maxdepth 1 -type f -name 'greyward-branding-*.rpm' -print)
+test -n "$branding_rpm"
+test "$(printf '%s\n' "$branding_rpm" | wc -l)" -eq 1
+rpm --root /mnt/sysroot -Uvh --replacepkgs "$branding_rpm"
+chroot /mnt/sysroot /usr/bin/plymouth-set-default-theme greyward
+# The installer runs an older kernel than the baseline-checked target. Plymouth's
+# -R helper uses uname -r even inside chroot; rebuild the installed kernels instead.
+chroot /mnt/sysroot /usr/bin/dracut --regenerate-all --force
+# Keep Anaconda's target chroot limited to file copies. DNF, DMS, Flatpak, and
+# systemd-dependent work runs from the installed system after reboot, where a
+# real system bus and the account created by Anaconda are available.
+install -D -m 0755 \
+  "$target_stage/provision-firstboot.sh" \
+  /mnt/sysroot/usr/local/libexec/greyward-production-firstboot
+install -D -m 0644 \
+  "$target_stage/provision-firstboot.service" \
+  /mnt/sysroot/etc/systemd/system/greyward-production-firstboot.service
+install -D -m 0755 \
+  "$target_stage/firstboot-status.sh" \
+  /mnt/sysroot/usr/local/libexec/greyward-firstboot-status
+install -D -m 0644 \
+  "$target_stage/firstboot-status.service" \
+  /mnt/sysroot/etc/systemd/system/greyward-firstboot-status.service
+install -d -m 0755 /mnt/sysroot/etc/systemd/system/multi-user.target.wants
+ln -sfn ../greyward-production-firstboot.service \
+  /mnt/sysroot/etc/systemd/system/multi-user.target.wants/greyward-production-firstboot.service
+ln -sfn ../firstboot-status.service \
+  /mnt/sysroot/etc/systemd/system/multi-user.target.wants/greyward-firstboot-status.service
+# Anaconda's automatic Btrfs layout does not guarantee that /var/lib/greyward
+# exists yet. Create the marker directory explicitly before writing the retry
+# boundary used by the first-boot services.
+install -d -m 0755 /mnt/sysroot/var/lib/greyward/installer
+# Reaching this point means Anaconda has completed its package transaction from
+# the ISO-local repository. The first-boot finalizer uses this durable marker to
+# avoid resolving and reinstalling the same Fedora RPM closure a second time.
+# It still verifies every requested production package and falls back to DNF if
+# the marker is absent or the installed closure is incomplete.
+touch /mnt/sysroot/var/lib/greyward/installer/anaconda-package-closure-installed
+touch /mnt/sysroot/var/lib/greyward/installer/production-pending
+# The offline RPM transaction already installed greetd. Hold login even if its
+# package preset enabled it; Type=exec ordering alone does not await setup.
+install -d -m 0755 /mnt/sysroot/etc/systemd/system/greetd.service.d
+cat > /mnt/sysroot/etc/systemd/system/greetd.service.d/greyward-production-firstboot.conf <<'EOF'
+[Unit]
+ConditionPathExists=/etc/greyward-production-complete
+EOF
+# The first-boot gate owns the visible setup experience.  tty1 has its own
+# independent getty target, so gate it as well or users see a misleading login
+# prompt while the installed system is still being finalized.
+install -d -m 0755 /mnt/sysroot/etc/systemd/system/getty@tty1.service.d
+cat > /mnt/sysroot/etc/systemd/system/getty@tty1.service.d/greyward-production-firstboot.conf <<'EOF'
+[Unit]
+ConditionPathExists=!/var/lib/greyward/installer/production-pending
+EOF
+# Avoid asking systemctl to talk to a bus in the installer environment; this
+# is the same on-disk default-target link that systemctl set-default creates.
+ln -sfn /usr/lib/systemd/system/graphical.target /mnt/sysroot/etc/systemd/system/default.target
+# Do not mask Initial Setup in this post section: Anaconda must finish its
+# account workflow first. The first-boot finalizer masks any residual setup
+# path only after reboot and before it releases the GREYWARD login boundary.
+# Record the hand-off immediately before leaving the installer. The Kickstart
+# reboot directive above is the only reboot owner; the first-boot service
+# confirms this marker after the installed system has actually booted.
+touch /mnt/sysroot/var/lib/greyward/installer/anaconda-reboot-requested
+%end

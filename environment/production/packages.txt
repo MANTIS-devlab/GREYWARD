@@ -1,0 +1,106 @@
+# Runtime packages for the future installed GREYWARD system.
+# Build tools, Hyper-V agents, SSH access, and diagnostic tools belong to the
+# development overlay or the image factory, not this list.
+hyprland
+labwc
+uwsm
+swayidle
+swaylock
+wlopm
+flatpak
+xdg-desktop-portal
+xdg-desktop-portal-gtk
+xdg-desktop-portal-hyprland
+xdg-desktop-portal-wlr
+xorg-x11-server-Xwayland
+hyprpaper
+# DMS owns the graphical Polkit agent; a second agent conflicts with it.
+quickshell
+qt6-qtdeclarative
+qt6-qtsvg
+qt6-qtimageformats
+qt6-qtmultimedia
+qt6-qt5compat
+pipewire
+pipewire-pulseaudio
+pipewire-utils
+wireplumber
+wl-clipboard
+NetworkManager
+NetworkManager-wifi
+NetworkManager-openvpn
+net-tools
+bluez
+bluez-tools
+upower
+polkit
+dbus
+firewalld
+systemd-resolved
+audit
+audit-rules
+crypto-policies
+crypto-policies-scripts
+policycoreutils
+dnf5daemon-server
+dnf5daemon-server-polkit
+fwupd
+cryptsetup
+plymouth
+plymouth-scripts
+dracut
+linux-firmware
+restic
+btrfs-progs
+opensnitch
+GeoIP
+GeoIP-GeoLite-data
+usbguard
+usbguard-dbus
+clamav
+clamav-update
+clamd
+greetd
+dms-greeter
+dgop
+danksearch
+python3-gobject
+python3-rpm
+at-spi2-core
+google-noto-sans-fonts
+google-noto-sans-mono-fonts
+cascadia-mono-nf-fonts
+rsms-inter-fonts
+adwaita-icon-theme
+gsettings-desktop-schemas
+dconf
+jq
+git
+zsh
+firefox
+nautilus
+# Files integration: Windows/NAS shares, phones, cameras, and archive browsing.
+gvfs-smb
+gvfs-mtp
+gvfs-gphoto2
+gvfs-archive
+gnome-text-editor
+blackbox-terminal
+libnotify
+
+# User-facing document and media tools. These use the system dark preference
+# configured by the production provisioner.
+gnome-screenshot
+obs-studio
+papers
+loupe
+file-roller
+
+# Local and network printer support. Modern IPP printers work without vendor
+# drivers; the GTK administration tool remains available for legacy setups.
+cups
+cups-filters
+system-config-printer
+avahi
+nss-mdns
+ipp-usb

@@ -1,0 +1,7 @@
+[Desktop Entry]
+Name=GREYWARD (Labwc)
+Comment=GREYWARD conventional Wayland desktop
+Exec=/usr/local/libexec/greyward-start-labwc
+TryExec=labwc
+Type=Application
+DesktopNames=GREYWARD;Labwc

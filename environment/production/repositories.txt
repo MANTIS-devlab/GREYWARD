@@ -1,0 +1,6 @@
+# Repositories required by the GREYWARD runtime package set.
+# These are production inputs, not developer repositories. Keep this list
+# small and review changes before promoting them into an installed image.
+sdegler/hyprland
+errornointernet/quickshell
+avengemedia/danklinux

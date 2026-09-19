@@ -1,0 +1,30 @@
+#!/bin/sh
+# DMS is the canonical GREYWARD shell.
+# DMS owns the graphical Polkit agent used by user-confirmed privileged actions.
+# Labwc creates the Wayland socket after the user manager is already running.
+# Import only the session-routing variables that DMS needs before starting the
+# user service; without this, systemd can launch DMS without WAYLAND_DISPLAY and
+# leave the compositor showing only a black root surface.
+dbus-update-activation-environment --systemd \
+  WAYLAND_DISPLAY XDG_CURRENT_DESKTOP XDG_SESSION_DESKTOP XDG_DATA_DIRS \
+  2>/dev/null || true
+systemctl --user import-environment \
+  WAYLAND_DISPLAY XDG_CURRENT_DESKTOP XDG_SESSION_DESKTOP XDG_DATA_DIRS \
+  2>/dev/null || true
+# The graphical-session target can be reached before Labwc's environment was
+# imported into the user manager. Start Security Context at this same known
+# good boundary so its D-Bus name is present for DMS on every fresh login.
+systemctl --user start --no-block greyward-security-context-user.service
+systemctl --user start --no-block greyward-dms.service
+(
+  for _attempt in 1 2 3 4 5 6 7 8 9 10; do
+    if systemctl --user is-active --quiet greyward-dms.service; then
+      if [ -r /usr/share/backgrounds/greyward/greyward-wallpaper-black-art-4k.jpg ]; then
+        /usr/local/bin/greyward-dms ipc call wallpaper set /usr/share/backgrounds/greyward/greyward-wallpaper-black-art-4k.jpg >/tmp/greyward-wallpaper-set.log 2>&1 && break
+      else
+        break
+      fi
+    fi
+    sleep 1
+  done
+) &

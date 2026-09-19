@@ -1,0 +1,14 @@
+{
+  "greywardNetworkTraffic": {
+    "enabled": true
+  },
+  "greywardPublicIp": {
+    "enabled": true
+  },
+  "greywardSecure": {
+    "enabled": true
+  },
+  "greywardSoftware": {
+    "enabled": true
+  }
+}

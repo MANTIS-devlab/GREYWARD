@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Software
+Comment=Discover and install applications
+Exec=/usr/local/libexec/greyward-software
+Terminal=false
+Categories=Settings;PackageManager;
+Icon=io.github.kolunmi.Bazaar
+StartupNotify=true
+StartupWMClass=io.github.kolunmi.Bazaar
+X-GNOME-UsesNotifications=true
+NoDisplay=false

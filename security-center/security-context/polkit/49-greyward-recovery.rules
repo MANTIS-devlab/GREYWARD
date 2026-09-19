@@ -1,0 +1,23 @@
+polkit.addRule(function (action, subject) {
+    var program = action.lookup("program");
+    var is_greyward_helper =
+        action.id === "org.greyward.RecoveryPoint" ||
+        action.id === "org.greyward.Update1.apply" ||
+        (action.id === "org.freedesktop.policykit.exec" &&
+            (program === "/usr/libexec/greyward-recovery-point" ||
+                program === "/usr/libexec/greyward-update-action"));
+
+    if (!is_greyward_helper) {
+        return polkit.Result.NOT_HANDLED;
+    }
+
+    // These fixed update/recovery helpers are invoked from a user systemd
+    // service, whose pkexec child is not reliably attached to the operator's
+    // logind session. Bind authorization to the operator's own password and
+    // Fedora's admin group instead. A graphical Polkit agent is still required
+    // to complete the prompt.
+    if (!subject.isInGroup("wheel")) {
+        return polkit.Result.NO;
+    }
+    return polkit.Result.AUTH_SELF;
+});

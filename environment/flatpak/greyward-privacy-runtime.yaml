@@ -1,0 +1,69 @@
+rows:
+  - banner:
+      height: 220
+      image:
+        dark-uri: file://__GREYWARD_HOME__/.config/bazaar/greyward-software-banner.svg
+        light-uri: file://__GREYWARD_HOME__/.config/bazaar/greyward-software-banner.svg
+        fit: cover
+        alt: "GREYWARD Software"
+        can-shrink: true
+        halign: center
+
+
+  - section:
+      title: "GREYWARD defaults"
+      subtitle:
+        string: >
+          The default desktop applications installed with GREYWARD. They are
+          sandboxed Flatpaks and receive the system desktop theme and portals.
+      overflow-count: 4
+      list-type: rich
+      appids:
+        list:
+          - io.github.hkdb.Aerion
+          - com.collaboraoffice.Office
+          - org.kde.haruna
+          - com.brave.Browser
+
+  - section:
+      title: "GREYWARD recommendations"
+      subtitle:
+        string: >
+          A considered starting set for private communication, credentials,
+          browsing, encryption and network tools. Review publisher and
+          permission information before installing.
+      overflow-count: 6
+      list-type: rich
+      appids:
+        list:
+          - me.proton.Pass
+          - me.proton.Mail
+          - com.protonvpn.www
+          - org.signal.Signal
+          - org.keepassxc.KeePassXC
+          - org.cryptomator.Cryptomator
+
+  - section:
+      title: "Private browsing and transfers"
+      subtitle:
+        string: >
+          Tools for browsing with fewer trackers, retrieving Tor Browser
+          securely, and managing transfers with control.
+      overflow-count: 4
+      list-type: rich
+      appids:
+        list:
+          - org.torproject.torbrowser-launcher
+          - net.mullvad.MullvadBrowser
+          - org.qbittorrent.qBittorrent
+
+  - section:
+      title: "Availability note"
+      subtitle:
+        string: >
+          Recommendations follow the configured Flatpak sources. Mullvad VPN
+          currently has no Flathub application, so GREYWARD leaves it out of
+          install tiles instead of showing a broken entry. Search remains
+          available if another configured source provides it later.
+      appids:
+        list: []

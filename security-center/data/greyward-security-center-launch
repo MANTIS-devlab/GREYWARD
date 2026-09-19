@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Durable desktop-entry fallback for the last package installed in the VM.
+readonly APP=/usr/bin/greyward-security-center
+
+if [[ ! -x "$APP" ]]; then
+    printf '%s\n' 'GREYWARD Security Center is not installed.' >&2
+    exit 127
+fi
+
+if [[ -z "${XDG_RUNTIME_DIR:-}" ]]; then
+    export XDG_RUNTIME_DIR="/run/user/$(id -u)"
+fi
+if [[ -z "${WAYLAND_DISPLAY:-}" && -d "$XDG_RUNTIME_DIR" ]]; then
+    wayland_socket=$(find "$XDG_RUNTIME_DIR" -maxdepth 1 -type s -name 'wayland-*' -printf '%f\n' -quit 2>/dev/null || true)
+    if [[ -n "$wayland_socket" ]]; then
+        export WAYLAND_DISPLAY="$wayland_socket"
+    fi
+fi
+if [[ -z "${DBUS_SESSION_BUS_ADDRESS:-}" && -S "$XDG_RUNTIME_DIR/bus" ]]; then
+    export DBUS_SESSION_BUS_ADDRESS="unix:path=$XDG_RUNTIME_DIR/bus"
+fi
+
+# Tao's normal Wayland GtkHeaderBar forces client-side decoration.
+# This scoped flag lets Labwc negotiate the native server-side titlebar.
+export GREYWARD_LABWC_SERVER_DECORATIONS=1
+# GTK otherwise installs a client-side header bar; let labwc own the native frame.
+export GTK_CSD=0
+
+if [[ "${1:-}" == "--file-context" && -n "${2:-}" ]]; then
+    export GREYWARD_CONTEXT_FILE="$2"
+    shift 2
+fi
+
+exec "$APP" "$@"

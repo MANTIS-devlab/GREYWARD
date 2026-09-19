@@ -1,0 +1,31 @@
+/* Supported Fedora Anaconda GTK product stylesheet.
+ * Fedora's .logo remains the base mark; .product-logo is the supported
+ * product-specific slot for the GREYWARD mark. The dark treatment applies to
+ * Anaconda's installer chrome and leaves the native workflow intact.
+ */
+@define-color greyward_obsidian #0B0D10;
+@define-color greyward_charcoal #12161B;
+@define-color greyward_silver #E6E9ED;
+
+.logo-sidebar {
+  background-color: @greyward_obsidian;
+  background-image: none;
+}
+
+.product-logo {
+  background-image: url('/usr/share/anaconda/pixmaps/greyward-anaconda-logo.png');
+  background-repeat: no-repeat;
+  background-position: center center;
+  background-color: transparent;
+  padding: 12px;
+}
+
+AnacondaSpokeWindow #nav-box {
+  background-color: @greyward_charcoal;
+  background-image: none;
+  color: @greyward_silver;
+}
+
+AnacondaSpokeWindow #nav-box GtkButton {
+  color: @greyward_silver;
+}
