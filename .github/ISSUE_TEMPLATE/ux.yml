@@ -1,0 +1,29 @@
+name: UI / UX improvement
+description: Propose a usability, accessibility, interaction, or visual improvement
+title: "[UX] "
+labels: ["ux"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: User problem
+      description: Describe the task, context, and current friction before proposing visuals.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed improvement
+      description: Explain how it fits the GREYWARD visual direction without treating current pixels as sacred.
+    validations:
+      required: true
+  - type: textarea
+    id: accessibility
+    attributes:
+      label: Accessibility and interaction
+      description: Keyboard, focus, screen reader, contrast, motion, scaling, and responsive behavior.
+  - type: textarea
+    id: validation
+    attributes:
+      label: Validation
+      description: Before/after evidence, tasks, display sizes, and tests.

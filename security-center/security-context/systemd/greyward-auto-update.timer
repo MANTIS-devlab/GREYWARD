@@ -1,0 +1,12 @@
+[Unit]
+Description=GREYWARD unattended system-update check
+
+[Timer]
+OnBootSec=15min
+OnUnitActiveSec=2d
+RandomizedDelaySec=30min
+AccuracySec=1min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

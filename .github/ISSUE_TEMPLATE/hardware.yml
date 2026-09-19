@@ -1,0 +1,60 @@
+name: Hardware report
+description: Record a physical-device result or reproducible hardware failure
+title: "[Hardware] "
+labels: ["hardware"]
+body:
+  - type: markdown
+    attributes:
+      value: "Do not include serial numbers, MAC/IP addresses, SSIDs, usernames, hostnames, credentials, or complete unreviewed logs."
+  - type: input
+    id: build
+    attributes:
+      label: Build
+      description: GREYWARD commit, image checksum, kernel, and GREYWARD package versions.
+    validations:
+      required: true
+  - type: input
+    id: system
+    attributes:
+      label: System and firmware
+      description: Manufacturer/model and firmware version only; omit serial and asset tags.
+    validations:
+      required: true
+  - type: input
+    id: device
+    attributes:
+      label: Relevant device
+      description: Device model plus PCI/USB ID and driver, if applicable.
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options: [Installation, GPU/display, Wi-Fi, Ethernet, Bluetooth, TPM/Secure Boot, Firmware, Audio, Suspend/resume, Storage, USB, Update, Recovery, Other]
+    validations:
+      required: true
+  - type: textarea
+    id: configuration
+    attributes:
+      label: Relevant configuration
+      description: Secure Boot, TPM, storage layout, display topology, connection type, and other non-identifying state.
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps and result
+      description: Numbered steps, expected result, observed result, and reproducibility rate.
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Sanitized evidence
+      description: Minimal lspci/lsusb and journal excerpts for the affected device only.
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Privacy check
+      options:
+        - label: I reviewed every attachment and removed identifying or secret data.
+          required: true

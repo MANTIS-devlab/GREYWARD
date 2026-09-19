@@ -1,0 +1,84 @@
+#!/usr/bin/env python3
+"""Open GREYWARD Software and activate Bazaar's curated Selection tab."""
+
+import subprocess
+import time
+
+
+def iter_children(node):
+    try:
+        for index in range(node.get_child_count()):
+            child = node.get_child_at_index(index)
+            if child is not None:
+                yield child
+                yield from iter_children(child)
+    except Exception:
+        return
+
+
+def selection_tab():
+    try:
+        import gi
+        gi.require_version("Atspi", "2.0")
+        from gi.repository import Atspi
+    except Exception:
+        return None
+
+    desktop = Atspi.get_desktop(0)
+    for index in range(desktop.get_child_count()):
+        application = desktop.get_child_at_index(index)
+        if application is None or str(application.get_name() or "").lower() != "bazaar":
+            continue
+
+        tabs = []
+        for node in iter_children(application):
+            try:
+                if node.get_role_name() == "page tab":
+                    tabs.append(node)
+            except Exception:
+                continue
+        if not tabs:
+            continue
+
+        names = {str(tab.get_name() or "").strip().casefold() for tab in tabs}
+        known = {"selection", "sélection", "selección", "selezione", "seleção"}
+        if names & known:
+            for tab in tabs:
+                if str(tab.get_name() or "").strip().casefold() in known:
+                    return tab
+        if len(tabs) >= 4:
+            return tabs[0]
+    return None
+
+
+def activate_selection(tab):
+    try:
+        action = tab.get_action_iface()
+        return action.get_n_actions() > 0 and action.do_action(0)
+    except Exception:
+        return False
+
+
+def main():
+    # Reuse an open Bazaar window when possible. This keeps one launcher and
+    # one taskbar identity instead of creating a second Software window.
+    existing = selection_tab()
+    if existing is not None and activate_selection(existing):
+        return
+
+    subprocess.Popen(
+        ["/usr/local/libexec/greyward-software"],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        start_new_session=True,
+    )
+    deadline = time.monotonic() + 8.0
+    while time.monotonic() < deadline:
+        tab = selection_tab()
+        if tab is not None and activate_selection(tab):
+            return
+        time.sleep(0.15)
+
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,33 @@
+border.width: 1
+window.titlebar.padding.width: 10
+window.titlebar.padding.height: 5
+# Keep the titlebar lightly translucent, but dark enough that white window
+# content and bright text behind the frame cannot erase the title.
+window.active.border.color: #e7edf2e0
+window.inactive.border.color: #c0c9d280
+window.active.title.bg: Gradient Vertical
+window.active.title.bg.color: #09131dcc
+window.active.title.bg.colorTo: #294353cc
+window.inactive.title.bg: Gradient Vertical
+window.inactive.title.bg.color: #0b141bb3
+window.inactive.title.bg.colorTo: #22313db3
+window.active.label.text.color: #ffffff
+window.inactive.label.text.color: #edf4f8
+window.label.text.justify: Left
+window.button.width: 24
+window.button.height: 24
+window.button.spacing: 11
+window.active.button.unpressed.image.color: #f4f7f9
+window.inactive.button.unpressed.image.color: #c2cad1
+window.active.button.hover.bg: Solid
+window.active.button.hover.bg.color: #e2e9ef3d
+window.inactive.button.hover.bg: Solid
+window.inactive.button.hover.bg.color: #c7d0d826
+window.active.button.pressed.bg: Solid
+window.active.button.pressed.bg.color: #eef3f65b
+window.inactive.button.pressed.bg: Solid
+window.inactive.button.pressed.bg.color: #d7e0e63d
+window.active.shadow.size: 18
+window.inactive.shadow.size: 12
+window.active.shadow.color: #000000a6
+window.inactive.shadow.color: #00000073

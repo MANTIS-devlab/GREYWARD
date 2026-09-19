@@ -1,0 +1,25 @@
+{
+    "name": "GREYWARD Obsidian",
+    "comment": "GREYWARD dark terminal palette",
+    "use-theme-colors": false,
+    "foreground-color": "#DFDFDD",
+    "background-color": "#0A1722",
+    "palette": [
+      "#0A0F14",
+      "#E06C75",
+      "#98C379",
+      "#D19A66",
+      "#61AFEE",
+      "#C678DD",
+      "#56B6C2",
+      "#A5B1B9",
+      "#59616A",
+      "#FF7A85",
+      "#B5E890",
+      "#E5B07B",
+      "#7CC7FF",
+      "#D99BFF",
+      "#72D6E4",
+      "#FEFDFD"
+    ]
+}

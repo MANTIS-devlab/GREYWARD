@@ -1,0 +1,29 @@
+--- a/quickshell/dms/Modules/DankBar/Widgets/SystemTrayBar.qml
++++ b/quickshell/dms/Modules/DankBar/Widgets/SystemTrayBar.qml
+@@ -66,9 +66,25 @@ BasePill {
+             }
+             if (icon.startsWith("/") && !icon.startsWith("file://"))
+                 return `file://${icon}`;
++            // Quickshell's SNI provider emits image://icon/<name> for a
++            // valid IconName, but resolves it through QIcon. Resolve the
++            // same name through DMS's theme service first so Flatpak active
++            // deployments are covered even when their global export is
++            // incomplete. This also avoids the provider's magenta missing
++            // pixmap when an optional IconPixmap is malformed.
++            if (icon.startsWith("image://icon/")) {
++                const iconName = icon.substring("image://icon/".length);
++                const resolved = Paths.resolveIconPath(iconName);
++                return resolved || icon;
++            }
++            if (!icon.startsWith("image://")) {
++                const resolved = Paths.resolveIconPath(icon);
++                if (resolved)
++                    return resolved;
++            }
+             return icon;
+         }
+-        return "";
++        return Paths.resolveIconPath(trayItem?.id || "");
+     }
+ 
+     function activateInlineTrayItem(trayItem, anchorItem) {

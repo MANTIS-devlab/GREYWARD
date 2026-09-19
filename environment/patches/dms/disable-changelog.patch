@@ -1,0 +1,5 @@
+--- a/quickshell/dms/Services/ChangelogService.qml
++++ b/quickshell/dms/Services/ChangelogService.qml
+@@ -16,1 +16,1 @@
+-    readonly property bool changelogEnabled: true
++    readonly property bool changelogEnabled: false

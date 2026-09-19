@@ -1,0 +1,14 @@
+{
+  "id": "greywardNetworkTraffic",
+  "name": "GREYWARD Network Traffic",
+  "description": "Compact live download and upload throughput for the GREYWARD taskbar",
+  "version": "1.0.0",
+  "author": "MANTIS SYSTEMS",
+  "type": "widget",
+  "capabilities": ["dankbar-widget", "network-throughput"],
+  "component": "./NetworkTrafficWidget.qml",
+  "icon": "swap_horiz",
+  "requires_dms": ">=1.5.3",
+  "dependencies": ["dgop"],
+  "permissions": ["settings_read"]
+}

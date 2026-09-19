@@ -1,0 +1,31 @@
+{
+  "schema": "greyward.production-system/v1",
+  "status": "active-development",
+  "runtime": {
+    "compositor": "labwc",
+    "fallbackCompositor": "hyprland",
+    "shell": "DankMaterialShell",
+    "securityCenter": "greyward-security-center",
+    "securityContext": "greyward-security-context",
+    "encryptedRoot": true,
+    "cryptoPolicy": "DEFAULT:GREYWARD"
+  },
+  "payloads": {
+    "packages": "packages.txt",
+    "provisioner": "provision.sh",
+    "dmsInstaller": "install-dms.sh",
+    "artifactPolicy": "artifact-policy.json",
+    "installedArtifactDirectory": "/var/lib/greyward/build-artifacts/",
+    "securityCenterRpmDirectory": "rpms/",
+    "securityCenterContract": "security-center-contract.tsv",
+    "securityCenterBuildManifest": "artifacts/security-center-build-manifest.tsv",
+    "imageInputStager": "../image/build.sh"
+  },
+  "notProduction": [
+    "environment/development",
+    "tools/greyward-dev",
+    "Hyper-V communicator access",
+    "developer credentials",
+    "boot rollback prototype"
+  ]
+}

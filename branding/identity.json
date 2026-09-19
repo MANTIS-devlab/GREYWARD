@@ -1,0 +1,27 @@
+{
+  "product": "GREYWARD",
+  "owner": "MANTIS SYSTEMS",
+  "canonicalSymbol": "source/greyward-symbol.svg",
+  "canonicalWordmark": "source/greyward-wordmark.png",
+  "canonicalLockup": "source/greyward-lockup.svg",
+  "palette": {
+    "obsidian": "#0B0D10",
+    "charcoal": "#12161B",
+    "graphite": "#59616A",
+    "silver": "#E6E9ED",
+    "muted": "#8A929C",
+    "highlight": "#B8C4D0"
+  },
+  "minimumSymbolPixels": 16,
+  "clearSpace": "one eighth of symbol width",
+  "sourceHashes": {
+    "greyward-symbol.svg": "DD925D9F9EF3EDC174F9B9FCBC0972A60D13A3D21C9D6864AC39727A028B6F22",
+    "greyward-wordmark.png": "3E5BC969E59D3314CC3641F5077AEB1BEE9389B281CF9612413DBD7BEE54752E",
+    "greyward-lockup.svg": "FCAF3313B6D33AE3E96A562D4DF51C390974D5B762BE06C357F07941FD1EE3F5"
+  },
+  "exports": {
+    "shell": [32, 48, 64, 128, 256],
+    "boot": [256, 512],
+    "raster": [256, 512, 1024]
+  }
+}

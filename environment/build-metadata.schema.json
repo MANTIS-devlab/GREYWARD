@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["fedora", "packer", "network", "builtAt"],
+  "properties": {
+    "fedora": { "type": "object", "required": ["release", "compose", "iso", "sha256", "downloadedAt"] },
+    "packer": { "type": "object", "required": ["version", "hypervPlugin"] },
+    "network": { "type": "object", "required": ["mode", "switchName"] },
+    "builtAt": { "type": "string", "format": "date-time" },
+    "installedNevras": { "type": "array", "items": { "type": "string" } },
+    "enabledRepositories": { "type": "array", "items": { "type": "string" } }
+  },
+  "additionalProperties": true
+}

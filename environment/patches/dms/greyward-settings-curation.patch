@@ -1,0 +1,47 @@
+--- a/quickshell/dms/Modals/Settings/SettingsModal.qml
++++ b/quickshell/dms/Modals/Settings/SettingsModal.qml
+@@ -194,7 +194,8 @@
+ 
+             Item {
+                 width: parent.width
+-                height: 48
++                height: CompositorService.isLabwc && !settingsModal.isCompactMode ? 0 : 48
++                visible: height > 0
+                 z: 10
+ 
+                 MouseArea {
+--- a/quickshell/dms/Modals/Settings/SettingsSidebar.qml
++++ b/quickshell/dms/Modals/Settings/SettingsSidebar.qml
+@@ -114,7 +114,7 @@
+         },
+         {
+             "id": "dankbar",
+-            "text": I18n.tr("Dank Bar"),
++            "text": I18n.tr("Desktop"),
+             "icon": "toolbar",
+             "children": [
+                 {
+--- a/quickshell/dms/Modules/Settings/WallpaperTab.qml
++++ b/quickshell/dms/Modules/Settings/WallpaperTab.qml
+@@ -236,7 +236,7 @@
+                         }
+ 
+                         StyledText {
+-                            text: root.currentWallpaper
++                            text: root.currentWallpaper ? I18n.tr("Stored locally") : ""
+                             font.pixelSize: Theme.fontSizeSmall
+                             color: Theme.surfaceVariantText
+                             elide: Text.ElideMiddle
+@@ -1231,6 +1231,7 @@
+                 title: I18n.tr("External Wallpaper Management", "wallpaper settings external management")
+                 settingKey: "disableWallpaper"
+                 iconName: "wallpaper"
++                visible: !CompositorService.isLabwc
+ 
+                 SettingsToggleRow {
+                     tab: "wallpaper"
+--- a/quickshell/dms/Modules/Settings/DisplayConfig/IncludeWarningBox.qml
++++ b/quickshell/dms/Modules/Settings/DisplayConfig/IncludeWarningBox.qml
+@@ -16 +16 @@
+-    readonly property bool showSetup: !showLegacy && !DisplayConfigState.includeStatus.included
++    readonly property bool showSetup: !showLegacy && DisplayConfigState.getConfigPaths() !== null && !DisplayConfigState.includeStatus.included

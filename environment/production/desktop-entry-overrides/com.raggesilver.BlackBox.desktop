@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Terminal
+GenericName=Terminal Emulator
+Comment=Open a GREYWARD terminal for shell, console and command line work
+Exec=/usr/bin/env GREYWARD_TERMINAL_BRIEF=1 SHELL=/usr/bin/zsh blackbox-terminal
+Terminal=false
+Icon=greyward-terminal
+StartupWMClass=com.raggesilver.BlackBox
+Categories=Utility;TerminalEmulator;
+Keywords=terminal;console;shell;command;command line;black box;

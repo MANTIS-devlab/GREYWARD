@@ -1,0 +1,11 @@
+{
+  "schema": "greyward.security.snapshot/v1",
+  "generated_at": "2026-08-20T12:00:00Z",
+  "boot_id": "fixture-boot",
+  "evaluator_version": "1",
+  "policy_profile": "fixture",
+  "domains": [],
+  "checks": [],
+  "collection_issues": []
+}
+

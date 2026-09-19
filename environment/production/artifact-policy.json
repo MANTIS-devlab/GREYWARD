@@ -1,0 +1,21 @@
+{
+  "schema": "greyward.production-artifact-policy/v1",
+  "purpose": "Internal-alpha traceability requirements for the installed image",
+  "dms": {
+    "version": "v1.5.3",
+    "commit": "069ddab041c738236a8910e4c39b65d9628d3018",
+    "archiveSha256": "ed543447b98568a092845164ea9cc20538ed8efa421214fba2969ab1b90a3f53"
+  },
+  "requiredAtImageBuild": [
+    "exact installed package NEVRAs and source repositories",
+    "exact COPR build identifiers or an explicit unresolved blocker",
+    "exact installed Flatpak refs and commits",
+    "package license inventory",
+    "bounded GREYWARD component SBOM/inventory"
+  ],
+  "mutableInputs": [
+    "enabled COPR repositories are externally mutable until exact build records are captured",
+    "Flathub application resolution is externally mutable until exact refs and commits are captured"
+  ],
+  "releasePolicy": "An internal image may be inspected with unresolved records; public release claims require complete records."
+}

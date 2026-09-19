@@ -1,0 +1,13 @@
+[Unit]
+Description=GREYWARD Security Context session bus
+PartOf=graphical-session.target
+After=graphical-session.target
+
+[Service]
+Type=dbus
+BusName=systems.mantis.greyward.SecurityContext1
+ExecStart=/usr/libexec/greyward-security-context-session10
+Restart=on-failure
+
+[Install]
+WantedBy=default.target graphical-session.target

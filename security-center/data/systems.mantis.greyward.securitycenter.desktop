@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=GREYWARD Security Center
+Comment=Review local security and privacy posture
+Exec=/usr/bin/greyward-security-center-launch
+Terminal=false
+Categories=System;Security;
+Icon=greyward-security-center
+StartupNotify=true
+DBusActivatable=false
+StartupWMClass=systems.mantis.greyward.securitycenter
+TryExec=/usr/bin/greyward-security-center-launch

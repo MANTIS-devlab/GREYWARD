@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+readonly page="${1:-}"
+case "$page" in
+    overview|system|network|privacy|updates|files|applications|devices|evidence|activity) ;;
+    threats)
+    event_id="${2:-}"
+    if [[ -n "$event_id" && ! "$event_id" =~ ^[A-Za-z0-9._:-]{1,128}$ ]]; then
+        printf '%s\n' 'A focused threat event is required.' >&2
+        exit 64
+    fi
+    ;;
+    *)
+    printf '%s\n' 'The requested GREYWARD Security Center destination is not supported.' >&2
+    exit 64
+    ;;
+esac
+
+readonly runtime="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+readonly request="$runtime/greyward-security-center-navigation"
+mkdir -p "$runtime"
+tmp=$(mktemp "$request.XXXXXX")
+trap 'rm -f "$tmp"' EXIT
+if [[ "$page" == "threats" && -n "$event_id" ]]; then
+    printf '%s\n%s\n' "$page" "$event_id" > "$tmp"
+else
+    printf '%s\n' "$page" > "$tmp"
+fi
+chmod 0600 "$tmp"
+mv -f "$tmp" "$request"
+trap - EXIT
+
+if ! pgrep -u "$(id -u)" -x greyward-security-center >/dev/null 2>&1; then
+    nohup /usr/bin/greyward-security-center-launch >/tmp/greyward-security-center-launch.log 2>&1 </dev/null &
+fi

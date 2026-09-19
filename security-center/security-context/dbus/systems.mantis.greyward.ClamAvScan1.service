@@ -1,0 +1,5 @@
+[D-BUS Service]
+Name=systems.mantis.greyward.ClamAvScan1
+Exec=/usr/libexec/greyward-clamav-scan
+User=root
+SystemdService=greyward-clamav-scan.service

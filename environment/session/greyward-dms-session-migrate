@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# DMS persists pinned applications in session.json rather than settings.json.
+# Seed the GREYWARD production pin set only for a new/legacy state that has
+# never contained the bar pin list. Once DMS has written barPinnedApps, that
+# list is user-owned: a restart, update, or provisioning rerun must not re-pin
+# an app the user intentionally removed. A malformed state file is preserved
+# for diagnosis.
+state_file="${XDG_STATE_HOME:-$HOME/.local/state}/DankMaterialShell/session.json"
+default_pins=("brave-browser" "com.raggesilver.BlackBox" "org.gnome.Nautilus")
+mkdir -p "$(dirname "$state_file")"
+
+if [[ ! -e "$state_file" ]]; then
+  printf '%s\n' '{"barPinnedApps":["brave-browser","com.raggesilver.BlackBox","org.gnome.Nautilus"]}' > "$state_file"
+  chmod 0600 "$state_file"
+  exit 0
+fi
+
+if ! jq -e 'type == "object"' "$state_file" >/dev/null 2>&1; then
+  backup="${state_file}.pre-greyward-software-pin.$(date -u +%Y%m%dT%H%M%SZ).bak"
+  cp -p "$state_file" "$backup" 2>/dev/null || true
+  exit 0
+fi
+
+# Migrate only the exact GREYWARD default from the former terminal identity.
+# A customized list remains untouched, while an existing fresh/default VM does
+# not retain a pin for an application that is no longer installed.
+if jq -e '(.barPinnedApps // null) == ["brave-browser", "tabby", "org.gnome.Nautilus"] or
+          (.barPinnedApps // null) == ["brave-browser", "greyward-terminal", "org.gnome.Nautilus"]' "$state_file" >/dev/null 2>&1; then
+  tmp="${state_file}.greyward-terminal.tmp.$$"
+  trap 'rm -f "$tmp"' EXIT
+  jq '(.barPinnedApps = ["brave-browser", "com.raggesilver.BlackBox", "org.gnome.Nautilus"])
+      | if (.pinnedApps // null) == ["tabby"] or (.pinnedApps // null) == ["brave-browser", "greyward-terminal", "org.gnome.Nautilus"]
+        then .pinnedApps = ["brave-browser", "com.raggesilver.BlackBox", "org.gnome.Nautilus"]
+        else .
+        end' "$state_file" > "$tmp"
+  chmod 0600 "$tmp"
+  mv -f "$tmp" "$state_file"
+  exit 0
+fi
+
+# The presence of the DMS-owned key is the durable distinction between an
+# initial seed and an established user's choices. Do not maintain a second
+# GREYWARD favorites database or marker file.
+if jq -e 'has("barPinnedApps")' "$state_file" >/dev/null 2>&1; then
+  exit 0
+fi
+
+tmp="${state_file}.greyward.tmp.$$"
+trap 'rm -f "$tmp"' EXIT
+jq -n --argjson defaults '["brave-browser", "com.raggesilver.BlackBox", "org.gnome.Nautilus"]' \
+  --slurpfile state "$state_file" \
+  '$state[0] | .barPinnedApps = $defaults' > "$tmp"
+chmod 0600 "$tmp"
+mv -f "$tmp" "$state_file"

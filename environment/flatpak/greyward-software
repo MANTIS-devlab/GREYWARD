@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Launch Bazaar with the per-user GREYWARD curated content file. This keeps the
+# Flatpak sandbox unchanged: only the user's own Bazaar config directory is
+# exposed read-only by the system override.
+config_root="${XDG_CONFIG_HOME:-$HOME/.config}/bazaar"
+template="/usr/share/greyward/bazaar/greyward-privacy.yaml"
+banner_template="/usr/share/greyward/bazaar/greyward-software-banner.svg"
+symbol_template="/usr/share/greyward/bazaar/greyward-symbol.svg"
+mkdir -p "$config_root"
+if [[ -r "$template" ]]; then
+  tmp="$config_root/greyward-privacy.yaml.tmp.$$"
+  escaped_home=$(printf '%s' "$HOME" | sed 's/[&|]/\&/g')
+  sed "s|__GREYWARD_HOME__|$escaped_home|g" "$template" > "$tmp"
+  chmod 0644 "$tmp"
+  mv -f "$tmp" "$config_root/greyward-privacy.yaml"
+fi
+if [[ -r "$banner_template" ]]; then
+  banner_tmp="$config_root/greyward-software-banner.svg.tmp.$$"
+  escaped_home=$(printf '%s' "$HOME" | sed 's/[&|]/\&/g')
+  sed "s|__GREYWARD_HOME__|$escaped_home|g" "$banner_template" > "$banner_tmp"
+  chmod 0644 "$banner_tmp"
+  mv -f "$banner_tmp" "$config_root/greyward-software-banner.svg"
+fi
+if [[ -r "$symbol_template" ]]; then
+  install -m 0644 "$symbol_template" "$config_root/greyward-symbol.svg"
+fi
+
+if [[ -r "$config_root/greyward-privacy.yaml" ]]; then
+  # The system override exposes the host user's ~/.config/bazaar directory
+  # read-only at the same path inside the Flatpak sandbox.
+  exec /usr/bin/flatpak run io.github.kolunmi.Bazaar --extra-curated-config "$config_root/greyward-privacy.yaml" "$@"
+fi
+exec /usr/bin/flatpak run io.github.kolunmi.Bazaar "$@"

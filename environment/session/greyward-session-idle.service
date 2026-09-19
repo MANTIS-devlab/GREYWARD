@@ -1,0 +1,16 @@
+[Unit]
+Description=GREYWARD session idle and sleep lock coordinator
+PartOf=graphical-session.target
+After=graphical-session.target
+ConditionEnvironment=WAYLAND_DISPLAY
+
+[Service]
+Type=simple
+# Lock after ten minutes, blank at fifteen, and lock synchronously before all
+# suspend transitions. The locker remains visible after resume.
+ExecStart=/usr/bin/swayidle -w timeout 600 '/usr/local/bin/greyward-session-lock' timeout 900 '/usr/local/bin/greyward-display-power off' resume '/usr/local/bin/greyward-display-power on' before-sleep '/usr/local/bin/greyward-session-lock'
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=graphical-session.target

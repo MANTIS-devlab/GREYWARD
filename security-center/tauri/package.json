@@ -1,0 +1,11 @@
+{
+  "name": "greyward-security-center-tauri-tooling",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test:interaction": "node --test frontend/interaction.test.mjs"
+  },
+  "devDependencies": {
+    "@wdio/tauri-service": "1.3.0"
+  }
+}

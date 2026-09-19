@@ -1,0 +1,11 @@
+[org/gnome/desktop/interface]
+# Prefer the dark Adwaita palette for GTK/libadwaita applications.
+color-scheme='prefer-dark'
+gtk-theme='Adwaita-dark'
+icon-theme='Adwaita'
+
+[org/gnome/desktop/wm/preferences]
+# Keep the standard minimize/maximize/close controls on GNOME/GTK windows.
+# The live .149 reference exposes this layout; production must seed it before
+# the first user session instead of relying on a desktop-specific default.
+button-layout='appmenu:minimize,maximize,close'
