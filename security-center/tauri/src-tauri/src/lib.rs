@@ -172,10 +172,7 @@ fn choose_overall_posture(
     &'static str,
     BTreeMap<String, String>,
 ) {
-    if domain_states
-        .iter()
-        .any(|state| *state == PostureState::ActionRequired)
-    {
+    if domain_states.contains(&PostureState::ActionRequired) {
         return (
             "REVIEW NEEDED",
             "action",
@@ -196,9 +193,7 @@ fn choose_overall_posture(
         );
     }
 
-    let has_unknown_domain = domain_states
-        .iter()
-        .any(|state| *state == PostureState::Unknown);
+    let has_unknown_domain = domain_states.contains(&PostureState::Unknown);
     let has_evaluated_domain = domain_states
         .iter()
         .any(|state| matches!(state, PostureState::Secure | PostureState::Protected));
@@ -212,10 +207,7 @@ fn choose_overall_posture(
         );
     }
 
-    let state = if domain_states
-        .iter()
-        .any(|state| *state == PostureState::Protected)
-    {
+    let state = if domain_states.contains(&PostureState::Protected) {
         "PROTECTED"
     } else {
         "SECURE"
@@ -862,12 +854,12 @@ fn run_json_helper(
     let mut child = command
         .spawn()
         .map_err(|_| "The GREYWARD recovery helper is unavailable.".to_string())?;
-    if let Some(value) = input {
-        if let Some(mut stdin) = child.stdin.take() {
-            stdin
-                .write_all(value.as_bytes())
-                .map_err(|_| "The recovery credential could not be passed safely.".to_string())?;
-        }
+    if let Some(value) = input
+        && let Some(mut stdin) = child.stdin.take()
+    {
+        stdin
+            .write_all(value.as_bytes())
+            .map_err(|_| "The recovery credential could not be passed safely.".to_string())?;
     }
     let output = child
         .wait_with_output()
@@ -877,16 +869,16 @@ fn run_json_helper(
     }
     let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
     if !output.status.success() {
-        if let Ok(value) = serde_json::from_str::<Value>(&stdout) {
-            if let Some(error) = value.get("error").and_then(Value::as_str) {
-                let problem = value.get("problem").and_then(Value::as_str).unwrap_or("");
-                let detail = if problem.is_empty() {
-                    error.to_string()
-                } else {
-                    format!("[{problem}] {error}")
-                };
-                return Err(detail.chars().take(240).collect());
-            }
+        if let Ok(value) = serde_json::from_str::<Value>(&stdout)
+            && let Some(error) = value.get("error").and_then(Value::as_str)
+        {
+            let problem = value.get("problem").and_then(Value::as_str).unwrap_or("");
+            let detail = if problem.is_empty() {
+                error.to_string()
+            } else {
+                format!("[{problem}] {error}")
+            };
+            return Err(detail.chars().take(240).collect());
         }
         let detail = String::from_utf8_lossy(&output.stderr).trim().to_string();
         return Err(if detail.is_empty() {
