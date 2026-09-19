@@ -1,0 +1,60 @@
+name: Design / security challenge
+description: Challenge a GREYWARD architecture, security, usability, or implementation assumption
+title: "[Design] "
+body:
+  - type: markdown
+    attributes:
+      value: "Use this when the question is not simply 'this crashes', but 'this assumption, boundary, mechanism, or trade-off may be wrong'. Existing decisions are not sacred."
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Privilege / authorization
+        - Networking / DNS / VPN
+        - Application isolation / permissions
+        - Updates / recovery / backup
+        - Cryptography
+        - File security
+        - Desktop / UX / accessibility
+        - Image / packaging / supply chain
+        - Architecture / code ownership
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: assumption
+    attributes:
+      label: What are you challenging?
+      description: Identify the current assumption, mechanism, boundary, or trade-off as precisely as possible.
+    validations:
+      required: true
+  - type: textarea
+    id: concern
+    attributes:
+      label: Why may it be wrong or unnecessarily complex?
+      description: Describe the failure mode, security concern, upstream alternative, maintenance cost, or usability problem.
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence or references
+      description: Relevant source paths, Fedora/Linux mechanisms, documentation, reproductions, traces, or prior art.
+  - type: textarea
+    id: alternative
+    attributes:
+      label: Better alternative, if known
+      description: A replacement is useful but not required. A precise finding by itself is valuable.
+  - type: textarea
+    id: invariant
+    attributes:
+      label: Property that should remain true
+      description: What useful security, compatibility, or UX property must a change preserve?
+  - type: checkboxes
+    id: scope
+    attributes:
+      label: Scope check
+      options:
+        - label: This is suitable for public discussion and does not contain exploit details, credentials, or sensitive personal data.
+          required: true
