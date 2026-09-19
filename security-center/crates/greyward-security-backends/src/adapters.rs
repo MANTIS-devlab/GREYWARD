@@ -481,55 +481,6 @@ fn parse_zone(zone: &str) -> TrustZone {
     }
 }
 
-#[cfg(test)]
-mod firmware_tests {
-    use super::*;
-
-    #[test]
-    fn structured_hsi_results_are_conservative() {
-        let valid = serde_json::json!({
-            "Attributes": [{"HsiResult": "valid"}, {"HsiResult": "success"}]
-        });
-        assert_eq!(
-            firmware_security_from_json(&valid),
-            FirmwareSecurityState::Secure
-        );
-
-        let failed = serde_json::json!({
-            "Attributes": [{"HsiResult": "valid"}, {"HsiResult": "not-valid"}]
-        });
-        assert_eq!(
-            firmware_security_from_json(&failed),
-            FirmwareSecurityState::Insecure
-        );
-        assert_eq!(
-            firmware_security_from_json(&serde_json::json!({})),
-            FirmwareSecurityState::Unknown
-        );
-    }
-
-    #[test]
-    fn structured_update_results_do_not_infer_from_unrelated_text() {
-        assert_eq!(
-            firmware_updates_from_json(&serde_json::json!({
-                "Devices": [{"Releases": [{"Version": "1.2"}]}]
-            })),
-            FirmwareUpdateState::Available
-        );
-        assert_eq!(
-            firmware_updates_from_json(&serde_json::json!({"Devices": [{"Name": "device"}]})),
-            FirmwareUpdateState::Unknown
-        );
-        assert_eq!(
-            firmware_updates_from_json(&serde_json::json!({"Devices": []})),
-            FirmwareUpdateState::NoneKnown
-        );
-        assert_eq!(
-            firmware_updates_from_json(&serde_json::json!({"message": "available"})),
-            FirmwareUpdateState::Unknown
-        );
-    }
-}
 pub fn collect_flatpak_facts() -> FlatpakFacts {
     let version = bounded_output("flatpak", &["--version"]);
     if version
@@ -820,5 +771,55 @@ pub fn collect_recovery_facts(
         encryption: storage.root.clone(),
         firmware_updates: firmware.updates.clone(),
         tpm: tpm.capability.clone(),
+    }
+}
+
+#[cfg(test)]
+mod firmware_tests {
+    use super::*;
+
+    #[test]
+    fn structured_hsi_results_are_conservative() {
+        let valid = serde_json::json!({
+            "Attributes": [{"HsiResult": "valid"}, {"HsiResult": "success"}]
+        });
+        assert_eq!(
+            firmware_security_from_json(&valid),
+            FirmwareSecurityState::Secure
+        );
+
+        let failed = serde_json::json!({
+            "Attributes": [{"HsiResult": "valid"}, {"HsiResult": "not-valid"}]
+        });
+        assert_eq!(
+            firmware_security_from_json(&failed),
+            FirmwareSecurityState::Insecure
+        );
+        assert_eq!(
+            firmware_security_from_json(&serde_json::json!({})),
+            FirmwareSecurityState::Unknown
+        );
+    }
+
+    #[test]
+    fn structured_update_results_do_not_infer_from_unrelated_text() {
+        assert_eq!(
+            firmware_updates_from_json(&serde_json::json!({
+                "Devices": [{"Releases": [{"Version": "1.2"}]}]
+            })),
+            FirmwareUpdateState::Available
+        );
+        assert_eq!(
+            firmware_updates_from_json(&serde_json::json!({"Devices": [{"Name": "device"}]})),
+            FirmwareUpdateState::Unknown
+        );
+        assert_eq!(
+            firmware_updates_from_json(&serde_json::json!({"Devices": []})),
+            FirmwareUpdateState::NoneKnown
+        );
+        assert_eq!(
+            firmware_updates_from_json(&serde_json::json!({"message": "available"})),
+            FirmwareUpdateState::Unknown
+        );
     }
 }
