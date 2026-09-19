@@ -54,7 +54,21 @@ foreach ($consumerPath in @('security-center\data\greyward-symbol.svg','security
     $consumerText = (Get-Content $fullConsumerPath -Raw).Replace("`r`n","`n").TrimEnd()
     if ($canonicalText -cne $consumerText) { $errors.Add("Canonical symbol drifted in $consumerPath; copy the canonical source.") }
 }
-$visualFiles = Get-ChildItem (Join-Path $repo 'greyward'),(Join-Path $repo 'branding\source'),(Join-Path $repo 'branding\wallpaper') -Recurse -File -Include *.qml,*.svg
+$visualDirectories = @(
+    (Join-Path (Join-Path $repo 'branding') 'source')
+    (Join-Path (Join-Path $repo 'branding') 'wallpaper')
+)
+$existingVisualDirectories = @($visualDirectories | Where-Object { Test-Path -LiteralPath $_ -PathType Container })
+foreach ($visualDirectory in $visualDirectories) {
+    if ($visualDirectory -notin $existingVisualDirectories) {
+        $errors.Add("Missing canonical visual asset directory: $visualDirectory")
+    }
+}
+$visualFiles = @(
+    foreach ($visualDirectory in $existingVisualDirectories) {
+        Get-ChildItem -LiteralPath $visualDirectory -Recurse -File -Include *.qml,*.svg
+    }
+)
 $securitySource = (Get-Content (Join-Path $repo 'branding/source/greyward-security-status.svg') -Raw).Replace("`r`n","`n").TrimEnd()
 $securityConsumer = (Get-Content (Join-Path $repo 'security-center/data/greyward-security-status.svg') -Raw).Replace("`r`n","`n").TrimEnd()
 if ($securitySource -cne $securityConsumer) { $errors.Add('Security status emblem drifted; run tools/generate-branding.ps1 -SkipRaster.') }

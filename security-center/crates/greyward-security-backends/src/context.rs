@@ -97,7 +97,7 @@ pub const OPENSNITCH_CONTEXT_SUMMARY_PATH: &str =
     "/run/greyward-security-context/opensnitch-summary.json";
 
 /// Reads the already-redacted, bounded summary emitted by the privileged
-/// OpenSnitch control plane. Consumers never decode OpenSnitch protobuf data.
+/// `OpenSnitch` control plane. Consumers never decode `OpenSnitch` protobuf data.
 pub fn load_opensnitch_context_summary(
     path: impl AsRef<std::path::Path>,
 ) -> Result<SecurityContextSummary, String> {
@@ -136,7 +136,7 @@ fn aggregate_context_state(snapshot: &PostureSnapshot) -> PostureState {
             PostureState::Secure | PostureState::Protected | PostureState::NotApplicable
         )
     }) {
-        return if states.iter().any(|state| *state == PostureState::Protected) {
+        return if states.contains(&PostureState::Protected) {
             PostureState::Protected
         } else {
             PostureState::Secure

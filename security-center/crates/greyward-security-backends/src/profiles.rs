@@ -1,7 +1,7 @@
-//! Transactional privacy profiles over NetworkManager and firewalld.
+//! Transactional privacy profiles over `NetworkManager` and firewalld.
 //!
 //! The profile is inferred from observed native state. No requested profile is
-//! treated as successful until both NetworkManager and firewalld report it.
+//! treated as successful until both `NetworkManager` and firewalld report it.
 
 use crate::adapters::{bounded_output, collect_network_facts};
 use crate::facts::TrustZone;
@@ -52,6 +52,12 @@ pub enum ProfileError {
 }
 
 impl PrivacyProfile {
+    /// Parses a user-facing privacy profile name.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ProfileError::UnsupportedConnection`] for an unrecognized
+    /// profile name.
     pub fn parse(value: &str) -> Result<Self, ProfileError> {
         match value.to_ascii_lowercase().as_str() {
             "standard" => Ok(Self::Standard),
@@ -84,11 +90,38 @@ impl PrivacyProfile {
 }
 
 pub trait NativeProfileOps {
+    /// Reads the currently observed native privacy state.
+    ///
+    /// # Errors
+    ///
+    /// Returns a profile error when the native state cannot be read or the
+    /// active connection has changed.
     fn read_state(&mut self) -> Result<PrivacyState, ProfileError>;
+
+    /// Changes the native MAC-address policy.
+    ///
+    /// # Errors
+    ///
+    /// Returns a profile error when the requested policy is unsupported or the
+    /// native operation fails.
     fn set_mac_policy(&mut self, policy: MacPolicy) -> Result<(), ProfileError>;
+
+    /// Changes the native firewall zone.
+    ///
+    /// # Errors
+    ///
+    /// Returns a profile error when the requested zone is unsupported or the
+    /// native operation fails.
     fn set_firewall_zone(&mut self, zone: TrustZone) -> Result<(), ProfileError>;
 }
 
+/// Applies and verifies a privacy profile, rolling back partial changes.
+///
+/// # Errors
+///
+/// Returns a profile error when the current state is unavailable, a native
+/// operation fails, verification fails, or rollback cannot restore the prior
+/// state.
 pub fn apply_profile<O: NativeProfileOps>(
     ops: &mut O,
     target: PrivacyProfile,
@@ -153,6 +186,13 @@ pub struct SystemProfileOps {
 }
 
 impl SystemProfileOps {
+    /// Creates native profile operations from the active connection.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ProfileError::NoActiveConnection`] when no active interface or
+    /// connection is available, or [`ProfileError::UnsupportedConnection`] when
+    /// the connection type is unavailable.
     pub fn from_active() -> Result<Self, ProfileError> {
         let facts = collect_network_facts();
         Ok(Self {
@@ -307,11 +347,23 @@ impl NativeProfileOps for SystemProfileOps {
     }
 }
 
+/// Reads and verifies the current native privacy state.
+///
+/// # Errors
+///
+/// Returns a profile error when no active connection is available or native
+/// state cannot be read or verified.
 pub fn read_actual_state() -> Result<PrivacyState, ProfileError> {
     let mut ops = SystemProfileOps::from_active()?;
     ops.read_state()
 }
 
+/// Applies a privacy profile through the native system controls.
+///
+/// # Errors
+///
+/// Returns a profile error when the active connection is unavailable, a native
+/// operation fails, verification fails, or rollback cannot restore prior state.
 pub fn apply_native_profile(profile: PrivacyProfile) -> Result<PrivacyState, ProfileError> {
     let mut ops = SystemProfileOps::from_active()?;
     apply_profile(&mut ops, profile)

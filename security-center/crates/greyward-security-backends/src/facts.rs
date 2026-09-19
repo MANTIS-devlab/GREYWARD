@@ -195,7 +195,7 @@ pub struct EffectiveFlatpakAccess {
 }
 
 impl EffectiveFlatpakAccess {
-    pub const fn needs_review(&self) -> bool {
+    pub fn needs_review(&self) -> bool {
         !self.review_reasons.is_empty()
     }
 }

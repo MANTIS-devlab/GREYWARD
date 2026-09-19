@@ -43,7 +43,10 @@ user-selected mounted destination outside the home directory. Backup is
 unavailable until that destination has been chosen and validated; cancellation
 or a missing configuration leaves the existing destination unchanged. Removable
 storage or another supported user-controlled mount is recommended for
-protection from local disk loss. The Restic passphrase is entered by the user
+protection from local disk loss. GREYWARD rejects directories that only reside
+on the root filesystem and records the selected mount identity so a replacement
+filesystem at the same path cannot silently receive the backup. The Restic
+passphrase is entered by the user
 and held only for the current operation; it is never persisted by GREYWARD.
 
 The backup includes existing personal folders and the explicit settings

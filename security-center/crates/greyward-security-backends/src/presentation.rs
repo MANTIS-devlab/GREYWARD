@@ -27,6 +27,9 @@ pub struct EvidenceRemediation {
     pub action_key: &'static str,
 }
 
+// Keep the centralized presentation mapping together; a separate
+// maintainability refactor is outside this CI-hygiene change.
+#[allow(clippy::too_many_lines)]
 pub fn evidence_presentation(
     check: &CheckResult,
     accepted_deviations: &[String],

@@ -843,6 +843,11 @@ function backupProblemCopy(problem) {
   const labels = {
     CHECK_PASSPHRASE: "backup.problem.passphrase", CHECK_DESTINATION: "backup.problem.destination",
     TRY_LATER: "backup.problem.later", SERVICE_UNAVAILABLE: "backup.problem.unavailable", TRY_AGAIN: "backup.problem.retry",
+    DESTINATION_IN_HOME: "backup.configure.choose", DESTINATION_INVALID: "backup.problem.destination",
+    DESTINATION_NOT_WRITABLE: "backup.problem.destination", DESTINATION_NOT_MOUNTED: "backup.configure.choose",
+    DESTINATION_MOUNT_VALIDATION: "backup.problem.destination", DESTINATION_MOUNT_PROVIDER: "backup.problem.destination",
+    DESTINATION_IDENTITY_MISSING: "backup.configure.choose", DESTINATION_CHANGED: "backup.problem.destination",
+    REPOSITORY_MISMATCH: "backup.problem.retry", REPOSITORY_INACCESSIBLE: "backup.problem.retry",
   };
   return copy(labels[String(problem || "TRY_AGAIN").toUpperCase()] || "backup.problem.retry");
 }
@@ -873,19 +878,19 @@ function recoveryQueueItem(command, data) {
   if (command === "configure_backup") {
     if (backup.ok === false) return {state: "BLOCKED", detail: copy("backup.configure.unavailable")};
     if (backup.configured === true && backup.destination_available === true) return {state: "COMPLETED", detail: copy("backup.configure.configured")};
-    if (backup.configured === true) return {state: "BLOCKED", detail: copy("backup.configure.destinationUnavailable")};
+    if (backup.configured === true) return {state: "BLOCKED", detail: backupProblemCopy(backup.destination_problem)};
     return {state: "READY", detail: copy("backup.configure.choose")};
   }
   if (command === "backup_now") {
     const current = operationFor("BACKUP"); if (current) return current;
     if (backup.configured !== true) return {state: "BLOCKED", detail: copy("backup.configure.required")};
-    if (backup.destination_available !== true) return {state: "BLOCKED", detail: copy("backup.configure.reconnect")};
+    if (backup.destination_available !== true) return {state: "BLOCKED", detail: backupProblemCopy(backup.destination_problem)};
     if (backup.last_backup_status === "SUCCESSFUL") return {state: "COMPLETED", detail: backup.last_retention_status === "FAILED" ? copy("backup.latest.retentionRetry") : copy("backup.latest.completed")};
     if (backup.last_backup_status === "FAILED") return {state: "FAILED", detail: backupProblemCopy(backup.last_backup_problem)};
     return {state: "READY", detail: copy("backup.latest.ready")};
   }
   const current = operationFor("VERIFY"); if (current) return current;
-  if (backup.configured !== true || backup.destination_available !== true) return {state: "BLOCKED", detail: copy("backup.configure.required")};
+  if (backup.configured !== true || backup.destination_available !== true) return {state: "BLOCKED", detail: backup.configured === true ? backupProblemCopy(backup.destination_problem) : copy("backup.configure.required")};
   if (backup.last_check_status === "VERIFIED") return {state: "COMPLETED", detail: copy("backup.verify.passed")};
   if (backup.last_check_status === "FAILED") return {state: "FAILED", detail: backupProblemCopy(backup.last_check_problem)};
   return {state: "READY", detail: copy("backup.verify.ready")};
@@ -931,7 +936,7 @@ function recoveryMarkup(data) {
   const restorePanel = `<div id="recovery-restore-picker" class="recovery-restore-picker" hidden><div class="eyebrow">${esc(copy("backup.restore.eyebrow"))}</div><p id="recovery-restore-summary" class="section-meta"></p><p id="recovery-restore-count" class="section-meta"></p><div id="recovery-file-list" class="recovery-file-list"></div><div class="inline-actions">${actionButton(copy("backup.restore.selectedAction"), copy("backup.restore.selectedAction.detail"), "primary", "data-recovery-restore-confirm", "arrow")}<button class="text-button" data-recovery-restore-cancel>${esc(copy("ui.cancel"))}</button></div></div>`;
   const integrityLabel = backupUnavailable ? copy("backup.verify.unavailable") : backup.last_check_status === "VERIFIED" ? copy("backup.verify.verifiedAt", {time: recoveryTime(backup.last_check_at)}) : backup.last_check_status === "FAILED" ? copy("backup.verify.failed") : copy("backup.verify.notVerified");
   const backupDestination = backupUnavailable ? copy("backup.verify.unavailable") : backup.destination || copy("backup.panel.notConfigured");
-  const backupActionStatus = backupUnavailable ? copy("backup.configure.unavailable") : !backup.configured ? copy("backup.status.choose") : backupDestinationUnavailable ? copy("backup.status.destinationUnavailable") : backup.last_backup_status === "SUCCESSFUL" ? backup.last_retention_status === "FAILED" ? copy("backup.status.retentionRetry") : copy("backup.status.completed") : backup.last_backup_status === "FAILED" ? copy("backup.status.failed") : copy("backup.status.notRun");
+  const backupActionStatus = backupUnavailable ? copy("backup.configure.unavailable") : !backup.configured ? copy("backup.status.choose") : backupDestinationUnavailable ? backupProblemCopy(backup.destination_problem) : backup.last_backup_status === "SUCCESSFUL" ? backup.last_retention_status === "FAILED" ? copy("backup.status.retentionRetry") : copy("backup.status.completed") : backup.last_backup_status === "FAILED" ? copy("backup.status.failed") : copy("backup.status.notRun");
   const scope = Array.isArray(backup.sources) && backup.sources.length ? backup.sources.map((source) => esc(source)).join(" · ") : copy("backup.panel.noScope");
   const retention = backup.retention ? copy("backup.panel.retention", {daily: backup.retention.daily || 0, weekly: backup.retention.weekly || 0}) : copy("backup.panel.retentionUnavailable");
   const cleanupAvailable = !recoveryUnavailable && points.length > 3;
@@ -1494,11 +1499,15 @@ async function runRecoveryAction(command, button, label, selector, name, timeout
   beginButton(button, label); setStatus(selector, copy("backup.operation.working", {name}));
   try {
     const result = await invokeBounded(command, undefined, timeout);
-    if (result?.ok === false && !result.cancelled) throw new Error(result.error || result.message || `${name} failed.`);
+    if (result?.ok === false && !result.cancelled) {
+      const error = new Error(result.error || result.message || `${name} failed.`);
+      error.problem = result.problem;
+      throw error;
+    }
     setStatus(selector, result?.cancelled ? copy("feedback.cancelled") : copy("feedback.completed", {name}));
     if (currentPage === "devices") window.setTimeout(() => { if (currentPage === "devices") loadPage("devices", {force: true}); }, 300);
   } catch (error) {
-    setStatus(selector, actionError(error, name));
+    setStatus(selector, error.problem ? backupProblemCopy(error.problem) : actionError(error, name));
   } finally { endButton(button); }
 }
 function syncRestoreSelectionLimit() {
@@ -1548,7 +1557,7 @@ async function restoreSelectedFiles(event) {
   if (!paths.length) { setStatus("#backup-action-status", copy("backup.restore.required")); return; }
   if (paths.length > limit) { setStatus("#backup-action-status", copy("backup.restore.limit", {limit})); return; }
   beginButton(button, copy("backup.restore.staging")); setStatus("#backup-action-status", copy("backup.restore.stagingCopy"));
-  try { const result = await invokeBounded("restore_backup_files", {paths}, 7200000); if (result?.ok === false) throw new Error(result.error || "Restore failed."); resetRestorePicker(); setStatus("#backup-action-status", copy("backup.restore.staged", {path: result.staging_path || copy("backup.restore.defaultFolder")})); } catch (error) { setStatus("#backup-action-status", actionError(error, copy("backup.restore.action"))); } finally { endButton(button); }
+  try { const result = await invokeBounded("restore_backup_files", {paths}, 7200000); if (result?.ok === false) { const error = new Error(result.error || "Restore failed."); error.problem = result.problem; throw error; } resetRestorePicker(); setStatus("#backup-action-status", copy("backup.restore.staged", {path: result.staging_path || copy("backup.restore.defaultFolder")})); } catch (error) { setStatus("#backup-action-status", error.problem ? backupProblemCopy(error.problem) : actionError(error, copy("backup.restore.action"))); } finally { endButton(button); }
 }
 function setStatus(selector, message) { const text = String(message || ""); const element = app.querySelector(selector); if (element) element.textContent = text; const live = app.querySelector("[data-live-status]"); if (live && live !== element) live.textContent = element ? "" : text; }
 function setDeviationFeedback(message) { deviationState.feedback = String(message || ""); setStatus(".deviation-action-status", deviationState.feedback); }
@@ -1559,11 +1568,15 @@ function setFileSecurityFeedback(message) {
 function actionError(error, fallback) {
   const raw = String(error?.message || error || "").trim().replace(/\s+/g, " ");
   const message = raw.toLowerCase();
+  const problem = raw.match(/^\[([A-Z_]+)\]/)?.[1];
+  if (problem) return backupProblemCopy(problem);
   if (message.includes("does not support") || message.includes("no compatible") || message.includes("file handler")) return raw;
   if (message.includes("timed out")) return copy("feedback.timeout", {name: fallback});
   if (message.includes("controlling terminal")) return copy("feedback.authorizationSession", {name: fallback});
   if (message.includes("authentication agent") || message.includes("textual authentication")) return copy("feedback.authorizationAgent", {name: fallback});
   if (message.includes("wrong password") || message.includes("incorrect password") || message.includes("invalid password") || message.includes("no key found")) return copy("feedback.passphrase", {name: fallback});
+  if (message.includes("outside the home") || message.includes("not an available directory") || message.includes("not writable") || message.includes("not mounted") || message.includes("mount could not be validated") || message.includes("findmnt is unavailable") || message.includes("mount identity") || message.includes("mount has changed")) return copy("backup.problem.destination");
+  if (message.includes("configured restic repository")) return copy("feedback.repository", {name: fallback});
   if (message.includes("denied") || message.includes("refused")) return copy("feedback.access", {name: fallback});
   if (message.includes("unavailable")) return copy("feedback.service", {name: fallback});
   if (message.includes("destination")) return copy("feedback.destination", {name: fallback});
