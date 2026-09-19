@@ -1,0 +1,47 @@
+#!/bin/sh
+set -eu
+
+# Some virtual GPUs advertise a DRM device without exposing a usable render
+# node. In that case wlroots can select an EGL/dmabuf path that fails after the
+# greeter or DMS creates its first surface. Keep Pixman scoped to a known
+# virtual GPU or to a system with no render node; a bare-metal GPU with a
+# usable DRM render node keeps hardware acceleration.
+software_renderer=false
+for identity_file in \
+  /sys/class/dmi/id/sys_vendor \
+  /sys/class/dmi/id/product_name \
+  /sys/class/dmi/id/board_vendor; do
+  if [ -r "$identity_file" ] && grep -Eiq 'vmware|hyper-?v|virtual machine' "$identity_file"; then
+    software_renderer=true
+    break
+  fi
+done
+
+for vendor_file in /sys/class/drm/card*/device/vendor; do
+  if [ -r "$vendor_file" ] && grep -Eiq '^(0x)?(15ad|1414)$' "$vendor_file"; then
+    software_renderer=true
+    break
+  fi
+done
+
+has_render_node=false
+for render_node in /dev/dri/renderD*; do
+  if [ -e "$render_node" ]; then
+    has_render_node=true
+    break
+  fi
+done
+if [ "$has_render_node" != true ]; then
+  software_renderer=true
+fi
+
+if [ "$software_renderer" = true ]; then
+  # Pixman is a wlroots compositor renderer, not a system-wide graphics
+  # policy. Only the Labwc session and its DMS child inherit these values.
+  export WLR_RENDERER=pixman
+  export WLR_RENDERER_ALLOW_SOFTWARE=1
+  export WLR_NO_HARDWARE_CURSORS=1
+  export WLR_DRM_NO_MODIFIERS=1
+fi
+
+exec uwsm start -D Labwc:GREYWARD labwc

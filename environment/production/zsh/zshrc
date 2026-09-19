@@ -1,0 +1,53 @@
+# GREYWARD interactive shell defaults.
+# Oh My Zsh and Powerlevel10k are installed by greyward-configure-zsh.
+export ZSH="$HOME/.oh-my-zsh"
+
+# Keep first login quiet and immediately usable. Updates remain an explicit
+# user action rather than an unexpected network operation in a new terminal.
+zstyle ':omz:update' mode disabled
+DISABLE_AUTO_UPDATE=true
+DISABLE_UPDATE_PROMPT=true
+
+# The standalone ISO ships the prompt helper too; first terminal use must
+# not download a binary. Development installs retain their normal cache.
+if [[ -d /usr/share/greyward/zsh/gitstatus ]]; then
+  export GITSTATUS_CACHE_DIR=/usr/share/greyward/zsh/gitstatus
+  export GITSTATUS_AUTO_INSTALL=0
+fi
+
+ZSH_THEME="powerlevel10k/powerlevel10k"
+plugins=(git)
+
+# Powerlevel10k's optional instant prompt is safe to use when its cache exists;
+# the normal theme still starts correctly before that cache has been created.
+if [[ -r "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh" ]]; then
+  source "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh"
+fi
+source "$ZSH/oh-my-zsh.sh"
+
+[[ -r "$HOME/.p10k.zsh" ]] && source "$HOME/.p10k.zsh"
+
+# The terminal brief is cache-only: it never starts providers or waits on
+# D-Bus. Render it from a one-shot precmd hook so Black Box has finished its
+# initial terminal setup before the text is drawn immediately before the first
+# visible prompt. Keep the rendered marker shell-local: exporting it caused
+# later Black Box windows spawned from a terminal to lose their brief.
+if [[ -o interactive && -t 1 &&
+      ( "${TERM_PROGRAM:-}" == "Black Box" || "${GREYWARD_TERMINAL_BRIEF:-}" == "1" ) &&
+      -z "${SSH_CONNECTION:-}" && -z "${SSH_TTY:-}" &&
+      ${ZSH_SUBSHELL:-0} -eq 0 &&
+      -x /usr/local/libexec/greyward-terminal-brief ]]; then
+  typeset -g GREYWARD_TERMINAL_BRIEF_RENDERED=0
+  autoload -Uz add-zsh-hook
+  greyward_terminal_brief_precmd() {
+    if (( ! GREYWARD_TERMINAL_BRIEF_RENDERED )) &&
+          [[ "${GREYWARD_TERMINAL_BRIEF:-}" == "1" || -z "${ZSH_EXECUTION_STRING:-}" ]]; then
+      GREYWARD_TERMINAL_BRIEF_RENDERED=1
+      /usr/local/libexec/greyward-terminal-brief
+    fi
+    add-zsh-hook -d precmd greyward_terminal_brief_precmd
+  }
+  add-zsh-hook precmd greyward_terminal_brief_precmd
+fi
+
+# To customize prompt, run `p10k configure` or edit ~/.p10k.zsh.

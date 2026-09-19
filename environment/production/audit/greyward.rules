@@ -1,0 +1,42 @@
+# GREYWARD moderate production audit policy.
+#
+# This intentionally records security-relevant changes and privileged activity
+# without enabling the very noisy all-user execve or network-connection rules.
+# audit-rules.service regenerates /etc/audit/audit.rules from this directory.
+
+# Start from a deterministic ruleset and keep enough backlog for a desktop.
+-D
+-b 8192
+--backlog_wait_time 60000
+-f 1
+--loginuid-immutable
+
+# Identity, authentication, authorization, and audit-policy changes.
+-w /etc/passwd -p wa -k identity
+-w /etc/group -p wa -k identity
+-w /etc/shadow -p wa -k identity
+-w /etc/gshadow -p wa -k identity
+-w /etc/security/opasswd -p wa -k identity
+-w /etc/pam.d -p wa -k authentication
+-w /etc/sudoers -p wa -k authorization
+-w /etc/sudoers.d -p wa -k authorization
+-w /etc/audit -p wa -k audit-config
+-w /var/log/wtmp -p wa -k logins
+-w /var/log/btmp -p wa -k logins
+-w /var/log/lastlog -p wa -k logins
+
+# Privileged execution and kernel module changes.
+-a always,exit -F arch=b64 -S init_module,finit_module -F key=module-load
+-a always,exit -F arch=b64 -S delete_module -F key=module-unload
+-a always,exit -F arch=b32 -S init_module,finit_module -F key=module-load
+-a always,exit -F arch=b32 -S delete_module -F key=module-unload
+-a always,exit -F arch=b64 -F perm=x -F auid>=1000 -F auid!=unset -F path=/usr/bin/sudo -F key=privileged
+-a always,exit -F arch=b64 -F perm=x -F auid>=1000 -F auid!=unset -F path=/usr/bin/su -F key=privileged
+-a always,exit -F arch=b64 -F perm=x -F auid>=1000 -F auid!=unset -F path=/usr/bin/pkexec -F key=privileged
+
+# Package installers.
+-a always,exit -F arch=b64 -F perm=x -F auid>=1000 -F auid!=unset -F path=/usr/bin/dnf -F key=software-installer
+-a always,exit -F arch=b64 -F perm=x -F auid>=1000 -F auid!=unset -F path=/usr/bin/dnf5 -F key=software-installer
+
+# Prevent a running user from changing this policy without a reboot.
+-e 2

@@ -1,0 +1,55 @@
+--- a/quickshell/dms/Services/IconThemeService.qml
++++ b/quickshell/dms/Services/IconThemeService.qml
+@@ -13,9 +13,9 @@ Singleton {
+ 
+     readonly property string managedTheme: {
+         if (typeof SettingsData === "undefined")
+-            return "";
++            return "hicolor";
+         const t = SettingsData.resolveIconTheme();
+-        return (!t || t === "System Default") ? "" : t;
++        return (!t || t === "System Default") ? "hicolor" : t;
+     }
+ 
+     property var _searchDirs: []
+@@ -29,7 +29,17 @@ Singleton {
+         const localData = Paths.strip(StandardPaths.writableLocation(StandardPaths.GenericDataLocation));
+         const home = Paths.strip(StandardPaths.writableLocation(StandardPaths.HomeLocation));
+         const dataDirs = xdg.trim() !== "" ? xdg.split(":").concat([localData]) : ["/usr/share", "/usr/local/share", localData];
+-        for (const flatpak of [localData + "/flatpak/exports/share", "/var/lib/flatpak/exports/share"]) {
++        // Flatpak normally publishes these through its exports directory. Some
++        // valid installations also retain the current deployment only below
++        // app/<id>/<arch>/<branch>/active/export. Include both locations so
++        // icon lookup remains correct after an app update and does not require
++        // copying third-party artwork into GREYWARD's icon theme.
++        for (const flatpak of [
++            localData + "/flatpak/exports/share",
++            "/var/lib/flatpak/exports/share",
++            localData + "/flatpak/app/*/*/*/active/export/share",
++            "/var/lib/flatpak/app/*/*/*/active/export/share"
++        ]) {
+             if (!dataDirs.includes(flatpak))
+                 dataDirs.push(flatpak);
+         }
+@@ -51,12 +61,6 @@ Singleton {
+ 
+     function _rebuild() {
+         _cache = ({});
+-        if (!managedTheme) {
+-            _searchDirs = [];
+-            _dirsForTheme = "";
+-            _bumpRevision();
+-            return;
+-        }
+         const theme = managedTheme;
+         const bases = _baseDirs.join(" ");
+         const script = `BASES="${bases}"
+@@ -86,7 +90,7 @@ for t in $order; do for b in $BASES; do d="$b/$t"; [ -d "$d" ] && echo "$d"; done; done`;
+ 
+     function resolve(name) {
+         const _dep = revision;
+-        if (!managedTheme || !name)
++        if (!name)
+             return "";
+         if (name.startsWith("/") || name.startsWith("file://") || name.startsWith("image://") || name.startsWith("~"))
+             return "";

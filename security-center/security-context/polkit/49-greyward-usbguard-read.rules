@@ -1,0 +1,15 @@
+// GREYWARD's unprivileged Security Context needs to read USBGuard state so
+// Security Center and the DMS plugin can report device posture. Device policy
+// changes remain governed by USBGuard's upstream authentication actions.
+polkit.addRule(function (action, subject) {
+    if (!subject.isInGroup("wheel")) {
+        return polkit.Result.NOT_HANDLED;
+    }
+
+    if (action.id === "org.usbguard.Devices1.listDevices" ||
+        action.id === "org.usbguard.Policy1.listRules") {
+        return polkit.Result.YES;
+    }
+
+    return polkit.Result.NOT_HANDLED;
+});

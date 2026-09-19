@@ -1,0 +1,43 @@
+[com/raggesilver/BlackBox]
+# Canonical GREYWARD production terminal state captured from the live .149
+# session. Keep this in sync with the documented production state.
+command-as-login-shell=true
+context-aware-header-bar=true
+cursor-blink-mode=uint32 0
+cursor-shape=uint32 0
+custom-shell-command=''
+custom-working-directory='~'
+delay-before-showing-floating-controls=uint32 400
+easy-copy-paste=true
+fill-tabs=true
+floating-controls=true
+floating-controls-hover-area=uint32 10
+font='Cascadia Mono NF 14'
+headerbar-drag-area=true
+notify-process-completion=true
+opacity=uint32 93
+pixel-scrolling=false
+pretty=false
+remember-window-size=true
+scrollback-lines=uint32 1000
+scrollback-mode=uint32 0
+show-headerbar=true
+show-menu-button=true
+show-scrollbars=true
+style-preference=uint32 2
+terminal-bell=false
+terminal-cell-height=1.0
+terminal-cell-width=1.0
+terminal-hide-cursor-while-typing=false
+terminal-padding=(uint32 12, uint32 12, uint32 12, uint32 12)
+theme-bold-is-bright=true
+theme-dark='Dark Pastel'
+theme-light='Gruvbox Light'
+use-custom-command=false
+use-overlay-scrolling=true
+use-sixel=false
+was-fullscreened=false
+was-maximized=false
+window-height=uint32 945
+window-width=uint32 1237
+working-directory-mode=uint32 0

@@ -1,0 +1,3 @@
+#!/bin/sh
+export PYTHONPATH=/usr/lib/greyward-security-context
+exec /usr/bin/python3 /usr/lib/greyward-security-context/greyward_security_context/network_policy_service.py "$@"

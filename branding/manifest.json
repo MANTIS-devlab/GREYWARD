@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "canonical": {
+    "symbol": "branding/source/greyward-symbol.svg",
+    "wordmark": "branding/source/greyward-wordmark.svg",
+    "lockup": "branding/source/greyward-lockup.svg"
+  },
+  "consumers": [
+    {"surface":"security-shell","consumer":"security-center/packaging/greyward-security-context.spec","source":"branding/source/greyward-security-status.svg","outputs":["security-center/data/greyward-security-status.svg"],"validation":"canonical SVG equality; widget and notification runtime"},
+    {"surface":"wallpaper","consumer":"hyprpaper","source":"branding/wallpaper/greyward-wallpaper.svg","outputs":["branding/generated/raster/greyward-wallpaper-3840x2160.png"],"validation":"3840x2160 PNG"},
+    {"surface":"wallpaper-variant","consumer":"DMS wallpaper picker","source":"branding/wallpaper/greyward-wallpaper-black-art-4k.jpg","outputs":["/var/cache/dms-greeter/greeter_wallpaper_override.jpg"],"validation":"3840x2160 JPG; canonical logo applied; synchronized to DMS Greeter"},
+    {"surface":"wallpaper-variant","consumer":"DMS wallpaper picker","source":"branding/wallpaper/greyward-wallpaper-2109-4k.jpg","outputs":[],"validation":"3840x2160 JPG; canonical logo applied"},
+    {"surface":"wallpaper-collection","consumer":"DMS wallpaper picker","source":"branding/wallpaper","outputs":[],"validation":"two JPG wallpapers; canonical logo applied"},
+    {"surface":"plymouth-boot","consumer":"packaging/greyward-branding","source":"branding/source/greyward-symbol.svg","outputs":["branding/generated/boot/greyward-symbol-256.png"],"validation":"initramfs inventory"},
+    {"surface":"plymouth-unlock","consumer":"packaging/greyward-branding","source":"branding/source/greyward-symbol.svg","outputs":["branding/generated/boot/greyward-symbol-256.png"],"validation":"encrypted boot test"},
+    {"surface":"terminal-brief","consumer":"environment/production/zsh/greyward-terminal-brief.py","source":"branding/source/greyward-symbol.svg","outputs":[],"validation":"ASCII-safe terminal projection; no runtime image renderer"},
+    {"surface":"anaconda-installer","consumer":"packaging/greyward-branding via detected Fedora-derived Anaconda profile","source":"branding/source/greyward-symbol.svg + packaging/greyward-branding/SOURCES/greyward-anaconda.css + packaging/greyward-branding/SOURCES/greyward-anaconda.conf","outputs":["branding/generated/boot/greyward-symbol-256.png","/usr/share/anaconda/pixmaps/greyward-anaconda-logo.png","/usr/share/anaconda/pixmaps/greyward-anaconda.css","/etc/anaconda/profile.d/greyward.conf"],"validation":"Anaconda detects the greyward profile, loads the GREYWARD stylesheet, and keeps Fedora's base logo/identity"},
+    {"surface":"anaconda-web-installer","consumer":"packaging/greyward-branding via Cockpit local branding","source":"branding/source/greyward-symbol.svg + packaging/greyward-branding/SOURCES/greyward-cockpit-branding.css","outputs":["/etc/cockpit/branding/branding.css","/etc/cockpit/branding/greyward-symbol.svg"],"validation":"Anaconda Web UI loads the local GREYWARD Cockpit branding, uses the dark chrome, and keeps Fedora in the installer title"}
+  ],
+  "exceptions": [
+    {"surface":"firmware","reason":"Hyper-V firmware is upstream and not patched."},
+    {"surface":"recovery-text","reason":"Fedora/dracut technical identity remains to preserve recovery support."},
+    {"surface":"third-party-applications","reason":"Application-specific brands are not GREYWARD-owned."}
+  ]
+}

@@ -1,0 +1,17 @@
+[Unit]
+Description=GREYWARD Feodo recommended threat snapshot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/greyward-feodo-update
+User=root
+Group=root
+UMask=0077
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+StateDirectory=greyward/opensnitch
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX

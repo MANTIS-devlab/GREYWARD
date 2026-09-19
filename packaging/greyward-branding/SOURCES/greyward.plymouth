@@ -1,0 +1,8 @@
+[Plymouth Theme]
+Name=GREYWARD
+Description=GREYWARD boot and encrypted-root unlock presentation
+ModuleName=script
+
+[script]
+ImageDir=/usr/share/plymouth/themes/greyward
+ScriptFile=/usr/share/plymouth/themes/greyward/greyward.script

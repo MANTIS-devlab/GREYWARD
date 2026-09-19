@@ -1,0 +1,7 @@
+# Default Flathub applications installed by the production provisioner.
+# Format: Flatpak application ID | exported desktop file ID
+io.github.hkdb.Aerion|io.github.hkdb.Aerion.desktop
+com.collaboraoffice.Office|com.collaboraoffice.Office.desktop
+org.kde.haruna|org.kde.haruna.desktop
+com.brave.Browser|com.brave.Browser.desktop
+com.protonvpn.www|com.protonvpn.www.desktop

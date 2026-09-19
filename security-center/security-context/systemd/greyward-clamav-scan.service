@@ -1,0 +1,39 @@
+[Unit]
+Description=GREYWARD bounded ClamAV scanner
+After=local-fs.target clamav-freshclam.service
+
+[Service]
+Type=dbus
+BusName=systems.mantis.greyward.ClamAvScan1
+ExecStart=/usr/libexec/greyward-clamav-scan
+Restart=on-failure
+User=root
+Group=root
+NoNewPrivileges=yes
+CapabilityBoundingSet=CAP_DAC_READ_SEARCH
+PrivateDevices=yes
+PrivateTmp=yes
+ProtectClock=yes
+ProtectControlGroups=yes
+ProtectHostname=yes
+ProtectKernelLogs=yes
+ProtectKernelModules=yes
+ProtectKernelTunables=yes
+ProtectSystem=strict
+ProtectHome=read-only
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+RestrictAddressFamilies=AF_UNIX
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+SystemCallArchitectures=native
+ReadOnlyPaths=/home /media /run/media /mnt
+ReadWritePaths=/var/lib/greyward
+RuntimeDirectory=greyward-file-security
+RuntimeDirectoryMode=0711
+ReadWritePaths=/run/greyward-file-security
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

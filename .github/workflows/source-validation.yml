@@ -1,0 +1,66 @@
+name: Source validation
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  repository:
+    name: Repository contracts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Static checks
+        shell: pwsh
+        run: ./tests/static.ps1
+      - name: Repository checks
+        shell: pwsh
+        run: ./tools/validate-repository.ps1
+
+  frontend:
+    name: Frontend source tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Node contracts
+        working-directory: security-center
+        run: |
+          npm --prefix tauri ci
+          node --test tauri/frontend/interaction.test.mjs
+          node --test tauri/frontend/startup.test.mjs
+          node --test tauri/frontend/performance.test.mjs
+          node --test tauri/frontend/ux-contract.test.mjs
+
+  python:
+    name: Python source tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Python system bindings
+        run: sudo apt-get update && sudo apt-get install -y python3-dbus python3-gi
+      - name: Security Context tests
+        working-directory: security-center
+        env:
+          PYTHONPATH: security-context
+        run: /usr/bin/python3 -m unittest discover -s security-context/tests -p 'test_*.py'
+      - name: Image source tests
+        run: /usr/bin/python3 -m unittest tests.test_image_baseline tests.test_image_offline tests.test_image_stage_text
+
+  rust:
+    name: Rust source checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install native build dependencies
+        run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev
+      - name: Install Rust
+        run: rustup toolchain install stable --profile minimal --component rustfmt --component clippy
+      - name: Check workspace
+        working-directory: security-center
+        run: |
+          cargo fmt --all -- --check
+          cargo test --workspace --locked
+          cargo clippy --workspace --all-targets --locked -- -D warnings

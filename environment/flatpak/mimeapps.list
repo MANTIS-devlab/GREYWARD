@@ -1,0 +1,51 @@
+[Default Applications]
+
+# GREYWARD default communication and web applications.
+x-scheme-handler/mailto=io.github.hkdb.Aerion.desktop;
+x-scheme-handler/http=com.brave.Browser.desktop;
+x-scheme-handler/https=com.brave.Browser.desktop;
+text/html=com.brave.Browser.desktop;
+application/xhtml+xml=com.brave.Browser.desktop;
+text/plain=org.gnome.TextEditor.desktop;
+application/pdf=org.gnome.Papers.desktop;
+
+# Local image viewing belongs to the native viewer, not the web browser.
+image/png=org.gnome.Loupe.desktop;
+image/jpeg=org.gnome.Loupe.desktop;
+image/gif=org.gnome.Loupe.desktop;
+image/webp=org.gnome.Loupe.desktop;
+image/bmp=org.gnome.Loupe.desktop;
+image/tiff=org.gnome.Loupe.desktop;
+image/svg+xml=org.gnome.Loupe.desktop;
+image/avif=org.gnome.Loupe.desktop;
+
+# GREYWARD default office application. PDF remains with the installed
+# document viewer rather than being claimed by the office suite.
+application/msword=com.collaboraoffice.Office.desktop;
+application/vnd.ms-word=com.collaboraoffice.Office.desktop;
+application/vnd.openxmlformats-officedocument.wordprocessingml.document=com.collaboraoffice.Office.desktop;
+application/vnd.openxmlformats-officedocument.wordprocessingml.template=com.collaboraoffice.Office.desktop;
+application/vnd.oasis.opendocument.text=com.collaboraoffice.Office.desktop;
+application/rtf=com.collaboraoffice.Office.desktop;
+text/rtf=com.collaboraoffice.Office.desktop;
+application/vnd.ms-excel=com.collaboraoffice.Office.desktop;
+application/vnd.openxmlformats-officedocument.spreadsheetml.sheet=com.collaboraoffice.Office.desktop;
+application/vnd.openxmlformats-officedocument.spreadsheetml.template=com.collaboraoffice.Office.desktop;
+application/vnd.oasis.opendocument.spreadsheet=com.collaboraoffice.Office.desktop;
+text/csv=com.collaboraoffice.Office.desktop;
+application/vnd.ms-powerpoint=com.collaboraoffice.Office.desktop;
+application/vnd.openxmlformats-officedocument.presentationml.presentation=com.collaboraoffice.Office.desktop;
+application/vnd.openxmlformats-officedocument.presentationml.slideshow=com.collaboraoffice.Office.desktop;
+application/vnd.openxmlformats-officedocument.presentationml.template=com.collaboraoffice.Office.desktop;
+application/vnd.oasis.opendocument.presentation=com.collaboraoffice.Office.desktop;
+
+# GREYWARD default local media player.
+video/mp4=org.kde.haruna.desktop;
+video/x-matroska=org.kde.haruna.desktop;
+video/mpeg=org.kde.haruna.desktop;
+video/ogg=org.kde.haruna.desktop;
+video/quicktime=org.kde.haruna.desktop;
+video/vnd.avi=org.kde.haruna.desktop;
+video/mp2t=org.kde.haruna.desktop;
+video/webm=org.kde.haruna.desktop;
+video/x-ms-wmv=org.kde.haruna.desktop;

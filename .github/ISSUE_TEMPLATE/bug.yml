@@ -1,0 +1,58 @@
+name: Bug report
+description: Report reproducible incorrect GREYWARD behavior
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: "Remove secrets, personal paths, addresses, SSIDs, serial numbers, and unrelated logs before submitting."
+  - type: input
+    id: commit
+    attributes:
+      label: GREYWARD version
+      description: Commit SHA and, if applicable, image checksum/package version.
+    validations:
+      required: true
+  - type: dropdown
+    id: environment
+    attributes:
+      label: Environment
+      options:
+        - Physical installation
+        - Installed virtual machine
+        - Development VM
+        - Source-only test
+        - Other / unknown
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Reproduction steps
+      description: Minimal numbered steps, including relevant state before the failure.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: observed
+    attributes:
+      label: Observed behavior
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Sanitized evidence
+      description: Relevant package/kernel versions, short log excerpts, screenshots, and reproducibility rate.
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Privacy check
+      options:
+        - label: I reviewed attachments and removed credentials and identifying information.
+          required: true

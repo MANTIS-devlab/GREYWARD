@@ -1,0 +1,22 @@
+[Unit]
+Description=GREYWARD first-boot production finalization
+After=local-fs.target
+Before=initial-setup.service display-manager.service greetd.service graphical.target
+ConditionPathExists=/var/lib/greyward/installer/production-pending
+StartLimitIntervalSec=3h
+StartLimitBurst=3
+
+[Service]
+Type=exec
+IPAddressDeny=any
+ExecStartPre=-/usr/bin/chvt 1
+ExecStartPre=-/usr/bin/bash -c 'printf "\033[2J\033[H\n\nGREYWARD is finishing installation.\nPlease wait and do not power off.\n\nProvisioning logs follow:\n" >/dev/tty1'
+ExecStart=/usr/local/libexec/greyward-production-firstboot
+Restart=on-failure
+RestartSec=30s
+StandardOutput=journal
+StandardError=journal
+TimeoutStartSec=30min
+
+[Install]
+WantedBy=graphical.target

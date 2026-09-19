@@ -1,0 +1,41 @@
+[Unit]
+Description=GREYWARD Secure DNS state reconciler
+After=NetworkManager.service systemd-resolved.service
+Wants=NetworkManager.service systemd-resolved.service
+
+[Service]
+Type=dbus
+BusName=systems.mantis.greyward.SecureDns1
+ExecStart=/usr/libexec/greyward-secure-dns
+ExecStopPost=/usr/libexec/greyward-secure-dns --restore
+User=root
+Group=root
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+PrivateDevices=yes
+ProtectClock=yes
+ProtectControlGroups=yes
+ProtectHostname=yes
+ProtectKernelLogs=yes
+ProtectKernelModules=yes
+ProtectKernelTunables=yes
+ProtectHome=yes
+ProtectSystem=strict
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+RestrictAddressFamilies=AF_UNIX
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+SystemCallArchitectures=native
+ReadWritePaths=/var/lib/greyward/secure-dns /run/greyward-secure-dns
+RuntimeDirectory=greyward-secure-dns
+RuntimeDirectoryMode=0700
+StateDirectory=greyward/secure-dns
+StateDirectoryMode=0700
+PrivateTmp=yes
+UMask=0077
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target

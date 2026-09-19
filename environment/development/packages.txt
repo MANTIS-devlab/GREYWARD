@@ -1,0 +1,41 @@
+# Tools used only by the disposable build/development VM.
+openssh-server
+hyperv-daemons
+dnf-plugins-core
+git
+curl
+jq
+ripgrep
+rsync
+tar
+gcc
+gcc-c++
+make
+cmake
+ninja-build
+pkgconf-pkg-config
+# Security Center build-only toolchain. These packages remain in the
+# GREYWARD-DEV overlay and must never be copied into production.
+rustfmt
+clippy
+webkit2gtk4.1-devel
+nautilus-devel
+openssl-devel
+libappindicator-gtk3-devel
+librsvg2-devel
+libxdo-devel
+pykickstart
+rust
+cargo
+rpm-build
+desktop-file-utils
+mesa-demos
+mesa-libEGL-utils
+bind-utils
+iproute
+lsof
+strace
+ImageMagick
+librsvg2-tools
+sequoia-sq
+hyprland-devel

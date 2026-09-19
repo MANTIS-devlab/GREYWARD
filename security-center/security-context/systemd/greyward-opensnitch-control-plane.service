@@ -1,0 +1,38 @@
+[Unit]
+Description=GREYWARD OpenSnitch control plane
+After=network-pre.target
+Before=opensnitch.service
+
+[Service]
+Type=simple
+User=root
+Group=root
+RuntimeDirectory=greyward-opensnitch greyward-security-context
+RuntimeDirectoryMode=0750
+ExecStart=/usr/libexec/greyward-opensnitch-control-plane serve
+Restart=on-failure
+RestartSec=2s
+NoNewPrivileges=yes
+CapabilityBoundingSet=CAP_CHOWN
+PrivateDevices=yes
+PrivateTmp=yes
+ProtectClock=yes
+ProtectControlGroups=yes
+ProtectHostname=yes
+ProtectKernelLogs=yes
+ProtectKernelModules=yes
+ProtectKernelTunables=yes
+ProtectHome=yes
+ProtectSystem=strict
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+RestrictAddressFamilies=AF_UNIX
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+SystemCallArchitectures=native
+ReadWritePaths=/run/greyward-opensnitch /run/greyward-security-context /etc/greyward
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,1 @@
+"""Pinned OpenSnitch protocol namespace."""
