@@ -12,7 +12,7 @@ fn profile_name(profile: Option<PrivacyProfile>) -> Option<&'static str> {
     })
 }
 
-fn state_payload(state: PrivacyState, status: &'static str) -> serde_json::Value {
+fn state_payload(state: &PrivacyState, status: &'static str) -> serde_json::Value {
     json!({
         "ok": true,
         "state": status,
@@ -23,7 +23,7 @@ fn state_payload(state: PrivacyState, status: &'static str) -> serde_json::Value
     })
 }
 
-fn failed_state_payload(error: String, profile: PrivacyProfile) -> serde_json::Value {
+fn failed_state_payload(error: &str) -> serde_json::Value {
     let mut payload = json!({
         "ok": false,
         "state": "REFUSED",
@@ -31,9 +31,8 @@ fn failed_state_payload(error: String, profile: PrivacyProfile) -> serde_json::V
         "detail": error,
     });
     if let Ok(state) = read_actual_state() {
-        payload["profile"] = profile_name(state.profile)
-            .map(serde_json::Value::from)
-            .unwrap_or(serde_json::Value::Null);
+        payload["profile"] =
+            profile_name(state.profile).map_or(serde_json::Value::Null, serde_json::Value::from);
         payload["effective_mac_policy"] = serde_json::json!(state.mac_policy);
         payload["effective_firewall_zone"] = serde_json::json!(state.firewall_zone);
         payload["effective_state"] = serde_json::json!(state);
@@ -44,20 +43,22 @@ fn failed_state_payload(error: String, profile: PrivacyProfile) -> serde_json::V
 fn main() {
     let args: Vec<String> = env::args().collect();
     let result = match args.get(1).map(String::as_str) {
-        Some("--read") if args.len() == 2 => read_actual_state()
-            .map(|state| state_payload(state, "OBSERVED"))
-            .unwrap_or_else(|error| {
+        Some("--read") if args.len() == 2 => read_actual_state().map_or_else(
+            |error| {
                 json!({
                     "ok": false,
                     "state": "UNAVAILABLE",
                     "profile": null,
                     "detail": error.to_string(),
                 })
-            }),
+            },
+            |state| state_payload(&state, "OBSERVED"),
+        ),
         Some("--set") if args.len() == 3 => match PrivacyProfile::parse(&args[2]) {
-            Ok(profile) => apply_native_profile(profile)
-                .map(|state| state_payload(state, "APPLIED"))
-                .unwrap_or_else(|error| failed_state_payload(error.to_string(), profile)),
+            Ok(profile) => apply_native_profile(profile).map_or_else(
+                |error| failed_state_payload(&error.to_string()),
+                |state| state_payload(&state, "APPLIED"),
+            ),
             Err(error) => json!({
                 "ok": false,
                 "state": "INVALID",
