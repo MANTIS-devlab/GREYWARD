@@ -6,24 +6,28 @@ GREYWARD is pre-release software intended for testing, hardware validation, and 
 
 Current public image:
 
-`GREYWARD-0.1.0-alpha.1-Obsidian-x86_64.iso`
+`GREYWARD-0.1.1-alpha.1-Obsidian-x86_64.iso`
 
-Download the ISO and its SHA-256 file from the [GREYWARD SourceForge release directory](https://sourceforge.net/projects/greyward/files/v0.1.0-alpha.1/).
+Download the ISO and its SHA-256 file from the [GREYWARD SourceForge release directory](https://sourceforge.net/projects/greyward/files/v0.1.1-alpha.1/).
 
 ## 2. Verify the image
 
 Linux:
 
 ```bash
-sha256sum -c GREYWARD-0.1.0-alpha.1-Obsidian-x86_64.iso.sha256
+sha256sum -c GREYWARD-0.1.1-alpha.1-Obsidian-x86_64.iso.sha256
 ```
 
 PowerShell:
 
 ```powershell
-Get-FileHash .\GREYWARD-0.1.0-alpha.1-Obsidian-x86_64.iso -Algorithm SHA256
-Get-Content .\GREYWARD-0.1.0-alpha.1-Obsidian-x86_64.iso.sha256
+Get-FileHash .\GREYWARD-0.1.1-alpha.1-Obsidian-x86_64.iso -Algorithm SHA256
+Get-Content .\GREYWARD-0.1.1-alpha.1-Obsidian-x86_64.iso.sha256
 ```
+
+Expected SHA-256:
+
+`07498e73fcb36c1f998b5e069273bb46461afcde917930a547bb9f06942a4afb`
 
 Compare the reported SHA-256 values before writing the image.
 
@@ -34,7 +38,7 @@ Use a trusted image-writing tool and write the ISO to a USB drive as an image, n
 On Linux, first identify the target device carefully, then:
 
 ```bash
-sudo dd if=GREYWARD-0.1.0-alpha.1-Obsidian-x86_64.iso of=/dev/sdX bs=4M status=progress conv=fsync
+sudo dd if=GREYWARD-0.1.1-alpha.1-Obsidian-x86_64.iso of=/dev/sdX bs=4M status=progress conv=fsync
 ```
 
 Replace `/dev/sdX` with the whole USB device. This command destroys the existing contents of that device.
