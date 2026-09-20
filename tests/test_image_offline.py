@@ -150,6 +150,8 @@ class OfflineTests(unittest.TestCase):
         self.assertIn("BASH_COMMAND", provision)
         self.assertIn("pgrep -u greeter -x dms-greeter", firstboot)
         self.assertIn("pgrep -u greeter -x labwc", firstboot)
+        self.assertIn("loginctl list-sessions --no-legend", firstboot)
+        self.assertIn("pgrep -x dms", firstboot)
         self.assertIn("greetd-failure.txt", firstboot)
         self.assertIn("finalizer entered; validating staged inputs", firstboot)
         self.assertIn("timeout --foreground 10m", firstboot)
@@ -172,6 +174,7 @@ class OfflineTests(unittest.TestCase):
         self.assertIn('export WLR_RENDERER=pixman', launcher)
         self.assertIn('exec uwsm start -D Labwc:GREYWARD labwc', launcher)
         self.assertNotIn("/usr/libexec/greyward-dms-greeter", provision)
+
         self.assertNotIn('test -r "$stage/greyward-dms-greeter"', provision)
         self.assertNotIn("greetd-renderer.conf", provision)
         self.assertIn('"$stage/labwc-environment"', provision)
@@ -187,6 +190,27 @@ class OfflineTests(unittest.TestCase):
             firstboot.index('rm -rf "$stage"'),
             firstboot.index('if [[ "$greeter_ready" != true ]]'),
         )
+
+    def test_session_autostart_preserves_a_selected_wallpaper(self):
+        autostart = (ROOT / "environment/production/labwc-autostart").read_text()
+        self.assertIn("ipc call wallpaper get", autostart)
+        self.assertIn("wallpaper_state", autostart)
+        self.assertIn("ipc call wallpaper set /usr/share/backgrounds/greyward/greyward-wallpaper-black-art-4k.jpg", autostart)
+
+    def test_session_lock_uses_secure_greyward_session_presentation(self):
+        lock = (ROOT / "environment/session/greyward-session-lock").read_text()
+        for argument in (
+            "/usr/local/bin/greyward-dms",
+            "ipc call lock lock",
+        ):
+            self.assertIn(argument, lock)
+        self.assertNotIn("swaylock", lock)
+        self.assertNotIn("gtklock", lock)
+        self.assertNotIn("--ignore-empty-password", lock)
+        self.assertNotIn("loginctl terminate", lock)
+        self.assertNotIn("systemctl restart greetd", lock)
+        self.assertIn("WlSessionLock", (ROOT / "environment/production/production-acceptance.sh").read_text())
+        self.assertIn("Modules/Lock/Pam.qml", (ROOT / "environment/production/production-acceptance.sh").read_text())
 
     def test_image_stage_carries_canonical_security_context_unit(self):
         source = (ROOT / "environment/image/build.sh").read_text()
@@ -257,9 +281,12 @@ class OfflineTests(unittest.TestCase):
         self.assertIn("greyward-sync-greeter-wallpaper", provision)
         self.assertIn("greyward-wallpaper-black-art-4k.jpg", helper)
         self.assertIn("greeter_wallpaper_override.jpg", helper)
+        self.assertIn("/var/cache/dms-greeter/session.json", helper)
+        self.assertIn('"wallpaperFillMode": "PreserveAspectCrop"', helper)
         self.assertIn("ExecStartPre=/usr/local/libexec/greyward-sync-greeter-wallpaper", provision)
         self.assertIn("greyward-wallpaper-black-art-4k.jpg", acceptance)
         self.assertIn("cmp -s /usr/share/backgrounds/greyward/greyward-wallpaper-black-art-4k.jpg", acceptance)
+        self.assertIn("/var/cache/dms-greeter/session.json", acceptance)
         self.assertIn("greyward-sync-greeter-wallpaper", builder)
 
     def test_payload_is_checked_at_copy_and_first_boot_boundaries(self):

@@ -1,6 +1,6 @@
 Name:           greyward-security-context
 Version:        0.1.0
-Release:        52%{?dist}
+Release:        53%{?dist}
 Summary:        GREYWARD OpenSnitch control plane and Security Context session bus
 License:        GPL-3.0-only
 Source0:        %{name}-%{version}.tar.gz
@@ -61,6 +61,9 @@ install -Dm0755 security-context/bin/greyward-recovery-point %{buildroot}%{_libe
 install -Dm0755 security-context/bin/greyward-backup %{buildroot}%{_libexecdir}/greyward-backup
 install -Dm0755 security-context/bin/greyward-secure-dns %{buildroot}%{_libexecdir}/greyward-secure-dns
 install -Dm0755 security-context/bin/greyward-feodo-update %{buildroot}%{_libexecdir}/greyward-feodo-update
+# The package source may come from a Windows checkout. Normalize executable
+# text payloads so Linux reads their shebangs without a trailing CR.
+find %{buildroot}%{_libexecdir} -maxdepth 1 -type f -exec sed -i 's/\r$//' {} +
 install -Dm0600 security-context/config/opensnitch-policy.json %{buildroot}%{_sysconfdir}/greyward/opensnitch-policy.json
 install -Dm0644 security-context/systemd/greyward-opensnitch-control-plane.service %{buildroot}%{_unitdir}/greyward-opensnitch-control-plane.service
 install -Dm0644 security-context/systemd/greyward-secure-dns.service %{buildroot}%{_unitdir}/greyward-secure-dns.service
@@ -164,6 +167,9 @@ install -Dm0644 security-context/tmpfiles.d/greyward-opensnitch.conf %{buildroot
 
 
 %changelog
+* Sun Sep 20 2026 MANTIS SYSTEMS - 0.1.0-53
+- Normalize executable script line endings for Windows-origin source trees.
+
 * Sat Sep 19 2026 MANTIS SYSTEMS - 0.1.0-52
 - Apply the GPL grant to the packaged GREYWARD status artwork.
 

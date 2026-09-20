@@ -5,7 +5,6 @@ hyprland
 labwc
 uwsm
 swayidle
-swaylock
 wlopm
 flatpak
 xdg-desktop-portal

@@ -2,8 +2,6 @@
   "currentThemeName": "custom",
   "currentThemeCategory": "generic",
   "customThemeFile": "/usr/share/greyward/dms/greyward-obsidian.json",
-  "greeterWallpaperPath": "/usr/share/backgrounds/greyward/greyward-wallpaper-black-art-4k.jpg",
-  "greeterWallpaperFillMode": "Fill",
   "launcherLogoMode": "custom",
   "launcherLogoCustomPath": "/usr/share/greyward/dms/greyward-symbol.svg",
   "launcherLogoBrightness": 0.72,
