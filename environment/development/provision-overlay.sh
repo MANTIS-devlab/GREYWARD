@@ -50,6 +50,13 @@ if id stendev >/dev/null 2>&1 && [ -d /tmp/greyward-production/labwc ]; then
   ln -s /usr/share/backgrounds/greyward/greyward-wallpaper-black-art-4k.jpg "$user_home/.config/DankMaterialShell/greyward-wallpaper.png"
   install -D -o greeter -g greeter -m 0644 /tmp/greyward-production/dankmaterialshell/settings.json /var/cache/dms-greeter/settings.json
   install -D -o greeter -g greeter -m 0644 /usr/share/backgrounds/greyward/greyward-wallpaper-black-art-4k.jpg /var/cache/dms-greeter/greeter_wallpaper_override.jpg
+  install -D -o greeter -g greeter -m 0644 /dev/null /var/cache/dms-greeter/session.json
+  cat > /var/cache/dms-greeter/session.json <<'EOF'
+{
+  "wallpaperPath": "/usr/share/backgrounds/greyward/greyward-wallpaper-black-art-4k.jpg",
+  "wallpaperFillMode": "PreserveAspectCrop"
+}
+EOF
   install -D -o stendev -g stendev -m 0644 /tmp/greyward-production/session/hyprland.conf "$user_home/.config/hypr/hyprland.conf"
   install -D -o stendev -g stendev -m 0644 /tmp/greyward-production/session/greyward-decoration.tokens.conf "$user_home/.config/hypr/greyward-decoration.tokens.conf"
   install -D -o stendev -g stendev -m 0755 /tmp/greyward-production/session/greyward-minimize.sh "$user_home/.local/bin/greyward-minimize"

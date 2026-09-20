@@ -1,6 +1,6 @@
 Name:           greyward-security-center
 Version:        0.1.0
-Release:        47%{?dist}
+Release:        48%{?dist}
 Summary:        GREYWARD local security posture and control application
 License:        GPL-3.0-only AND Apache-2.0 AND OFL-1.1 AND CC0-1.0
 Source0:        %{name}-%{version}.tar.gz
@@ -54,6 +54,9 @@ install -Dm0755 "%{greyward_cargo_target}/release/greyward-security-profile" \
   %{buildroot}%{_libexecdir}/greyward-security-profile
 install -Dm0755 data/greyward-security-center-launch \
   %{buildroot}%{_bindir}/greyward-security-center-launch
+# The package source may come from a Windows checkout. Normalize this shell
+# launcher so Linux reads its shebang without a trailing CR.
+sed -i 's/\r$//' %{buildroot}%{_bindir}/greyward-security-center-launch
 install -Dm0755 data/greyward-security-center-route \
   %{buildroot}%{_bindir}/greyward-security-center-route
 install -Dm0755 file-context/greyward-file-context \
@@ -99,6 +102,9 @@ install -Dm0755 greyward-safe-open.so \
 %postun
 /usr/bin/fc-cache -f >/dev/null 2>&1 || :
 %changelog
+* Sun Sep 20 2026 MANTIS SYSTEMS - 0.1.0-48
+- Normalize the Security Center launcher line endings for Linux installs.
+
 * Sat Sep 19 2026 MANTIS SYSTEMS - 0.1.0-47
 - Record exact font receipts and apply the GPL grant to GREYWARD artwork.
 

@@ -26,7 +26,7 @@ if "$require_marker"; then
   test -f /etc/greyward-production-complete || fail 'production completion marker is missing'
 fi
 checkpoint 'required production packages and login boundary'
-rpm -q dms-greeter greyward-security-center greyward-security-context audit audit-rules policycoreutils swayidle swaylock wlopm net-tools >/dev/null || fail 'required production package is missing'
+rpm -q dms-greeter greyward-security-center greyward-security-context audit audit-rules policycoreutils swayidle wlopm net-tools >/dev/null || fail 'required production package is missing'
 test -x /usr/bin/dms-greeter || fail 'DMS Greeter is not installed'
 test -s /etc/greetd/config.toml || fail 'greetd configuration is missing'
 is_enabled greetd || fail 'greetd is not enabled'
@@ -44,6 +44,11 @@ test -x /usr/local/libexec/greyward-sync-greeter-wallpaper || fail 'GREYWARD gre
 test -s /var/cache/dms-greeter/greeter_wallpaper_override.jpg || fail 'GREYWARD greeter wallpaper override is missing'
 cmp -s /usr/share/backgrounds/greyward/greyward-wallpaper-black-art-4k.jpg \
   /var/cache/dms-greeter/greeter_wallpaper_override.jpg || fail 'GREYWARD greeter wallpaper override does not match the desktop wallpaper'
+test -s /var/cache/dms-greeter/session.json || fail 'GREYWARD greeter wallpaper session is missing'
+grep -q '"wallpaperPath": "/usr/share/backgrounds/greyward/greyward-wallpaper-black-art-4k.jpg"' \
+  /var/cache/dms-greeter/session.json || fail 'GREYWARD greeter wallpaper session path is invalid'
+grep -q '"wallpaperFillMode": "PreserveAspectCrop"' \
+  /var/cache/dms-greeter/session.json || fail 'GREYWARD greeter wallpaper fill mode is invalid'
 test -s /etc/systemd/system/greetd.service.d/greyward-wallpaper.conf || fail 'GREYWARD greetd wallpaper drop-in is missing'
 grep -qx 'ExecStartPre=/usr/local/libexec/greyward-sync-greeter-wallpaper' \
   /etc/systemd/system/greetd.service.d/greyward-wallpaper.conf || fail 'GREYWARD greetd wallpaper sync is not applied before startup'
@@ -133,6 +138,12 @@ for human_user in "${human_users[@]}"; do
 done
 test -s /usr/share/wayland-sessions/greyward-labwc.desktop || fail 'GREYWARD Labwc session entry is missing'
 test -x /usr/local/bin/greyward-session-lock || fail 'GREYWARD session locker entrypoint is missing'
+test -x /usr/local/bin/greyward-dms || fail 'GREYWARD DMS wrapper is missing'
+grep -q 'ipc call lock lock' /usr/local/bin/greyward-session-lock || fail 'GREYWARD session locker does not use the DMS lock IPC'
+test -s /usr/local/share/greyward-dms/v1.5.3/quickshell/dms/Modules/Lock/Lock.qml || fail 'DMS native lock implementation is missing'
+grep -q 'WlSessionLock' /usr/local/share/greyward-dms/v1.5.3/quickshell/dms/Modules/Lock/Lock.qml || fail 'DMS native Wayland session lock is missing'
+test -s /usr/local/share/greyward-dms/v1.5.3/quickshell/dms/Modules/Lock/Pam.qml || fail 'DMS native lock PAM implementation is missing'
+grep -q 'PamContext' /usr/local/share/greyward-dms/v1.5.3/quickshell/dms/Modules/Lock/Pam.qml || fail 'DMS native lock PAM context is missing'
 test -x /usr/local/bin/greyward-display-power || fail 'GREYWARD display power entrypoint is missing'
 test -s /etc/systemd/user/greyward-session-idle.service || fail 'GREYWARD idle service is missing'
 for forbidden_session in \

@@ -252,6 +252,8 @@ if ((Test-Path -LiteralPath $productionProvisionPath) -and (Test-Path -LiteralPa
         $firstbootScript -notmatch 'is-active --quiet greetd\.service' -or
         $firstbootScript -notmatch 'pgrep -u greeter -x dms-greeter' -or
         $firstbootScript -notmatch 'pgrep -u greeter -x labwc' -or
+        $firstbootScript -notmatch 'loginctl list-sessions --no-legend' -or
+        $firstbootScript -notmatch 'pgrep -x dms' -or
         $firstbootScript -notmatch 'greetd-failure\.txt') {
         $errors.Add('First-boot finalization must verify the actual DMS Greeter/Labwc hand-off after acceptance succeeds.')
     }
@@ -261,6 +263,13 @@ if ((Test-Path -LiteralPath $productionProvisionPath) -and (Test-Path -LiteralPa
         $productionProvision -match 'rmdir "\$gitstatus_stage"') {
         $errors.Add('Offline gitstatus provisioning must stage files, rename them into place, and let find clean the temporary tree without a second root-directory removal.')
     }
+}
+
+$productionAutostart = Get-Content -Raw -LiteralPath (Join-Path $repo 'environment\production\labwc-autostart')
+if ($productionAutostart -notmatch 'ipc call wallpaper get' -or
+    $productionAutostart -notmatch 'wallpaper_state' -or
+    $productionAutostart -notmatch 'ipc call wallpaper set /usr/share/backgrounds/greyward/greyward-wallpaper-black-art-4k\.jpg') {
+    $errors.Add('The production session must keep an existing DMS wallpaper and apply the canonical wallpaper only when no wallpaper is configured.')
 }
 
 $firstbootStatusScript = Get-Content -Raw -LiteralPath $firstbootStatusScriptPath
@@ -774,6 +783,22 @@ if (Test-Path -LiteralPath $imageEntryPoint) {
     }
 }
 
+$sessionLockPath = Join-Path $repo 'environment\session\greyward-session-lock'
+if (Test-Path -LiteralPath $sessionLockPath) {
+    $sessionLock = Get-Content -Raw -LiteralPath $sessionLockPath
+    foreach ($requiredLockArgument in @(
+        '/usr/local/bin/greyward-dms',
+        'ipc call lock lock'
+    )) {
+        if ($sessionLock -notmatch $requiredLockArgument) {
+            $errors.Add("GREYWARD session lock is missing the DMS lock IPC contract: $requiredLockArgument")
+        }
+    }
+    if ($sessionLock -match 'swaylock|gtklock|--ignore-empty-password|loginctl terminate|systemctl (restart|stop) greetd') {
+        $errors.Add('GREYWARD session lock must use the DMS-native PAM/Wayland surface without a competing locker, empty-password bypass, or greetd restart.')
+    }
+}
+
 if (Test-Path -LiteralPath $developmentOverlayPath) {
     $developmentOverlay = Get-Content -Raw -LiteralPath $developmentOverlayPath
     if ($developmentOverlay -match '/tmp/greyward-production/session/labwc' -or
@@ -798,14 +823,16 @@ if (Test-Path -LiteralPath $dmsSettingsPath) {
     if ($dmsSettings -match '(?i)/home/stendev|stendev') {
         $errors.Add('Production DMS settings contain a developer-home reference.')
     }
-    foreach ($requiredDmsPath in @('/usr/share/greyward/dms/greyward-obsidian.json', '/usr/share/greyward/dms/greyward-symbol.svg', '/usr/share/backgrounds/greyward/greyward-wallpaper-black-art-4k.jpg')) {
+    foreach ($requiredDmsPath in @('/usr/share/greyward/dms/greyward-obsidian.json', '/usr/share/greyward/dms/greyward-symbol.svg')) {
         if ($dmsSettings -notmatch [regex]::Escape($requiredDmsPath)) {
             $errors.Add("Production DMS settings do not use the stable system asset path: $requiredDmsPath")
         }
     }
     $dmsSettingsJson = $dmsSettings | ConvertFrom-Json
-    if ($dmsSettingsJson.greeterWallpaperFillMode -ne 'Fill') {
-        $errors.Add('DMS settings must keep the GREYWARD greetd background in Fill mode.')
+    $greeterWallpaperSync = Get-Content -Raw -LiteralPath $greeterWallpaperSyncPath
+    if ($greeterWallpaperSync -notmatch '"wallpaperPath": "/usr/share/backgrounds/greyward/greyward-wallpaper-black-art-4k\.jpg"' -or
+        $greeterWallpaperSync -notmatch '"wallpaperFillMode": "PreserveAspectCrop"') {
+        $errors.Add('DMS Greeter must receive the canonical GREYWARD wallpaper through its session.json contract.')
     }
     if ($dmsSettingsJson.widgetBackgroundCustomColor -ne '#D8E0E7' -or [double]$dmsSettingsJson.widgetBackgroundCustomStrength -lt 0.2 -or $dmsSettingsJson.controlCenterTileColorMode -ne 'primary' -or $dmsSettingsJson.buttonColorMode -ne 'primary') {
         $errors.Add('DMS must retain the light-grey translucent widget material for the frosted desktop treatment.')

@@ -20,6 +20,10 @@ systemctl --user start --no-block greyward-dms.service
   for _attempt in 1 2 3 4 5 6 7 8 9 10; do
     if systemctl --user is-active --quiet greyward-dms.service; then
       if [ -r /usr/share/backgrounds/greyward/greyward-wallpaper-black-art-4k.jpg ]; then
+        wallpaper_state=$(/usr/local/bin/greyward-dms ipc call wallpaper get 2>/dev/null || true)
+        if [ -n "$wallpaper_state" ]; then
+          break
+        fi
         /usr/local/bin/greyward-dms ipc call wallpaper set /usr/share/backgrounds/greyward/greyward-wallpaper-black-art-4k.jpg >/tmp/greyward-wallpaper-set.log 2>&1 && break
       else
         break

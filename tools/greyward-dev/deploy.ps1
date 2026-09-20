@@ -46,6 +46,13 @@ sudo install -D -m 0644 "`$release/dankmaterialshell/greyward-obsidian.json" /us
 sudo install -D -m 0644 "`$release/branding/source/greyward-symbol.svg" /usr/share/greyward/dms/greyward-symbol.svg
 sudo install -d -o greeter -g greeter -m 2770 /var/cache/dms-greeter
 sudo install -D -m 0644 "`$release/dankmaterialshell/settings.json" /var/cache/dms-greeter/settings.json
+sudo install -D -m 0644 /dev/null /var/cache/dms-greeter/session.json
+sudo tee /var/cache/dms-greeter/session.json >/dev/null <<'EOF'
+{
+  "wallpaperPath": "/usr/share/backgrounds/greyward/greyward-wallpaper-black-art-4k.jpg",
+  "wallpaperFillMode": "PreserveAspectCrop"
+}
+EOF
 sudo install -d -m 0755 /usr/share/backgrounds/greyward
 find "`$release/branding/wallpaper" -maxdepth 1 -type f -name 'greyward-wallpaper-*.jpg' -exec sudo install -m 0644 {} /usr/share/backgrounds/greyward/ \;
 test "`$(find "`$release/branding/wallpaper" -maxdepth 1 -type f -name 'greyward-wallpaper-*.jpg' | wc -l)" -eq 2
@@ -53,7 +60,7 @@ for wallpaper_file in \
   greyward-wallpaper-black-art-4k.jpg \
   greyward-wallpaper-2109-4k.jpg; do test -f "/usr/share/backgrounds/greyward/`$wallpaper_file"; done
 sudo install -D -m 0644 /usr/share/backgrounds/greyward/greyward-wallpaper-black-art-4k.jpg /var/cache/dms-greeter/greeter_wallpaper_override.jpg
-sudo chown greeter:greeter /var/cache/dms-greeter/settings.json /var/cache/dms-greeter/greeter_wallpaper_override.jpg
+sudo chown greeter:greeter /var/cache/dms-greeter/settings.json /var/cache/dms-greeter/session.json /var/cache/dms-greeter/greeter_wallpaper_override.jpg
 rm -f ~/.config/DankMaterialShell/greyward-wallpaper.png
 ln -s /usr/share/backgrounds/greyward/greyward-wallpaper-black-art-4k.jpg ~/.config/DankMaterialShell/greyward-wallpaper.png
 mkdir -p ~/.config/DankMaterialShell/plugins/greywardPublicIp

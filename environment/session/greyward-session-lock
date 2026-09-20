@@ -1,9 +1,9 @@
 #!/bin/sh
 # The one GREYWARD session-lock entrypoint: keyboard, idle and sleep callers
-# all reach the same PAM-backed Wayland locker.
+# all reach the same DMS-native PAM-backed Wayland lock surface.
 set -eu
 
-if pgrep -u "$(id -u)" -x swaylock >/dev/null 2>&1; then
-  exit 0
-fi
-exec /usr/bin/swaylock --daemonize --color 182027
+# DMS owns the WlSessionLock surface, password field, and PAM conversation.
+# Its lock IPC is idempotent, so keyboard, idle, and suspend callers share one
+# native lock without terminating the session or competing locker processes.
+exec /usr/local/bin/greyward-dms ipc call lock lock

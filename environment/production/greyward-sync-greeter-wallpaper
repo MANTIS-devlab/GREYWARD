@@ -6,14 +6,25 @@ set -euo pipefail
 # a greeter restart, cache cleanup, or a repaired production install.
 source=/usr/share/backgrounds/greyward/greyward-wallpaper-black-art-4k.jpg
 target=/var/cache/dms-greeter/greeter_wallpaper_override.jpg
+session=/var/cache/dms-greeter/session.json
 
 test -s "$source"
 install -d -o greeter -g greeter -m 2770 "$(dirname "$target")"
 temporary=$(mktemp "${target}.XXXXXX")
-trap 'rm -f -- "$temporary"' EXIT
+session_temporary=$(mktemp "${session}.XXXXXX")
+trap 'rm -f -- "$temporary" "$session_temporary"' EXIT
 install -o greeter -g greeter -m 0644 "$source" "$temporary"
 cmp -s "$source" "$temporary"
 mv -f -- "$temporary" "$target"
 chown greeter:greeter "$target"
 chmod 0644 "$target"
+cat > "$session_temporary" <<'EOF'
+{
+  "wallpaperPath": "/usr/share/backgrounds/greyward/greyward-wallpaper-black-art-4k.jpg",
+  "wallpaperFillMode": "PreserveAspectCrop"
+}
+EOF
+chown greeter:greeter "$session_temporary"
+chmod 0644 "$session_temporary"
+mv -f -- "$session_temporary" "$session"
 trap - EXIT

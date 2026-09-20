@@ -224,8 +224,11 @@ desktop-entry override, preserving its package dependency without presenting
 an upstream utility as a GREYWARD application.
 
 The canonical session locks after ten minutes of idle time and before
-suspension through one PAM-backed `swaylock` entrypoint shared by keyboard and
-idle callers.
+suspension through one DMS-native lock entrypoint shared by keyboard and idle
+callers. DMS owns the Wayland session-lock surface, the conventional password
+field, and PAM authentication, so the session and its applications remain
+open. The lock uses the current canonical GREYWARD desktop wallpaper and DMS's
+native lock presentation; it is distinct from the LUKS storage unlock screen.
 
 `/etc/greyward-production-complete` is an installed-system acceptance marker,
 not a provisioning-progress flag. The account hand-off writes it atomically
