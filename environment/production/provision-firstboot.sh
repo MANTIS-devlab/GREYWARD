@@ -163,9 +163,10 @@ if ! timeout --foreground 30s systemctl is-active --quiet greetd.service; then
   exit 1
 fi
 # A running greetd daemon is not sufficient evidence of a usable graphical
-# login: greetd can remain active while its dms-greeter/labwc child exits. Wait
-# briefly for both children and preserve the actual journal if VMware's DRM
-# path still rejects the compositor.
+# login: greetd can remain active while its dms-greeter/labwc child exits.
+# After a successful authentication, however, dms-greeter deliberately exits
+# and the user-owned Labwc/DMS session replaces it. Accept either boundary.
+# This avoids treating a successful greeter hand-off as a delayed failure.
 rm -f "$greetd_failure"
 greeter_ready=false
 for _attempt in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
@@ -174,11 +175,20 @@ for _attempt in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
     greeter_ready=true
     break
   fi
+  if loginctl list-sessions --no-legend | \
+       awk '$3 != "greeter" && $4 == "seat0" { found=1 } END { exit(found ? 0 : 1) }' &&
+     pgrep -x labwc >/dev/null 2>&1 &&
+     pgrep -x dms >/dev/null 2>&1; then
+    greeter_ready=true
+    break
+  fi
   sleep 1
 done
 if [[ "$greeter_ready" != true ]]; then
   {
-    printf 'GREYWARD login boundary failed to produce dms-greeter and labwc.\n'
+    printf 'GREYWARD login boundary failed to produce a greeter or handed-off graphical session.\n'
+    printf '\n[login sessions]\n'
+    loginctl list-sessions --no-pager || true
     printf '\n[greetd status]\n'
     systemctl status --no-pager --full greetd.service || true
     printf '\n[greetd journal]\n'
