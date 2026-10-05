@@ -11,6 +11,21 @@ except ModuleNotFoundError:
 
 @unittest.skipIf(ShellRuntime is None, 'Session runtime requires Fedora D-Bus and GLib')
 class OperationTests(unittest.TestCase):
+    def test_signal_burst_coalesces_one_idle_callback_without_losing_dirty_state(self):
+        runtime = object.__new__(ShellRuntime)
+        runtime.dirty = False
+        runtime.invalidate_pending = False
+        runtime.tick = Mock()
+        with patch('greyward_security_context.shell_runtime.GLib.idle_add') as schedule:
+            for _ in range(20): runtime.invalidate()
+            schedule.assert_called_once()
+            self.assertTrue(runtime.dirty)
+            runtime._tick_once()
+            self.assertFalse(runtime.invalidate_pending)
+            runtime.tick.assert_called_once()
+            runtime.invalidate()
+            self.assertEqual(schedule.call_count, 2)
+
     def setUp(self):
         self.runtime = object.__new__(ShellRuntime)
         self.runtime.lock = threading.Lock()

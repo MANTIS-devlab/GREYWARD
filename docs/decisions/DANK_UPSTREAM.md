@@ -3,15 +3,29 @@
 > Decision and audit record. Dated runtime observations are historical; current
 > implementation ownership is defined in `docs/REPOSITORY_MAP.md`.
 
-Status: Decision and audit record. DMS v1.5.3 is the current canonical pin;
-the production installer records the checked archive and checksum. No visual
-fork is applied.
+Status: DMS 1.6.2 is the reproducibly packaged migration candidate, not a
+promoted release. The canonical pin, checksums, ordered patches, Fedora build
+inputs and compatibility tuple are in
+[`dms-release.json`](../../environment/production/dms-release.json).
+GREYWARD keeps an unchanged distribution backend and generates its explicit
+whole-shell override from upstream QML plus narrow patches. It maintains no
+complete shell fork. The 1.5.3 runtime and backups remain rollback evidence.
 
 ## Candidate policy
 
-The earlier `v1.5.2` / `74896fb` candidate review is historical. Future DMS
-updates must compare a complete official release against the GREYWARD
-acceptance matrix before changing the current `v1.5.3` pin.
+The active [migration tracker](../architecture/DMS_1_6_MIGRATION_PLAN.md)
+records implementation and acceptance gaps. Eleven patches affect twenty QML
+files, including the native Update Center route and native-lock startup recovery.
+The user's subsequent native-lock decision removed the external-lock handoff patch.
+Async shell startup must recreate the native surface for an already locked session.
+This corrects
+the former statement that no visual patches were applied. Promotion requires
+the existing upstream-review and acceptance contract below. User authorization
+to implement and test this migration does not turn missing image/hardware
+acceptance into success.
+
+The Objective 1/2 records below describe historical 1.5.x selection and probes.
+They are not instructions to install the former archive or floating Fedora spec.
 
 Authoritative sources:
 
@@ -61,7 +75,7 @@ Review Labwc handling, bar and popup input masks, desktop context menus, Setting
 
 Every upstream update requires a new candidate audit, complete SHA/checksum record, changelog and issue review, source-delta report, functional regression suite, direct VMConnect interaction suite, log review, rollback test, and explicit approval. An upstream update must never silently change GREYWARD runtime behavior.
 
-## Objective 1 selection record
+## Historical Objective 1 selection record
 
 Audited stable tags:
 
@@ -83,14 +97,14 @@ Known conditions and rejected-version reason:
 
 Authoritative release evidence: [official releases](https://github.com/AvengeMedia/DankMaterialShell/releases), [v1.5.3 release changes](https://newreleases.io/project/github/AvengeMedia/DankMaterialShell/release/v1.5.3), and the [official source repository](https://github.com/AvengeMedia/DankMaterialShell).
 
-## Source compatibility findings
+## Historical 1.5.3 source compatibility findings
 
 - DMS v1.5.3 detects Labwc from the Wayland socket owner and exposes `isLabwc`; the dedicated `LabwcService` currently provides logout. Generic toplevel management and wlroots protocols are available, but workspace switching/filtering and compositor-specific keybinds are not proven for Labwc by source alone.
 - DMS uses Quickshell `0.3`-era APIs, including `Quickshell.Wayland`, background-effect, idle-notify/inhibitor, shortcuts inhibitor, toplevel management, system tray, PipeWire, Bluetooth, UPower, Polkit, and notification modules. GREYWARD’s installed Quickshell package exposes those module families, but exact DMS runtime compatibility remains unvalidated until the reversible test session.
 - DMS provides a user `dms.service` with `Type=dbus`, `BusName=org.freedesktop.Notifications`, and `dms run --session`; this is the intended DMS daemon/notification owner and must be isolated from `greyward-shell.service`.
 - DMS source contains 573 QML files and 477 Go files; 318 QML files reference Material/theme surfaces. This is an early fork-cost warning, not a GO decision.
 
-## Objective 2 installation evidence — 2026-08-19
+## Historical Objective 2 installation evidence — 2026-08-19
 
 The baseline used the official immutable `v1.5.3` asset
 `dms-full-amd64.tar.gz`, not a mutable `latest` download. Verified asset
@@ -112,7 +126,7 @@ are byte-identical to the font paths in that archive; exact paths, hashes, and
 retained license files are recorded in
 `security-center/THIRD_PARTY_NOTICES.md`.
 
-## Objective 2B runtime review — 2026-08-19
+## Historical Objective 2B runtime review — 2026-08-19
 
 The v1.5.3 source review was repeated against the bounded GREYWARD test
 window. `backend_networkmanager_wifi.go` intentionally returns
@@ -128,7 +142,7 @@ The only correction made in Objective 2B was outside DMS: the disposable test
 unit now classifies its expected SIGTERM exit (`143`) as successful. The DMS
 payload, source pin, and QML/Go files were not modified.
 
-## Canonical cutover decision — 2026-08-19
+## Historical Canonical cutover decision — 2026-08-19
 
 The product owner accepted DMS `v1.5.3` / full commit
 `069ddab041c738236a8910e4c39b65d9628d3018` as the GREYWARD generic shell
@@ -137,7 +151,7 @@ this promotion. The source pin and verified archive checksum remain unchanged;
 no mutable release, `*-git` dependency, self-update, or upstream source patch
 is introduced by the cutover.
 
-## Canonical cutover evidence — 2026-08-19
+## Historical Canonical cutover evidence — 2026-08-19
 
 The pinned payload was installed under `/usr/local/share/greyward-dms/v1.5.3`
 with commit `069ddab041c738236a8910e4c39b65d9628d3018` and archive checksum
@@ -151,7 +165,7 @@ packaged DMS Greeter through greetd while retaining Fedora PAM as the authority.
 The VM was intentionally left under DMS; no rollback was performed
 after the final verification.
 
-## Objective 3 visual fork-cost spike — 2026-08-19
+## Historical Objective 3 visual fork-cost spike — 2026-08-19
 
 Inspection of the pinned v1.5.3 source found that the bar, launcher, Control
 Center, Settings, and notification surfaces consume the shared

@@ -4,6 +4,8 @@ Everything below is retained for decisions, evidence, or audit context. It is
 not a current source of architecture or product behavior.
 
 - `migrations/` — completed migration and runtime audit records;
+- [5 October pre-release implementation record](migrations/2026-10-05-pre-release-implementation.md)
+  — published changes, exact candidate tuple, completed evidence and open gates;
 - `security-center/sessions/` — implementation-session reports;
 - Security Center capture artifacts are retained locally under
   `security-center/captures/` but excluded from Git because they are generated

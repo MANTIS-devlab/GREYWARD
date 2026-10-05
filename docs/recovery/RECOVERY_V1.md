@@ -64,8 +64,10 @@ The Security Center displays these operations in a compact workflow queue. It
 keeps local points, backup completion, and repository verification independent.
 The helper persists the current or most recent operation (`BACKUP`, `VERIFY`,
 or `RESTORE`) with `RUNNING`, `COMPLETED`, or `FAILED` state and a stable,
-product-safe problem category. Provider diagnostics remain local diagnostics;
-they are never used as primary UI feedback.
+product-safe problem category. Destination status also preserves whether the
+path is invalid, inside home, unmounted, changed, or could not be validated.
+Provider diagnostics remain local diagnostics; they are never used as primary
+UI feedback.
 
 Restores are selective and staged under the user's GREYWARD restore directory;
 existing files are not overwritten automatically. The helper returns at most

@@ -373,7 +373,7 @@ function secureDnsMarkup(dns) {
   const options = [["Automatic", "network.dns.mode.automatic"], ["Privacy", "network.dns.mode.privacy"], ["NetworkDefault", "network.dns.mode.networkDefault"]].map(([value, labelKey]) => `<option value="${value}"${value === mode ? " selected" : ""}>${esc(copy(labelKey))}</option>`).join("");
   const chain = (dns.provider_order || ["quad9", "controld", "adguard"]).map((value) => ({quad9:"Quad9", controld:"Control D", adguard:"AdGuard"}[value] || value)).join(" → ");
   const stateKey = {SecureProvider:"network.dns.state.secure", VPNOwned:"network.dns.state.vpn", CompatibilityFallback:"network.dns.state.fallback"}[state] || "network.dns.state.unavailable";
-  const detail = dns.degradation_reason ? copy("network.dns.detail.degraded") : (dns.effective_owner === "VPN" ? copy("network.dns.detail.vpn") : copy("network.dns.detail.measured"));
+  const detail = dns.degradation_reason ? copy("network.dns.detail.degraded") : (dns.effective_owner === "VPN" ? copy("network.dns.detail.vpn") : copy(dns.public_scope === "system" && state === "SecureProvider" ? "network.dns.detail.split" : "network.dns.detail.measured"));
   const facts = `<p>${esc(copy("network.dns.facts", {transport, validation:dns.validation || copy("network.dns.unknown"), provider:dns.provider || copy("network.dns.unknown")}))}</p>`;
   const readOnly = dns.runtime_mutation === "DISABLED_READ_ONLY";
   return `<section class="secure-dns-panel tone-${toneName}"><div><div class="eyebrow">${esc(copy("network.dns.eyebrow"))}</div><h3>${esc(copy(stateKey))}</h3><p>${esc(detail)}</p><div class="secure-dns-facts"><span><b>${esc(copy("network.dns.configuredMode"))}</b> ${esc(copy({Automatic:"network.dns.mode.automatic", Privacy:"network.dns.mode.privacy", NetworkDefault:"network.dns.mode.networkDefault"}[mode] || "network.dns.unknown"))}</span><span><b>${esc(copy("network.dns.failoverChain"))}</b> ${esc(chain)}</span></div>${technicalDisclosure(copy("network.dns.resolverDetails"), "", facts)}</div><div class="secure-dns-controls"><label for="secure-dns-mode">${esc(copy("network.dns.modeLabel"))}</label><select id="secure-dns-mode" data-secure-dns-mode${readOnly ? ' disabled aria-disabled="true"' : ""}>${options}</select><button class="text-button" data-secure-dns-retry${readOnly ? ' disabled aria-disabled="true"' : ""}>${esc(copy("network.dns.retry"))} ${icon("refresh")}</button><small>${esc(readOnly ? copy("network.dns.readOnly") : copy("network.dns.verifyAfterChange"))}</small></div></section>`;
@@ -448,6 +448,8 @@ function networkActivityDestination(item) {
     country_converged: destination.country_converged !== false,
     country_source_count: Number(destination.country_source_count || 0),
     country_source: destination.country_source || "LOCAL",
+    country_availability: destination.country_availability || "UNKNOWN",
+    country_sources: Array.isArray(destination.country_sources) ? destination.country_sources : [],
   };
 }
 // Country markers are based only on backend metadata from local sources. A
@@ -507,6 +509,14 @@ function networkCountryFlag(destination) {
     }
   }
   const visual = signal.code ? networkCountryFlagSvg(signal.code) : networkCountryFlagSvg("UN");
+  const sources = Array.isArray(destination?.country_sources) ? destination.country_sources : [];
+  for (const item of sources.filter((item) => item?.available)) {
+    label += ` · ${copy(`network.activity.country.source.${item.source}`)}`;
+    const age = Number(item.age_days);
+    if (item.age_days != null && Number.isFinite(age) && age >= 0)
+      label += ` · ${copy("network.activity.country.fileAge", {days: Math.floor(age)})}`;
+    if (item.freshness === "STALE") label += ` · ${copy("network.activity.country.stale")}`;
+  }
   return `<span class="network-country-flag${signal.code ? "" : " network-country-flag-unknown"}" role="img" aria-label="${esc(label)}" title="${esc(label)}">${visual}</span>`;
 }
 function networkDestinationIdentity(host) {
@@ -842,12 +852,13 @@ function applicationsMarkup(data) {
 function backupProblemCopy(problem) {
   const labels = {
     CHECK_PASSPHRASE: "backup.problem.passphrase", CHECK_DESTINATION: "backup.problem.destination",
-    TRY_LATER: "backup.problem.later", SERVICE_UNAVAILABLE: "backup.problem.unavailable", TRY_AGAIN: "backup.problem.retry",
     DESTINATION_IN_HOME: "backup.configure.choose", DESTINATION_INVALID: "backup.problem.destination",
     DESTINATION_NOT_WRITABLE: "backup.problem.destination", DESTINATION_NOT_MOUNTED: "backup.configure.choose",
     DESTINATION_MOUNT_VALIDATION: "backup.problem.destination", DESTINATION_MOUNT_PROVIDER: "backup.problem.destination",
-    DESTINATION_IDENTITY_MISSING: "backup.configure.choose", DESTINATION_CHANGED: "backup.problem.destination",
-    REPOSITORY_MISMATCH: "backup.problem.retry", REPOSITORY_INACCESSIBLE: "backup.problem.retry",
+    DESTINATION_IDENTITY_MISSING: "backup.configure.choose",
+    DESTINATION_CHANGED: "backup.problem.destination", REPOSITORY_MISMATCH: "backup.problem.retry",
+    REPOSITORY_INACCESSIBLE: "backup.problem.retry",
+    TRY_LATER: "backup.problem.later", SERVICE_UNAVAILABLE: "backup.problem.unavailable", TRY_AGAIN: "backup.problem.retry",
   };
   return copy(labels[String(problem || "TRY_AGAIN").toUpperCase()] || "backup.problem.retry");
 }

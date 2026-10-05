@@ -143,6 +143,24 @@ This opens the last installed package through the durable desktop launcher.
 
 ## Performance validation
 
+The packaged `/usr/libexec/greyward-security-posture` command collects the core
+snapshot and emits the same `greyward.security.posture/v1` digest used by the
+Security Center. Security Context uses this headless backend command instead of
+starting the graphical executable for each posture read. Missing or failed reads
+retain the existing unavailable state and freshness limits. Bursts of provider
+signals share one pending idle callback; subsequent changes still trigger a read.
+
+Component builds retain external Cargo dependencies while cleaning first-party
+crates whose content digest changed. This prevents normalized source timestamps
+from hiding changed code. `environment/image/build-components.py` reuses only
+hash-verified receipts and rejects changed inputs under a previously built package
+identity; increment the affected RPM release before building changed inputs.
+
+Endpoint-country hints use optional local MMDB/geofeed data. No country database
+or remote lookup is required. API/UI metadata reports source availability and
+file age; data older than 180 days is marked stale with very low confidence.
+Legacy DAT input requires an explicit `GREYWARD_GEOIP_LEGACY_DB` path.
+
 Page reads and privacy profile changes use asynchronous Tauri command dispatch so
 blocking service reads do not occupy the window thread. Frontend refreshes retain
 open disclosures and focus; shared confirmation dialogs remain mounted outside

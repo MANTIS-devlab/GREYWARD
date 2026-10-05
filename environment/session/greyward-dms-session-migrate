@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+/usr/local/libexec/greyward-dms-state-migrate
+
 # DMS persists pinned applications in session.json rather than settings.json.
 # Seed the GREYWARD production pin set only for a new/legacy state that has
 # never contained the bar pin list. Once DMS has written barPinnedApps, that

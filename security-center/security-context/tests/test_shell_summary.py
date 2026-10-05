@@ -5,6 +5,13 @@ from greyward_security_context.shell_summary import build_shell_summary
 
 
 class ShellSummaryTests(unittest.TestCase):
+    def test_definition_initialization_and_refresh_are_not_lost_as_provider_failure(self):
+        from greyward_security_context.shell_summary import _malware
+        for state in ('INITIALIZING', 'UPDATING', 'OUTDATED', 'UNAVAILABLE'):
+            self.assertEqual(_malware({}, {'status': state})['state'], state)
+        self.assertEqual(_malware({}, {'status': 'invented-success'})['state'], 'UNAVAILABLE')
+        self.assertIsNone(_malware({}, {'status': 'INITIALIZING'})['database_age_seconds'])
+
     def setUp(self):
         self.now = datetime(2026, 8, 24, 12, 0, tzinfo=timezone.utc)
 

@@ -1,5 +1,5 @@
 [Unit]
-Description=GREYWARD canonical DMS shell v1.5.3
+Description=GREYWARD selected packaged DMS shell
 PartOf=graphical-session.target
 After=graphical-session.target
 # The user unit is enabled globally for the production account, but Labwc is
@@ -16,8 +16,8 @@ RestartSec=2
 SuccessExitStatus=143 SIGTERM
 Environment=QT_QPA_PLATFORM=wayland
 Environment=QT_WAYLAND_DISABLE_WINDOWDECORATION=1
-# The pinned upstream DMS backend contains an unconditional cleartext
-# ip-api.com geolocation seed. Route all non-local plain HTTP from the DMS
+# Explicit upstream geolocation requests still use cleartext ip-api.com.
+# Startup lookup is lazy in 1.6. Route all non-local plain HTTP from the DMS
 # process tree to a closed loopback port: HTTPS remains available to reviewed
 # plugins, while the upstream request fails locally without disclosure or its
 # former network timeout.
@@ -28,3 +28,4 @@ Environment="no_proxy=localhost,127.0.0.1,::1"
 
 [Install]
 WantedBy=graphical-session.target
+Alias=dms.service

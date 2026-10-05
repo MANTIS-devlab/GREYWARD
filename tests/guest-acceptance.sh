@@ -2,7 +2,7 @@
 set -euo pipefail
 runtime="/run/user/$(id -u)"
 socket=$(find "$runtime" -maxdepth 1 -type s -name 'wayland-*' -printf '%f\n' | sort | head -n1)
-signature=$(find "$runtime/hypr" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' 2>/dev/null | head -n1)
+signature=$(find "$runtime/hypr" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' 2>/dev/null | head -n1 || true)
 test -n "$socket"
 export XDG_RUNTIME_DIR="$runtime"
 export WAYLAND_DISPLAY="$socket"
@@ -16,8 +16,9 @@ sudo systemctl is-active greetd.service
 test -x /usr/bin/dms-greeter
 test -s /etc/pam.d/greetd
 test "$(systemctl --user is-enabled greyward-dms.service || true)" = enabled
-test "$(cat /usr/local/share/greyward-dms/v1.5.3/COMMIT)" = 069ddab041c738236a8910e4c39b65d9628d3018
-test -x /usr/bin/dgop
+runtime_root=$(/usr/libexec/greyward-dms-verify)
+receipt="$runtime_root/release.json"
+/usr/local/libexec/greyward-dms-runtime-check
 test -x /usr/bin/dsearch
 if [ "$compositor" = labwc ]; then
   systemctl --user is-active xdg-desktop-portal.service xdg-desktop-portal-wlr.service
@@ -26,10 +27,12 @@ else
   systemctl --user is-active xdg-desktop-portal.service xdg-desktop-portal-hyprland.service
   pgrep -u "$USER" -x Hyprland >/dev/null
 fi
-rpm -q labwc xdg-desktop-portal-wlr hyprland quickshell uwsm hyperv-daemons
-test "$(rpm -q --qf '%{VERSION}' labwc)" = 0.9.6
-test "$(rpm -q --qf '%{VERSION}' hyprland)" = 0.56.2
-test "$(rpm -q --qf '%{VERSION}' quickshell)" = 0.3.0
+rpm -q labwc xdg-desktop-portal-wlr quickshell uwsm hyperv-daemons
+if [ "$compositor" != labwc ]; then
+  rpm -q hyprland
+  test "$(rpm -q --qf '%{VERSION}' hyprland)" = 0.56.2
+fi
+test "$(rpm -q --qf '%{VERSION}-%{RELEASE}' quickshell)" = "$(jq -r '.compatibility.quickshell' "$receipt")"
 if [ "$compositor" = labwc ]; then
   wlr-randr >/dev/null
 else

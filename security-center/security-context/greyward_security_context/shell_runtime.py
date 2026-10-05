@@ -22,6 +22,7 @@ class ShellRuntime:
         self.snapshot = {"schema": "greyward.security.experience/v1", "revision": 0, "posture": "UNAVAILABLE", "label": "Connecting", "reason": "Reading security status", "severity": "INFO", "items": [], "activity": [], "details": []}
         self.running = False
         self.dirty = True
+        self.invalidate_pending = False
         self.last_full = 0
         self.shell, self.files, self.network = {}, {}, {}
         self.router = NotificationRouter(bus, self.dispatch)
@@ -35,9 +36,12 @@ class ShellRuntime:
 
     def invalidate(self, *args):
         self.dirty = True
-        GLib.idle_add(self._tick_once)
+        if not getattr(self, 'invalidate_pending', False):
+            self.invalidate_pending = True
+            GLib.idle_add(self._tick_once)
 
     def _tick_once(self):
+        self.invalidate_pending = False
         self.tick()
         return False
 

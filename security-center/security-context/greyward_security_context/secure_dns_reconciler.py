@@ -2,9 +2,9 @@
 """Transactional per-link Secure DNS state reconciler.
 
 NetworkManager remains the source of connection/VPN/split-DNS metadata. The
-reconciler never writes a global resolver or edits NetworkManager profiles.
-It mutates only one unambiguous non-VPN default link and restores a verified
-snapshot before compatibility fallback.
+reconciler never edits persistent resolver configuration or NetworkManager
+profiles. Site-private links use a reversible runtime public scope inside the
+same resolver; simple links retain the per-link provider implementation.
 """
 import datetime as dt
 import ipaddress
@@ -227,12 +227,22 @@ def _matches_provider(props, provider):
 
 
 def _probe(bus, ifindex):
-    _, props = _resolved_link(bus, ifindex)
+    if ifindex == 0:
+        from greyward_security_context.secure_dns_split import _global
+        props = _global(bus)
+    else:
+        _, props = _resolved_link(bus, ifindex)
     encrypted = str(props.get("DNSOverTLS", "")).lower() in {"yes", "true"}
     validated = str(props.get("DNSSEC", "")).lower() in {"yes", "true"}
     manager = dbus.Interface(bus.get_object("org.freedesktop.resolve1", "/org/freedesktop/resolve1"), "org.freedesktop.resolve1.Manager")
     try:
-        manager.ResolveHostname(ifindex, "example.com", socket.AF_UNSPEC, dbus.UInt64(0), timeout=DBUS_CALL_TIMEOUT)
+        # Exclude cached/synthetic answers. Require measured confidential and
+        # authenticated network data, rather than configuration alone.
+        result = manager.ResolveHostname(ifindex, "example.com", socket.AF_UNSPEC,
+                                         dbus.UInt64((1 << 11) | (1 << 12)), timeout=DBUS_CALL_TIMEOUT)
+        flags = int(result[2])
+        if not result[0] or not flags & (1 << 18) or not flags & (1 << 9) or not flags & (1 << 23):
+            return encrypted, validated, "ResolverValidationFailed"
         return encrypted, validated, None
     except dbus.DBusException as error:
         return encrypted, validated, str(error.get_dbus_name() or error)[:160]
@@ -244,18 +254,29 @@ def _state():
     base = {"schema": "greyward.secure-dns/v1", "generated_at": _stamp(), "desired_policy": desired, "effective_policy": "Disconnected", "effective_owner": "None", "effective_transport": "None", "provider": policy["provider"], "provider_order": policy["provider_order"], "dns_enforcement": "MANAGED_DNS_PORTS", "encryption": "Unknown", "validation": "Unknown", "degradation_reason": "NoActiveLink", "link": None, "vpn_links": [], "route_domains": [], "resolver": None, "last_successful_reconciliation": None, "runtime_mutation": "ENABLED" if _mutation_enabled() else "DISABLED_READ_ONLY"}
     bus = dbus.SystemBus()
     devices = _active_devices(bus)
+    from greyward_security_context import secure_dns_split as split
     if not devices:
+        if _mutation_enabled():
+            split.restore(bus)
         return base
     vpn = [item for item in devices if item["vpn"]]
     base["vpn_links"] = [item["interface"] for item in vpn]
     primary = vpn[0] if vpn else devices[0]
     base["link"] = primary["interface"]
     props = _link(bus, primary["ifindex"])
+    domains = _domains(props)
+    split_eligible = (not vpn and len(devices) == 1 and domains and "." not in domains
+                      and _dns_ex(props) and not _managed_provider(props))
+    if _mutation_enabled() and (desired == "NetworkDefault" or not split_eligible):
+        split.restore(bus)
+        props = _link(bus, primary["ifindex"])
     base["route_domains"] = _domains(props)
     base["resolver"] = _server(props)
     if vpn:
         base.update({"effective_policy": "VPNOwned", "effective_owner": "VPN", "effective_transport": "VPNProtected", "encryption": "Enabled", "validation": "Measured by VPN/provider", "degradation_reason": None, "last_successful_reconciliation": _stamp()})
         return base
+    if _mutation_enabled() and desired in {"Automatic", "Privacy"} and split_eligible:
+        return split.reconcile(bus, primary, props, base, policy)
     provider_order = policy["provider_order"]
     provider = PROVIDERS[policy["provider"]]
     selected_provider = None
@@ -319,7 +340,7 @@ def _state():
         base.update({"effective_policy": "Unavailable", "effective_owner": "None", "effective_transport": "None", "encryption": "Unavailable", "validation": "Unavailable", "degradation_reason": "ResolverUnreachable"})
     elif desired == "NetworkDefault":
         base.update({"effective_policy": "NetworkDefault", "effective_owner": "Network", "effective_transport": _transport(props, False), "encryption": "Enabled" if encrypted else "Not guaranteed", "validation": "Enabled" if validated else "Not guaranteed", "degradation_reason": None if encrypted or validated else "NetworkDnsOnly", "last_successful_reconciliation": _stamp()})
-    elif desired in {"Automatic", "Privacy"} and len(devices) > 1 and not base["route_domains"]:
+    elif desired in {"Automatic", "Privacy"} and (len(devices) > 1 or base["route_domains"]):
         base.update({"effective_policy": "Unavailable", "effective_owner": "None", "effective_transport": "None", "encryption": "Unavailable", "validation": "Unavailable", "degradation_reason": "SplitDnsAmbiguous"})
     elif encrypted and validated and selected_provider and _matches_provider(props, provider):
         base.update({"effective_policy": "SecureProvider", "effective_owner": "Greyward", "effective_transport": "DoT", "encryption": "Enabled", "validation": "Enabled", "degradation_reason": None, "last_successful_reconciliation": _stamp()})
@@ -397,10 +418,12 @@ class SecureDnsService(dbus.service.Object):
 
 
 def restore_runtime():
+    from greyward_security_context import secure_dns_split as split
+    bus = dbus.SystemBus()
+    split.restore(bus)
     snapshot = _read(SNAPSHOT_PATH, {})
     if not snapshot:
         return
-    bus = dbus.SystemBus()
     restored = False
     try:
         restored = _restore_link(bus, snapshot)

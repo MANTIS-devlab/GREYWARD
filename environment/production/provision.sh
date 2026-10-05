@@ -48,6 +48,7 @@ test -r "$packages_file"
 test -r "$repositories_file"
 test -r "$stage/external-rpms.txt"
 test -r "$stage/install-dms.sh"
+test -r "$stage/dms-release.json"
 test -r "$stage/production-acceptance.sh"
 test -r "$stage/provision-firstboot.sh"
 test -r "$stage/provision-firstboot.service"
@@ -69,21 +70,8 @@ test -r "$stage/zsh/greyward-terminal-brief.py"
 test -r "$stage/audit/greyward.rules"
 test -r "$stage/selinux/greyward-dms-greeter.cil"
 test -r "$stage/greyward-sync-greeter-wallpaper"
-test -r "$stage/patch-uwsm-labwc.sh"
-test -r "$stage/patches/dms/launcher-canonical-hitbox.patch"
-test -r "$stage/patches/dms/polkit-auth-dialog.patch"
-test -r "$stage/patches/dms/running-apps-icon-scale.patch"
-test -r "$stage/patches/dms/greyward-settings-curation.patch"
-test -r "$stage/patches/dms/greyward-labwc-runtime.patch"
-test -r "$stage/patches/dms/apps-dock-taskbar-labels.patch"
-test -r "$stage/patches/dms/apps-dock-toggle-minimize.patch"
-test -r "$stage/patches/dms/apps-dock-spacing.patch"
-test -r "$stage/patches/dms/disable-changelog.patch"
-test -r "$stage/patches/dms/greyward-flatpak-icon-resolution.patch"
-test -r "$stage/patches/dms/greyward-tray-icon-fallback.patch"
 test -r "$stage/crypto-policy/GREYWARD.pmod"
 test -r "$stage/security-center-contract.tsv"
-test -r "$stage/security-context/greyward-security-context-user.service"
 
 if [[ "$target_install" == 1 || "${GREYWARD_LOCAL_FINALIZE:-0}" != 1 ]]; then
   phase 'Preparing the offline RPM repository'
@@ -193,8 +181,8 @@ if [[ "$target_install" == 1 || "${GREYWARD_LOCAL_FINALIZE:-0}" != 1 ]]; then
   # UWSM's Labwc plugin writes a reload drop-in without creating its parent
   # directory. Apply the guarded, GREYWARD-owned runtime fix after uwsm is
   # installed and before the graphical session can start.
-  install -D -m 0755 "$stage/patch-uwsm-labwc.sh" /usr/local/libexec/greyward-patch-uwsm-labwc
-  /usr/local/libexec/greyward-patch-uwsm-labwc
+  # The package-owned session launcher prepares UWSM's two drop-in rungs.
+  rpm -q greyward-session >/dev/null
 
   # SSH belongs to the development overlay only. Some Fedora package groups
   # or inherited target roots can still carry openssh-server, so remove the
@@ -226,7 +214,13 @@ if [[ "$target_install" == 1 || "${GREYWARD_LOCAL_FINALIZE:-0}" != 1 ]]; then
   security_rpms=("$stage/rpms/greyward-security-center-"*.rpm "$stage/rpms/greyward-security-context-"*.rpm)
   shopt -u nullglob
   test "${#security_rpms[@]}" -eq 2
-  dnf -y install "${branding_rpms[0]}" "${security_rpms[@]}"
+  shopt -s nullglob
+  dms_rpms=("$stage/rpms/greyward-dms-"*.rpm)
+  shopt -u nullglob
+  test "${#dms_rpms[@]}" -eq 1
+  session_rpms=("$stage/rpms/greyward-session-"*.rpm)
+  test "${#session_rpms[@]}" -eq 1
+  dnf -y install "${branding_rpms[0]}" "${security_rpms[@]}" "${dms_rpms[0]}" "${session_rpms[0]}"
   rpm -q greyward-branding plymouth-plugin-script
   plymouth-set-default-theme greyward
   dracut --regenerate-all --force
@@ -272,18 +266,11 @@ if [[ "$target_install" == 1 || "${GREYWARD_LOCAL_FINALIZE:-0}" != 1 ]]; then
   fi
 fi
 
-# The DMS archive and Flatpak applications need a running system
-# environment. During Anaconda target installation they are completed by the
-# one-shot first-boot finalizer below; ordinary provisioning keeps the
-# original synchronous behavior.
+# Runtime RPM is installed from the local image closure, also in the target root.
+# Verification and wrapper activation happen after normal provisioning begins.
 if [[ "$target_install" != 1 ]]; then
-  phase 'Installing the bundled DMS runtime and applying GREYWARD patches'
-  # The DMS archive is a separately checked production input. Its builder and
-  # patch are staged by the image factory, not installed as developer tooling.
-  if [[ "${GREYWARD_OFFLINE_INSTALL:-0}" == 1 ]]; then
-    export GREYWARD_DMS_ARCHIVE="$stage/offline/dms-full-amd64.tar.gz"
-  fi
-  GREYWARD_DMS_PATCH_DIR="$stage/patches/dms" bash "$stage/install-dms.sh"
+  phase 'Verifying the packaged selected DMS runtime'
+  GREYWARD_DMS_ACTIVATE=1 bash "$stage/install-dms.sh"
 fi
 
 session="$stage/session"
@@ -302,21 +289,9 @@ test -d "$wallpaper_variants"
 test -d "$stage/dconf"
 test -r "$flatpak/default-applications.list"
 test -r "$flatpak/mimeapps.list"
-for dms_file in \
-  "$dms/settings.json" \
-  "$dms/plugin_settings.json" \
-  "$dms/plugins/greywardPublicIp/plugin.json" \
-  "$dms/plugins/greywardPublicIp/PublicIpWidget.qml" \
-  "$dms/plugins/greywardNetworkTraffic/plugin.json" \
-  "$dms/plugins/greywardNetworkTraffic/NetworkTrafficWidget.qml" \
-  "$dms/plugins/greywardNetworkTraffic/NetworkTrafficModel.qml" \
-  "$dms/plugins/greywardNetworkTraffic/NetworkTrafficMath.js" \
-  "$dms/plugins/greywardSecure/plugin.json" \
-  "$dms/plugins/greywardSecure/SecureWidget.qml" \
-  "$dms/plugins/greywardSoftware/plugin.json" \
-  "$dms/plugins/greywardSoftware/SoftwareWidget.qml"; do
-  test -r "$dms_file"
-done
+test -r "$dms/settings.json"
+test -r "$dms/plugin_settings.json"
+
 test -r "$flatpak/brave-flags.conf"
 
 install -d -m 0755 /etc/xdg /etc/xdg-desktop-portal /usr/share/greyward/bazaar /usr/share/greyward/dms \
@@ -384,32 +359,13 @@ install -D -m 0644 "$stage/dconf/00-greyward-appearance" /etc/dconf/db/local.d/0
 install -D -m 0644 "$stage/dconf/50-greyward-blackbox" /etc/dconf/db/local.d/50-greyward-blackbox
 dconf update
 
-install -D -m 0644 "$session/greyward-dms.service" /etc/systemd/user/greyward-dms.service
-install -D -m 0644 "$session/greyward-session-idle.service" /etc/systemd/user/greyward-session-idle.service
-install -D -m 0755 "$session/greyward-dms-session-migrate" /usr/local/libexec/greyward-dms-session-migrate
-install -D -m 0755 "$session/greyward-session-lock" /usr/local/bin/greyward-session-lock
-install -D -m 0755 "$session/greyward-display-power" /usr/local/bin/greyward-display-power
-install -D -m 0755 "$stage/greyward-start-labwc" /usr/local/libexec/greyward-start-labwc
+rpm -q greyward-session >/dev/null
 # Hyprland remains a supported fallback, but its Polkit agent must not start
 # in the canonical Labwc session. The upstream unit is D-Bus activatable, so
 # package presence or a disabled [Install] section alone does not prevent it
 # from winning the graphical-agent race. Keep it available only when an actual
 # Hyprland session supplied its signature.
-install -d -m 0755 /etc/systemd/user/hyprpolkitagent.service.d
-cat > /etc/systemd/user/hyprpolkitagent.service.d/greyward-session-owner.conf <<'EOF'
-[Unit]
-ConditionEnvironment=HYPRLAND_INSTANCE_SIGNATURE
-EOF
-# Fedora wires the GNOME portal backend into every graphical session. Labwc
-# has no Mutter service channel, so that eager activation adds a visible
-# warning and cannot provide its GNOME-only interfaces. Leave the backend
-# available for a real GNOME fallback session, but do not start it in Labwc.
-install -d -m 0755 /etc/systemd/user/xdg-desktop-portal-gnome.service.d
-cat > /etc/systemd/user/xdg-desktop-portal-gnome.service.d/greyward-session-owner.conf <<'EOF'
-[Unit]
-ConditionEnvironment=XDG_CURRENT_DESKTOP=GNOME
-EOF
-install -D -m 0644 "$session/greyward-labwc.desktop" /usr/share/wayland-sessions/greyward-labwc.desktop
+# Polkit/portal owner drop-ins belong to greyward-session.
 # The installed product has one supported desktop entry: GREYWARD Labwc.
 # The installer is a direct Anaconda environment, so GDM and GNOME Initial
 # Setup are never used as a live-session hand-off or account-creation path.
@@ -443,8 +399,9 @@ install -D -m 0644 "$branding/source/greyward-terminal.svg" \
   /usr/share/icons/hicolor/scalable/apps/greyward-terminal.svg
 install -D -m 0755 "$stage/configure-zsh.sh" \
   /usr/local/libexec/greyward-configure-zsh
-install -D -m 0644 "$stage/security-context/greyward-security-context-user.service" \
-  /usr/lib/systemd/user/greyward-security-context-user.service
+# The current Security Context RPM owns this unit; never replace it with
+# staged source to conceal a stale package.
+rpm -qf /usr/lib/systemd/user/greyward-security-context-user.service >/dev/null
 install -D -m 0755 "$stage/zsh/greyward-terminal-brief.py" \
   /usr/local/libexec/greyward-terminal-brief
 install -D -m 0644 "$stage/zsh/sources.env" \
@@ -492,7 +449,6 @@ done
 test -s "$desktop_wallpaper"
 rm -f /etc/skel/.config/DankMaterialShell/greyward-wallpaper.png
 ln -s /usr/share/backgrounds/greyward/greyward-wallpaper-black-art-4k.jpg /etc/skel/.config/DankMaterialShell/greyward-wallpaper.png
-find "$dms/plugins" -mindepth 2 -maxdepth 2 -type f -exec sh -c 'for file do relative=${file#"$1/"}; install -D -m 0644 "$file" "/etc/skel/.config/DankMaterialShell/$relative"; done' sh "$dms" {} +
 
 # Anaconda creates the real account before the first-boot provisioner runs,
 # so /etc/skel is no longer consumed for that account. Seed the actual human
@@ -527,22 +483,21 @@ if [[ "$target_install" != 1 ]]; then
       "$production_home/.config/uwsm" \
       "$production_home/.config/greyward" \
       "$production_home/.local/share/themes/Greyward/labwc"
+    if [[ ! -e "$production_home/.config/DankMaterialShell/settings.json" ]]; then
     install -o "$production_user" -g "$production_group" -m 0644 \
       "$dms/settings.json" "$production_home/.config/DankMaterialShell/settings.json"
+    fi
     install -o "$production_user" -g "$production_group" -m 0644 \
       "$dms/greyward-obsidian.json" "$production_home/.config/DankMaterialShell/greyward-obsidian.json"
+    if [[ ! -e "$production_home/.config/DankMaterialShell/plugin_settings.json" ]]; then
     install -o "$production_user" -g "$production_group" -m 0644 \
       "$dms/plugin_settings.json" "$production_home/.config/DankMaterialShell/plugin_settings.json"
+    fi
     install -o "$production_user" -g "$production_group" -m 0644 \
       "$branding/source/greyward-symbol.svg" "$production_home/.config/DankMaterialShell/greyward-symbol.svg"
     rm -f "$production_home/.config/DankMaterialShell/greyward-wallpaper.png"
     ln -s /usr/share/backgrounds/greyward/greyward-wallpaper-black-art-4k.jpg \
       "$production_home/.config/DankMaterialShell/greyward-wallpaper.png"
-    find "$dms/plugins" -type f -print0 | while IFS= read -r -d '' file; do
-      relative=${file#"$dms/"}
-      install -D -o "$production_user" -g "$production_group" -m 0644 \
-        "$file" "$production_home/.config/DankMaterialShell/$relative"
-    done
     install -o "$production_user" -g "$production_group" -m 0644 \
       "$labwc/rc.xml" "$production_home/.config/labwc/rc.xml"
     install -o "$production_user" -g "$production_group" -m 0644 \
@@ -627,8 +582,8 @@ if [[ "$target_install" == 1 ]]; then
   # explicitly and leave display-manager selection to the first boot hand-off.
   install -d -m 0755 /etc/systemd/user/graphical-session.target.wants
   install -d -m 0755 /etc/systemd/user/default.target.wants
-  ln -sfn ../greyward-dms.service /etc/systemd/user/graphical-session.target.wants/greyward-dms.service
-  ln -sfn ../greyward-session-idle.service /etc/systemd/user/graphical-session.target.wants/greyward-session-idle.service
+  ln -sfn /usr/lib/systemd/user/greyward-dms.service /etc/systemd/user/dms.service
+  ln -sfn /usr/lib/systemd/user/greyward-dms.service /etc/systemd/user/graphical-session.target.wants/greyward-dms.service
   ln -sfn /usr/lib/systemd/user/greyward-security-context-user.service /etc/systemd/user/graphical-session.target.wants/greyward-security-context-user.service
   ln -sfn /usr/lib/systemd/user/greyward-security-context-user.service /etc/systemd/user/default.target.wants/greyward-security-context-user.service
   systemctl --global enable greyward-update-center.service 2>/dev/null || true
@@ -700,7 +655,6 @@ else
   # production greetd/DMS/Labwc boundary; GDM is not part of the product.
   systemctl disable --now gdm.service 2>/dev/null || true
   systemctl --global enable greyward-dms.service
-  systemctl --global enable greyward-session-idle.service
   systemctl --global enable greyward-security-context-user.service
   systemctl --global enable greyward-update-center.service
   # This branch runs from the first-boot finalizer after multi-user.target has
@@ -778,6 +732,8 @@ fi
 # internal image cannot be mistaken for a fully traceable release.
 rpm -qa --qf '%{NAME}-%{EPOCHNUM}:%{VERSION}-%{RELEASE}.%{ARCH}\n' | sort > /etc/greyward-installed-nevras.txt
 install -m 0644 /etc/greyward-installed-nevras.txt "$artifact_dir/package-inventory.txt"
+runtime=$(/usr/libexec/greyward-dms-verify)
+install -m0644 "$runtime/release.json" "$artifact_dir/dms-build-manifest.json"
 if dnf repoquery --installed --qf '%{NAME}-%{VERSION}-%{RELEASE}.%{ARCH}\t%{REPOID}\n' 2>/dev/null | sort > "$artifact_dir/package-sources.tsv"; then
   :
 else

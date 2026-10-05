@@ -2,6 +2,8 @@
   "currentThemeName": "custom",
   "currentThemeCategory": "generic",
   "customThemeFile": "/usr/share/greyward/dms/greyward-obsidian.json",
+  "greeterWallpaperPath": "/usr/share/backgrounds/greyward/greyward-wallpaper-black-art-4k.jpg",
+  "greeterWallpaperFillMode": "Fill",
   "launcherLogoMode": "custom",
   "launcherLogoCustomPath": "/usr/share/greyward/dms/greyward-symbol.svg",
   "launcherLogoBrightness": 0.72,
@@ -26,11 +28,41 @@
       "name": "GREYWARD Taskbar",
       "enabled": true,
       "position": 1,
-      "screenPreferences": ["all"],
+      "screenPreferences": [
+        "all"
+      ],
       "showOnLastDisplay": true,
-      "leftWidgets": ["launcherButton", {"id": "spacer", "size": 12}, "workspaceSwitcher", {"id": "spacer", "size": 12}, {"id": "appsDock", "appsDockIconSizePercentage": 152}],
-      "centerWidgets": ["spacer", "clock", "greywardSecure", "greywardSoftware", "spacer"],
-      "rightWidgets": ["greywardNetworkTraffic", "greywardPublicIp", "systemTray", "notificationButton", "controlCenterButton", "powerMenuButton"],
+      "leftWidgets": [
+        "launcherButton",
+        {
+          "id": "spacer",
+          "size": 12
+        },
+        "workspaceSwitcher",
+        {
+          "id": "spacer",
+          "size": 12
+        },
+        {
+          "id": "appsDock",
+          "appsDockIconSizePercentage": 152
+        }
+      ],
+      "centerWidgets": [
+        "spacer",
+        "clock",
+        "greywardSecure",
+        "greywardSoftware",
+        "spacer"
+      ],
+      "rightWidgets": [
+        "greywardNetworkTraffic",
+        "greywardPublicIp",
+        "systemTray",
+        "notificationButton",
+        "controlCenterButton",
+        "powerMenuButton"
+      ],
       "spacing": 7,
       "innerPadding": 16,
       "barInsetPadding": 20,
@@ -54,7 +86,7 @@
       "widgetOutlineColor": "primary",
       "widgetOutlineOpacity": 0.28,
       "widgetOutlineThickness": 1,
-      "fontScale": 1.10,
+      "fontScale": 1.1,
       "iconScale": 1.0,
       "autoHide": false,
       "autoHideStrict": false,
@@ -79,5 +111,22 @@
     }
   ],
   "runningAppsCurrentWorkspace": false,
-  "runningAppsGroupByApp": false
+  "runningAppsGroupByApp": false,
+  "customPowerActionLock": "",
+  "lockPamPath": "/etc/pam.d/greyward-dms-lock",
+  "lockPamExternallyManaged": true,
+  "lockBeforeSuspend": true,
+  "loginctlLockIntegration": true,
+  "fadeToLockEnabled": false,
+  "fadeToDpmsEnabled": false,
+  "lockAtStartup": false,
+  "lockScreenPowerOffMonitorsOnLock": false,
+  "acMonitorTimeout": 900,
+  "acLockTimeout": 600,
+  "acSuspendTimeout": 0,
+  "acPostLockMonitorTimeout": 300,
+  "batteryMonitorTimeout": 900,
+  "batteryLockTimeout": 600,
+  "batterySuspendTimeout": 0,
+  "batteryPostLockMonitorTimeout": 300
 }

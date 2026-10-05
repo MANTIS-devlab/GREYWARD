@@ -8,7 +8,7 @@
   "capabilities": ["dankbar-widget", "network-throughput"],
   "component": "./NetworkTrafficWidget.qml",
   "icon": "swap_horiz",
-  "requires_dms": ">=1.5.3",
-  "dependencies": ["dgop"],
+  "requires_dms": "=1.6.2",
+  "requiredCapabilities": ["dgop", "network"],
   "permissions": ["settings_read"]
 }

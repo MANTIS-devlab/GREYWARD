@@ -34,6 +34,7 @@ greyward-security-context|/usr/lib/systemd/system/greyward-opensnitch-control-pl
 greyward-security-context|/usr/lib/systemd/system/greyward-opensnitch-policy.service
 greyward-security-context|/usr/lib/systemd/system/greyward-clamav-scan.service
 greyward-security-context|/usr/lib/systemd/system/greyward-secure-dns.service
+greyward-security-context|/usr/lib/tmpfiles.d/greyward-secure-dns.conf
 greyward-security-context|/usr/lib/systemd/system/greyward-auto-update.service
 greyward-security-context|/usr/lib/systemd/system/greyward-auto-update.timer
 greyward-security-context|/usr/lib/systemd/system/opensnitch.service.d/10-greyward-control-plane.conf

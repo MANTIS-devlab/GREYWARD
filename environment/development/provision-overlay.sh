@@ -34,7 +34,12 @@ if id stendev >/dev/null 2>&1 && [ -d /tmp/greyward-production/labwc ]; then
   install -D -o stendev -g stendev -m 0644 /tmp/greyward-production/labwc/rc.xml /home/stendev/.config/labwc/rc.xml
   install -D -o stendev -g stendev -m 0644 /tmp/greyward-production/labwc/environment /home/stendev/.config/labwc/environment
   install -D -o stendev -g stendev -m 0755 /tmp/greyward-production/labwc/autostart /home/stendev/.config/labwc/autostart
-  cp -a /tmp/greyward-production/dankmaterialshell/. "$user_home/.config/DankMaterialShell/"
+  # System plugins are supplied by the selected runtime RPM. Seed only defaults.
+  for file in settings.json plugin_settings.json greyward-obsidian.json; do
+    if [ ! -e "$user_home/.config/DankMaterialShell/$file" ]; then
+      install -D -o stendev -g stendev -m 0644 "/tmp/greyward-production/dankmaterialshell/$file" "$user_home/.config/DankMaterialShell/$file"
+    fi
+  done
   install -D -o stendev -g stendev -m 0644 /tmp/greyward-production/branding/source/greyward-symbol.svg "$user_home/.config/DankMaterialShell/greyward-symbol.svg"
   install -D -m 0644 /tmp/greyward-production/dankmaterialshell/greyward-obsidian.json /usr/share/greyward/dms/greyward-obsidian.json
   install -D -m 0644 /tmp/greyward-production/branding/source/greyward-symbol.svg /usr/share/greyward/dms/greyward-symbol.svg
@@ -50,13 +55,6 @@ if id stendev >/dev/null 2>&1 && [ -d /tmp/greyward-production/labwc ]; then
   ln -s /usr/share/backgrounds/greyward/greyward-wallpaper-black-art-4k.jpg "$user_home/.config/DankMaterialShell/greyward-wallpaper.png"
   install -D -o greeter -g greeter -m 0644 /tmp/greyward-production/dankmaterialshell/settings.json /var/cache/dms-greeter/settings.json
   install -D -o greeter -g greeter -m 0644 /usr/share/backgrounds/greyward/greyward-wallpaper-black-art-4k.jpg /var/cache/dms-greeter/greeter_wallpaper_override.jpg
-  install -D -o greeter -g greeter -m 0644 /dev/null /var/cache/dms-greeter/session.json
-  cat > /var/cache/dms-greeter/session.json <<'EOF'
-{
-  "wallpaperPath": "/usr/share/backgrounds/greyward/greyward-wallpaper-black-art-4k.jpg",
-  "wallpaperFillMode": "PreserveAspectCrop"
-}
-EOF
   install -D -o stendev -g stendev -m 0644 /tmp/greyward-production/session/hyprland.conf "$user_home/.config/hypr/hyprland.conf"
   install -D -o stendev -g stendev -m 0644 /tmp/greyward-production/session/greyward-decoration.tokens.conf "$user_home/.config/hypr/greyward-decoration.tokens.conf"
   install -D -o stendev -g stendev -m 0755 /tmp/greyward-production/session/greyward-minimize.sh "$user_home/.local/bin/greyward-minimize"

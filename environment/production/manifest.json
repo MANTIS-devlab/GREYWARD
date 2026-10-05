@@ -19,7 +19,10 @@
     "securityCenterRpmDirectory": "rpms/",
     "securityCenterContract": "security-center-contract.tsv",
     "securityCenterBuildManifest": "artifacts/security-center-build-manifest.tsv",
-    "imageInputStager": "../image/build.sh"
+    "imageInputStager": "../image/build.sh",
+    "dmsReleaseManifest": "dms-release.json",
+    "dmsRuntimePackage": "greyward-dms",
+    "sessionPolicyPackage": "greyward-session"
   },
   "notProduction": [
     "environment/development",

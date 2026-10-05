@@ -8,6 +8,7 @@ packer {
   }
 }
 
+variable "dms_runtime_rpm" { type = string }
 variable "iso_path" { type = string }
 variable "iso_checksum" { type = string }
 variable "switch_name" { type = string }
@@ -80,19 +81,32 @@ build {
     inline = ["mkdir -p /tmp/greyward-production/session"]
   }
 
-  provisioner "file" {
-    source      = "${path.root}/patches/dms/launcher-canonical-hitbox.patch"
-    destination = "/tmp/greyward-production/patches/dms/launcher-canonical-hitbox.patch"
+  provisioner "shell" {
+    inline = ["mkdir -p /tmp/greyward-production/rpms"]
   }
-
   provisioner "file" {
-    source      = "${path.root}/patches/dms/polkit-auth-dialog.patch"
-    destination = "/tmp/greyward-production/patches/dms/polkit-auth-dialog.patch"
+    source      = var.dms_runtime_rpm
+    destination = "/tmp/greyward-production/rpms/"
   }
-
   provisioner "file" {
-    source      = "${path.root}/patches/dms/running-apps-icon-scale.patch"
-    destination = "/tmp/greyward-production/patches/dms/running-apps-icon-scale.patch"
+    source      = "${path.root}/session/greyward-dms"
+    destination = "/tmp/greyward-production/session/greyward-dms"
+  }
+  provisioner "file" {
+    source      = "${path.root}/session/greyward-dms-state-migrate"
+    destination = "/tmp/greyward-production/session/greyward-dms-state-migrate"
+  }
+  provisioner "file" {
+    source      = "${path.root}/session/greyward-dms-runtime-check"
+    destination = "/tmp/greyward-production/session/greyward-dms-runtime-check"
+  }
+  provisioner "file" {
+    source      = "${path.root}/session/greyward-session-lock"
+    destination = "/tmp/greyward-production/session/greyward-session-lock"
+  }
+  provisioner "file" {
+    source      = "${path.root}/session/greyward-display-power"
+    destination = "/tmp/greyward-production/session/greyward-display-power"
   }
 
   provisioner "file" {

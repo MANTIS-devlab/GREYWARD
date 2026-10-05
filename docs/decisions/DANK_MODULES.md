@@ -10,7 +10,7 @@ not itself an installer.
 | Component | Initial policy | Required audit |
 |---|---|---|
 | DMS core | Required candidate | version, source, services, Labwc behavior, logs, performance |
-| dgop | Enabled production capability | dependency, daemon model, CPU/RAM, exposed telemetry, disable path |
+| Internal dgop | Required DMS 1.6.2 backend capability | connected capability, sampler shape/freshness, refs, CPU/RAM, unavailable state |
 | dsearch | Enabled production capability | local-only indexing, exclusions, watchers, paths, secrets, I/O, rebuild, disable path |
 | dcal | Disabled by default | no startup network activity, explicit opt-in accounts, sync scope |
 | Dank16 | Optional derived palette | GREYWARD tokens remain source of truth |
@@ -18,7 +18,24 @@ not itself an installer.
 | Community plugins | Disabled/hidden | registry, arbitrary code execution, permissions, provenance |
 | DMS updater | Disabled or GREYWARD-managed | privilege, source, pin enforcement, rollback |
 
-## Objective 1 decisions
+## Current 1.6.2 candidate boundary
+
+The [canonical migration tracker](../architecture/DMS_1_6_MIGRATION_PLAN.md)
+and release manifest define the active candidate. Monitoring uses upstream's
+internal dgop implementation; the current production dependency list no longer
+requires the external executable. Its installed development-VM RPM may remain
+while the 1.5.3 rollback runtime needs it. Health checks verify backend capability
+and data rather than executable presence. Dsearch remains local-only; reviewed
+first-party HTTPS identity lookup and opt-out remain separate from geolocation.
+The closed-loopback HTTP proxy contains explicit upstream cleartext requests;
+1.6 no longer seeds geolocation unconditionally at startup.
+
+The distribution build removes the shell self-update command. Desktop update
+execution routes to GREYWARD Update Center. Four first-party plugins are delivered
+in the system plugin directory and bound to the release receipt. User preferences
+and customized copies survive; no automatic community download is enabled.
+
+## Historical Objective 1 decisions
 
 - DMS core: selected audit pin `v1.5.3`; do not install yet.
 - `dgop`: enabled in the production image from the pinned GREYWARD DMS dependency repository. Provisioning fails closed if `/usr/bin/dgop` is absent.
@@ -58,8 +75,8 @@ reported until exact build records are supplied. No `latest`, `master`, or
 ## Objective 2 runtime evidence — 2026-08-19
 
 The historical reversible baseline installed DMS core only. `dgop` and
-`dsearch` were absent in that probe; the production provisioner now enables
-both explicitly and verifies their binaries.
+`dsearch` were absent in that probe; the then-current production provisioner enabled
+both explicitly and verified their binaries. This does not describe 1.6 packaging.
 
 During test mode, ownership was singular for the shell and notifications:
 DMS/Quickshell owned `org.freedesktop.Notifications` and the ScreenSaver
@@ -84,13 +101,13 @@ was corrected with `SuccessExitStatus=143 SIGTERM` and revalidated.
 No optional module was enabled to silence diagnostics in the historical probe.
 Wi-Fi and Bluetooth are unavailable because the Hyper-V guest has Ethernet only
 and no `/sys/class/bluetooth`; `power-profiles-daemon` remains absent. The
-production image now enables `dgop` and `dsearch`; evdev access remains
+then-production image enabled external `dgop` and `dsearch`; evdev access remained
 restricted to avoid broadening input privileges.
 Labwc blur is an explicit compositor capability warning in DMS v1.5.3, not a
 reason to patch upstream logic. Direct VMConnect interaction remains the sole
 acceptance gap, so Phase 2 remains FAIL and Phase 3 remains STOP.
 
-## Canonical cutover policy — 2026-08-19
+## Historical canonical cutover policy — 2026-08-19
 
 DMS v1.5.3 is now the accepted canonical GREYWARD shell foundation by explicit
 product decision. The VMConnect interaction gap is waived for this promotion;
@@ -101,7 +118,7 @@ wallpaper, lock/idle, and tray/system surfaces. The legacy GREYWARD shell is
 kept as a manually selectable rollback and is not auto-started. Optional
 modules and network-connected features remain disabled by default.
 
-## Canonical cutover evidence — 2026-08-19
+## Historical canonical cutover evidence — 2026-08-19
 
 The final reboot verification found one stale VM-side Labwc autostart that was
 still starting `greyward-shell.service`; it was replaced with the repository’s

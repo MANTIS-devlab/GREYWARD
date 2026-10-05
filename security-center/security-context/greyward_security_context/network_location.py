@@ -13,6 +13,7 @@ import ipaddress
 import os
 import re
 import subprocess
+import time
 from functools import lru_cache
 from pathlib import Path
 
@@ -68,7 +69,9 @@ def _geofeed_path() -> Path | None:
 
 def _legacy_database_path() -> Path | None:
     configured = _configured_path("GREYWARD_GEOIP_LEGACY_DB")
-    candidates = (configured,) if configured else _LEGACY_DATABASE_CANDIDATES
+    # Historical DAT files are never an ambient production authority.
+    # Retain an explicitly selected file only as a weak local hint.
+    candidates = (configured,) if configured else ()
     return next((path for path in candidates if path and path.is_file()), None)
 
 
@@ -190,19 +193,32 @@ def _country_from_geofeed(address: str, path: Path | None) -> str:
 def _resolution_uncached(value: str | None) -> dict[str, object]:
     address = _public_address(str(value or "").strip())
     if not address:
-        return {"country_code": "", "confidence": "NONE", "converged": False, "source_count": 0}
+        return {"country_code": "", "confidence": "NONE", "converged": False, "source_count": 0,
+                "availability": "UNKNOWN", "sources": []}
 
     primary = _database_path()
     secondary = _secondary_database_path(primary)
-    sources = (
-        ("geoip", _country_from_mmdb(address, primary), 4),
-        ("geoip-secondary", _country_from_mmdb(address, secondary), 3),
-        ("geoip-legacy", _country_from_legacy_geoip(address, _legacy_database_path()), 2),
-        ("geofeed", _country_from_geofeed(address, _geofeed_path()), 1),
-    )
+    inputs = (("geoip", primary, _country_from_mmdb, 4),
+              ("geoip-secondary", secondary, _country_from_mmdb, 3),
+              ("geoip-legacy", _legacy_database_path(), _country_from_legacy_geoip, 2),
+              ("geofeed", _geofeed_path(), _country_from_geofeed, 1))
+    details = []
+    sources = []
+    for name, path, lookup, weight in inputs:
+        try:
+            age = max(0, int((time.time() - path.stat().st_mtime) / 86400)) if path else None
+        except OSError:
+            age = None
+        country = lookup(address, path) if age is not None else ''
+        details.append({'source': name, 'available': bool(country),
+                        'age_days': age, 'age_basis': 'FILE_MTIME',
+                        'freshness': ('UNKNOWN' if age is None else 'STALE' if age > 180 else 'RECENT')})
+        if country:
+            sources.append((name, country, weight))
     votes = [(name, country, weight) for name, country, weight in sources if country]
     if not votes:
-        return {"country_code": "", "confidence": "NONE", "converged": False, "source_count": 0}
+        return {"country_code": "", "confidence": "NONE", "converged": False, "source_count": 0,
+                'availability': 'UNKNOWN', 'sources': details}
 
     totals: dict[str, int] = {}
     counts: dict[str, int] = {}
@@ -212,10 +228,14 @@ def _resolution_uncached(value: str | None) -> dict[str, object]:
     selected = min(totals, key=lambda country: (-totals[country], -counts[country], country))
     converged = len(totals) == 1
     confidence = "HIGH" if converged and len(votes) >= 2 else "MEDIUM" if converged else "LOW"
-    return {"country_code": selected, "confidence": confidence, "converged": converged, "source_count": len(votes)}
+    used = [item for item in details if item['available']]
+    stale = any(item['freshness'] == 'STALE' for item in used)
+    if stale: confidence = 'VERY_LOW'
+    elif all(item['source'] == 'geoip-legacy' for item in used): confidence = 'LOW'
+    return {"country_code": selected, "confidence": confidence, "converged": converged, "source_count": len(votes),
+            'availability': 'STALE' if stale else 'AVAILABLE', 'sources': details}
 
 
-@lru_cache(maxsize=4096)
 def country_resolution_for_destination(ip: str | None, host: str | None) -> dict[str, object]:
     """Resolve an endpoint locally, using a labelled ccTLD hint only last."""
 
@@ -231,20 +251,38 @@ def country_resolution_for_destination(ip: str | None, host: str | None) -> dict
             "converged": False,
             "source_count": 0,
             "source": "DOMAIN_SUFFIX",
+            "availability": "UNKNOWN",
+            "sources": resolution.get("sources", []),
         }
     resolution["source"] = "NONE"
     return resolution
 
 
-@lru_cache(maxsize=4096)
 def country_resolution_for_ip(value: str | None) -> dict[str, object]:
     """Return a local resolution, retaining a deterministic country on conflict."""
 
-    return _resolution_uncached(value)
+    paths = (_database_path(), _secondary_database_path(_database_path()), _legacy_database_path(), _geofeed_path())
+    key = []
+    for path in paths:
+        try:
+            info = path.stat() if path else None
+            key.append((str(path), info.st_mtime_ns, info.st_size) if info else None)
+        except OSError:
+            key.append(None)
+    return dict(_cached_resolution(value, tuple(key), int(time.time() // 60)))
 
 
-@lru_cache(maxsize=4096)
 def country_code_for_ip(value: str | None) -> str:
     """Return the selected ISO-3166 alpha-2 country, or ``""``."""
 
     return str(country_resolution_for_ip(value)["country_code"] or "")
+
+
+@lru_cache(maxsize=4096)
+def _cached_resolution(value, file_versions, minute):
+    return _resolution_uncached(value)
+
+
+country_resolution_for_ip.cache_clear = _cached_resolution.cache_clear
+country_resolution_for_destination.cache_clear = _cached_resolution.cache_clear
+country_code_for_ip.cache_clear = _cached_resolution.cache_clear

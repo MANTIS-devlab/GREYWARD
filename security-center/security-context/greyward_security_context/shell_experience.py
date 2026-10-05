@@ -107,7 +107,12 @@ def build_experience(shell, capsule, devices, usb_error, files, network, operati
             title = 'Scan finished' if state == 'COMPLETED' else 'Scan cancelled' if state == 'CANCELLED' else 'Scan could not finish'
             pending.append(item('scan-result:' + str(latest.get('operation_id')), 'operation', 'INFO' if state in {'COMPLETED', 'CANCELLED'} else 'WARNING', title,
                                 'No known threats found.' if state == 'COMPLETED' else latest.get('detail') or 'Review the result in File Security.', 'files', timeout_ms=4000))
-    if shell.get("malware", {}).get("state") in {"OUTDATED", "UNAVAILABLE"}:
+    malware_initializing = shell.get("malware", {}).get("state") == "INITIALIZING"
+    if malware_initializing:
+        activity.append({"id": "definitions-initializing", "kind": "malware", "icon": "shield",
+                         "title": "Preparing malware protection", "route": "files",
+                         "detail": "Threat definitions are being initialized. Scanning readiness is not yet confirmed."})
+    if shell.get("malware", {}).get("state") in {"OUTDATED", "UNAVAILABLE", "UPDATING"}:
         pending.append(item("definitions", "provider", "WARNING", "Malware protection needs attention", "Check the scanning engine and threat definitions.", "files"))
     for event in shell.get("notification_events", []):
         if str(event.get("event_id", "")).startswith("usbguard-"): continue
@@ -146,6 +151,9 @@ def build_experience(shell, capsule, devices, usb_error, files, network, operati
     severity = pending[0]["severity"] if pending else ("WARNING" if posture == "REVIEW NEEDED" else "INFO")
     label = "Threat needs attention" if severity == "CRITICAL" else "Action needed" if severity == "ACTION" else "Review needed" if severity == "WARNING" else "Protected" if posture in {"SECURE", "PROTECTED"} else "Status unavailable"
     reason = ("Review the detected threat" if severity == "CRITICAL" else "A decision is required" if severity == "ACTION" else "Some protection needs attention") if pending and severity != 'INFO' else "Review system checks" if posture == "REVIEW NEEDED" else "Protection is operating" if posture in {"SECURE", "PROTECTED"} else "Security providers cannot confirm current status"
+    if malware_initializing and severity == "INFO" and posture in {"SECURE", "PROTECTED"}:
+        label = "Preparing protection"
+        reason = "Malware scanning readiness is not yet confirmed"
     return {"schema": "greyward.security.experience/v1", "fresh_until": shell.get("fresh_until"),
             "posture": posture, "label": label, "reason": reason, "severity": severity,
             "items": pending, "activity": activity[:32], "details": details,

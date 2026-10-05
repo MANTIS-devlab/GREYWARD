@@ -1,5 +1,5 @@
 #!/bin/sh
-# Keep wildcard handling out of swayidle's shell command parsing.
+# Explicit display-power utility; automatic idle power is owned by DMS.
 set -eu
 case "${1:-}" in
   off) exec /usr/bin/wlopm --off '*' ;;

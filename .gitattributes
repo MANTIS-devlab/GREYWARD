@@ -15,6 +15,11 @@
 *.service text eol=lf
 *.timer text eol=lf
 *.conf text eol=lf
+environment/patches/dms/*.patch text eol=lf whitespace=-blank-at-eol,-blank-at-eof
+environment/session/greyward-* text eol=lf
+environment/session/labwc/autostart text eol=lf
+environment/production/labwc-autostart text eol=lf
+packaging/greyward-dms/*.spec text eol=lf
 *.png binary
 *.jpg binary
 *.jpeg binary

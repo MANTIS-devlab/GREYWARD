@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+set -euo pipefail
+# Package/selector validation chooses both backend and whole-shell override.
+if [[ "${1:-}" == ipc ]]; then
+  root=$(/usr/libexec/greyward-dms-verify --selection-only)
+else
+  root=$(/usr/libexec/greyward-dms-verify)
+fi
+export PATH="$root/bin:/usr/local/bin:/usr/bin:/bin"
+export DMS_SHELL_DIR="$root/shell"
+export XDG_DATA_DIRS="/usr/local/share:/usr/share${XDG_DATA_DIRS:+:$XDG_DATA_DIRS}"
+# Global flags can precede the command, so reject shell overrides everywhere.
+for argument in "$@"; do
+  case "$argument" in -c|--config|--config=*|-c*) echo 'Use the GREYWARD release selector to choose a shell.' >&2; exit 2;; esac
+done
+if [[ "${1:-}" == restart ]]; then
+  exec systemctl --user restart greyward-dms.service
+fi
+if [[ "${1:-}" == run ]]; then
+  shift
+  exec "$root/bin/dms" run --session -c "$DMS_SHELL_DIR" "$@"
+fi
+exec "$root/bin/dms" "$@"

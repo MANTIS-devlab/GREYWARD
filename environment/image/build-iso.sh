@@ -10,7 +10,7 @@ set -euo pipefail
 usage() {
   cat <<'EOF'
 Usage: environment/image/build-iso.sh --base-iso FILE --output FILE \
-  --branding-rpm FILE --security-rpm FILE --security-rpm FILE \
+  --branding-rpm FILE --dms-rpm FILE --session-rpm FILE --security-rpm FILE --security-rpm FILE \
   --security-build-manifest FILE --production-rpm FILE... \
   --baseline FILE --base-sha256 SHA256
 
@@ -31,6 +31,8 @@ output=''
 security_rpms=()
 production_rpms=()
 branding_rpm=''
+dms_rpm=''
+session_rpm=''
 security_build_manifest=''
 baseline=''
 base_sha256=''
@@ -40,7 +42,9 @@ base_sha256=''
 # composition step after the expensive dependency work has completed.
 if [[ "$(id -u)" != 0 ]]; then
   sudo -n true || { echo 'ISO composition requires noninteractive sudo.' >&2; exit 1; }
-  exec sudo -n env "GREYWARD_ISO_WORK_ROOT=$work_root" bash "$0" "$@"
+  exec sudo -n env "GREYWARD_ISO_WORK_ROOT=$work_root" \
+    "GREYWARD_FLATPAK_SEED=${GREYWARD_FLATPAK_SEED:-}" \
+    "GREYWARD_ACQUISITION_CACHE=${GREYWARD_ACQUISITION_CACHE:-$work_root/.greyward-acquisition-cache}" bash "$0" "$@"
 fi
 
 while (($#)); do
@@ -60,6 +64,13 @@ while (($#)); do
     --security-rpm)
       (($# >= 2)) || { usage >&2; exit 2; }
       security_rpms+=("$(realpath -e "$2")")
+      shift 2
+      ;;
+    --session-rpm) (($# >= 2)) || exit 2; session_rpm=$(realpath -e "$2"); test "$(rpm -qp --qf '%{NAME}' "$session_rpm")" = greyward-session; shift 2 ;;
+    --dms-rpm)
+      (($# >= 2)) || { usage >&2; exit 2; }
+      [[ -z "$dms_rpm" ]] || { usage >&2; exit 2; }
+      dms_rpm=$(realpath -e "$2")
       shift 2
       ;;
     --branding-rpm)
@@ -90,7 +101,7 @@ while (($#)); do
   esac
 done
 
-[[ -n "$base_iso" && -n "$output" && -n "$branding_rpm" && -n "$security_build_manifest" && ${#security_rpms[@]} -eq 2 && ${#production_rpms[@]} -ge 1 ]] || { usage >&2; exit 2; }
+[[ -n "$session_rpm" && -n "$dms_rpm" && -n "$base_iso" && -n "$output" && -n "$branding_rpm" && -n "$security_build_manifest" && ${#security_rpms[@]} -eq 2 && ${#production_rpms[@]} -ge 1 ]] || { usage >&2; exit 2; }
 [[ "$(basename "$branding_rpm")" == greyward-branding-*.rpm ]] || { echo "Invalid branding RPM." >&2; exit 2; }
 [[ -f "$base_iso" ]] || { echo "Base ISO not found: $base_iso" >&2; exit 1; }
 [[ ! -e "$output" ]] || { echo "Output already exists: $output" >&2; exit 2; }
@@ -99,7 +110,7 @@ done
 }
 printf '%s  %s\n' "$base_sha256" "$base_iso" | sha256sum -c -
 
-for command in mkksiso xorriso rpm rpmkeys rpm2cpio cpio tar gzip sha256sum awk sed realpath python3 find sort xargs df cmp createrepo_c dnf5 flatpak git curl unshare; do
+for command in mkksiso xorriso mcopy rpm rpmkeys rpm2cpio cpio tar gzip sha256sum awk sed realpath python3 find sort xargs df cmp createrepo_c dnf5 flatpak git curl unshare; do
   command -v "$command" >/dev/null || { echo "Required command not found: $command" >&2; exit 1; }
 done
 bash -n "$stage_validator"
@@ -151,6 +162,8 @@ trap cleanup EXIT
 staging_args=(
   --output "$stage/production"
   --branding-rpm "$branding_rpm"
+  --dms-rpm "$dms_rpm"
+  --session-rpm "$session_rpm"
   --security-rpm "${security_rpms[0]}"
   --security-rpm "${security_rpms[1]}"
   --security-build-manifest "$security_build_manifest"
@@ -263,6 +276,8 @@ mkksiso \
 
 # Inspect the embedded payload, not merely mkksiso's exit status. A failed
 # compose/inspection never leaves a plausibly complete final ISO filename.
+python3 "$repo_root/environment/image/installer-contract.py" \
+  --iso "$publication/image.iso" --branding-root "$branding_payload"
 xorriso -osirrox on -indev "$publication/image.iso" \
   -extract /greyward/production "$publication/production"
 (cd "$publication/production" && sha256sum --quiet -c payload.sha256)

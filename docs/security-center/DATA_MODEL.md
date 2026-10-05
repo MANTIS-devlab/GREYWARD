@@ -170,7 +170,7 @@ telemetry history; this does not create a browsing or DNS history. Throughput,
 active connection counts, DNS history, reputation, and server-location
 enrichment are not part of this contract. The Security Context may derive a
 local endpoint-country flag from the observed public destination IP using
-local GeoIP databases and optional local geofeed data; when those sources are
+optional local MMDB databases and local geofeed data; when those sources are
 empty, it may carry a separate `DOMAIN_SUFFIX` display hint with `VERY_LOW`
 confidence. That hint never overrides IP evidence or claims server location,
 and reverse DNS, provider ownership hints, and remote services are never used.
@@ -178,6 +178,13 @@ The
 resolver always selects a deterministic country when at least one local source
 answers, and exposes transient `country_confidence` and `country_converged`
 metadata alongside the two-letter code. These fields are activity projection
+metadata. `country_availability` is `AVAILABLE`, `STALE` or `UNKNOWN`;
+`country_sources` identifies local sources, availability, file age and the
+`FILE_MTIME` age basis. File age does not prove a database's publication date.
+Inputs older than 180 days are stale and cap confidence at `VERY_LOW`. Legacy
+DAT data is used only through an explicit local path and cannot imply current
+data. Replacing a local input invalidates the bounded resolution cache.
+These fields are projection
 metadata and are not serialized into the telemetry event. Missing, private,
 or unresolved addresses use a neutral world marker and remain explicitly
 unknown.

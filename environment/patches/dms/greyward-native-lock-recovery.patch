@@ -1,0 +1,16 @@
+--- a/quickshell/dms/Modules/Lock/Lock.qml
++++ b/quickshell/dms/Modules/Lock/Lock.qml
+@@ -76,7 +76,12 @@
+ 
+     Component.onCompleted: {
+         IdleService.lockComponent = this;
+-        if (SettingsData.lockAtStartup && !freshGreeterLogin())
++        // Async shell loading can attach after the initial logind state signal.
++        // Recreate a native surface if the compositor is already locked.
++        if (SettingsData.loginctlLockIntegration && SessionService.locked
++                && !(SettingsData.customPowerActionLock?.length > 0))
++            lock();
++        else if (SettingsData.lockAtStartup && !freshGreeterLogin())
+             lock();
+     }
+ 

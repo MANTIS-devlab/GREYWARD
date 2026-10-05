@@ -84,7 +84,7 @@ def authoritative_posture():
    return dict(_AUTHORITATIVE_POSTURE_CACHE[1]) if _AUTHORITATIVE_POSTURE_CACHE[1] else None
   posture=None
   try:
-   result=subprocess.run(["/usr/bin/greyward-security-center","--print-posture"],capture_output=True,text=True,timeout=8,check=True)
+   result=subprocess.run(["/usr/libexec/greyward-security-posture"],capture_output=True,text=True,timeout=8,check=True)
    payload=json.loads(result.stdout)
    summary=payload.get("posture") or {}
    metrics=payload.get("metrics") or {}
@@ -232,6 +232,8 @@ def _with_network_location(value):
  else:
   for key in ("country_code", "country_confidence", "country_converged", "country_source_count", "country_source"):
    destination.pop(key,None)
+ destination["country_availability"]=resolution.get("availability","UNKNOWN")
+ destination["country_sources"]=resolution.get("sources",[])
  event["destination"]=destination
  return event
 def network_activity(since_sequence=0,limit=256):

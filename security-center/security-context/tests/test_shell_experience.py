@@ -4,6 +4,21 @@ from greyward_security_context.shell_experience import build_experience
 
 
 class ShellExperienceTests(unittest.TestCase):
+    def test_initial_definition_download_is_visible_without_false_protected_claim(self):
+        value = self.render(shell={'posture': {'state': 'SECURE'}, 'malware': {'state': 'INITIALIZING'}})
+        self.assertEqual(value['items'], [])
+        self.assertEqual(value['label'], 'Preparing protection')
+        self.assertEqual(value['activity'][0]['route'], 'files')
+        self.assertIn('not yet confirmed', value['activity'][0]['detail'])
+        value = self.render(shell={'posture': {'state': 'SECURE'}, 'malware': {'state': 'INITIALIZING'},
+                                   'notification_events': [{'event_id': 'persistence-change', 'title': 'Startup changed'}]})
+        self.assertEqual(value['items'][0]['severity'], 'INFO')
+        self.assertEqual(value['label'], 'Preparing protection')
+        for state in ('UNAVAILABLE', 'OUTDATED', 'UPDATING'):
+            value = self.render(shell={'posture': {'state': 'SECURE'}, 'malware': {'state': state}})
+            self.assertEqual(value['items'][0]['id'], 'definitions')
+            self.assertEqual(value['severity'], 'WARNING')
+
     def render(self, **kwargs):
         values = dict(shell={'posture': {'state': 'SECURE'}}, capsule={}, devices=[], usb_error=None, files={}, network={})
         values.update(kwargs)

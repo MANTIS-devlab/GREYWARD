@@ -279,6 +279,11 @@ def essential_driver_package_names():
 def dnf5():
     """Collect normal Fedora system updates through DNF5, read-only."""
     observed = now()
+    from .dms_compatibility import constraints
+    try:
+        desktop_constraints = constraints()
+    except (OSError, ValueError, subprocess.SubprocessError) as error:
+        return provider_state('DEGRADED', 'Desktop compatibility policy unavailable: ' + str(error), observed), []
     if shutil.which("dnf5") is None:
         return provider_state("UNAVAILABLE", "dnf5 command is unavailable", observed), []
     try:
@@ -302,6 +307,14 @@ def dnf5():
         name = item.get("name") or "System package"
         arch = item.get("arch") or "unknown"
         available = item.get("evr") or item.get("available_version")
+        if name in desktop_constraints:
+            # The same exclusion is enforced by the fixed update helper.
+            # Retain a visible explanation instead of advertising an action
+            # that the transaction will intentionally skip.
+            item = dict(item)
+            held = available != desktop_constraints[name]
+        else:
+            held = False
         package_advisories = [
             advisory for advisory in advisories
             if advisory.get("nevra", "").endswith(f"-{available}.{arch}")
@@ -316,7 +329,7 @@ def dnf5():
             item.get("repository") or item.get("repo_id"),
             current,
             available,
-            True,
+            not held,
             "UNKNOWN",
             "UNKNOWN",
             "UNKNOWN",
@@ -324,6 +337,8 @@ def dnf5():
             health,
             {
                 "arch": arch,
+                "compatibility_hold": held,
+                "compatibility_reason": ('Requires a tested GREYWARD desktop tuple' if held else None),
                 "download_size": int(item.get("download_size") or 0),
                 "install_size": int(item.get("install_size") or 0),
                 "advisories": package_advisories,
@@ -340,6 +355,9 @@ def dnf5():
             {"history_count": len(transactions)},
         ))
     records.extend(driver_records)
+    held_count = sum(bool(item.get('metadata', {}).get('compatibility_hold')) for item in records)
+    if held_count:
+        health = provider_state('AVAILABLE', f'DNF5 metadata collected; {held_count} desktop dependencies held for a tested GREYWARD tuple', observed, observed)
     if driver_lookup_errors and health["state"] == "AVAILABLE":
         health = provider_state("DEGRADED", "; ".join(sorted(set(driver_lookup_errors)))[:240], observed, observed)
     for item in records + driver_records:

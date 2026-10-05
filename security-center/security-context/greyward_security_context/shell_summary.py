@@ -140,9 +140,10 @@ def _malware(summary, clamav):
     )
     value = clamav if isinstance(clamav, dict) else {}
     status = "THREAT" if threat else str(value.get("status") or "UNAVAILABLE").upper()
-    if status not in {"CURRENT", "OUTDATED", "THREAT", "UNAVAILABLE"}:
+    if status not in {"CURRENT", "OUTDATED", "THREAT", "UNAVAILABLE", "INITIALIZING", "UPDATING"}:
         status = "UNAVAILABLE"
-    return {"state": status, "database_age_seconds": _int(value.get("database_age_seconds"), 0, 31536000)}
+    age = value.get("database_age_seconds")
+    return {"state": status, "database_age_seconds": _int(age, 0, 31536000) if age is not None else None}
 
 
 def _usb(summary):

@@ -8,7 +8,7 @@
   "capabilities": ["dankbar-widget", "public-network-identity"],
   "component": "./PublicIpWidget.qml",
   "icon": "public",
-  "requires_dms": ">=1.5.3",
+  "requires_dms": "=1.6.2",
   "dependencies": ["curl"],
   "permissions": ["network", "settings_read"]
 }

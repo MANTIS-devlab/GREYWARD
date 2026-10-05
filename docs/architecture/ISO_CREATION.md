@@ -15,7 +15,86 @@ The finished ISO must install **without internet**, including first boot and
 all included applications. Only the build machine needs internet to acquire
 dependencies. This is not yet a signed, hardware-certified release pipeline.
 
-## Latest rebuild candidate: 2026-09-19 reboot hand-off and greeter wallpaper
+## 5 October portable-DNS and wallpaper test candidate
+
+Current internal test media: `output/iso/greyward-installer-20261005-portable-dns-6-7-59-64.iso`.
+SHA-256: `736b87cefbe9ef3ed0c4b766538f9ab1d606400643d9aad673451f0f998f7a94`.
+Baseline SHA-256: `18c8ed69bbff6ae1f858fd3dbfb1f5ec846900523375631f41478d16eddfca78`.
+The exact package set is DMS 1.6.2-6, session 0.1.0-7, Center 0.1.0-59,
+Context 0.1.0-64 and branding 0.1.0-15. The tested Quickshell/Labwc/UWSM/Greeter
+tuple remains 0.3.1-5 / 0.9.6-1 / 0.24.3-1 / 1:1.6.2-1. Native DMS locking is canonical.
+
+The canonical builder preserves the proven interactive account, LUKS, storage,
+Anaconda branding and first-boot flow. Its composed-media contract, fresh offline
+RPM/Flatpak verification, extracted payload hashes and 28-path production-stage
+contract pass. Warm acquisition retained zero new object bytes. Session 7 contains
+the wallpaper state/standalone-greeter fixes; Context 64 contains the initialization
+projection and generic public/private DNS correction, including explicit opt-out
+and complete routing-domain restoration.
+
+Center 59/Context 64 pass clean installed integrity and all 242 Context tests with
+31 imports pinned to extracted/installed RPM code. Two consecutive constrained
+service canaries pass on .149 with unchanged DMS PID and no recent audit-log AVC.
+Factory logs are `logs/portable-dns-restoration-iso-build.log`; component and
+service evidence is recorded in the [compatibility investigation](ISO_INSTALLER_COMPATIBILITY.md).
+The Windows copy has the same verified digest and passes the independent
+Rock Ridge/media validator (38 required paths); its log is
+`output/pre-release-execution/fresh-install-fixes/portable-dns-restoration-windows-iso-validation.log`.
+The user chose manual ISO installation. The initial build handed over only the
+verified media. On 5 October the user requested VM setup: the isolated
+`GREYWARD-ISO-TEST-20261005-DNS` (`273a4479-33cd-45f5-b210-9d9a056aa8e1`)
+boots the sole product ISO on a fresh 60 GB C: disk, with 2 vCPUs and 2–4 GB RAM.
+Default Switch is connected for the user's DNS test; this is not the disconnected
+standalone-install gate. Earlier VMs and disks remain untouched. Private setup
+receipts are under `output/pre-release-execution/portable-dns-*vm*.json`.
+The live VMConnect console shows the GREYWARD symbol, User Creation and an empty
+LUKS passphrase dialog. It is left there for the user; installation has not begun.
+Disk-first firmware priority is already set for the subsequent installed boot.
+`installed_system_tested=false` remains truthful. Fresh installation,
+actual backgrounds, native authentication and other-network/hardware acceptance
+remain open. Earlier October packages/media are historical intermediate candidates.
+
+## 4 October pre-release candidate (historical; compatibility review)
+
+The final package tuple is DMS 1.6.2-6, session 0.1.0-6, Center 0.1.0-53,
+Context 0.1.0-58 and branding 0.1.0-15. It uses the manifest's exact Quickshell
+0.3.1-5/Labwc 0.9.6-1/UWSM 0.24.3-1/Greeter 1:1.6.2-1 tuple, Flatpak 1.18.4
+and fwupd 2.1.8. Native DMS locking is canonical.
+
+- ISO: `output/iso/greyward-installer-20261004-6-6-53-58.iso`.
+- SHA-256: `30db0c70ca747ca9e56f9ae8a1aff8ab7c6a036829b6eff7a39faf0288cbe25a`.
+- Captured final baseline SHA-256:
+  `68beee53e13a2de2e879e92c3389909294380e45b5d18df33887170061258100`.
+- Factory provenance sidecar confirms offline installation inputs and final
+  installer dependency resolution; extracted payload digests and all 28 declared
+  paths passed. The transferred Windows ISO has the same verified digest.
+- All six selected Flatpak commits installed in empty network namespaces during
+  cold and warm factory checks. Warm acquisition reused the complete 3.6 GB
+  object cache; final metadata-only revisions received about 233 KB.
+
+The auxiliary answer-DVD test path was invalid and is rejected. It removed the
+GREYWARD profile/update arguments, preseeded account and encryption, and disabled
+Plymouth. It cannot establish compatibility with the proven interactive installer.
+See [ISO_INSTALLER_COMPATIBILITY.md](ISO_INSTALLER_COMPATIBILITY.md) for the artifact,
+Git-history and boot-partition comparison. The replacement must boot only the
+product ISO, without answer media or automated credentials. No installed-system
+pass is claimed. The user's running VM/installer is left untouched.
+
+The replacement candidate is
+`output/iso/greyward-installer-20261004-interactive-6-6-53-58.iso`, SHA-256
+`c8df013a9583fe86b12454810078424f4e73e267cc2378ee17c35f644c8f4de6`.
+It retains the package/baseline tuple above and passed the new media contract,
+including the actual appended EFI partition, plus the existing factory checks.
+All 60 Fedora image tests passed. Product-only console and installation results
+are tracked in the compatibility investigation; publication alone is not acceptance.
+The isolated `GREYWARD-INSTALLER-COMPAT-20261004` console shows the branded
+Anaconda, User Creation and an empty native encryption passphrase prompt. It is
+subsequently installed by the user and reached the desktop; no credential or
+installation action was automated. Post-install defects are tracked separately.
+
+The approved item ledger is [PRE_RELEASE_IMPROVEMENTS.md](../plans/PRE_RELEASE_IMPROVEMENTS.md).
+
+## Historical rebuild candidate: 2026-09-19 reboot hand-off and greeter wallpaper
 
 This candidate contains the installer reboot hand-off marker and the persistent
 greetd wallpaper synchronization fix. It was built on `.149`; `.120` was not
@@ -436,6 +515,7 @@ environment/production/external-rpms.txt.
       --baseline "$build/inputs/greyward-149-YYYYMMDD.json" \
       --base-sha256 "$verified_vendor_sha256" \
       --branding-rpm "$build/rpms/greyward-branding-CURRENT.noarch.rpm" \
+      --dms-rpm "$build/rpms/greyward-dms-CURRENT.x86_64.rpm" \
       --security-rpm "$build/rpms/greyward-security-center-CURRENT.x86_64.rpm" \
       --security-rpm "$build/rpms/greyward-security-context-CURRENT.noarch.rpm" \
       --security-build-manifest "$build/rpms/security-center-build-manifest.tsv" \

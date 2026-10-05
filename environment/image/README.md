@@ -15,13 +15,16 @@ From a Fedora-like build host, prepare a new input directory with:
 ```bash
 environment/image/build.sh --output output/greyward-production-inputs \
   --branding-rpm output/branding-current/greyward-branding-*.rpm \
+  --dms-rpm path/to/selected-greyward-dms.rpm \
+  --session-rpm path/to/selected-greyward-session.rpm \
   --security-rpm path/to/greyward-security-center-*.rpm \
   --security-rpm path/to/greyward-security-context-*.rpm \
   --security-build-manifest path/to/security-center-build-manifest.tsv \
   --require-complete
 ```
 
-The RPM arguments are optional for source inspection. With
+The RPM arguments are optional for source inspection. The DMS candidate must pass
+its migration gates before production promotion. With
 `--require-complete`, the command requires exactly one RPM of each required
 package. It refuses to overwrite an existing output and records whether the
 source checkout was dirty. The internal alpha image builder
@@ -107,6 +110,8 @@ environment/image/build-iso.sh \
   --baseline output/iso-baselines/greyward-149-YYYYMMDD.json \
   --base-sha256 "$verified_vendor_sha256" \
   --branding-rpm output/branding-current/greyward-branding-*.rpm \
+  --dms-rpm path/to/selected-greyward-dms.rpm \
+  --session-rpm path/to/selected-greyward-session.rpm \
   --security-rpm output/security-center-current/greyward-security-center-*.rpm \
   --security-rpm output/security-center-current/greyward-security-context-*.rpm \
   --security-build-manifest output/security-center-current/security-center-build-manifest.tsv \
@@ -153,3 +158,18 @@ persistent ISO boot, inspects Linux-visible Rock Ridge names directly from the
 ISO, and verifies the provisioner closure and every payload hash before a
 VMware start. It is intentionally a preflight: it does not start, stop, or
 reconfigure the VM.
+
+The DMS 1.6.2 candidate requires `--dms-rpm` at source staging. Its local runtime
+RPM participates in the same offline transaction closure as the other GREYWARD
+packages. `dms-release.json` is staged and checked against the installed receipt;
+DMS archives are build inputs for the runtime RPM, not first-boot downloads.
+See [migration acceptance](../../docs/architecture/DMS_1_6_MIGRATION_PLAN.md).
+
+
+The composed-media `installer-contract.py` gate verifies the known-good interactive
+Kickstart, GREYWARD updates/profile/assets and every boot configuration, including
+the appended EFI partition, before publication. Tests are in
+`tests/test_image_installer_contract.py`. It preserves the established behavior;
+actual installer acceptance must boot only the product ISO, with no auxiliary
+answer media or preseeded account/encryption. See the active
+[compatibility investigation](../../docs/architecture/ISO_INSTALLER_COMPATIBILITY.md).

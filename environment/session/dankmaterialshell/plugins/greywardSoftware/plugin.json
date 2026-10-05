@@ -8,7 +8,7 @@
   "capabilities": ["dankbar-widget", "software-launch"],
   "component": "./SoftwareWidget.qml",
   "icon": "storefront",
-  "requires_dms": ">=1.5.3",
+  "requires_dms": "=1.6.2",
   "dependencies": ["greyward-software-selection"],
   "permissions": ["settings_read"]
 }

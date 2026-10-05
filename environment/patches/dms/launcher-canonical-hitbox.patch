@@ -1,6 +1,6 @@
 --- a/quickshell/dms/Modules/Plugins/BasePill.qml
 +++ b/quickshell/dms/Modules/Plugins/BasePill.qml
-@@ -21,6 +21,9 @@ Item {
+@@ -21,6 +21,9 @@
      property bool isLast: false
      property real sectionSpacing: 0
      property bool enableBackgroundHover: true
@@ -10,7 +10,8 @@
      property bool enableCursor: true
      readonly property bool isMouseHovered: mouseArea.containsMouse
      property bool isLeftBarEdge: false
-@@ -134,9 +137,9 @@ Item {
+@@ -134,10 +137,10 @@
+     MouseArea {
          id: mouseArea
          z: -1
 -        x: -root.leftMargin
@@ -26,16 +27,25 @@
          acceptedButtons: Qt.LeftButton | Qt.RightButton
 --- a/quickshell/dms/Modules/DankBar/Widgets/LauncherButton.qml
 +++ b/quickshell/dms/Modules/DankBar/Widgets/LauncherButton.qml
-@@ -14,0 +14,6 @@
+@@ -6,6 +6,12 @@
+ 
+ BasePill {
+     id: root
 +    readonly property real launcherVisualSize: SettingsData.launcherLogoMode === "apps"
 +        ? Theme.barIconSize(root.barThickness, -4, root.barConfig?.maximizeWidgetIcons, root.barConfig?.iconScale)
 +        : Theme.barIconSize(root.barThickness, SettingsData.launcherLogoSizeOffset, root.barConfig?.maximizeWidgetIcons, root.barConfig?.iconScale)
 +    extendHitboxToBarEdge: false
 +    hitboxWidth: Math.max(visualWidth, launcherVisualSize)
 +    hitboxHeight: Math.max(visualHeight, launcherVisualSize)
+ 
+     property bool isActive: false
+     property var hyprlandOverviewLoader: null
 --- a/quickshell/dms/Modules/DankBar/BarCanvas.qml
 +++ b/quickshell/dms/Modules/DankBar/BarCanvas.qml
-@@ -170,18 +170,0 @@
+@@ -168,24 +168,6 @@
+         borderEdgePathCorrectShape = false;
+     }
+ 
 -    MouseArea {
 -        anchors.fill: parent
 -        acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
@@ -54,3 +64,6 @@
 -            TrayMenuManager.closeAllMenus();
 -        }
 -    }
+ 
+     ElevationShadow {
+         id: barShadow

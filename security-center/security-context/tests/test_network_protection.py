@@ -4,7 +4,7 @@ import unittest
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 
 try:
@@ -106,6 +106,38 @@ class NetworkProtectionTests(unittest.TestCase):
             action, _duration, selected = select_policy_rule(connection)
         self.assertEqual(action, "deny")
         self.assertEqual(selected["name"], "GREYWARD deny direct DNS outside managed resolver")
+
+    def test_private_dns_exception_is_scoped_to_resolved_and_live_destination(self):
+        with patch("greyward_security_context.control_plane._active_vpn_dns_addresses", return_value=set()), \
+             patch("greyward_security_context.control_plane._active_private_dns_addresses", return_value={"192.168.1.1"}):
+            for process, address, expected in (("/usr/lib/systemd/systemd-resolved", "192.168.1.1", "allow"),
+                                               ("/usr/lib/systemd/systemd-resolved", "1.1.1.1", "deny"),
+                                               ("/usr/bin/example-app", "192.168.1.1", "deny")):
+                connection = SimpleNamespace(process_path=process, dst_host="local-dns", dst_ip=address, dst_port=53, protocol="udp")
+                self.assertEqual(select_policy_rule(connection)[0], expected)
+
+    def test_network_default_exception_requires_explicit_intent_and_live_servers(self):
+        from greyward_security_context import control_plane, secure_dns_reconciler as dns
+        with patch.object(dns, '_policy', return_value={'desired_policy': 'Automatic'}), patch.object(dns, '_active_devices') as devices:
+            self.assertEqual(control_plane._active_network_default_dns_addresses(), set())
+            devices.assert_not_called()
+        with patch.object(dns, '_policy', return_value={'desired_policy': 'Privacy'}):
+            self.assertEqual(control_plane._active_network_default_dns_addresses(), set())
+        with patch.object(dns, '_policy', return_value={'desired_policy': 'NetworkDefault'}), \
+             patch.object(dns.dbus, 'SystemBus', return_value=Mock()), \
+             patch.object(dns, '_active_devices', return_value=[{'ifindex': 2}]), \
+             patch.object(dns, '_link', return_value={'DNSEx': [(2, [192, 168, 1, 1], 0, '')]}):
+            self.assertEqual(control_plane._active_network_default_dns_addresses(), {'192.168.1.1'})
+
+    def test_network_default_admission_never_authorizes_app_or_unrelated_server(self):
+        with patch('greyward_security_context.control_plane._active_vpn_dns_addresses', return_value=set()), \
+             patch('greyward_security_context.control_plane._active_private_dns_addresses', return_value=set()), \
+             patch('greyward_security_context.control_plane._active_network_default_dns_addresses', return_value={'192.168.1.1'}):
+            for process, address, expected in (('/usr/lib/systemd/systemd-resolved', '192.168.1.1', 'allow'),
+                                               ('/usr/lib/systemd/systemd-resolved', '1.1.1.1', 'deny'),
+                                               ('/usr/bin/example-app', '192.168.1.1', 'deny')):
+                connection = SimpleNamespace(process_path=process, dst_host='network-dns', dst_ip=address, dst_port=53, protocol='udp')
+                self.assertEqual(select_policy_rule(connection)[0], expected)
 
     def test_active_vpn_dns_addresses_come_only_from_connected_vpn_devices(self):
         results = [

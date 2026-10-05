@@ -1,6 +1,6 @@
 --- a/quickshell/dms/Modules/DankBar/Widgets/SystemTrayBar.qml
 +++ b/quickshell/dms/Modules/DankBar/Widgets/SystemTrayBar.qml
-@@ -66,9 +66,25 @@ BasePill {
+@@ -68,9 +68,25 @@
              }
              if (icon.startsWith("/") && !icon.startsWith("file://"))
                  return `file://${icon}`;

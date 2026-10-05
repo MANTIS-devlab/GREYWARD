@@ -67,7 +67,7 @@ PluginComponent {
     function variantString(value) { return '"' + String(value).replace(/\\/g, "\\\\").replace(/"/g, '\\"') + '"'; }
     function call(method, args, callback) {
         Proc.runCommand("greywardSecure." + method, ["/usr/bin/gdbus", "call", "--session", "--timeout", "6", "--dest", busName, "--object-path", objectPath, "--method", busName + "." + method].concat(args || []), function(stdout, code) {
-            callback(code === 0 ? decodeGdbusJson(stdout) : null);
+            callback(code === 0 ? root.decodeGdbusJson(stdout) : null);
         });
     }
     function refreshSummary() {
@@ -76,25 +76,25 @@ PluginComponent {
         const generation = ++requestGeneration;
         requestTimeout.restart();
         call("GetShellPresentation", [], function(next) {
-            if (generation !== requestGeneration) return;
-            requestTimeout.stop(); requestPending = false; clockNow = Date.now();
+            if (generation !== root.requestGeneration) return;
+            requestTimeout.stop(); root.requestPending = false; root.clockNow = Date.now();
             if (!next || next.schema !== "greyward.security.experience/v1") return;
             const nextFreshUntil = Date.parse(next.fresh_until || "");
             const ids = (next.items || []).filter(item => item.severity !== "INFO").map(item => item.id);
-            const newItem = ids.find(id => previousIds.indexOf(id) < 0);
-            if (initialized && newItem && (!primaryItem || next.items[0]?.id === newItem)) {
-                attentionId = newItem; attentionTimer.restart();
+            const newItem = ids.find(id => root.previousIds.indexOf(id) < 0);
+            if (root.initialized && newItem && (!root.primaryItem || next.items[0]?.id === newItem)) {
+                root.attentionId = newItem; attentionTimer.restart();
             }
-            previousIds = ids;
-            presentation = next; initialized = Number.isFinite(nextFreshUntil);
+            root.previousIds = ids;
+            root.presentation = next; root.initialized = Number.isFinite(nextFreshUntil);
             const result = (next.operations || []).find(op => op.state === "COMPLETE");
-            if (result) { actionMessage = result.detail; messageTimer.restart(); }
+            if (result) { root.actionMessage = result.detail; messageTimer.restart(); }
         });
     }
     function subscribe() {
         if (subscriptionId || !DMSService.isConnected || typeof DMSService.dbusSubscribe !== "function") return;
         DMSService.dbusSubscribe("session", busName, objectPath, busName, "ShellSummaryChanged", function(response) {
-            if (response?.result?.subscriptionId) subscriptionId = String(response.result.subscriptionId);
+            if (response?.result?.subscriptionId) root.subscriptionId = String(response.result.subscriptionId);
         });
     }
     function activateSecurityCenterWindow() {
@@ -113,9 +113,9 @@ PluginComponent {
         actionTimeout.restart();
         const finish = function(result) {
             actionTimeout.stop();
-            actionPending = false;
-            actionMessage = result?.ok ? result.state === "PENDING" ? qsTr("Waiting for authorization…") : qsTr("Done") : result?.detail || qsTr("The action could not be completed. Check Security Center.");
-            messageTimer.restart(); refreshSummary();
+            root.actionPending = false;
+            root.actionMessage = result?.ok ? result.state === "PENDING" ? qsTr("Waiting for authorization…") : qsTr("Done") : result?.detail || qsTr("The action could not be completed. Check Security Center.");
+            messageTimer.restart(); root.refreshSummary();
         };
         if (action.id === "trust_once" || action.id === "trust_always")
             call("RequestUsbTrust", [variantString(item.connection_ref), variantString(action.id === "trust_once" ? "once" : "always")], finish);
@@ -128,9 +128,9 @@ PluginComponent {
         actionTimeout.restart();
         call("SetPrivacyProfile", [variantString(profile)], function(result) {
             actionTimeout.stop();
-            actionPending = false; profileMenuOpen = false;
-            actionMessage = result?.ok && result.profile === profile ? qsTr("Privacy profile applied") : qsTr("Privacy profile could not be applied");
-            messageTimer.restart(); refreshSummary();
+            root.actionPending = false; root.profileMenuOpen = false;
+            root.actionMessage = result?.ok && result.profile === profile ? qsTr("Privacy profile applied") : qsTr("Privacy profile could not be applied");
+            messageTimer.restart(); root.refreshSummary();
         });
     }
     Timer { id: requestTimeout; interval: 7000; onTriggered: { ++root.requestGeneration; root.requestPending = false; root.clockNow = Date.now(); } }

@@ -20,8 +20,9 @@
     "package": "hyprland"
   },
   "quickshell": {
-    "version": "0.3.0",
+    "version": "0.3.1",
     "repository": "errornointernet/quickshell",
     "package": "quickshell"
-  }
+  },
+  "dmsReleaseManifest": "environment/production/dms-release.json"
 }

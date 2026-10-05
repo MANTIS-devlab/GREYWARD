@@ -14,6 +14,7 @@ import re
 import shutil
 import subprocess
 import tempfile
+import time
 import xml.etree.ElementTree as ET
 
 BOOT_PACKAGES = """kernel kernel-modules kernel-modules-extra grub2-efi-x64
@@ -49,6 +50,25 @@ def download(url, path):
 def digest(path):
     with path.open("rb") as f:
         return hashlib.file_digest(f, "sha256").hexdigest()
+
+
+def acquisition_cache(stage):
+    """Persistent download objects; never reuse an RPM/verification database."""
+    root = Path(os.environ.get('GREYWARD_ACQUISITION_CACHE', str(stage.parent / '.greyward-acquisition-cache')))
+    if root.is_symlink():
+        raise ValueError('Acquisition cache must not be a symlink')
+    root.mkdir(parents=True, exist_ok=True)
+    return root.resolve()
+
+
+def cache_inventory(root):
+    return {str(p.relative_to(root)): p.stat().st_size for p in root.rglob('*') if p.is_file()}
+
+
+def received_bytes():
+    """Builder interface traffic, including metadata and unrelated background traffic."""
+    return sum(int(row.split(':', 1)[1].split()[0]) for row in Path('/proc/net/dev').read_text().splitlines()[2:]
+               if row.split(':', 1)[0].strip() != 'lo')
 
 
 def pinned(source, name):
@@ -121,23 +141,93 @@ def build_rpms(stage, work, offline, baseline):
     root = work / "rpm-root"
     root.mkdir()
     staged = sorted((stage / "rpms").glob("*.rpm"))
+    release = json.loads((stage / 'dms-release.json').read_text())
+    pins = {'dms-greeter' if k == 'greeter' else k: v
+            for k, v in release['compatibility'].items()
+            if k in {'quickshell', 'labwc', 'uwsm', 'greeter'}}
+    selection = [p for p in lines(stage / 'packages.txt') if p not in pins]
+    selection += [f'{name}-{version}' for name, version in sorted(pins.items())]
+    cache = acquisition_cache(stage) / 'dnf'
+    cache.mkdir(exist_ok=True)
     run("dnf5", "-y", f"--installroot={root}", "--releasever=44",
         "--setopt=ip_resolve=4",
         "--setopt=retries=10", "--setopt=max_parallel_downloads=1",
         "--setopt=timeout=120",
         f"--setopt=reposdir={configs}", "--setopt=keepcache=True",
-        f"--exclude={EXCLUDED}", "install", "--downloadonly", "@core",
-        *BOOT_PACKAGES, *lines(stage / "packages.txt"), *staged)
-    for rpm_path in sorted(root.rglob("*.rpm")) + staged:
+        f"--setopt=cachedir={cache}", f"--setopt=system_cachedir={cache}", '--refresh',
+        f"--exclude={EXCLUDED}", "install", f'--store={work / "selected-transaction"}', "@core",
+        *BOOT_PACKAGES, *selection, *staged)
+    # Store the fresh solve without executing it. Export exactly its selected
+    # objects, never all versions left in the persistent acquisition cache.
+    for rpm_path in sorted((work / 'selected-transaction').rglob('*.rpm')) + staged:
         target = packages / rpm_path.name
         if target.exists() and digest(target) != digest(rpm_path):
             raise ValueError("RPM filename collision: " + rpm_path.name)
         shutil.copyfile(rpm_path, target)
-    export_core_group(root, configs, offline / "comps.xml")
+    inventory = rpm_inventory(sorted(packages.glob('*.rpm')))
+    retain_rpm_objects(root, configs, cache, packages)
+    for name, expected in pins.items():
+        actual = inventory.get(name + ('.noarch' if name == 'uwsm' else '.x86_64'))
+        version = (actual[0] + ':' if ':' in expected else '') + '-'.join(actual[1:]) if actual else None
+        if version != expected:
+            raise ValueError('Offline DMS compatibility tuple mismatch: ' + name)
+    export_core_group(root, configs, offline / "comps.xml", cache)
     return verify_rpms(stage, work, offline, baseline)
 
 
-def export_core_group(root, configs, destination):
+def retain_rpm_objects(root, configs, cache, packages):
+    """DNF --store bypasses keepcache; retain selected objects at DNF's own paths."""
+    import libdnf5
+    base = libdnf5.base.Base()
+    base.load_config()
+    config = base.get_config()
+    config.get_installroot_option().set(str(root))
+    config.get_reposdir_option().set([str(configs)])
+    config.get_cachedir_option().set(str(cache))
+    config.get_system_cachedir_option().set(str(cache))
+    config.get_cacheonly_option().set('all')
+    base.get_vars().set('releasever', '44')
+    base.setup()
+    base.get_repo_sack().create_repos_from_system_configuration()
+    base.get_repo_sack().load_repos(libdnf5.repo.Repo.Type_AVAILABLE)
+    for package in libdnf5.rpm.PackageQuery(base):
+        source = packages / Path(package.get_location()).name
+        if not source.is_file():
+            continue
+        target = Path(package.get_package_path())
+        target.resolve().relative_to(cache.resolve())
+        target.parent.mkdir(parents=True, exist_ok=True)
+        if not target.exists() or digest(target) != digest(source):
+            temporary = target.with_name(target.name + '.retaining')
+            shutil.copyfile(source, temporary)
+            temporary.replace(target)
+
+
+def verify_flatpak_seed(seed, baseline):
+    """A reviewed explicit input, never an ambient host installation/cache."""
+    receipt = seed / 'seed.json'
+    value = json.loads(receipt.read_text())
+    if value.get('schema') != 'greyward.flatpak-seed/v1' or value.get('flatpaks') != baseline['flatpaks']:
+        raise ValueError('Flatpak seed does not match the selected baseline')
+    files = value.get('files', {})
+    actual = {p.relative_to(seed).as_posix() for p in seed.rglob('*') if p.is_file() and p != receipt}
+    if not files or set(files) != actual:
+        raise ValueError('Flatpak seed inventory differs from its receipt')
+    for name, expected in files.items():
+        path = seed / name
+        if path.is_symlink() or any(p.is_symlink() for p in path.parents):
+            raise ValueError('Flatpak seed contains a symlink')
+        path.resolve().relative_to(seed.resolve())
+        if digest(path) != expected:
+            raise ValueError('Flatpak seed checksum mismatch: ' + name)
+    repo = seed / '.ostree/repo'
+    for item in baseline['flatpaks'].values():
+        if (repo / 'refs/heads' / item['ref']).read_text().strip() != item['commit']:
+            raise ValueError('Flatpak seed ref differs from selected commit')
+    return digest(receipt)
+
+
+def export_core_group(root, configs, destination, cache=None):
     """Preserve the merged Fedora core group used by the download transaction.
 
     Anaconda selects @core even with an explicit Kickstart package list. RPM
@@ -149,8 +239,8 @@ def export_core_group(root, configs, destination):
     config = base.get_config()
     config.get_installroot_option().set(str(root))
     config.get_reposdir_option().set([str(configs)])
-    config.get_cachedir_option().set(str(root / "var/cache/libdnf5"))
-    config.get_system_cachedir_option().set(str(root / "var/cache/libdnf5"))
+    config.get_cachedir_option().set(str(cache or root / "var/cache/libdnf5"))
+    config.get_system_cachedir_option().set(str(cache or root / "var/cache/libdnf5"))
     config.get_cacheonly_option().set("all")
     config.get_optional_metadata_types_option().set(["comps"])
     base.get_vars().set("releasever", "44")
@@ -231,12 +321,13 @@ def verify_rpms(stage, work, offline, baseline):
 
 
 def build_sources(stage, offline):
-    source = (stage / "install-dms.sh").read_text()
-    version = pinned(source, "DMS_VERSION")
-    archive = offline / "dms-full-amd64.tar.gz"
-    download(f"https://github.com/AvengeMedia/DankMaterialShell/releases/download/{version}/dms-full-amd64.tar.gz", archive)
-    if digest(archive) != pinned(source, "DMS_ARCHIVE_SHA256"):
-        raise ValueError("DMS archive checksum mismatch")
+    # DMS is a local RPM in the transaction closure, not a second archive install.
+    release = json.loads((stage / "dms-release.json").read_text())
+    if release["schema"] != "greyward.dms-release/v1":
+        raise ValueError("Invalid DMS release manifest")
+    runtimes = list((stage / "rpms").glob("greyward-dms-*.rpm"))
+    if len(runtimes) != 1:
+        raise ValueError("Exactly one packaged DMS runtime is required")
     sources = (stage / "zsh/sources.env").read_text()
     vendor = offline / "zsh-vendor"
     vendor.mkdir()
@@ -244,10 +335,23 @@ def build_sources(stage, offline):
         ref, url = pinned(sources, name + "_REF"), pinned(sources, name + "_REPO")
         if not re.fullmatch("[0-9a-f]{40}", ref) or not url.startswith("https://github.com/"):
             raise ValueError("Invalid shell source pin")
+        source_cache = acquisition_cache(stage) / 'sources'
+        source_cache.mkdir(exist_ok=True)
+        key = hashlib.sha256((url + '\n' + ref).encode()).hexdigest()
+        cached = source_cache / key
+        if not cached.exists():
+            with tempfile.TemporaryDirectory(prefix='fetch-', dir=source_cache) as temporary:
+                checkout = Path(temporary) / 'repo'
+                run('git', 'init', '--bare', checkout)
+                run('git', '-C', checkout, 'fetch', '--depth=1', url, ref)
+                run('git', '-C', checkout, 'update-ref', 'refs/heads/greyward', 'FETCH_HEAD')
+                run('git', '-C', checkout, 'fsck', '--strict')
+                checkout.rename(cached)
+        if run('git', '-C', cached, 'rev-parse', 'refs/heads/greyward', capture=True) != ref:
+            raise ValueError('Corrupt cached shell source pin')
+        run('git', '-C', cached, 'fsck', '--strict')
         destination = vendor / ref
-        run("git", "init", "--bare", destination)
-        run("git", "-C", destination, "fetch", "--depth=1", url, ref)
-        run("git", "-C", destination, "update-ref", "refs/heads/greyward", "FETCH_HEAD")
+        shutil.copytree(cached, destination)
         if run("git", "-C", destination, "rev-parse", "refs/heads/greyward", capture=True) != ref:
             raise ValueError("Shell source commit mismatch")
         if name == "GREYWARD_POWERLEVEL10K":
@@ -258,16 +362,18 @@ def build_sources(stage, offline):
                 tree = Path(temporary)
                 run("git", "-C", destination, "archive", f"--output={tree / 'source.tar'}", ref, "gitstatus")
                 run("tar", "-xf", tree / "source.tar", "-C", tree)
-                cache = offline / "gitstatus"
-                cache.mkdir()
+                cache = source_cache / ('gitstatus-' + ref)
+                cache.mkdir(exist_ok=True)
                 env = dict(os.environ, GITSTATUS_CACHE_DIR=str(cache))
-                run("sh", tree / "gitstatus/install", "-f", "-s", "linux", "-m", "x86_64", env=env)
+                if not any(cache.iterdir()):
+                    run("sh", tree / "gitstatus/install", "-f", "-s", "linux", "-m", "x86_64", env=env)
                 run("unshare", "--net", "sh", tree / "gitstatus/install", "-n", "-s", "linux", "-m", "x86_64", env=env)
+                shutil.copytree(cache, offline / 'gitstatus')
     (vendor / "required").touch()
 
 
-def flatpak_env(path):
-    path.mkdir()
+def flatpak_env(path, reuse=False):
+    path.mkdir(parents=True, exist_ok=reuse)
     # Flatpak otherwise keeps consulting /var/lib/flatpak. That can make an
     # offline dependency check pass only because the builder already has the
     # requested runtime installed. Keep both installations disposable.
@@ -311,25 +417,57 @@ def prepare_sideload_repo(repo, offline_refs):
 def build_flatpaks(stage, work, offline, baseline):
     remote = offline / "flathub.flatpakrepo"
     download("https://dl.flathub.org/repo/flathub.flatpakrepo", remote)
-    source_env = flatpak_env(work / "flatpak-source")
+    seed_path = os.environ.get('GREYWARD_FLATPAK_SEED')
+    if seed_path:
+        seed = Path(seed_path).resolve(strict=True)
+        seed_digest = verify_flatpak_seed(seed, baseline)
+        cached = acquisition_cache(stage) / 'flatpak-seeds' / seed_digest
+        if not cached.exists():
+            cached.parent.mkdir(exist_ok=True)
+            shutil.copytree(seed, cached)
+        if verify_flatpak_seed(cached, baseline) != seed_digest:
+            raise ValueError('Cached Flatpak seed receipt differs from the selected input')
+        (offline / 'flatpak-seed-receipt.json').write_text(json.dumps({
+            'schema': 'greyward.flatpak-seed-input/v1', 'receipt_sha256': seed_digest,
+            'flatpaks': baseline['flatpaks'],
+        }, indent=2) + '\n')
+        destination = offline / 'flatpak'
+        destination.mkdir()
+        shutil.copytree(cached / '.ostree', destination / '.ostree')
+        refs = [item['ref'] for item in baseline['flatpaks'].values()]
+        finish_flatpak_verification(stage, work, offline, baseline, refs)
+        return
+    source_env = flatpak_env(acquisition_cache(stage) / 'flatpak-source', reuse=True)
     run("flatpak", "--user", "config", "--set", "languages", "*", env=source_env)
-    run("flatpak", "--user", "remote-add", "--from", "flathub", remote, env=source_env)
+    run("flatpak", "--user", "remote-add", '--if-not-exists', "--from", "flathub", remote, env=source_env)
     run("flatpak", "--user", "remote-modify", "--collection-id=org.flathub.Stable", "flathub", env=source_env)
+    origin = 'flathub'
     refs = []
     for item in baseline["flatpaks"].values():
         ref, commit = item["ref"], item["commit"]
-        run("flatpak", "--user", "install", "--noninteractive", "flathub", ref, env=source_env)
-        run("flatpak", "--user", "update", "--noninteractive", f"--commit={commit}", ref, env=source_env)
+        present = subprocess.run(['flatpak', '--user', 'info', '--show-commit', ref],
+                                 env=source_env, capture_output=True, text=True)
+        if present.returncode != 0 or present.stdout.strip() != commit:
+            run("flatpak", "--user", "install", "--noninteractive", '--or-update', origin, ref, env=source_env)
+            if run('flatpak', '--user', 'info', '--show-commit', ref, env=source_env, capture=True) != commit:
+                run("flatpak", "--user", "update", "--noninteractive", f"--commit={commit}", ref, env=source_env)
         # An older selected app commit can use an older runtime branch than
         # today's app. Updating to a commit does not install that runtime.
         runtime = run("flatpak", "--user", "info", "--show-runtime", ref, env=source_env, capture=True)
-        run("flatpak", "--user", "install", "--noninteractive", "flathub", "runtime/" + runtime, env=source_env)
+        present_runtime = subprocess.run(['flatpak', '--user', 'info', 'runtime/' + runtime],
+                                         env=source_env, capture_output=True)
+        if present_runtime.returncode != 0:
+            run("flatpak", "--user", "install", "--noninteractive", origin, "runtime/" + runtime, env=source_env)
         refs.append(ref)
     destination = offline / "flatpak"
     destination.mkdir()
     run("flatpak", "--user", "create-usb", destination, *refs, env=source_env)
     repo = destination / ".ostree/repo"
     prepare_sideload_repo(repo, refs)
+    finish_flatpak_verification(stage, work, offline, baseline, refs)
+
+
+def finish_flatpak_verification(stage, work, offline, baseline, refs):
     inventory = "\n".join(f"{ref}\t{baseline['flatpaks'][ref.split('/', 2)[1]]['commit']}"
                            for ref in refs)
     (offline / "flatpak-inventory.tsv").write_text(inventory + "\n")
@@ -358,12 +496,30 @@ def main():
     from baseline import validate
     validate(baseline)
     offline.mkdir()  # refuse stale or partly prepared payloads
+    import fcntl
+    cache = acquisition_cache(stage)
+    lock = (cache / '.lock').open('a')
+    fcntl.flock(lock, fcntl.LOCK_EX)
+    before = cache_inventory(cache)
+    received_before = received_bytes()
+    timings = {}
     try:
         with tempfile.TemporaryDirectory(prefix=".offline-build-", dir=stage.parent) as temporary:
             work = Path(temporary)
-            inventory = build_rpms(stage, work, offline, baseline)
-            build_sources(stage, offline)
-            build_flatpaks(stage, work, offline, baseline)
+            started = time.monotonic(); inventory = build_rpms(stage, work, offline, baseline)
+            timings['rpm_acquire_and_verify_seconds'] = time.monotonic() - started
+            started = time.monotonic(); build_sources(stage, offline)
+            timings['source_acquire_seconds'] = time.monotonic() - started
+            started = time.monotonic(); build_flatpaks(stage, work, offline, baseline)
+            timings['flatpak_acquire_and_verify_seconds'] = time.monotonic() - started
+        after = cache_inventory(cache)
+        (offline / 'acquisition-metrics.json').write_text(json.dumps({
+            'timings': timings, 'cache_bytes_before': sum(before.values()),
+            'cache_bytes_after': sum(after.values()),
+            'new_object_bytes': sum(size for name, size in after.items() if name not in before),
+            'builder_received_bytes': received_bytes() - received_before,
+            'note': 'Object bytes are retained cache growth. Interface bytes include metadata and concurrent builder traffic.',
+        }, indent=2) + '\n')
         (offline / "manifest.json").write_text(json.dumps({
             "schema": "greyward.offline-payload/v1", "rpm_inventory": inventory,
             "baseline_sha256": digest(stage / "artifacts/runtime-baseline.json"),

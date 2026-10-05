@@ -10,8 +10,7 @@ status() {
 
 cutover() {
     test -x /usr/local/bin/greyward-dms
-    test -f /usr/local/share/greyward-dms/v1.5.3/COMMIT
-    grep -Fxq 069ddab041c738236a8910e4c39b65d9628d3018 /usr/local/share/greyward-dms/v1.5.3/COMMIT
+    /usr/libexec/greyward-dms-verify >/dev/null
     systemctl --global enable "$DMS_UNIT"
     systemctl --user daemon-reload
     systemctl --user start "$DMS_UNIT"
