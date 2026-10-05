@@ -1,9 +1,11 @@
 --- a/quickshell/dms/Modules/DankBar/Widgets/AppsDockContextMenu.qml
 +++ b/quickshell/dms/Modules/DankBar/Widgets/AppsDockContextMenu.qml
-@@ -354,7 +354,7 @@ PanelWindow {
+@@ -383,7 +383,7 @@
+                     anchors.right: parent.right
                      anchors.rightMargin: Theme.spacingS
                      anchors.verticalCenter: parent.verticalCenter
 -                    text: root.appData && root.appData.isPinned ? I18n.tr("Unpin from Dock") : I18n.tr("Pin to Dock")
 +                    text: root.appData && root.appData.isPinned ? I18n.tr("Unpin from taskbar") : I18n.tr("Pin to taskbar")
                      font.pixelSize: Theme.fontSizeSmall
                      color: Theme.surfaceText
+                     font.weight: Font.Normal

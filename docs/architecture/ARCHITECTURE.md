@@ -84,9 +84,21 @@ than restored from an address cache, and remains in memory only. Its pill
 popout owns a persistent `Public IP check` switch; the saved off state is loaded
 before timers can run and prevents provider requests until manually re-enabled.
 The session unit also sends non-local plain-HTTP proxy attempts to a closed
-loopback port, containing the pinned DMS 1.5.3 backend's unconditional
-`ip-api.com` geolocation seed without blocking the plugin's reviewed HTTPS
+loopback port, containing explicit upstream cleartext `ip-api.com` geolocation requests
+(the 1.6 backend loads location lazily) without blocking the plugin's reviewed HTTPS
 providers.
+
+## DMS runtime ownership
+
+The [1.6.2 migration tracker](DMS_1_6_MIGRATION_PLAN.md) is authoritative for
+candidate implementation and acceptance. The generated whole shell is paired with
+its unchanged distribution backend by a root-owned package receipt and selector.
+System plugins retain the Security Context contract; native desktop update execution
+opens Update Center. Native DMS owns session lock/idle and sleep coordination; the
+fixed GREYWARD keyboard wrapper waits for secure Wayland lock confirmation. PAM
+delegates to Fedora's existing system-auth stack. Labwc imports the graphical environment
+before starting Security Context and DMS. Development-only renderer
+and virtual-display commands remain in the development payload.
 
 ## Branding flow
 

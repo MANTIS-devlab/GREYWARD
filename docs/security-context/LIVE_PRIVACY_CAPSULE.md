@@ -36,6 +36,11 @@ The Security Center emblem remains visible in every state. The idle indicator
 is 36 × 32 logical pixels; up to two distinct activity icons and an overflow
 count may accompany it. A separate exclamation badge indicates unresolved
 conditions. Microphone/camera use is live activity, never an unresolved review.
+ClamAV's first definition download (`INITIALIZING`) is preparation activity,
+with scanning readiness explicitly unconfirmed. It does not create a generic
+Review item or establish a Protected status. Missing services, stale definitions
+and unsuccessful protection remain actionable warnings; unknown database age
+is never represented as zero.
 New actionable conditions can expand the caption for ten seconds; initial
 rehydration does not animate. Equal-priority items retain stable order.
 

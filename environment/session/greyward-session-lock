@@ -1,9 +1,25 @@
-#!/bin/sh
-# The one GREYWARD session-lock entrypoint: keyboard, idle and sleep callers
-# all reach the same DMS-native PAM-backed Wayland lock surface.
-set -eu
+#!/usr/bin/python3
+"""Request the canonical native DMS lock and wait for Wayland confirmation."""
+import json
+import subprocess
+import time
 
-# DMS owns the WlSessionLock surface, password field, and PAM conversation.
-# Its lock IPC is idempotent, so keyboard, idle, and suspend callers share one
-# native lock without terminating the session or competing locker processes.
-exec /usr/local/bin/greyward-dms ipc call lock lock
+
+def lock(cli='/usr/local/bin/greyward-dms', timeout=10):
+    subprocess.run([cli, 'ipc', 'call', 'lock', 'lock'], check=True, timeout=timeout)
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        remaining = max(0.1, deadline - time.monotonic())
+        output = subprocess.check_output([cli, 'ipc', 'call', 'lock', 'isLocked'],
+                                         text=True, timeout=remaining)
+        if json.loads(output.strip()) is True:
+            return
+        time.sleep(0.1)
+    raise RuntimeError('DMS did not confirm a secure Wayland lock')
+
+
+if __name__ == '__main__':
+    try:
+        lock()
+    except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as error:
+        raise SystemExit(str(error))

@@ -15,6 +15,15 @@ the two Security Center RPMs in `rpms/`; the repeatable component-build step is
 kept in `environment/development/build-security-center.sh` because its compiler
 and packaging tools are factory-only.
 
+DMS 1.6.2 is an unpromoted candidate. The image supplies one local `greyward-dms`
+RPM built from the checked manifest by `packaging/greyward-dms/`; no runtime archive
+download or patch glob runs during installation. The wrapper validates the root-owned
+selector and paired runtime. First-party plugins are package-owned system plugins;
+preferences, established pins and modified user copies are preserved after restrictive
+config/state/cache backup. The previous 1.5.3 payload remains recoverable.
+See the [migration tracker](../../docs/architecture/DMS_1_6_MIGRATION_PLAN.md) for
+locks, update authority, exact patch assembly and outstanding acceptance.
+
 `packages.txt` is the runtime package contract and `repositories.txt` lists
 the small set of production sources needed by that contract.
 
@@ -123,15 +132,18 @@ summary, so no image renderer or font-dependent glyph is needed at launch.
 
 The production desktop installs only the two supplied GREYWARD wallpapers from
 `branding/wallpaper/` into `/usr/share/backgrounds/greyward/`. DMS receives a
-compatibility symlink to the Black Art wallpaper, and the session applies its
-real installed path so DMS opens the shared wallpaper folder when its picker
-is opened.
+compatibility symlink to the Black Art wallpaper. Before the first QML load,
+session migration seeds its real installed path only when no session state
+exists. Existing wallpapers and explicit empty selections remain user-owned.
+There is no timed autostart wallpaper override.
 
 The greetd login screen uses the same canonical desktop background as the
 session: `branding/wallpaper/greyward-wallpaper-black-art-4k.jpg`. The
 provisioner atomically refreshes `/var/cache/dms-greeter/greeter_wallpaper_override.jpg`
-through a root-owned helper before every `greetd` start, so the setting remains
-applied after restarts and cache cleanup. No separate greeter image is shipped.
+through a root-owned helper before every `greetd` start. It also writes the
+wallpaper selection into `/var/cache/dms-greeter/session.json`, which the
+separately packaged Greeter 1.6.2 actually consumes. Production acceptance checks
+both the copied image and that selection. No separate greeter image is shipped.
 
 DMS's production settings refer to the stable system assets in
 `/usr/share/greyward/dms/`; they do not contain developer-home paths. The
@@ -183,7 +195,7 @@ hours, with a persistent tty1/Plymouth status message and a retained diagnostic
 status file. See
 [`ISO_CREATION.md`](../../docs/architecture/ISO_CREATION.md) for capture scope,
 build prerequisites and retry instructions. The ISO includes the RPM dependency
-closure, Flatpak runtimes, DMS archive and shell source cache. Only construction
+closure, Flatpak runtimes, DMS runtime RPM and pinned shell source cache. Only construction
 needs internet; installed setup runs without networking. The offline Flatpak
 transaction temporarily disables the Flathub remote to prevent metadata refresh
 attempts, then restores it for future updates. DMS's upstream What's New
@@ -223,12 +235,12 @@ available there. Rygel Preferences is hidden through a canonical
 desktop-entry override, preserving its package dependency without presenting
 an upstream utility as a GREYWARD application.
 
-The canonical session locks after ten minutes of idle time and before
-suspension through one DMS-native lock entrypoint shared by keyboard and idle
-callers. DMS owns the Wayland session-lock surface, the conventional password
-field, and PAM authentication, so the session and its applications remain
-open. The lock uses the current canonical GREYWARD desktop wallpaper and DMS's
-native lock presentation; it is distinct from the LUKS storage unlock screen.
+The canonical lock screen is native DMS, selected by the user's 4 October
+correction. DMS locks after ten idle minutes, blanks after fifteen, and coordinates
+locking before suspend through logind. Keyboard requests use
+`greyward-session-lock`, which confirms a secure native Wayland lock. The session
+RPM owns the PAM service delegating to Fedora's existing system-auth stack.
+Swaylock and the separate swayidle coordinator are no longer session defaults.
 
 `/etc/greyward-production-complete` is an installed-system acceptance marker,
 not a provisioning-progress flag. The account hand-off writes it atomically

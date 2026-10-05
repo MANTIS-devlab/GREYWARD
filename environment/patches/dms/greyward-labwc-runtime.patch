@@ -1,6 +1,6 @@
 --- a/quickshell/dms/Services/PopoutService.qml
 +++ b/quickshell/dms/Services/PopoutService.qml
-@@ -78,8 +78,21 @@
+@@ -86,8 +86,21 @@
          }
      }
  

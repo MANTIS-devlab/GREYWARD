@@ -4,6 +4,7 @@ mod control;
 mod facts;
 mod framework;
 mod policy;
+mod posture;
 mod presentation;
 mod privacy;
 mod profiles;
@@ -33,6 +34,7 @@ pub use policy::{
     evaluate_facts, evaluate_facts_with_deviations, load_accepted_deviations,
     set_accepted_deviation,
 };
+pub use posture::{choose_overall_posture, posture_digest};
 pub use presentation::{
     EvidencePresentation, EvidenceRemediation, evidence_domain_key, evidence_domain_route,
     evidence_presentation,

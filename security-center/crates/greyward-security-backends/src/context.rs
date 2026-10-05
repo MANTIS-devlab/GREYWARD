@@ -47,17 +47,19 @@ pub fn context_summary(
     events: Vec<SecurityContextEvent>,
 ) -> SecurityContextSummary {
     let state = aggregate_context_state(snapshot);
-    let review_count = snapshot
-        .domains
-        .iter()
-        .filter(|domain| {
-            matches!(
-                domain.state,
-                PostureState::ReviewNeeded | PostureState::ActionRequired
-            )
-        })
-        .count();
-    let review_count = u32::try_from(review_count).unwrap_or(u32::MAX);
+    let review_count = u32::try_from(
+        snapshot
+            .domains
+            .iter()
+            .filter(|domain| {
+                matches!(
+                    domain.state,
+                    PostureState::ReviewNeeded | PostureState::ActionRequired
+                )
+            })
+            .count(),
+    )
+    .unwrap_or(u32::MAX);
     let fresh_until = snapshot
         .checks
         .iter()
@@ -99,9 +101,7 @@ pub const OPENSNITCH_CONTEXT_SUMMARY_PATH: &str =
 /// `OpenSnitch` control plane. Consumers never decode `OpenSnitch` protobuf data.
 ///
 /// # Errors
-///
-/// Returns an error when the summary cannot be read, decoded, or has an
-/// unsupported schema.
+/// Returns an error for an unreadable file, invalid JSON or unsupported schema.
 pub fn load_opensnitch_context_summary(
     path: impl AsRef<std::path::Path>,
 ) -> Result<SecurityContextSummary, String> {

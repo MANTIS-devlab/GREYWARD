@@ -1,0 +1,176 @@
+{
+  "schema": "greyward.dms-release/v1",
+  "status": "candidate-unpromoted",
+  "releaseId": "v1.6.2-6",
+  "dms": {
+    "tag": "v1.6.2",
+    "commit": "2db7646fe3ab47fddfdb8723f2da07d61a0d47ac",
+    "apiVersion": 34
+  },
+  "dankCommon": "26396ce432d6c71c3f5367438f96f4a8d667e160",
+  "dankgo": "v1.6.1-0.20260908011626-07e1ef7caaea",
+  "inputs": {
+    "source": {
+      "file": "dms-source.tar.gz",
+      "root": "DankMaterialShell-1.6.2",
+      "sha256": "6e3a1ff6e028d1b363a119e18a2ed664d99b0a9287a0189897efe56b9099db23"
+    },
+    "vendor": {
+      "file": "dms-cli-1.6.2.tar.gz",
+      "root": "dms-cli-1.6.2",
+      "sha256": "98f2e443336c2d20667882b278d5eb641a6c05d8482465e7ea9b916ceac3c92a"
+    }
+  },
+  "build": {
+    "minimumGo": "1.26.5",
+    "tags": [
+      "distro_binary",
+      "withshell"
+    ],
+    "moduleMode": "vendor",
+    "network": "disabled",
+    "sourceDateEpoch": 1788872400,
+    "fedora": 44,
+    "requiredPackages": {
+      "golang": "1.26.8-2.fc44.x86_64",
+      "python3": "3.14.7-1.fc44.x86_64",
+      "make": "4.4.1-12.fc44.x86_64",
+      "rpm-build": "6.0.2-1.fc44.x86_64"
+    }
+  },
+  "compatibility": {
+    "quickshell": "0.3.1-5.fc44",
+    "labwc": "0.9.6-1.fc44",
+    "uwsm": "0.24.3-1.fc44",
+    "greeter": "1:1.6.2-1.fc44",
+    "validation": "Pre-release candidate tuple; package-only login/image/hardware gates pending."
+  },
+  "patches": [
+    {
+      "file": "apps-dock-spacing.patch",
+      "sha256": "4d0dd9dfdcfd54239bc68cb64d0d42167f3f5965f9f95fab22d0f3649c47ce3e",
+      "reason": "Preserve GREYWARD taskbar item spacing.",
+      "preimages": {
+        "Modules/DankBar/Widgets/AppsDock.qml": "51795c67d29024ea070c67d9295934d2dcb32f4cf7365b5b4a5dd0daf7c4a6c6"
+      }
+    },
+    {
+      "file": "apps-dock-taskbar-labels.patch",
+      "sha256": "04915c8596a646f79f3526cc7ebc3cc7588f7edad84f32300554f04d4cf41026",
+      "reason": "Preserve translation-aware taskbar terminology.",
+      "preimages": {
+        "Modules/DankBar/Widgets/AppsDockContextMenu.qml": "ea072a2335d0f6d95069f2d65e14b2aa66668d89a09901e3ed9e129da9c8ea12"
+      }
+    },
+    {
+      "file": "apps-dock-toggle-minimize.patch",
+      "sha256": "d950d27e8415ce53c762349892445874d1403fa2978a371b096c4d7ddf3bcc3c",
+      "reason": "Minimize the focused grouped window; upstream owns single-window toggling.",
+      "preimages": {
+        "Modules/DankBar/Widgets/AppsDock.qml": "2bc2d2313a937c76ccfdde251d6aaf8b6098495771d9e1ad17ce7c289d5e9fd1"
+      }
+    },
+    {
+      "file": "greyward-flatpak-icon-resolution.patch",
+      "sha256": "d0099f5be693da44ddfaeb25cf2fa63eeb8e91453488d5859d787a157afcfc2e",
+      "reason": "Discover real active Flatpak exports absent from normal export roots.",
+      "preimages": {
+        "Services/IconThemeService.qml": "db867afd1adc0b5e414e4d505bcc5ee4502579c76725c5a60b759d95db908fab"
+      }
+    },
+    {
+      "file": "greyward-labwc-runtime.patch",
+      "sha256": "4c63be68bee3464194e91f65dfc4e8b54f8615c689d2b38bbdf8b1810f914337",
+      "reason": "Bounded Labwc closed-popout reclamation; native DMS lock remains upstream.",
+      "preimages": {
+        "Services/PopoutService.qml": "fac368b72d2e442685ac24917ff0dc080f5d9cbcd8c844ad70ecac51591b30d1"
+      }
+    },
+    {
+      "file": "greyward-security-notifications.patch",
+      "sha256": "bb1ab1800ee57f691a30e5e9647213bae1bc0c22bb9abea227b2cbab828e1a83",
+      "reason": "Preserve Security Context severity presentation and quiet replacements.",
+      "preimages": {
+        "Modules/Notifications/Popup/NotificationPopup.qml": "97fd637b443f98ffceb27a19521799af800c7c901ce5b63f3b3d76a5c62f4e5c",
+        "Modules/Notifications/Center/NotificationCard.qml": "3763197675a8c75831af931831354b76e638364dd4b7045e3580b1691f910660",
+        "Services/NotificationService.qml": "370a39b5d1ba5d104522bff2619d814ca4731cc510191199ec1f6527690d23ae",
+        "Modules/Notifications/Center/HistoryNotificationCard.qml": "352636daa87528a0be10c9c4490684e2d1bd4cb39e56a8378690ebfbcbac0e5b"
+      }
+    },
+    {
+      "file": "greyward-settings-curation.patch",
+      "sha256": "2874849ff84acf6a0c818e1f32cbf43262184804fe1e5bb2759366561348aff9",
+      "reason": "Preserve Labwc settings capability guards and GREYWARD wording. Native update execution routes to the typed Update Center entrypoint.",
+      "preimages": {
+        "Modals/Settings/SettingsModal.qml": "2d7b89e549d48f9382080777e31a181a4baafb58784f91aad0ac85fd4cb71474",
+        "Modals/Settings/SettingsSidebar.qml": "a8d9b07e36215a5cb9cd5a39e9daaae0ed0e4aaa7feaea3198c5e73b126af05b",
+        "Modules/Settings/WallpaperTab.qml": "04b836ea8f8bf8248ff2e8d5ead4a764d55977388d9905c53cb9e83affe1ea0d",
+        "Modules/Settings/DisplayConfig/IncludeWarningBox.qml": "516e3b24ad787d1b0de44310e788069157d4c0cae05459157138319ee4363912",
+        "Services/SystemUpdateService.qml": "8e5fca9d4d338629bc5082015252c4d98e801d671ae3bb212c532fdb151eb150"
+      }
+    },
+    {
+      "file": "greyward-tray-icon-fallback.patch",
+      "sha256": "cd848daed56b3ce8dfd1d27829a2a9c0215ba04b159c02e795d2f1d774473824",
+      "reason": "Use upstream icon resolver for missing tray icon paths.",
+      "preimages": {
+        "Modules/DankBar/Widgets/SystemTrayBar.qml": "07315533c642e10c7c975e985112264c4405dc39f22e40ad67724b0a36e83373"
+      }
+    },
+    {
+      "file": "launcher-canonical-hitbox.patch",
+      "sha256": "a74dd43acb5b5e9e272ffd95c042bd9b8f09cc292ae9880ac964bea8fb92f48e",
+      "reason": "Preserve centered launcher hitbox and blank-bar clicks.",
+      "preimages": {
+        "Modules/Plugins/BasePill.qml": "1e95dc09c2aef6f7590bf5bf466c5dea9cc1e6fd605e11b802502056a899fc9d",
+        "Modules/DankBar/Widgets/LauncherButton.qml": "eb4d31bfee1da1d7f4ad810b3b1ef1ca8b2b83fa25718196ecf688e9287df82b",
+        "Modules/DankBar/BarCanvas.qml": "f2f153a6f72a6d33d652879093910043c98e7cd73ae505ea2b263bb30621258e"
+      }
+    },
+    {
+      "file": "polkit-auth-dialog.patch",
+      "sha256": "32bc629ebb3d5f6599997d1357ee817a09b3479ddb63ffc5acdcca46d3ecbe55",
+      "reason": "Preserve GREYWARD authentication dialog geometry.",
+      "preimages": {
+        "Modals/PolkitAuthModal.qml": "57ae10ee0b4c1339056ce10f9450597b95ca796bbfae65ca1d2348040e194cd5",
+        "Modals/PolkitAuthSurfaceModal.qml": "a7eeba0607f0e166beb7f426aac87670fd39c66f9e76bac859ffb72cfca26aea"
+      }
+    },
+    {
+      "file": "greyward-native-lock-recovery.patch",
+      "sha256": "c388b1495c6b4a28e9a5c2569b7ba0acd3db8f70304f087674254fa0a01958ac",
+      "reason": "Restore the native lock surface when async shell startup misses the initial logind locked-state signal.",
+      "preimages": {
+        "Modules/Lock/Lock.qml": "82adc905f7581c8f8415fde32a23f4bacc7de2b65f789c6400f1b32176bef968"
+      }
+    }
+  ],
+  "shell": {
+    "sha256": "4e125c1e38bb01242994c733cc5561f03ce4e711a0d30a009d152f5c85c2dd1f",
+    "patchedFiles": 20,
+    "qmlFiles": 638,
+    "commonQmlFiles": 74,
+    "commonFiles": 111
+  },
+  "rollback": {
+    "legacyRoot": "/usr/local/share/greyward-dms/v1.5.3",
+    "promotion": "blocked-until-acceptance"
+  },
+  "firstPartyCompatibility": {
+    "dms": "v1.6.2",
+    "imports": [
+      "qs.Common",
+      "qs.Services",
+      "qs.Widgets",
+      "qs.Modules.Plugins"
+    ],
+    "plugins": [
+      "greywardSecure",
+      "greywardNetworkTraffic",
+      "greywardPublicIp",
+      "greywardSoftware"
+    ],
+    "delivery": "/etc/xdg/quickshell/dms-plugins",
+    "automaticDownloads": false
+  }
+}

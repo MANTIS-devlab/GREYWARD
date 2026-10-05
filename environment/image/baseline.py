@@ -24,7 +24,7 @@ SAFE_TERMINAL = {"font", "opacity", "theme-dark", "theme-light", "style-preferen
 # floor so a retired Kitty/Tabby package on .149 cannot block a valid image.
 OMITTED_RPM_NAMES = {
     "kitty", "kitty-kitten", "kitty-shell-integration", "kitty-terminfo",
-    "tabby",
+    "tabby", "dgop",
 }
 
 
@@ -49,7 +49,7 @@ def policy(repo):
     # Bind the capture to the actual configuration/assets, including dirty
     # working-tree changes. Commit IDs alone cannot identify this project state.
     sources = {}
-    for folder in ("environment/production", "environment/session", "environment/flatpak", "environment/patches", "branding"):
+    for folder in ("environment/production", "environment/session", "environment/flatpak", "environment/patches", "packaging/greyward-dms", "branding"):
         for path in sorted((repo / folder).rglob("*")):
             if path.is_file() and not any(p in ("__pycache__", ".work") for p in path.parts):
                 content = path.read_bytes()

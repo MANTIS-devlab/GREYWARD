@@ -2,11 +2,12 @@ use chrono::Utc;
 use dbus::blocking::Connection;
 use greyward_security_backends::{
     ActivityCategory, ActivityItem, ActivitySeverity, CoreCollection, FlatpakAvailability,
-    TrustZone, change_active_trust_zone, clear_activity, collect_core_collection,
-    collect_core_snapshot, collect_device_snapshot, collect_flatpak_facts, collect_network_facts,
-    collect_portal_facts, evidence_domain_key, evidence_domain_route, evidence_presentation,
-    external_service_manifest, load_activity, load_opensnitch_context_summary, read_actual_state,
-    record_activity, resolve_flatpak_access, set_accepted_deviation, write_safe_export,
+    TrustZone, change_active_trust_zone, choose_overall_posture, clear_activity,
+    collect_core_collection, collect_core_snapshot, collect_device_snapshot, collect_flatpak_facts,
+    collect_network_facts, collect_portal_facts, evidence_domain_key, evidence_domain_route,
+    evidence_presentation, external_service_manifest, load_activity,
+    load_opensnitch_context_summary, read_actual_state, record_activity, resolve_flatpak_access,
+    set_accepted_deviation, write_safe_export,
 };
 use greyward_security_domain::{ClamAvStatus, PostureState, Requiredness};
 use serde::Serialize;
@@ -160,91 +161,6 @@ pub struct ActivitySummary {
 /// a VM while the device still has enough evaluated protection to be honestly
 /// shown as protected. Required uncertainty and unknown domain state remain a
 /// global limitation.
-fn choose_overall_posture(
-    domain_states: &[PostureState],
-    review_needed: usize,
-    unavailable_checks: usize,
-    required_uncertain: bool,
-) -> (
-    &'static str,
-    &'static str,
-    &'static str,
-    &'static str,
-    BTreeMap<String, String>,
-) {
-    if domain_states.contains(&PostureState::ActionRequired) {
-        return (
-            "REVIEW NEEDED",
-            "action",
-            "overview.posture.action.message",
-            "overview.posture.action.care",
-            BTreeMap::new(),
-        );
-    }
-    if review_needed > 0 {
-        let mut copy_values = BTreeMap::new();
-        copy_values.insert("count".into(), review_needed.to_string());
-        return (
-            "REVIEW NEEDED",
-            "review",
-            "overview.posture.review.message",
-            "overview.posture.review.care",
-            copy_values,
-        );
-    }
-
-    let has_unknown_domain = domain_states.contains(&PostureState::Unknown);
-    let has_evaluated_domain = domain_states
-        .iter()
-        .any(|state| matches!(state, PostureState::Secure | PostureState::Protected));
-    if required_uncertain || has_unknown_domain || !has_evaluated_domain {
-        return (
-            "UNAVAILABLE",
-            "unavailable",
-            "overview.posture.unavailable.message",
-            "overview.posture.unavailable.care",
-            BTreeMap::new(),
-        );
-    }
-
-    let state = if domain_states.contains(&PostureState::Protected) {
-        "PROTECTED"
-    } else {
-        "SECURE"
-    };
-    if unavailable_checks > 0 {
-        let mut copy_values = BTreeMap::new();
-        copy_values.insert("count".into(), unavailable_checks.to_string());
-        return (
-            state,
-            if state == "PROTECTED" {
-                "protected"
-            } else {
-                "secure"
-            },
-            "overview.posture.limited.message",
-            "overview.posture.limited.care",
-            copy_values,
-        );
-    }
-    if state == "PROTECTED" {
-        (
-            state,
-            "protected",
-            "overview.posture.protected.message",
-            "overview.posture.protected.care",
-            BTreeMap::new(),
-        )
-    } else {
-        (
-            state,
-            "secure",
-            "overview.posture.secure.message",
-            "overview.posture.secure.care",
-            BTreeMap::new(),
-        )
-    }
-}
 #[derive(Clone, Serialize)]
 pub struct StatusRow {
     pub label: String,
@@ -854,12 +770,12 @@ fn run_json_helper(
     let mut child = command
         .spawn()
         .map_err(|_| "The GREYWARD recovery helper is unavailable.".to_string())?;
-    if let Some(value) = input
-        && let Some(mut stdin) = child.stdin.take()
-    {
-        stdin
-            .write_all(value.as_bytes())
-            .map_err(|_| "The recovery credential could not be passed safely.".to_string())?;
+    if let Some(value) = input {
+        if let Some(mut stdin) = child.stdin.take() {
+            stdin
+                .write_all(value.as_bytes())
+                .map_err(|_| "The recovery credential could not be passed safely.".to_string())?;
+        }
     }
     let output = child
         .wait_with_output()
@@ -869,16 +785,16 @@ fn run_json_helper(
     }
     let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
     if !output.status.success() {
-        if let Ok(value) = serde_json::from_str::<Value>(&stdout)
-            && let Some(error) = value.get("error").and_then(Value::as_str)
-        {
-            let problem = value.get("problem").and_then(Value::as_str).unwrap_or("");
-            let detail = if problem.is_empty() {
-                error.to_string()
-            } else {
-                format!("[{problem}] {error}")
-            };
-            return Err(detail.chars().take(240).collect());
+        if let Ok(value) = serde_json::from_str::<Value>(&stdout) {
+            if let Some(error) = value.get("error").and_then(Value::as_str) {
+                let problem = value.get("problem").and_then(Value::as_str).unwrap_or("");
+                let detail = if problem.is_empty() {
+                    error.to_string()
+                } else {
+                    format!("[{problem}] {error}")
+                };
+                return Err(detail.chars().take(240).collect());
+            }
         }
         let detail = String::from_utf8_lossy(&output.stderr).trim().to_string();
         return Err(if detail.is_empty() {

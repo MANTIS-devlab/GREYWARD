@@ -86,7 +86,24 @@ exact application/IP/port exception; it never globally allows an indicator.
 
 The managed Secure DNS profile adds a typed DNS-only decision layer to this
 same control plane. Direct application DNS on ports 53 and 853 is denied by
-default; `systemd-resolved` may reach only the GREYWARD provider addresses on+DoT, while applications use the local resolved stub. Network Activity can save+an explicit application-plus-DNS-port allow rule as a documented bypass. The+daemon runtime is configured with `InterceptUnknown=true` and+`QueueBypass=false`, so an unavailable control plane does not silently turn this+policy into allow-by-default.
+default; `systemd-resolved` may reach only the GREYWARD provider addresses onDoT, while applications use the local resolved stub. Network Activity can save
+an explicit application-plus-DNS-port allow rule as a documented bypass. The
+daemon runtime is configured with `InterceptUnknown=true` and
+`QueueBypass=false`, so an unavailable control plane does not silently turn this
+policy into allow-by-default.
+
+The portable DNS candidate also permits only `/usr/lib/systemd/systemd-resolved`
+to reach the exact servers of a live private-domain scope. The root-owned
+snapshot must match observed link DNS/domains, the link must not be a DNS default
+route, and the managed strict public `~.` scope must be active. A changed route,
+server, absent snapshot or absent public scope denies the exception. It never
+authorizes application DNS or a public-query fallback to DHCP. See the
+[Secure DNS contract](../security/SECURE_DNS_IMPLEMENTATION_PLAN.md).
+
+An explicit typed `NetworkDefault` selection also permits only resolved itself
+to reach the DNS addresses currently observed on active links. Automatic and
+Privacy do not admit that exception. Unrelated servers and direct application
+DNS remain denied; this never silently downgrades public DNS after a failed probe.
 
 ### VPN DNS compatibility
 

@@ -11,16 +11,9 @@ systemctl --user import-environment \
   WAYLAND_DISPLAY XDG_CURRENT_DESKTOP XDG_SESSION_DESKTOP XDG_DATA_DIRS \
   2>/dev/null || true
 systemctl --user start --no-block greyward-dms.service
-systemctl --user start --no-block greyward-session-idle.service
-# DMS owns the static GREYWARD wallpaper. Apply it after the session service
-# becomes IPC-ready so a fresh login cannot fall back to the DMS default.
-(
-  for _attempt in 1 2 3 4 5 6 7 8 9 10; do
-    if systemctl --user is-active --quiet greyward-dms.service; then
-      /usr/local/bin/greyward-dms ipc call wallpaper set /usr/share/backgrounds/greyward/greyward-wallpaper-black-art-4k.jpg >/tmp/greyward-wallpaper-set.log 2>&1 && break
-    fi
-    sleep 1
-  done
-) &
+systemctl --user start --no-block greyward-security-context-user.service
+
+# Fresh wallpaper state is seeded by the service's migration before QML loads.
+# Existing wallpaper choices stay in DMS session state across later logins.
 # GREYWARD-DEV virtual display: keep the Labwc output aligned with the host panel.
 wlr-randr --output Virtual-1 --custom-mode 2560x1440@60Hz >/tmp/greyward-display.log 2>&1 || true

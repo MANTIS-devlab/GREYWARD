@@ -10,7 +10,7 @@
  
      readonly property bool connectedFrameMode: CompositorService.usesConnectedFrameChromeForScreen(win.screen)
      readonly property string notifBarSide: {
-@@ -116,10 +119,10 @@
+@@ -117,10 +120,10 @@
  
      readonly property bool compactMode: SettingsData.notificationCompactMode
      readonly property real cardPadding: compactMode ? Theme.notificationCardPaddingCompact : Theme.notificationCardPadding
@@ -23,7 +23,7 @@
      readonly property real collapsedContentHeight: Math.max(popupIconSize, Theme.fontSizeSmall * 1.2 + Theme.fontSizeMedium * 1.2 + Theme.fontSizeSmall * 1.2 * (compactMode ? 1 : 2)) + contentBottomClearance
      readonly property real privacyCollapsedContentHeight: Math.max(popupIconSize, Theme.fontSizeSmall * 1.2 + Theme.fontSizeMedium * 1.2) + contentBottomClearance
      readonly property real basePopupHeight: cardPadding * 2 + collapsedContentHeight + actionButtonHeight + contentSpacing
-@@ -684,7 +687,7 @@
+@@ -693,7 +696,7 @@
              sourceWidth: Math.max(0, content.width - (content.cardInset * 2))
              sourceHeight: Math.max(0, content.height - (content.cardInset * 2))
              targetRadius: win.connectedFrameMode ? Theme.connectedSurfaceRadius : Theme.cornerRadius
@@ -32,7 +32,7 @@
              borderColor: win.notificationData && win.notificationData.urgency === NotificationUrgency.Critical ? Theme.withAlpha(Theme.primary, 0.3) : Theme.withAlpha(Theme.outline, 0.08)
              borderWidth: win.notificationData && win.notificationData.urgency === NotificationUrgency.Critical ? 2 : 0
          }
-@@ -707,12 +710,12 @@
+@@ -716,12 +719,12 @@
  
                  GradientStop {
                      position: 0
@@ -47,7 +47,7 @@
                  }
  
                  GradientStop {
-@@ -727,8 +730,8 @@
+@@ -736,8 +739,8 @@
              anchors.margins: content.cardInset
              radius: win.connectedFrameMode ? Theme.connectedSurfaceRadius : Theme.cornerRadius
              color: "transparent"
@@ -58,7 +58,7 @@
              z: 100
              scale: content.chromeScale
              transformOrigin: Item.Center
-@@ -957,7 +960,7 @@
+@@ -943,7 +946,7 @@
                      StyledText {
                          text: notificationData ? (notificationData.summary || "") : ""
                          color: Theme.surfaceText
@@ -67,7 +67,7 @@
                          font.weight: Font.Medium
                          width: parent.width
                          elide: Text.ElideRight
-@@ -972,8 +975,8 @@
+@@ -958,8 +961,8 @@
  
                          text: notificationData ? (notificationData.htmlBody || "") : ""
                          textFormat: Text.StyledText
@@ -78,7 +78,7 @@
                          width: parent.width
                          elide: descriptionExpanded ? Text.ElideNone : Text.ElideRight
                          horizontalAlignment: Text.AlignLeft
-@@ -1007,7 +1010,7 @@
+@@ -999,7 +1002,7 @@
  
                      StyledText {
                          text: I18n.tr("Message Content", "notification privacy mode placeholder")
@@ -87,7 +87,7 @@
                          font.pixelSize: Theme.fontSizeSmall
                          width: parent.width
                          visible: SettingsData.notificationPopupPrivacyMode && !descriptionExpanded && win.hasExpandableBody
-@@ -1052,7 +1055,7 @@
+@@ -1044,7 +1047,7 @@
              }
  
              Row {
@@ -96,7 +96,7 @@
                  opacity: visible ? 1 : 0
                  anchors.right: clearButton.visible ? clearButton.left : parent.right
                  anchors.rightMargin: clearButton.visible ? contentSpacing : Theme.spacingL
-@@ -1077,7 +1080,7 @@
+@@ -1069,7 +1072,7 @@
                          width: Math.max(actionText.implicitWidth + Theme.spacingM, Theme.notificationActionMinWidth)
                          height: actionButtonHeight
                          radius: Theme.notificationButtonCornerRadius
@@ -105,7 +105,7 @@
  
                          StyledText {
                              id: actionText
-@@ -1128,7 +1131,7 @@
+@@ -1120,7 +1123,7 @@
                  width: Math.max(clearTextLabel.implicitWidth + Theme.spacingM, Theme.notificationActionMinWidth)
                  height: actionButtonHeight
                  radius: Theme.notificationButtonCornerRadius
@@ -126,7 +126,7 @@
  
      property var notificationGroup
      property bool expanded: (NotificationService.expandedGroups[notificationGroup && notificationGroup.key] || false)
-@@ -34,11 +37,11 @@
+@@ -35,11 +38,11 @@
  
      readonly property bool compactMode: SettingsData.notificationCompactMode
      readonly property real cardPadding: compactMode ? Theme.notificationCardPaddingCompact : Theme.notificationCardPadding
@@ -140,7 +140,7 @@
      readonly property real collapsedContentHeight: Math.max(iconSize, Theme.fontSizeSmall * 1.2 + Theme.fontSizeMedium * 1.2 + Theme.fontSizeSmall * 1.2 * (compactMode ? 1 : 2))
      readonly property real baseCardHeight: cardPadding * 2 + collapsedContentHeight + actionButtonHeight + contentSpacing
      readonly property bool connectedFrameMode: FrameTransitionState.effectiveConnectedFrameModeActive
-@@ -147,13 +150,14 @@
+@@ -148,13 +151,14 @@
      }
  
      color: {
@@ -156,7 +156,7 @@
      }
      border.color: {
          if (isGroupSelected && keyboardNavigationActive) {
-@@ -163,9 +167,9 @@
+@@ -164,9 +168,9 @@
              return Theme.primaryPressed;
          }
          if (notificationGroup?.latestNotification?.urgency === NotificationUrgency.Critical) {
@@ -169,7 +169,7 @@
      }
      border.width: {
          if (isGroupSelected && keyboardNavigationActive) {
-@@ -412,7 +416,7 @@
+@@ -387,7 +391,7 @@
  
                      text: fullText
                      textFormat: Text.StyledText
@@ -178,7 +178,7 @@
                      font.pixelSize: Theme.fontSizeSmall
                      width: parent.width
                      elide: Text.ElideRight
-@@ -583,7 +587,7 @@
+@@ -558,7 +562,7 @@
                              return expandedBaseHeight;
                          }
                          radius: Theme.cornerRadius
@@ -187,7 +187,7 @@
                          border.color: isSelected ? Theme.withAlpha(Theme.primary, 0.4) : Theme.outlineMedium
                          border.width: 1
  
-@@ -726,7 +730,7 @@
+@@ -673,7 +677,7 @@
  
                                          text: modelData?.htmlBody || ""
                                          textFormat: Text.StyledText
@@ -198,17 +198,17 @@
                                          elide: messageExpanded ? Text.ElideNone : Text.ElideRight
 --- a/quickshell/dms/Services/NotificationService.qml
 +++ b/quickshell/dms/Services/NotificationService.qml
-@@ -714,7 +714,8 @@
+@@ -716,7 +716,8 @@
                  }
              }
  
--            const shouldShowPopup = !root.popupsDisabled && !SessionData.doNotDisturb && !policy.disablePopup;
+-            const shouldShowPopup = !root.popupsDisabled && !dndBlocked && !policy.disablePopup;
 +            const quietSecurityUpdate = notif.desktopEntry === "systems.mantis.greyward.securitycenter" && !!notif.hints?.["x-greyward-quiet"];
-+            const shouldShowPopup = !quietSecurityUpdate && !root.popupsDisabled && !SessionData.doNotDisturb && !policy.disablePopup;
++            const shouldShowPopup = !quietSecurityUpdate && !root.popupsDisabled && !dndBlocked && !policy.disablePopup;
              const isTransient = notif.transient;
              const shouldKeepInCenter = !isTransient && !policy.hideFromCenter;
  
-@@ -738,7 +739,7 @@
+@@ -741,7 +742,7 @@
                  root.allWrappers.push(wrapper);
                  if (shouldKeepInCenter) {
                      root.notifications.push(wrapper);
@@ -217,7 +217,7 @@
                          root.addToHistory(wrapper);
                      }
                  }
-@@ -1195,6 +1196,12 @@
+@@ -1317,6 +1318,12 @@
              }
  
              groups[groupKey].notifications.unshift(notif);
@@ -230,7 +230,7 @@
              groups[groupKey].latestNotification = groups[groupKey].notifications[0];
              groups[groupKey].count = groups[groupKey].notifications.length;
  
-@@ -1233,6 +1240,12 @@
+@@ -1355,6 +1362,12 @@
              }
  
              groups[groupKey].notifications.unshift(notif);
@@ -253,7 +253,7 @@
  
      required property var historyItem
      property bool isSelected: false
-@@ -47,6 +48,7 @@
+@@ -77,6 +78,7 @@
      }
  
      color: {
@@ -261,7 +261,7 @@
          if (isSelected && keyboardNavigationActive)
              return Theme.primaryPressed;
          return Theme.notificationFloatingSurfaceHigh;
-@@ -55,8 +57,8 @@
+@@ -85,8 +87,8 @@
          if (isSelected && keyboardNavigationActive)
              return Theme.withAlpha(Theme.primary, 0.5);
          if (historyItem.urgency === 2)
@@ -272,7 +272,7 @@
      }
      border.width: {
          if (isSelected && keyboardNavigationActive)
-@@ -82,11 +84,11 @@
+@@ -112,11 +114,11 @@
              orientation: Gradient.Horizontal
              GradientStop {
                  position: 0.0
@@ -286,7 +286,7 @@
              }
              GradientStop {
                  position: 0.021
-@@ -233,7 +235,7 @@
+@@ -235,7 +237,7 @@
  
                      text: historyItem.htmlBody || historyItem.body || ""
                      textFormat: Text.StyledText

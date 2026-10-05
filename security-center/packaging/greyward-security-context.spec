@@ -1,14 +1,13 @@
 Name:           greyward-security-context
 Version:        0.1.0
-Release:        53%{?dist}
+Release:        64%{?dist}
 Summary:        GREYWARD OpenSnitch control plane and Security Context session bus
 License:        GPL-3.0-only
 Source0:        %{name}-%{version}.tar.gz
 
 BuildArch:      noarch
 Requires:       opensnitch
-Requires:       GeoIP
-Requires:       GeoIP-GeoLite-data
+Recommends:     libmaxminddb-utils
 Requires:       python3-dbus
 Requires:       python3-gobject-base
 Requires:       python3-systemd
@@ -21,7 +20,7 @@ Requires:       pipewire-utils
 Requires:       wl-clipboard
 Requires:       greyward-security-center
 Requires:       NetworkManager
-Requires:       systemd
+Requires:       systemd >= 256
 Requires:       systemd-resolved
 Requires:       dnf5daemon-server
 Requires:       dnf5daemon-server-polkit
@@ -61,9 +60,6 @@ install -Dm0755 security-context/bin/greyward-recovery-point %{buildroot}%{_libe
 install -Dm0755 security-context/bin/greyward-backup %{buildroot}%{_libexecdir}/greyward-backup
 install -Dm0755 security-context/bin/greyward-secure-dns %{buildroot}%{_libexecdir}/greyward-secure-dns
 install -Dm0755 security-context/bin/greyward-feodo-update %{buildroot}%{_libexecdir}/greyward-feodo-update
-# The package source may come from a Windows checkout. Normalize executable
-# text payloads so Linux reads their shebangs without a trailing CR.
-find %{buildroot}%{_libexecdir} -maxdepth 1 -type f -exec sed -i 's/\r$//' {} +
 install -Dm0600 security-context/config/opensnitch-policy.json %{buildroot}%{_sysconfdir}/greyward/opensnitch-policy.json
 install -Dm0644 security-context/systemd/greyward-opensnitch-control-plane.service %{buildroot}%{_unitdir}/greyward-opensnitch-control-plane.service
 install -Dm0644 security-context/systemd/greyward-secure-dns.service %{buildroot}%{_unitdir}/greyward-secure-dns.service
@@ -89,8 +85,10 @@ install -Dm0644 security-context/dbus/systems.mantis.greyward.SecureDns1.service
 install -Dm0644 security-context/dbus/systems.mantis.greyward.SecureDns1.conf %{buildroot}%{_sysconfdir}/dbus-1/system.d/systems.mantis.greyward.SecureDns1.conf
 install -Dm0644 security-context/systemd/10-greyward-control-plane.conf %{buildroot}%{_unitdir}/opensnitch.service.d/10-greyward-control-plane.conf
 install -Dm0644 security-context/tmpfiles.d/greyward-opensnitch.conf %{buildroot}%{_tmpfilesdir}/greyward-opensnitch.conf
+install -Dm0644 security-context/tmpfiles.d/greyward-secure-dns.conf %{buildroot}%{_tmpfilesdir}/greyward-secure-dns.conf
 
 %post
+%tmpfiles_create %{_tmpfilesdir}/greyward-secure-dns.conf
 %systemd_post greyward-opensnitch-control-plane.service
 %systemd_post greyward-opensnitch-policy.service
 %systemd_post greyward-feodo-update.timer
@@ -164,11 +162,41 @@ install -Dm0644 security-context/tmpfiles.d/greyward-opensnitch.conf %{buildroot
 %dir %{_unitdir}/opensnitch.service.d
 %{_unitdir}/opensnitch.service.d/10-greyward-control-plane.conf
 %{_tmpfilesdir}/greyward-opensnitch.conf
+%{_tmpfilesdir}/greyward-secure-dns.conf
 
 
 %changelog
-* Sun Sep 20 2026 MANTIS SYSTEMS - 0.1.0-53
-- Normalize executable script line endings for Windows-origin source trees.
+* Mon Oct 05 2026 MANTIS SYSTEMS - 0.1.0-64
+- Explicitly clear resolved's retained public routing domain during scope removal.
+
+* Mon Oct 05 2026 MANTIS SYSTEMS - 0.1.0-63
+- Honor explicit Network Default only for resolved and its observed active-link DNS servers; keep managed modes fail-closed.
+
+* Mon Oct 05 2026 MANTIS SYSTEMS - 0.1.0-62
+- Preserve local DHCP namespaces while validating encrypted public DNS in a reversible resolved runtime scope.
+- Require measured authenticated/confidential network probes and scope private DNS exceptions to resolved.
+
+* Sun Oct 04 2026 MANTIS SYSTEMS - 0.1.0-61
+- Report protected private DNS ownership as SplitDnsAmbiguous; retain hardware-neutral routing.
+- The Hyper-V-only prototype was rejected and never deployed.
+
+* Sun Oct 04 2026 MANTIS SYSTEMS - 0.1.0-60
+- Reconcile Hyper-V synthetic search suffixes transactionally while preserving private DNS ownership.
+
+* Sun Oct 04 2026 MANTIS SYSTEMS - 0.1.0-59
+- Preserve first-download preparation and unknown definition age without suppressing unavailable protection.
+
+* Sun Oct 04 2026 MANTIS SYSTEMS - 0.1.0-58
+- Use the fixed headless posture projection, coalesce idle invalidations and preserve typed freshness/failure states.
+
+* Sun Oct 04 2026 MANTIS SYSTEMS - 0.1.0-55
+- Use the fixed headless posture helper and coalesce invalidation callbacks.
+
+* Sun Oct 04 2026 MANTIS SYSTEMS - 0.1.0-54
+- Package selected desktop update constraints and optional age-aware country metadata.
+
+* Sun Oct 04 2026 MANTIS SYSTEMS - 0.1.0-53
+- Share selected desktop compatibility constraints with update preparation.
 
 * Sat Sep 19 2026 MANTIS SYSTEMS - 0.1.0-52
 - Apply the GPL grant to the packaged GREYWARD status artwork.

@@ -3,6 +3,10 @@
 This repository contains both the GREYWARD product and the machinery used to
 build and probe it. The two must not be confused.
 
+The active [DMS migration tracker](DMS_1_6_MIGRATION_PLAN.md) distinguishes
+candidate source/package integration from development runtime, clean-image and
+hardware acceptance. The recoverable 1.5.3 development baseline is historical.
+
 ## Future production system contract
 
 The future installed GREYWARD system is a Fedora-based desktop image with these
@@ -10,15 +14,15 @@ runtime surfaces. This is an active-development contract, not a release claim:
 
 - Labwc as the canonical Wayland compositor, with Hyprland retained only as a
   supported fallback where explicitly selected.
-- DankMaterialShell (DMS) v1.5.3 from the independently checked archive,
+- DankMaterialShell (DMS) 1.6.2 candidate from the checked local runtime RPM,
   including DMS Settings as the only general desktop/system settings surface.
 - Flatpak with a system Flathub remote, GTK/WLR desktop portals, and the
   pinned Bazaar-based `Software` application. Software is pinned immediately
   to the right of the DMS GREYWARD Security plugin; Update Center remains the
   canonical application-update surface.
-- DMS companion capabilities `dgop` (system/process monitoring) and
-  `dsearch` via the `danksearch` package (launcher file search), with image
-  provisioning checks for both binaries.
+- Internal DMS `dgop` capability (system/process monitoring) and
+  `dsearch` via the `danksearch` package (local launcher file search).
+  Monitoring acceptance checks API/capability/data, not an external dgop binary.
 - greetd plus the signed DMS Greeter package. The greeter runs as the
   unprivileged `greeter` account; Fedora PAM remains authoritative for
   authentication. tty autologin is not part of the production image.

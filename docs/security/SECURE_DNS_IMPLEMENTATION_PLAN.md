@@ -1,6 +1,8 @@
 # GREYWARD Secure DNS implementation
 
-Status: implemented in the GREYWARD Security Context. Automatic per-link
+Status: implemented in the GREYWARD Security Context. The generic private/public
+scope correction is a candidate: source, package and installed-service checks
+pass on the development host; replacement-image acceptance remains open. Automatic per-link
 mutation is enabled by default; an operator can create
 `/etc/greyward/secure-dns-read-only` for a measured emergency rollback or
 diagnostic read-only deployment.
@@ -11,13 +13,13 @@ NetworkManager owns links, connection state, VPN state, DHCP DNS, DNS
 priorities and routing domains. `systemd-resolved` is the only local resolver;
 `/etc/resolv.conf` remains its stub symlink. The privileged
 `greyward-secure-dns` D-Bus service is a narrow reconciler and the existing
-Security Context session service is the only UI-facing authority. No global
-`resolved.conf` Quad9 setting, NetworkManager profile rewrite, second resolver
-daemon or frontend command execution is used.
+Security Context session service is the only UI-facing authority. No persistent
+resolver configuration, NetworkManager profile rewrite, second resolver daemon
+or frontend command execution is used.
 
 The reconciler mutates only one unambiguous, non-VPN link. It snapshots the
-resolved per-link DNS state,
-applies the selected provider through `resolve1`, probes resolution, and
+resolved per-link DNS state, applies the selected provider through `resolve1`
+on simple links, probes resolution, and
 restores the snapshot when leaving the secure policy or when the managed chain
 cannot reach a provider. The service is root-owned, D-Bus activated, constrained by
 systemd filesystem protections, and limited to the typed methods below.
@@ -63,11 +65,74 @@ all three fail, the state is `Unavailable` and direct DNS is fail-closed;
 GREYWARD does not silently fall back to DHCP DNS. NetworkDefault remains an
 explicit operator opt-out. Ordinary non-DNS networking remains intact.
 NetworkDefault reports the measured `DoT`, `VPNProtected` or `Plain` state.
+Its DNS-port exception permits only resolved itself to contact the currently
+observed active-link servers. Applications and unrelated servers remain denied;
+Automatic/Privacy never enable that exception after provider failure.
 
 The reconciler never forces the public chain over a VPN, private route or split-DNS owner,
 and never creates parallel public DNS paths. The current implementation uses a
 bounded periodic reconciliation (30 seconds) and `RetrySecureDns` for an
 immediate probe; provider and resolver changes are restored transactionally.
+
+Search suffixes also own private lookup routes. Existing search/routing domains,
+VPNs and multiple links remain protected; ambiguous private ownership reports
+`SplitDnsAmbiguous`, without claiming encrypted protection. The test VM remains
+on Default Switch: changing switches was rejected as a product workaround.
+No hypervisor-specific runtime exemption ships.
+Search domains participate in routing as well as name expansion; see the
+[systemd resolver contract](https://github.com/systemd/systemd/blob/main/man/systemd-resolved.service.xml).
+
+For one non-VPN link with explicit non-root local domains, the candidate preserves
+its DHCP DNS and search/routing domains and removes its DNS default-route role.
+A root-owned, reversible `/run/systemd/resolved.conf.d/60-greyward-secure-dns.conf`
+supplies a strict public `~.` scope inside the same resolver. More-specific local
+domains continue to select the network DNS; public queries select only the managed
+DoT/DNSSEC provider. Administrator global scopes, root-domain ownership, multiple
+links and VPNs are not overwritten. The fixed runtime file is removed on mode
+changes, disconnect, VPN arrival and service stop; matching link settings restore
+from the private snapshot. Persistent `/etc` configuration is untouched.
+
+This replaces the old prohibition on every global scope: the resolve1 API cannot
+express two DNS server sets on one link. It does not change private/VPN precedence,
+provider order or fail-closed public policy. A fixed systemd D-Bus SIGHUP operation
+reloads the runtime scope on systemd >= 256, without restarting resolved or adding
+network capabilities. See [resolved configuration](https://github.com/systemd/systemd/blob/main/man/resolved.conf.xml)
+and [reload behavior](https://github.com/systemd/systemd/blob/main/man/systemd-resolved.service.xml).
+Public success requires uncached network answers carrying authenticated and
+confidential flags. OpenSnitch permits only resolved itself to reach the exact
+private-scope servers, after checking live routing and public-scope ownership;
+direct application DNS remains denied. Private transport is not reported as DoT.
+
+Source fixtures (239 Context tests) and real isolated Fedora resolved checks for
+`home.arpa` and `mshome.net` pass public DoT/DNSSEC, local resolution, absence of
+public queries at the local server and restoration. The namespace has its own
+bus and resolver, leaving the host's resolver and interfaces untouched. These are
+candidate checks, not acceptance of the user's installed ISO.
+
+Center 57/Context 62 package receipts match their payloads. All 239 tests also
+pass with 31 imports pinned to extracted and installed RPM modules. On .149,
+the actual constrained system unit passed a bounded `mshome.net` canary: public
+DoT/DNSSEC, local resolution, scoped OpenSnitch admission, no public query at the
+private server, and restoration. Its runtime public file disappeared after stop
+and the original link returned. No recent SELinux AVC was found. The desktop
+service PID stayed unchanged. This development-only canary briefly masks D-Bus
+activation while preparing/restoring metadata, leaves persistent DNS policy and
+network profiles untouched, and is never run on the user's installation VM.
+
+The repeated 58/63 canary caught an incomplete global restoration: resolved's
+reload retains an omitted `Domains=` value. The 57/62 restoration evidence above
+covered link state and file removal, not that retained root route. The 59/64
+candidate explicitly clears and observes global DNS/domains before removing the
+runtime override, with a recognized removal marker for retry after interruption.
+All 242 source tests and the isolated real resolver check pass, including global
+route removal and scope reentry. The final 59/64 packages also pass all 242 tests
+with 31 extracted/installed imports pinned to RPM bytes, clean installed integrity,
+and two actual constrained-unit cycles including wheel-authorized NetworkDefault,
+return to Automatic, global route removal and original-link restoration. No recent
+AVC was found using the actual audit logs; the desktop PID stayed unchanged.
+Evidence: `logs/portable-dns-restoration-installed-service-canary-{1,2}.log` and
+`logs/portable-dns-restoration-installed-context-tests.log` in the private build
+workspace. Replacement-image, other-network and hardware acceptance remain open.
 
 ## D-Bus contracts
 

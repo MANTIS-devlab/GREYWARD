@@ -25,6 +25,37 @@ rpm_common_args=(
   --define "debug_package %{nil}"
   --define "greyward_cargo_target $cargo_target"
 )
+# Source archives have normalized timestamps. Cargo's timestamp fast path must
+# not reuse an older workspace binary when the source content changed. Clean
+# only changed first-party crates; keep all external compiler/dependency caches.
+python3 - "$source_root" "$cargo_target" "$build_root" <<'PY'
+import hashlib,json,pathlib,subprocess,sys
+root,target,build=map(pathlib.Path,sys.argv[1:])
+import os
+if target.is_symlink() or target.stat().st_uid != os.getuid() or target.resolve() in {pathlib.Path('/'),pathlib.Path.home(),root.resolve()}:
+ raise SystemExit('Unsafe Cargo cache directory')
+# Existing factory caches can predate Cargo's CACHEDIR.TAG clean guard.
+# This dedicated, user-owned target is explicitly a disposable compiler cache.
+tag=target/'CACHEDIR.TAG'
+if not tag.exists():
+ tag.write_text('Signature: 8a477f597d28d172789f06886806bc55\n# GREYWARD dedicated Cargo build cache\n')
+stamp=target/'.greyward-component-inputs.json'
+previous=json.loads(stamp.read_text()) if stamp.exists() else {}
+packages={'greyward-security-domain':[root/'crates/greyward-security-domain'],
+          'greyward-security-backends':[root/'crates/greyward-security-backends'],
+          'greyward-security-center':[root/'tauri/src-tauri',root/'tauri/frontend']}
+current={}
+for name,paths in packages.items():
+ files={root/'Cargo.toml',root/'Cargo.lock'}
+ for path in paths:
+  files.update(p for p in path.rglob('*') if p.is_file() and not any(x in {'target','node_modules','__pycache__'} for x in p.parts))
+ content=''.join(p.relative_to(root).as_posix()+'\0'+hashlib.sha256(p.read_bytes()).hexdigest()+'\n' for p in sorted(files))
+ current[name]=hashlib.sha256(content.encode()).hexdigest()
+ if previous.get(name)!=current[name]:
+  for profile_args in ([],['--release']):
+   subprocess.run(['cargo','clean','--manifest-path',str(root/'Cargo.toml'),'--target-dir',str(target),'-p',name,*profile_args],check=True)
+(build/'cargo-inputs.json').write_text(json.dumps(current))
+PY
 if [[ "${GREYWARD_SKIP_RUST_TESTS:-0}" == "1" ]]; then
   rpm_common_args+=(--define 'greyward_skip_rust_tests 1')
 fi
@@ -32,7 +63,7 @@ fi
 make_source_tar() {
   local name="$1"
   tar --sort=name --mtime='@0' --owner=0 --group=0 --numeric-owner \
-    --exclude='target' --exclude='node_modules' --exclude='.git' \
+    --exclude='target' --exclude='node_modules' --exclude='.git' --exclude='__pycache__' --exclude='*.pyc' \
     --transform="s,^$(basename "$source_root"),${name}-0.1.0," \
     -czf "$build_root/SOURCES/${name}-0.1.0.tar.gz" \
     -C "$(dirname "$source_root")" "$(basename "$source_root")"
@@ -45,8 +76,9 @@ source_tree_sha256() {
   (
     cd "$source_root"
     LC_ALL=C find . -type f \
-      ! -path './target/*' \
-      ! -path './node_modules/*' \
+      ! -path '*/target/*' \
+      ! -path '*/node_modules/*' \
+      ! -path '*/__pycache__/*' ! -name '*.pyc' \
       ! -path './.git/*' \
       -print0 | LC_ALL=C sort -z | while IFS= read -r -d '' file; do
         sha256sum "$file"
@@ -64,6 +96,7 @@ install -m 0644 "$source_root/packaging/greyward-security-center.spec" "$build_r
 center_started=$SECONDS
 rpmbuild -ba "${rpm_common_args[@]}" "$build_root/SPECS/greyward-security-center.spec"
 printf 'GREYWARD_TIMING stage=center-rpm-build seconds=%s\n' "$((SECONDS - center_started))"
+install -m0600 "$build_root/cargo-inputs.json" "$cargo_target/.greyward-component-inputs.json"
 
 make_source_tar greyward-security-context
 install -m 0644 "$source_root/packaging/greyward-security-context.spec" "$build_root/SPECS/"
