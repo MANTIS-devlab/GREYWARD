@@ -33,8 +33,8 @@ feed, while OpenSnitch remains the only application-network enforcement engine.
 - USBGuard: upstream USB enforcement and rule owner. GREYWARD uses its supported system D-Bus/Polkit interface through the Security Context boundary; it neither writes raw USB authorization nor creates broad trust rules.
 - ClamAV, NetworkManager, and systemd: upstream capability/policy owners.
 - PipeWire/WirePlumber: upstream media graph owners. GREYWARD reads only linked stream metadata through `pw-dump`; it records sensor type, state, and reliable application label only. It captures no media and offers no revoke action without proven upstream semantics.
-- NetworkManager and systemd-resolved: connection, VPN, routing-domain and resolver owners. The GREYWARD Secure DNS reconciler uses only their typed D-Bus APIs, never a global resolver file or a second resolver daemon.
-- GREYWARD Secure DNS: the narrow root-owned reconciler owns only its explicit per-link DoT/DNSSEC overrides and measured state. VPN/private split-DNS ownership remains authoritative upstream.
+- NetworkManager and systemd-resolved: connection, VPN, routing-domain and resolver owners. The GREYWARD Secure DNS reconciler uses typed D-Bus APIs and, for a single site-private link, one reversible runtime public-scope drop-in. It never edits persistent resolver configuration or starts another resolver daemon.
+- GREYWARD Secure DNS: the narrow root-owned reconciler owns its explicit per-link or runtime public DoT/DNSSEC scope and measured state. VPN/private split-DNS ownership remains authoritative upstream; the public/private candidate contract is recorded in the Secure DNS plan.
 - GREYWARD Feodo integration: the fixed-feed updater owns retrieval, validation, normalized snapshots, threat metadata, and the Security Center projection; it does not own nftables, domain matching, or OpenSnitch daemon changes.
 
 GREYWARD does not ship or depend on the OpenSnitch GUI. A narrow privileged system control-plane service serves the daemon; the unprivileged Security Context user-bus service consumes only normalized/redacted state.

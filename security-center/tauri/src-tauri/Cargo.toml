@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "GREYWARD Security Center Tauri application"
 authors = ["MANTIS SYSTEMS"]
 edition = "2024"
+rust-version.workspace = true
 license.workspace = true
 
 [lib]

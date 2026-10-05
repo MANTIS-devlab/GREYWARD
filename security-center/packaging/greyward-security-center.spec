@@ -1,6 +1,6 @@
 Name:           greyward-security-center
 Version:        0.1.0
-Release:        48%{?dist}
+Release:        59%{?dist}
 Summary:        GREYWARD local security posture and control application
 License:        GPL-3.0-only AND Apache-2.0 AND OFL-1.1 AND CC0-1.0
 Source0:        %{name}-%{version}.tar.gz
@@ -52,11 +52,10 @@ install -Dm0755 "%{greyward_cargo_target}/release/greyward-security-center" \
   %{buildroot}%{_bindir}/greyward-security-center
 install -Dm0755 "%{greyward_cargo_target}/release/greyward-security-profile" \
   %{buildroot}%{_libexecdir}/greyward-security-profile
+install -Dm0755 "%{greyward_cargo_target}/release/greyward-security-posture" \
+  %{buildroot}%{_libexecdir}/greyward-security-posture
 install -Dm0755 data/greyward-security-center-launch \
   %{buildroot}%{_bindir}/greyward-security-center-launch
-# The package source may come from a Windows checkout. Normalize this shell
-# launcher so Linux reads its shebang without a trailing CR.
-sed -i 's/\r$//' %{buildroot}%{_bindir}/greyward-security-center-launch
 install -Dm0755 data/greyward-security-center-route \
   %{buildroot}%{_bindir}/greyward-security-center-route
 install -Dm0755 file-context/greyward-file-context \
@@ -87,6 +86,7 @@ install -Dm0755 greyward-safe-open.so \
 %doc THIRD_PARTY_NOTICES.md
 %{_bindir}/greyward-security-center
 %{_libexecdir}/greyward-security-profile
+%{_libexecdir}/greyward-security-posture
 %{_bindir}/greyward-security-center-launch
 %{_bindir}/greyward-security-center-route
 %{_bindir}/greyward-file-context
@@ -102,8 +102,35 @@ install -Dm0755 greyward-safe-open.so \
 %postun
 /usr/bin/fc-cache -f >/dev/null 2>&1 || :
 %changelog
-* Sun Sep 20 2026 MANTIS SYSTEMS - 0.1.0-48
-- Normalize the Security Center launcher line endings for Linux installs.
+* Mon Oct 05 2026 MANTIS SYSTEMS - 0.1.0-59
+- Pair the desktop with the tested repeatable Secure DNS scope restoration.
+
+* Mon Oct 05 2026 MANTIS SYSTEMS - 0.1.0-58
+- Pair the Security Center with the verified explicit Network Default admission correction.
+
+* Mon Oct 05 2026 MANTIS SYSTEMS - 0.1.0-57
+- Pair the Security Center with the portable public/private DNS reconciliation package.
+
+* Sun Oct 04 2026 MANTIS SYSTEMS - 0.1.0-56
+- Rebuild the paired input set for truthful private-DNS diagnostics.
+
+* Sun Oct 04 2026 MANTIS SYSTEMS - 0.1.0-55
+- Rebuild the paired input set for the transactional Hyper-V Secure DNS correction.
+
+* Sun Oct 04 2026 MANTIS SYSTEMS - 0.1.0-54
+- Rebuild the paired Security Center/Context input set for truthful first-download presentation.
+
+* Sun Oct 04 2026 MANTIS SYSTEMS - 0.1.0-53
+- Package the shared headless posture helper and optional age-aware country hints; keep unique validated build identities.
+
+* Sun Oct 04 2026 MANTIS SYSTEMS - 0.1.0-50
+- Share the exact posture projection with a backend-only read-only helper.
+
+* Sun Oct 04 2026 MANTIS SYSTEMS - 0.1.0-49
+- Expose optional local country-data age and source; fix strict validation warning.
+
+* Sun Oct 04 2026 MANTIS SYSTEMS - 0.1.0-48
+- Package current pre-release application code for package-only validation.
 
 * Sat Sep 19 2026 MANTIS SYSTEMS - 0.1.0-47
 - Record exact font receipts and apply the GPL grant to GREYWARD artwork.

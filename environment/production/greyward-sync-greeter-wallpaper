@@ -1,30 +1,47 @@
-#!/usr/bin/env bash
-set -euo pipefail
+#!/usr/bin/python3
+"""Refresh the fixed GREYWARD login background before each greetd start."""
+import json
+import os
+from pathlib import Path
+import tempfile
 
-# Keep the login background identical to the canonical desktop wallpaper.
-# This helper runs before every greetd start so the cache remains correct after
-# a greeter restart, cache cleanup, or a repaired production install.
-source=/usr/share/backgrounds/greyward/greyward-wallpaper-black-art-4k.jpg
-target=/var/cache/dms-greeter/greeter_wallpaper_override.jpg
-session=/var/cache/dms-greeter/session.json
+SOURCE = Path('/usr/share/backgrounds/greyward/greyward-wallpaper-black-art-4k.jpg')
+CACHE = Path('/var/cache/dms-greeter')
 
-test -s "$source"
-install -d -o greeter -g greeter -m 2770 "$(dirname "$target")"
-temporary=$(mktemp "${target}.XXXXXX")
-session_temporary=$(mktemp "${session}.XXXXXX")
-trap 'rm -f -- "$temporary" "$session_temporary"' EXIT
-install -o greeter -g greeter -m 0644 "$source" "$temporary"
-cmp -s "$source" "$temporary"
-mv -f -- "$temporary" "$target"
-chown greeter:greeter "$target"
-chmod 0644 "$target"
-cat > "$session_temporary" <<'EOF'
-{
-  "wallpaperPath": "/usr/share/backgrounds/greyward/greyward-wallpaper-black-art-4k.jpg",
-  "wallpaperFillMode": "PreserveAspectCrop"
-}
-EOF
-chown greeter:greeter "$session_temporary"
-chmod 0644 "$session_temporary"
-mv -f -- "$session_temporary" "$session"
-trap - EXIT
+
+def sync(source, cache, uid, gid):
+    image = source.read_bytes()
+    if not image:
+        raise ValueError('GREYWARD wallpaper is empty')
+    cache.mkdir(parents=True, exist_ok=True)
+    os.chown(cache, uid, gid)
+    cache.chmod(0o2770)
+    session = cache / 'session.json'
+    if session.is_symlink():
+        raise ValueError('Greeter session must be a regular cache file')
+    state = json.loads(session.read_text()) if session.exists() else {}
+    if not isinstance(state, dict):
+        raise ValueError('Malformed greeter session; cache preserved')
+    target = cache / 'greeter_wallpaper_override.jpg'
+    # Packaged Greeter 1.6.2 consumes SessionData, rather than the shell's newer
+    # greeterWallpaperPath setting and override-image shortcut.
+    state.update(wallpaperPath=str(target), perMonitorWallpaper=False, monitorWallpapers={})
+    for destination, content in (
+        (target, image),
+        (session, (json.dumps(state, indent=2) + '\n').encode()),
+    ):
+        descriptor, temporary = tempfile.mkstemp(prefix='.greyward-wallpaper-', dir=cache)
+        try:
+            with os.fdopen(descriptor, 'wb') as stream:
+                stream.write(content)
+                os.fchmod(stream.fileno(), 0o644)
+                os.fchown(stream.fileno(), uid, gid)
+            os.replace(temporary, destination)
+        finally:
+            Path(temporary).unlink(missing_ok=True)
+
+
+if __name__ == '__main__':
+    import pwd
+    account = pwd.getpwnam('greeter')
+    sync(SOURCE, CACHE, account.pw_uid, account.pw_gid)

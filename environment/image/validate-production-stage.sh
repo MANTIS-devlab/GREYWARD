@@ -26,7 +26,7 @@ require_file() {
 # These paths are consumed through variables or by first-boot code and are not
 # all visible as literal "$stage/..." checks in provision.sh.
 for required in \
-  packages.txt repositories.txt external-rpms.txt install-dms.sh \
+  packages.txt repositories.txt external-rpms.txt install-dms.sh dms-release.json \
   install-offline-flatpaks.sh provision.sh provision-firstboot.sh \
   provision-firstboot.service firstboot-status.sh firstboot-status.service \
   production-acceptance.sh payload.sha256 manifest.json artifact-policy.json \
@@ -44,7 +44,7 @@ for relative in "${declared[@]}"; do
   [[ -n "$relative" ]] && require_file "$relative"
 done
 
-for package in greyward-security-center greyward-security-context greyward-branding; do
+for package in greyward-security-center greyward-security-context greyward-branding greyward-dms greyward-session; do
   shopt -s nullglob
   matches=("$stage/rpms/$package-"*.rpm)
   shopt -u nullglob

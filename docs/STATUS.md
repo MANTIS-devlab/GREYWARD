@@ -5,6 +5,96 @@ replacement for the domain specifications listed in [INDEX.md](INDEX.md).
 
 ## Implemented or active
 
+- The user rejected the October test installer. The [compatibility investigation](architecture/ISO_INSTALLER_COMPATIBILITY.md)
+  identified an invalid auxiliary boot DVD introduced by the agent: stock Fedora
+  branding, preseeded account/LUKS and disabled Plymouth. September and October
+  product artifacts retain the same interactive Kickstart/profile and identical
+  customization bytes. A composed-media guard is implemented; the product-only
+  replacement `greyward-installer-20261004-interactive-6-6-53-58.iso` passed
+  factory checks and was transferred with verified SHA-256. Its isolated product-only
+  console shows GREYWARD branding, User Creation and an empty encryption passphrase
+  prompt. The user subsequently completed installation and the isolated console
+  reached the GREYWARD desktop. Greeter/desktop backgrounds regressed; fixes are
+  implemented in source, with replacement-image acceptance still open. The VM's
+  network was reconnected at the user's request and its public-IP lookup works.
+  ClamAV's initialization projection is corrected in the Context 59 candidate;
+  it shows preparation without claiming scanning readiness or suppressing actual
+  protection failures. The 227 Context tests, Rust fmt/tests/Clippy and 78 frontend
+  contracts pass. Session 7 packages the fresh wallpaper default; the greeter
+  helper now selects the image through its actual standalone session state.
+  Center 54/Context 59 build and extracted-package validation pass (227 tests;
+  all 30 loaded project modules pinned to RPM bytes). Security/session cache
+  reuse passes. Deployment and replacement-image acceptance remain open. The installed
+  VM's supplied Secure DNS state identifies the private search-domain guard on
+  Default Switch. The rejected switch workaround was reversed; the test VM remains
+  there. A Hyper-V-specific prototype never shipped. Four retained ISO Context
+  RPMs have a byte-identical reconciler and reproduce the same domain failure;
+  no working DNS setting was lost by staging. A generic runtime split-scope
+  candidate passes 239 Context tests and isolated real resolved checks for public
+  encryption, local resolution and restoration on two namespaces. The installed
+  user's DNS remains unaccepted. Earlier 54/59 and diagnostics-only 56/61 inputs
+  are historical; the new paired candidates are Center 57/Context 62. They built
+  and pass 239 extracted/installed-package tests with 31 imports pinned to RPM
+  bytes. The actual .149 root service passes a bounded private-domain canary and
+  restoration, without restarting DMS or changing profiles; no recent AVC was
+  found. The paired Security packages are installed only on .149. A fresh ISO
+  from DMS 6/session 7/Center 57/Context 62/branding 15 passed factory checks and
+  is retained as an intermediate candidate, not an installed-image result.
+  Repetition on 58/63 caught resolved retaining the removed public root domain;
+  prior restoration checks did not cover that global route. Center 59/Context 64
+  explicitly clear and observe it before removing the override. All 242 source
+  tests and real isolated resolver restoration pass. The final packages are installed
+  on .149 with clean integrity, 242 tests pinned to installed RPM modules, two
+  complete mode/restoration cycles, unchanged DMS PID and no recent audit-log AVC.
+  The fresh `greyward-installer-20261005-portable-dns-6-7-59-64.iso` passed factory
+  checks (SHA-256 `736b87cefbe9ef3ed0c4b766538f9ab1d606400643d9aad673451f0f998f7a94`)
+  from DMS 6/session 7/Center 59/Context 64/branding 15. The user's installation
+  VM remains untouched and fresh-image acceptance is open.
+
+- The user selected the **native DMS lock screen** as canonical on 4 October,
+  superseding the migration's earlier swaylock/swayidle choice. Session RPM
+  `0.1.0-6` and DMS runtime `v1.6.2-6` are installed on .149: native lock routing,
+  600-second idle locking, 900-second blanking, Fedora system-auth delegation and
+  DMS's logind sleep inhibitor are active. The obsolete external-lock QML patch
+  and idle coordinator are retired. Package integrity, backend readiness and
+  source gates passed. An actual native password unlock was observed; the -6
+  runtime restored a secure native surface automatically after a locked-session
+  shell restart. Repeated authentication and suspend/resume remain acceptance
+  gates. SSH remained available and .149 was not rebooted.
+  See the [current migration contract](architecture/DMS_1_6_MIGRATION_PLAN.md).
+
+- The 4 October [architecture audit](architecture/FINAL_ARCHITECTURE_AUDIT.md)
+  and [build/ISO audit](architecture/BUILD_ISO_AUDIT.md) are delivered; their
+  [implementation backlog](plans/PRE_RELEASE_IMPROVEMENTS.md) is in progress.
+  Read-only .149 checks reproduced DMS rejection of a changed Quickshell RPM
+  release while cached repositories offer newer Quickshell/Greeter inputs than
+  the candidate's exact tuple. The solver now enforces the exact manifest tuple alongside baseline floors;
+  actual closure and fresh-image validation remain in progress.
+  The audit also records current-source versus installed Security Context drift,
+  substantial short-sample collector CPU and repeated dependency acquisition.
+  Those are assessment-time findings; the backlog now records partial package
+  implementation. No fresh-image gate or production promotion has passed.
+
+- DMS 1.6.2 migration source/package integration is implemented as an unpromoted
+  candidate: immutable source/vendor pins, offline unchanged distribution backend,
+  generated explicit shell, eleven patches across twenty upstream files, system
+  plugins, restrictive state backups, explicit selected routing and production lock
+  defaults. Offline Fedora package build/backend tests and source migration fixtures
+  passed during development. The .149 candidate also passed installed integrity,
+  API 34/internal sampler and first-party plugins. Earlier simulated external-lock,
+  guest acceptance and old-runtime/state rollback checks are historical evidence
+  for the superseded lock configuration. Native-lock restart recovery is now
+  separately tested; fresh-image gates remain open. The
+  [dated evidence](history/migrations/2026-10-04-dms-1.6.2-candidate.md) records
+  scope and the recovered locker-failure black-screen incident. The
+  [active tracker](architecture/DMS_1_6_MIGRATION_PLAN.md) records remaining
+  authentication/suspend, visual, performance, fresh-image and hardware gates.
+  Matched post-cycle cgroup measurements observed lower CPU and about 32% lower
+  median combined RSS; protocol startup/restart remain near the acceptance
+  threshold and do not establish complete performance acceptance.
+  The .149 1.5.3 baseline and private backups remain recovery inputs. No 1.6 release
+  acceptance is implied by the earlier ISO records below.
+
 - Security Center shell redesign is implemented in source and running in the
   `.149` development overlay: fixed identity, independent live activity,
   progressive disclosure and one shared notification projection. Real microphone

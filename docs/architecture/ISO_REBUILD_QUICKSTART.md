@@ -1,7 +1,8 @@
 # GREYWARD ISO rebuild quickstart
 
 This is the short operational card for producing the next internal alpha ISO.
-Read it together with [ISO_CREATION.md](ISO_CREATION.md). The goal is one
+Read it together with [ISO_CREATION.md](ISO_CREATION.md) and the active
+[installer compatibility investigation](ISO_INSTALLER_COMPATIBILITY.md). The goal is one
 controlled candidate per source change, with the previous ISO kept intact for
 rollback. Do not start by booting `.120`; prove the factory inputs first.
 
@@ -17,6 +18,8 @@ The bundle must contain exactly these reviewed inputs:
   inputs/Fedora-Everything-netinst-x86_64-44-1.7.iso
   inputs/Fedora-Everything-netinst-x86_64-44-1.7.iso.sha256
   inputs/greyward-149-YYYYMMDD.json
+  rpms/greyward-dms-*.rpm          # tested, offline-built selected runtime
+  rpms/greyward-session-*.rpm      # package-owned session/default policy
   rpms/greyward-branding-*.rpm
   rpms/greyward-security-center-*.rpm
   rpms/greyward-security-context-*.rpm
@@ -66,6 +69,8 @@ test -d "$repo"
 test -s "$base"
 test -s "$baseline"
 test "$(find "$build/rpms" -maxdepth 1 -name 'greyward-branding-*.rpm' -type f | wc -l)" -eq 1
+test "$(find "$build/rpms" -maxdepth 1 -name 'greyward-dms-*.rpm' -type f | wc -l)" -eq 1
+test "$(find "$build/rpms" -maxdepth 1 -name 'greyward-session-*.rpm' -type f | wc -l)" -eq 1
 test "$(find "$build/rpms" -maxdepth 1 -name 'greyward-security-center-*.rpm' -type f | wc -l)" -eq 1
 test "$(find "$build/rpms" -maxdepth 1 -name 'greyward-security-context-*.rpm' -type f | wc -l)" -eq 1
 test ! -e "$output"
@@ -78,6 +83,8 @@ bash "$repo/environment/image/build-iso.sh" \
   --baseline "$baseline" \
   --base-sha256 "$(awk '{print $1}' "$base.sha256")" \
   --branding-rpm "$(find "$build/rpms" -maxdepth 1 -name 'greyward-branding-*.rpm' -type f -print -quit)" \
+  --dms-rpm "$(find "$build/rpms" -maxdepth 1 -name 'greyward-dms-*.rpm' -type f -print -quit)" \
+  --session-rpm "$(find "$build/rpms" -maxdepth 1 -name 'greyward-session-*.rpm' -type f -print -quit)" \
   --security-rpm "$(find "$build/rpms" -maxdepth 1 -name 'greyward-security-center-*.rpm' -type f -print -quit)" \
   --security-rpm "$(find "$build/rpms" -maxdepth 1 -name 'greyward-security-context-*.rpm' -type f -print -quit)" \
   --security-build-manifest "$build/rpms/security-center-build-manifest.tsv" \
@@ -88,7 +95,7 @@ xorriso -indev "$output" -pvd_info 2>&1 | grep "Volume id.*GREYWARD-INSTALLER-44
 ```
 
 The builder is the only producer of a fresh canonical ISO. It stages from
-empty RPM/Flatpak roots, verifies the payload after composition, and publishes
+empty solve and verification roots, verifies the payload after composition, and publishes
 the ISO only after the embedded payload hashes and baseline match. If any
 command fails, keep the output unpublished and diagnose the first failure.
 
@@ -108,6 +115,33 @@ The check reads Linux Rock Ridge names directly, checks the provisioner
 closure, and verifies the embedded payload hashes. A passing result is only a
 media/closure gate; it is not a Hyper-V or bare-metal runtime result.
 
+Set `GREYWARD_ACQUISITION_CACHE` to a dedicated Linux directory to retain DNF,
+Flatpak and pinned source objects between builds. The cache has an exclusive
+lock; each build still refreshes metadata, solves the exact DMS compatibility
+tuple and verifies selected objects in fresh roots with networking disabled.
+`offline/acquisition-metrics.json` records durations and new cached bytes.
+Builder interface receive bytes include metadata and unrelated background traffic.
+
+If a selected Flatpak commit is no longer served upstream, set
+`GREYWARD_FLATPAK_SEED` to an explicit reviewed seed directory. Its
+`greyward.flatpak-seed/v1` receipt must inventory every byte and match all
+selected baseline app refs/commits. A retained verified ISO can supply complete
+runtime objects; separately supplied app commits must come from the explicitly
+selected installation. The factory checks the seed receipt, retains the reviewed
+objects in a receipt-addressed cache, records the receipt digest, and installs the
+complete final payload into an empty networkless verification root. Never use an
+ambient host cache as verification evidence.
+
+DNF `--store` bypasses ordinary `keepcache` retention. The factory therefore
+retains selected objects at paths reported by libdnf5 after the fresh solve;
+the next solve checks current metadata and uses DNF checksum validation.
+
+Build the reviewed component set with `environment/image/build-components.py
+--output <component-cache> --dms-inputs <verified-archives>`. Receipts bind source,
+toolchain, RPM identity and hashes. A repeated run reuses verified RPM bytes;
+changed inputs require a new affected package release. Never mix intermediate
+Security Center packages with a manifest from another build.
+
 ## Fast update loop
 
 For a normal development change, use this loop instead of repeatedly trying
@@ -122,7 +156,10 @@ the VM:
    `XDG_*`, `FLATPAK_SYSTEM_DIR`, `FLATPAK_SYSTEM_CACHE_DIR` and
    `FLATPAK_USER_DIR` directories and an empty network namespace.
 5. Inspect the ISO and sidecars before touching the Hyper-V test VM.
-6. Prepare `GREYWARD-ISO-TEST-20260901` (`.120`) with a fresh VHDX under the
+6. Use an isolated fresh test VM when the usual VM is in use by the user.
+   Attach only the published product ISO; never add answer media, preseed accounts
+   or encryption, or disable Plymouth. The composed-media installer contract
+   must pass before boot. Prepare `GREYWARD-ISO-TEST-20260901` (`.120`) with a fresh VHDX under the
    project on `F:`. Attach the candidate DVD only for the installer launch; do
    not leave the DVD in persistent firmware boot order.
 7. Run the risk-appropriate Hyper-V gate below. Before the first post-install

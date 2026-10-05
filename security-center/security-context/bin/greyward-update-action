@@ -82,6 +82,11 @@ def load_recovery_create():
 
 
 def prepare_dnf(driver_packages):
+    for path in (Path('/usr/lib/greyward-security-context'), Path(__file__).resolve().parents[1]):
+        if str(path) not in sys.path:
+            sys.path.insert(0, str(path))
+    from greyward_security_context.dms_compatibility import dnf_options
+    policy_options = dnf_options()
     if driver_packages:
         # DNF5's `do` command combines unlike actions in one transaction.  A
         # second `install --offline` command could replace the stored upgrade,
@@ -93,6 +98,7 @@ def prepare_dnf(driver_packages):
         ]
     else:
         command = [DNF, "upgrade", "--offline", "--assumeyes"]
+    command.extend(policy_options)
     result = run(command, timeout=PROVIDER_TIMEOUT)
     optional_repo_skipped = False
     if result.returncode != 0 and optional_repo_failure(result):

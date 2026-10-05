@@ -114,8 +114,9 @@ class NetworkLocationTests(unittest.TestCase):
             with patch.dict(os.environ, environment), patch.object(network_location.subprocess, "run", return_value=completed) as run:
                 resolution = network_location.country_resolution_for_ip("8.8.8.8")
             self.assertEqual(resolution["country_code"], "FR")
-            self.assertEqual(resolution["confidence"], "MEDIUM")
             self.assertEqual(run.call_args.args[0][0], "geoiplookup")
+            self.assertEqual(resolution['confidence'], 'LOW')
+            self.assertEqual(resolution['availability'], 'AVAILABLE')
 
     def test_domain_suffix_is_a_last_resort_hint_only(self):
         with patch.dict(os.environ, {"GREYWARD_GEOIP_DB": "", "GREYWARD_GEOIP_DB_SECONDARY": "", "GREYWARD_GEOIP_LEGACY_DB": "", "GREYWARD_GEOFEED_DB": ""}):
@@ -127,6 +128,22 @@ class NetworkLocationTests(unittest.TestCase):
         self.assertEqual(resolution["confidence"], "VERY_LOW")
         self.assertEqual(generic["country_code"], "")
         self.assertEqual(uk["country_code"], "GB")
+
+    def test_stale_local_file_is_only_a_weak_hint_and_replacement_invalidates_cache(self):
+        with tempfile.TemporaryDirectory() as directory:
+            feed = Path(directory) / 'geofeed.csv'
+            feed.write_text('8.8.8.0/24,FR,,,\n')
+            os.utime(feed, (0, 0))
+            with patch.dict(os.environ, {'GREYWARD_GEOIP_DB': '/missing', 'GREYWARD_GEOIP_DB_SECONDARY': '/missing',
+                                       'GREYWARD_GEOIP_LEGACY_DB': '/missing', 'GREYWARD_GEOFEED_DB': str(feed)}):
+                stale = network_location.country_resolution_for_ip('8.8.8.8')
+                self.assertEqual(stale['availability'], 'STALE')
+                self.assertEqual(stale['confidence'], 'VERY_LOW')
+                self.assertGreater(stale['sources'][-1]['age_days'], 180)
+                feed.write_text('8.8.8.0/24,DE,,,\n')
+                fresh = network_location.country_resolution_for_ip('8.8.8.8')
+                self.assertEqual(fresh['country_code'], 'DE')
+                self.assertEqual(fresh['availability'], 'AVAILABLE')
 
 
 if __name__ == "__main__":

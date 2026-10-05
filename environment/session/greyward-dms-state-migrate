@@ -1,0 +1,102 @@
+#!/usr/bin/python3
+"""Back up split DMS state once per selected release, then adapt only owned data."""
+import hashlib
+import json
+import os
+import re
+from pathlib import Path
+import shutil
+import subprocess
+import tempfile
+
+
+def file_map(path):
+    return {p.relative_to(path).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest()
+            for p in path.rglob('*') if p.is_file() and not p.is_symlink()}
+
+
+def migrate(config, state, cache, system_plugins, release):
+    backup = state.parent / 'greyward/dms-migration' / release
+    backup.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    if not backup.exists():
+        temporary = Path(tempfile.mkdtemp(prefix='backup-', dir=backup.parent))
+        try:
+            for name, path in [('config', config), ('state', state), ('cache', cache)]:
+                if path.exists():
+                    shutil.copytree(path, temporary / name, symlinks=True)
+            for p in temporary.rglob('*'):
+                if not p.is_symlink():
+                    p.chmod(0o700 if p.is_dir() else 0o600)
+            receipt = {'release': release, 'roots': {'config': str(config), 'state': str(state), 'cache': str(cache)}}
+            (temporary / 'receipt.json').write_text(json.dumps(receipt))
+            (temporary / 'receipt.json').chmod(0o600)
+            temporary.rename(backup)
+        except BaseException:
+            shutil.rmtree(temporary)
+            raise
+    config.mkdir(parents=True, exist_ok=True, mode=0o700)
+    settings_file = config / 'settings.json'
+    settings = json.loads(settings_file.read_text()) if settings_file.exists() else {}
+    if not isinstance(settings, dict):
+        raise ValueError('Malformed desktop settings; preserved backup, activation refused')
+    # Establish fresh-user defaults before QML loads; process activity precedes
+    # IPC readiness. Existing sessions, including cleared wallpapers, are owned
+    # by the user. Preserve legacy settings when no split state exists yet.
+    session_file = state / 'session.json'
+    if not session_file.exists():
+        state.mkdir(parents=True, exist_ok=True, mode=0o700)
+        wallpaper = settings.get('wallpaperPath', '/usr/share/backgrounds/greyward/greyward-wallpaper-black-art-4k.jpg')
+        if not isinstance(wallpaper, str):
+            raise ValueError('Malformed legacy wallpaper preference')
+        with session_file.open('x') as stream:
+            stream.write(json.dumps({'wallpaperPath': wallpaper}) + '\n')
+        session_file.chmod(0o600)
+    # These are GREYWARD session ownership policy; other preferences remain user-owned.
+    settings.update(customPowerActionLock='',
+                    lockBeforeSuspend=True, loginctlLockIntegration=True,
+                    lockPamPath='/etc/pam.d/greyward-dms-lock', lockPamExternallyManaged=True,
+                    fadeToLockEnabled=False, fadeToDpmsEnabled=False,
+                    lockAtStartup=False, lockScreenPowerOffMonitorsOnLock=False)
+    for source in ('ac', 'battery'):
+        for timer in ('MonitorTimeout', 'LockTimeout', 'SuspendTimeout', 'PostLockMonitorTimeout'):
+            settings[source + timer] = {'MonitorTimeout': 900, 'LockTimeout': 600,
+                                        'SuspendTimeout': 0, 'PostLockMonitorTimeout': 300}[timer]
+    descriptor, temporary_name = tempfile.mkstemp(prefix='.greyward-settings-', dir=config)
+    temporary_settings = Path(temporary_name)
+    with os.fdopen(descriptor, 'w') as stream:
+        stream.write(json.dumps(settings, indent=2) + '\n')
+    temporary_settings.replace(settings_file)
+    marker = config / '.changelog-1.6'
+    if not marker.exists():
+        with marker.open('x') as stream:
+            stream.write('GREYWARD packaged release migration\n')
+        marker.chmod(0o600)
+    results = {}
+    for plugin in system_plugins.glob('greyward*'):
+        user = config / 'plugins' / plugin.name
+        if not user.exists():
+            continue
+        links = user.is_symlink() or any(p.is_symlink() for p in user.rglob('*'))
+        user_paths = {p.relative_to(user).as_posix() for p in user.rglob('*')}
+        system_paths = {p.relative_to(plugin).as_posix() for p in plugin.rglob('*')}
+        if not links and user_paths == system_paths and file_map(user) == file_map(plugin) and file_map(plugin):
+            shutil.rmtree(user)
+            results[plugin.name] = 'system-copy-after-backup'
+        else:
+            results[plugin.name] = 'customized-user-copy-preserved'
+    (backup / 'reconciliation.json').write_text(json.dumps(results, indent=2) + '\n')
+    (backup / 'reconciliation.json').chmod(0o600)
+    return backup
+
+
+if __name__ == '__main__':
+    home = Path.home()
+    config = Path(os.environ.get('XDG_CONFIG_HOME', home / '.config')) / 'DankMaterialShell'
+    state = Path(os.environ.get('XDG_STATE_HOME', home / '.local/state')) / 'DankMaterialShell'
+    cache = Path(os.environ.get('XDG_CACHE_HOME', home / '.cache')) / 'DankMaterialShell'
+    release = Path('/etc/greyward/dms-release').read_text().strip()
+    subprocess.run(['/usr/libexec/greyward-dms-verify', '--selection-only'], check=True,
+                   stdout=subprocess.DEVNULL, timeout=30)
+    if not re.fullmatch(r'v1\.6\.2-[1-9][0-9]*', release):
+        raise SystemExit('Unsupported migration release')
+    migrate(config, state, cache, Path('/etc/xdg/quickshell/dms-plugins'), release)

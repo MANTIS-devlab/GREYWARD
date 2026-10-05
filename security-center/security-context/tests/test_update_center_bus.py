@@ -428,6 +428,7 @@ class UpdateCenterBusTests(unittest.TestCase):
         with (
             patch.object(helper.subprocess, "run", side_effect=[failed, placeholder, succeeded, status, scheduled]) as run,
             patch.object(helper, "offline_restart_is_scheduled", return_value=True),
+            patch('greyward_security_context.dms_compatibility.constraints', return_value={name: 'test-1' for name in ('dms-greeter', 'labwc', 'quickshell', 'uwsm')}),
         ):
             self.assertEqual(helper.prepare_dnf([]), (0, True))
 
@@ -449,6 +450,7 @@ class UpdateCenterBusTests(unittest.TestCase):
         with (
             patch.object(helper, "run", side_effect=[transaction, status, scheduled]) as run,
             patch.object(helper, "offline_restart_is_scheduled", return_value=True),
+            patch('greyward_security_context.dms_compatibility.constraints', return_value={name: 'test-1' for name in ('dms-greeter', 'labwc', 'quickshell', 'uwsm')}),
         ):
             self.assertEqual(helper.prepare_dnf(["kernel-modules-extra"]), (0, False))
 
@@ -458,6 +460,7 @@ class UpdateCenterBusTests(unittest.TestCase):
                 helper.DNF, "do", "--offline", "--assumeyes",
                 "--action=upgrade", "*",
                 "--action=install", "kernel-modules-extra",
+                "--exclude=dms-greeter,labwc,quickshell,uwsm",
             ],
         )
         self.assertEqual(run.call_args_list[1].args[0], [helper.DNF, "offline-upgrade", "status"])

@@ -224,6 +224,41 @@ def _active_vpn_dns_addresses():
     return addresses
 
 
+def _active_private_dns_addresses():
+    # The root-owned split-scope snapshot is checked against live resolve1
+    # routing and the strict public scope. Never authorize an app or a stale
+    # DHCP address from a saved UI value.
+    try:
+        import dbus
+    except ImportError:
+        return set()
+    try:
+        from greyward_security_context.secure_dns_split import active_private_addresses
+        return active_private_addresses(dbus.SystemBus())
+    except (ImportError, dbus.DBusException, OSError, ValueError, KeyError):
+        return set()
+
+
+def _active_network_default_dns_addresses():
+    """Honor the explicit typed opt-out only for resolved's observed servers."""
+    try:
+        import dbus
+    except ImportError:
+        return set()
+    try:
+        from greyward_security_context import secure_dns_reconciler as dns
+        if dns._policy()['desired_policy'] != 'NetworkDefault':
+            return set()
+        bus = dbus.SystemBus()
+        addresses = set()
+        for device in dns._active_devices(bus):
+            props = dns._link(bus, device['ifindex'])
+            addresses.update(str(ipaddress.ip_address(bytes(item[1]))) for item in dns._dns_ex(props))
+        return addresses
+    except (ImportError, dbus.DBusException, OSError, ValueError, KeyError):
+        return set()
+
+
 def _destination(connection):
     host = _clean(getattr(connection, "dst_host", ""), 160)
     address = _clean(getattr(connection, "dst_ip", ""), 64)
@@ -237,6 +272,8 @@ def _destination(connection):
         "country_converged": country["converged"],
         "country_source_count": country["source_count"],
         "country_source": country["source"],
+        "country_availability": country.get("availability", "UNKNOWN"),
+        "country_sources": country.get("sources", []),
     }
 
 
@@ -684,6 +721,10 @@ def select_policy_rule(connection):
             and destination_ip in _active_vpn_dns_addresses()
         ):
             return "allow", "always", {"path": process_path, "ip": destination_ip, "port": port, "name": "GREYWARD active VPN resolver upstream"}
+        if process_path == "/usr/lib/systemd/systemd-resolved" and destination_ip in _active_private_dns_addresses():
+            return "allow", "always", {"path": process_path, "ip": destination_ip, "port": port, "name": "GREYWARD private-domain resolver upstream"}
+        if process_path == "/usr/lib/systemd/systemd-resolved" and destination_ip in _active_network_default_dns_addresses():
+            return "allow", "always", {"path": process_path, "ip": destination_ip, "port": port, "name": "GREYWARD explicit Network Default resolver upstream"}
         return "deny", "always", {"path": "*", "port": port, "name": "GREYWARD deny direct DNS outside managed resolver"}
     return policy["default_action"], policy["default_duration"], None
 

@@ -1,0 +1,4 @@
+#%PAM-1.0
+# Native DMS authentication delegates to the installed Fedora authselect stack.
+auth       include      system-auth
+account    include      system-auth

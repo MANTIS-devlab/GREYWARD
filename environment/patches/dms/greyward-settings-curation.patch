@@ -1,6 +1,6 @@
 --- a/quickshell/dms/Modals/Settings/SettingsModal.qml
 +++ b/quickshell/dms/Modals/Settings/SettingsModal.qml
-@@ -194,7 +194,8 @@
+@@ -203,7 +203,8 @@
  
              Item {
                  width: parent.width
@@ -12,18 +12,18 @@
                  MouseArea {
 --- a/quickshell/dms/Modals/Settings/SettingsSidebar.qml
 +++ b/quickshell/dms/Modals/Settings/SettingsSidebar.qml
-@@ -114,7 +114,7 @@
-         },
-         {
-             "id": "dankbar",
--            "text": I18n.tr("Dank Bar"),
-+            "text": I18n.tr("Desktop"),
-             "icon": "toolbar",
-             "children": [
-                 {
+@@ -707,7 +707,7 @@
+                             }
+ 
+                             StyledText {
+-                                text: categoryDelegate.modelData.text || ""
++                                text: categoryDelegate.modelData.id === "dankbar" ? I18n.tr("Desktop") : categoryDelegate.modelData.text || ""
+                                 font.pixelSize: Theme.fontSizeMedium
+                                 font.weight: (categoryRow.isActive || root.isChildActive(categoryDelegate.modelData)) ? Font.Medium : Font.Normal
+                                 color: categoryRow.isActive ? Theme.buttonText : Theme.surfaceText
 --- a/quickshell/dms/Modules/Settings/WallpaperTab.qml
 +++ b/quickshell/dms/Modules/Settings/WallpaperTab.qml
-@@ -236,7 +236,7 @@
+@@ -259,7 +259,7 @@
                          }
  
                          StyledText {
@@ -32,7 +32,7 @@
                              font.pixelSize: Theme.fontSizeSmall
                              color: Theme.surfaceVariantText
                              elide: Text.ElideMiddle
-@@ -1231,6 +1231,7 @@
+@@ -1280,6 +1280,7 @@
                  title: I18n.tr("External Wallpaper Management", "wallpaper settings external management")
                  settingKey: "disableWallpaper"
                  iconName: "wallpaper"
@@ -42,6 +42,33 @@
                      tab: "wallpaper"
 --- a/quickshell/dms/Modules/Settings/DisplayConfig/IncludeWarningBox.qml
 +++ b/quickshell/dms/Modules/Settings/DisplayConfig/IncludeWarningBox.qml
-@@ -16 +16 @@
+@@ -13,7 +13,7 @@
+     radius: Theme.cornerRadius
+ 
+     readonly property bool showLegacy: DisplayConfigState.readOnly
 -    readonly property bool showSetup: !showLegacy && !DisplayConfigState.includeStatus.included
 +    readonly property bool showSetup: !showLegacy && DisplayConfigState.getConfigPaths() !== null && !DisplayConfigState.includeStatus.included
+ 
+     color: (showLegacy || showSetup) ? Theme.withAlpha(Theme.primary, 0.15) : Theme.withAlpha(Theme.primary, 0)
+     border.color: (showLegacy || showSetup) ? Theme.withAlpha(Theme.primary, 0.3) : Theme.withAlpha(Theme.primary, 0)
+--- a/quickshell/dms/Services/SystemUpdateService.qml
++++ b/quickshell/dms/Services/SystemUpdateService.qml
+@@ -204,16 +204,8 @@
+     }
+ 
+     function runUpdates(opts) {
+-        const params = opts || {};
+-        params.ignored = SettingsData.updaterIgnoredPackages || [];
+-        if (useCustomCommand) {
+-            params.customCommand = SettingsData.updaterCustomCommand.trim();
+-            const termArgs = (SettingsData.updaterTerminalAdditionalParams || "").trim();
+-            if (termArgs.length > 0) {
+-                params.terminalArgs = termArgs.split(/\s+/);
+-            }
+-        }
+-        DMSService.sysupdateUpgrade(params, null);
++        // GREYWARD's reviewed transaction and recovery point live in Update Center.
++        Quickshell.execDetached(["/usr/bin/greyward-security-center-route", "updates"]);
+     }
+ 
+     function cancelUpdates() {

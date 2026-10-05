@@ -1,29 +1,13 @@
 --- a/quickshell/dms/Modules/DankBar/Widgets/AppsDock.qml
 +++ b/quickshell/dms/Modules/DankBar/Widgets/AppsDock.qml
-@@ -884,8 +884,13 @@ BasePill {
-                                         SessionService.launchDesktopEntry(desktopEntry);
-                                 }
-                             } else if (modelData.windowCount === 1) {
--                                if (modelData.allWindows[0].toplevel)
--                                    modelData.allWindows[0].toplevel.activate();
-+                                const toplevel = modelData.allWindows[0].toplevel;
-+                                if (toplevel) {
-+                                    if (toplevel.activated)
-+                                        toplevel.minimized = true;
-+                                    else
-+                                        toplevel.activate();
-+                                }
-                             } else {
-                                 let currentIndex = -1;
-                                 for (var i = 0; i < modelData.allWindows.length; i++) {
-@@ -894,6 +899,10 @@ BasePill {
+@@ -902,6 +902,10 @@
                                          break;
                                      }
                                  }
-+                                if (currentIndex >= 0) {
-+                                    modelData.allWindows[currentIndex].toplevel.minimized = true;
++                                if (currentIndex >= 0 && CompositorService.canMinimize(modelData.allWindows[currentIndex].toplevel)) {
++                                    CompositorService.toggleToplevel(modelData.allWindows[currentIndex].toplevel);
 +                                    return;
 +                                }
                                  const nextIndex = (currentIndex + 1) % modelData.allWindows.length;
-                                 modelData.allWindows[nextIndex].toplevel.activate();
+                                 CompositorService.activateToplevel(modelData.allWindows[nextIndex].toplevel);
                              }

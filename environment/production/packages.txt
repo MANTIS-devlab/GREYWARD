@@ -3,8 +3,8 @@
 # development overlay or the image factory, not this list.
 hyprland
 labwc
+greyward-session
 uwsm
-swayidle
 wlopm
 flatpak
 xdg-desktop-portal
@@ -12,7 +12,6 @@ xdg-desktop-portal-gtk
 xdg-desktop-portal-hyprland
 xdg-desktop-portal-wlr
 xorg-x11-server-Xwayland
-hyprpaper
 # DMS owns the graphical Polkit agent; a second agent conflicts with it.
 quickshell
 qt6-qtdeclarative
@@ -52,8 +51,6 @@ linux-firmware
 restic
 btrfs-progs
 opensnitch
-GeoIP
-GeoIP-GeoLite-data
 usbguard
 usbguard-dbus
 clamav
@@ -61,7 +58,6 @@ clamav-update
 clamd
 greetd
 dms-greeter
-dgop
 danksearch
 python3-gobject
 python3-rpm

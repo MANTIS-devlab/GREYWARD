@@ -285,3 +285,34 @@ Devices. Idle sampling added two `consume_navigation_request` calls over the
   single-instance event bridge or filesystem watcher. The next architectural
   step is an explicit Tauri single-instance/event endpoint; reducing the poll
   further would only trade responsiveness for idle work.
+
+
+## 4 October packaged Context profiling (bounded A4 work)
+
+Context invokes the fixed backend-only `/usr/libexec/greyward-security-posture`
+command, sharing the Security Center evaluator. Its consumed contract contains
+state, review-needed and unavailable counts, not all GUI Overview fields.
+Five-second leases and truthful failures are preserved. Twenty queued shell
+invalidations coalesce into one callback; updates during collection remain dirty.
+
+Six untraced ten-second samples had a median of 17.5744% of one core before,
+15.8453% after and 15.3155% final. Initial isolated helper timings under build load
+were worse and are retained. Final alternating old/new/old runs (six GUI and three
+headless samples) observed wall medians 0.7364/0.6329 s and CPU medians
+1.1661/1.1061 s. Consumed states/counts matched; authoritative provider scan counts
+were identical. These short VM observations are not release performance guarantees.
+
+Original 31–33 MiB and final 223–224 MiB readings were cgroup `memory.current`,
+including file cache, not process RSS. A transient 311 MiB was observed. These are
+not comparable process-memory measurements; no memory saving is claimed.
+After installing Context 58, its cgroup showed approximately 30.7 MB anonymous
+memory and 1.2 MB file cache. Evidence is in the private `.149` workspace
+`/mnt/greyward-build/pre-release/profile-before/`, `profile-after/`, `profile-final/`
+and `profile-final/consumed-contract-and-timings.json`.
+
+The bounded optimisation is complete. A larger evaluator/cache redesign is not
+justified by this study: it would change freshness and collector boundaries
+without demonstrated need. Context 58 passed all 225 tests with imports pinned
+to installed modules, including freshness/failure contracts. Center 53 passed
+real-window startup and route benchmarks using fresh drivers in an isolated
+compositor on the same authoritative user bus.

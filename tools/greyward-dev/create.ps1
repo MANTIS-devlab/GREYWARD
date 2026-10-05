@@ -1,6 +1,7 @@
 [CmdletBinding()]
 param(
     [switch]$ValidateOnly,
+    [string]$DmsRuntimeRpm,
     [switch]$Resume,
     [switch]$SkipGraphicsGate,
     [switch]$BootTest,
@@ -242,6 +243,9 @@ if ($ValidateOnly) {
     exit 0
 }
 
+if (-not $DmsRuntimeRpm -or -not (Test-Path -LiteralPath $DmsRuntimeRpm)) { throw 'Provide -DmsRuntimeRpm with the offline-built selected GREYWARD DMS runtime.' }
+$dmsRpmInput = (Resolve-Path -LiteralPath $DmsRuntimeRpm).Path.Replace('\', '/')
+
 New-Item -ItemType Directory -Force -Path (Split-Path $packerZip),$packerRoot,$isoDir | Out-Null
 if (-not (Test-Path $packerExe)) {
     if (-not (Test-Path $packerZip)) { Invoke-WebRequest -UseBasicParsing -Uri $packerUrl -OutFile $packerZip }
@@ -333,12 +337,12 @@ if (-not $reuseInterruptedBuild) {
         & $packerExe init .
         if ($LASTEXITCODE -ne 0) { throw 'packer init failed.' }
         & $packerExe validate `
-            -var "iso_path=$isoPath" -var "iso_checksum=$($script:Versions.fedora.sha256)" `
+            -var "dms_runtime_rpm=$dmsRpmInput" -var "iso_path=$isoPath" -var "iso_checksum=$($script:Versions.fedora.sha256)" `
             -var "switch_name=$switchName" -var "ssh_private_key_file=$keyPath" `
             -var "http_directory=$httpRoot" -var "output_directory=$packerOutput" -var "vm_name=$buildVmName" -var "ssh_host=$greywardBuildHost" .
         if ($LASTEXITCODE -ne 0) { throw 'packer validate failed.' }
         $buildExit = Invoke-GreywardPackerBuild -PackerPath $packerExe -WorkingDirectory (Join-Path $script:RepoRoot 'environment') -Arguments @(
-            'build','-force','-on-error=abort',
+            'build','-force','-on-error=abort','-var',"dms_runtime_rpm=$dmsRpmInput",
             '-var',"iso_path=$isoPath",'-var',"iso_checksum=$($script:Versions.fedora.sha256)",
             '-var',"switch_name=$switchName",'-var',"ssh_private_key_file=$keyPath",
             '-var',"http_directory=$httpRoot",'-var',"output_directory=$packerOutput",'-var',"vm_name=$buildVmName",'-var',"ssh_host=$greywardBuildHost",'.'

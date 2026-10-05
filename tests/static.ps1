@@ -111,7 +111,7 @@ $terminalBriefPath = Join-Path $repo 'environment\production\zsh\greyward-termin
 $terminalBriefTestPath = Join-Path $repo 'security-center\security-context\tests\test_terminal_brief.py'
 $auditRulesPath = Join-Path $repo 'environment\production\audit\greyward.rules'
 $greeterSelinuxPath = Join-Path $repo 'environment\production\selinux\greyward-dms-greeter.cil'
-$uwsmLabwcPatchPath = Join-Path $repo 'environment\production\patch-uwsm-labwc.sh'
+$uwsmLabwcPatchPath = Join-Path $repo 'environment\production\greyward-start-labwc'
 $devDeployPath = Join-Path $repo 'tools\greyward-dev\deploy.ps1'
 $dmsSettingsPatchPath = Join-Path $repo 'environment\patches\dms\greyward-settings-curation.patch'
 $dmsLabwcRuntimePatchPath = Join-Path $repo 'environment\patches\dms\greyward-labwc-runtime.patch'
@@ -119,13 +119,13 @@ $dmsLauncherHitboxPatchPath = Join-Path $repo 'environment\patches\dms\launcher-
 $dmsAppsDockLabelsPatchPath = Join-Path $repo 'environment\patches\dms\apps-dock-taskbar-labels.patch'
 $dmsAppsDockToggleMinimizePatchPath = Join-Path $repo 'environment\patches\dms\apps-dock-toggle-minimize.patch'
 $dmsAppsDockSpacingPatchPath = Join-Path $repo 'environment\patches\dms\apps-dock-spacing.patch'
-$dmsDisableChangelogPatchPath = Join-Path $repo 'environment\patches\dms\disable-changelog.patch'
+$dmsStateMigrationPath = Join-Path $repo 'environment\session\greyward-dms-state-migrate'
 $dmsFlatpakIconResolutionPatchPath = Join-Path $repo 'environment\patches\dms\greyward-flatpak-icon-resolution.patch'
 $dmsTrayIconFallbackPatchPath = Join-Path $repo 'environment\patches\dms\greyward-tray-icon-fallback.patch'
 $securityContractPath = Join-Path $repo 'environment\production\security-center-contract.tsv'
 $anacondaCssPath = Join-Path $repo 'packaging\greyward-branding\SOURCES\greyward-anaconda.css'
 $anacondaConfPath = Join-Path $repo 'packaging\greyward-branding\SOURCES\greyward-anaconda.conf'
-foreach ($required in @($defaultAppsPath, $mimeAppsPath, $braveFlagsPath, $softwareWrapperPath, $softwareDesktopPath, $softwareRuntimeDesktopPath, $productionProvisionPath, $productionManifestPath, $productionAcceptancePath, $productionAcceptanceImplementationPath, $imageEntryPoint, $imageIsoEntryPoint, $imageKickstartPath, $firstbootScriptPath, $firstbootServicePath, $greeterWallpaperSyncPath, $autoUpdateScriptPath, $autoUpdateServicePath, $autoUpdateTimerPath, $labwcEnvironmentPath, $sessionDesktopPath, $labwcSessionLauncherPath, $dmsServicePath, $artifactPolicyPath, $auditRulesPath, $greeterSelinuxPath, $uwsmLabwcPatchPath, $dmsSettingsPatchPath, $dmsLabwcRuntimePatchPath, $dmsLauncherHitboxPatchPath, $dmsSettingsPath, $securityCenterRoutePath, $securePluginManifestPath, $securePluginWidgetPath, $networkTrafficPluginManifestPath, $networkTrafficPluginWidgetPath, $networkTrafficPluginModelPath, $networkTrafficPluginMathPath, $publicIpPluginManifestPath, $publicIpPluginWidgetPath, $session10ReportPath, $session10GatePath, $interactionTestPath, $portalConfigPath, $rygelOverridePath, $blackboxDesktopOverridePath, $blackboxSchemePath, $blackboxDarkPastelSchemePath, $blackboxParaisoSchemePath, $blackboxSetiSchemePath, $blackboxVibrantInkSchemePath, $blackboxDconfPath, $terminalIconPath, $zshConfiguratorPath, $zshSourcesPath, $zshrcPath, $p10kPath, $terminalBriefPath, $terminalBriefTestPath, $devDeployPath, $cryptoPolicyDocPath, $cryptoPolicyModulePath, $dmsAppsDockSpacingPatchPath, $dmsDisableChangelogPatchPath, $dmsFlatpakIconResolutionPatchPath, $dmsTrayIconFallbackPatchPath)) {
+foreach ($required in @($defaultAppsPath, $mimeAppsPath, $braveFlagsPath, $softwareWrapperPath, $softwareDesktopPath, $softwareRuntimeDesktopPath, $productionProvisionPath, $productionManifestPath, $productionAcceptancePath, $productionAcceptanceImplementationPath, $imageEntryPoint, $imageIsoEntryPoint, $imageKickstartPath, $firstbootScriptPath, $firstbootServicePath, $greeterWallpaperSyncPath, $autoUpdateScriptPath, $autoUpdateServicePath, $autoUpdateTimerPath, $labwcEnvironmentPath, $sessionDesktopPath, $labwcSessionLauncherPath, $dmsServicePath, $artifactPolicyPath, $auditRulesPath, $greeterSelinuxPath, $uwsmLabwcPatchPath, $dmsSettingsPatchPath, $dmsLabwcRuntimePatchPath, $dmsLauncherHitboxPatchPath, $dmsSettingsPath, $securityCenterRoutePath, $securePluginManifestPath, $securePluginWidgetPath, $networkTrafficPluginManifestPath, $networkTrafficPluginWidgetPath, $networkTrafficPluginModelPath, $networkTrafficPluginMathPath, $publicIpPluginManifestPath, $publicIpPluginWidgetPath, $session10ReportPath, $session10GatePath, $interactionTestPath, $portalConfigPath, $rygelOverridePath, $blackboxDesktopOverridePath, $blackboxSchemePath, $blackboxDarkPastelSchemePath, $blackboxParaisoSchemePath, $blackboxSetiSchemePath, $blackboxVibrantInkSchemePath, $blackboxDconfPath, $terminalIconPath, $zshConfiguratorPath, $zshSourcesPath, $zshrcPath, $p10kPath, $terminalBriefPath, $terminalBriefTestPath, $devDeployPath, $cryptoPolicyDocPath, $cryptoPolicyModulePath, $dmsAppsDockSpacingPatchPath, $dmsStateMigrationPath, $dmsFlatpakIconResolutionPatchPath, $dmsTrayIconFallbackPatchPath)) {
     if (-not (Test-Path -LiteralPath $required)) {
         $errors.Add("Flatpak default application input is missing: $required")
     }
@@ -137,12 +137,26 @@ foreach ($requiredFirstbootStatus in @($firstbootStatusScriptPath, $firstbootSta
     }
 }
 
-if (Test-Path -LiteralPath $dmsDisableChangelogPatchPath) {
-    $dmsDisableChangelogPatch = Get-Content -Raw -LiteralPath $dmsDisableChangelogPatchPath
-    if ($dmsDisableChangelogPatch -notmatch 'quickshell/dms/Services/ChangelogService\.qml' -or
-        $dmsDisableChangelogPatch -notmatch 'changelogEnabled: false') {
-        $errors.Add("The production DMS patch must disable the first-boot What's New changelog popup at its source.")
+if (Test-Path -LiteralPath $dmsStateMigrationPath) {
+    $migration = Get-Content -Raw -LiteralPath $dmsStateMigrationPath
+    if ($migration -notmatch '\.changelog-1\.6' -or $migration -notmatch 'customized-user-copy-preserved') {
+        $errors.Add('DMS state migration must preserve customized plugins and preseed the verified release marker.')
     }
+}
+
+$releasePath = Join-Path $repo 'environment/production/dms-release.json'
+$releaseManifest = Get-Content -Raw -LiteralPath $releasePath | ConvertFrom-Json
+$listedPatches = @($releaseManifest.patches | ForEach-Object { $_.file } | Sort-Object)
+$actualPatches = @(Get-ChildItem -LiteralPath (Join-Path $repo 'environment/patches/dms') -Filter '*.patch' | ForEach-Object { $_.Name } | Sort-Object)
+if (Compare-Object $listedPatches $actualPatches) { $errors.Add('DMS manifest must enumerate exactly the assembled patchset.') }
+foreach ($patch in $releaseManifest.patches) {
+    $path = Join-Path (Join-Path $repo 'environment/patches/dms') $patch.file
+    if ((Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant() -ne $patch.sha256) {
+        $errors.Add("DMS patch receipt mismatch: $($patch.file)")
+    }
+}
+if ($releaseManifest.dms.apiVersion -ne 34 -or $releaseManifest.build.moduleMode -ne 'vendor') {
+    $errors.Add('DMS release must use the verified API and offline vendor contract.')
 }
 
 $autoUpdateScript = Get-Content -Raw -LiteralPath $autoUpdateScriptPath
@@ -186,7 +200,7 @@ if (Test-Path -LiteralPath $dmsLauncherHitboxPatchPath) {
     if ($dmsLauncherHitboxPatch -match '(?m)^\+Item \{' -or $dmsLauncherHitboxPatch -match 'hitboxExtension') {
         $errors.Add('The DMS launcher hitbox patch must not replace or resize the launcher visual component.')
     }
-    if ($dmsLauncherHitboxPatch -notmatch '(?m)^--- a/quickshell/dms/Modules/DankBar/BarCanvas\.qml$' -or $dmsLauncherHitboxPatch -notmatch '(?m)^@@ -170,18 \+170,0') {
+    if ($dmsLauncherHitboxPatch -notmatch '(?m)^--- a/quickshell/dms/Modules/DankBar/BarCanvas\.qml$' -or $dmsLauncherHitboxPatch -notmatch '(?m)^-    MouseArea \{') {
         $errors.Add('The redundant full-bar BarCanvas click area must remain removed.')
     }
 }
@@ -211,13 +225,13 @@ if ((Test-Path -LiteralPath $productionProvisionPath) -and (Test-Path -LiteralPa
     if ($productionProvision -match 'printf.*greyward-production-complete' -or $productionProvision -notmatch 'rm -f /etc/greyward-production-complete') {
         $errors.Add('Production provisioning must not create the completion marker before installed-root acceptance.')
     }
-    if ($productionProvision -notmatch 'HYPRLAND_INSTANCE_SIGNATURE' -or $productionProvision -notmatch 'XDG_CURRENT_DESKTOP=GNOME') {
+    if ((Get-Content -Raw -LiteralPath (Join-Path $repo 'packaging/greyward-session/greyward-session.spec')) -notmatch 'HYPRLAND_INSTANCE_SIGNATURE' -or (Get-Content -Raw -LiteralPath (Join-Path $repo 'packaging/greyward-session/greyward-session.spec')) -notmatch 'XDG_CURRENT_DESKTOP=GNOME') {
         $errors.Add('Production provisioning does not scope competing Polkit and GNOME portal services to their owning sessions.')
     }
     if ($productionProvision -notmatch 'audit/greyward\.rules' -or
         $productionProvision -notmatch 'augenrules --load' -or
         $productionProvision -notmatch 'selinux/greyward-dms-greeter\.cil' -or
-        $productionProvision -notmatch 'patch-uwsm-labwc\.sh') {
+        $productionProvision -notmatch 'rpm -q greyward-session') {
         $errors.Add('Production provisioning does not install and activate the audit, SELinux, and UWSM fixes.')
     }
     if ($productionProvision -notmatch 'production_users' -or
@@ -252,8 +266,6 @@ if ((Test-Path -LiteralPath $productionProvisionPath) -and (Test-Path -LiteralPa
         $firstbootScript -notmatch 'is-active --quiet greetd\.service' -or
         $firstbootScript -notmatch 'pgrep -u greeter -x dms-greeter' -or
         $firstbootScript -notmatch 'pgrep -u greeter -x labwc' -or
-        $firstbootScript -notmatch 'loginctl list-sessions --no-legend' -or
-        $firstbootScript -notmatch 'pgrep -x dms' -or
         $firstbootScript -notmatch 'greetd-failure\.txt') {
         $errors.Add('First-boot finalization must verify the actual DMS Greeter/Labwc hand-off after acceptance succeeds.')
     }
@@ -263,13 +275,6 @@ if ((Test-Path -LiteralPath $productionProvisionPath) -and (Test-Path -LiteralPa
         $productionProvision -match 'rmdir "\$gitstatus_stage"') {
         $errors.Add('Offline gitstatus provisioning must stage files, rename them into place, and let find clean the temporary tree without a second root-directory removal.')
     }
-}
-
-$productionAutostart = Get-Content -Raw -LiteralPath (Join-Path $repo 'environment\production\labwc-autostart')
-if ($productionAutostart -notmatch 'ipc call wallpaper get' -or
-    $productionAutostart -notmatch 'wallpaper_state' -or
-    $productionAutostart -notmatch 'ipc call wallpaper set /usr/share/backgrounds/greyward/greyward-wallpaper-black-art-4k\.jpg') {
-    $errors.Add('The production session must keep an existing DMS wallpaper and apply the canonical wallpaper only when no wallpaper is configured.')
 }
 
 $firstbootStatusScript = Get-Content -Raw -LiteralPath $firstbootStatusScriptPath
@@ -332,10 +337,11 @@ if ($greeterSelinux -notmatch 'allow xdm_t systemd_unit_file_t \(service \(statu
     $errors.Add('GREYWARD DMS Greeter SELinux policy is not narrowly scoped.')
 }
 $uwsmLabwcPatch = Get-Content -Raw -LiteralPath $uwsmLabwcPatchPath
-if ($uwsmLabwcPatch -notmatch 'TEMP_DROPIN_DIR' -or
-    $uwsmLabwcPatch -notmatch 'install -d -m 0755' -or
-    $uwsmLabwcPatch -notmatch 'GREYWARD_UWSM_LABWC_DROPIN_DIRECTORY') {
-    $errors.Add('GREYWARD UWSM Labwc patch does not create the reload drop-in directory safely.')
+if ($uwsmLabwcPatch -notmatch 'XDG_CONFIG_HOME' -or
+    $uwsmLabwcPatch -notmatch 'install -d -m\s*0755' -or
+    $uwsmLabwcPatch -notmatch 'XDG_RUNTIME_DIR' -or
+    $uwsmLabwcPatch -notmatch 'exec uwsm start -D Labwc:GREYWARD labwc') {
+    $errors.Add('GREYWARD session launcher does not create the UWSM reload drop-in directory safely.')
 }
 
 if (Test-Path -LiteralPath $portalConfigPath) {
@@ -774,28 +780,11 @@ if (Test-Path -LiteralPath $imageEntryPoint) {
         'greyward-dms-session-migrate',
         'greyward-dms.service',
         'greyward-labwc.desktop',
-        'greyward-session-idle.service',
         'greyward-session-lock'
     )) {
         if ($imageBuild -notmatch [regex]::Escape($requiredProductionSessionFile)) {
             $errors.Add("Production image staging does not include required session payload: $requiredProductionSessionFile")
         }
-    }
-}
-
-$sessionLockPath = Join-Path $repo 'environment\session\greyward-session-lock'
-if (Test-Path -LiteralPath $sessionLockPath) {
-    $sessionLock = Get-Content -Raw -LiteralPath $sessionLockPath
-    foreach ($requiredLockArgument in @(
-        '/usr/local/bin/greyward-dms',
-        'ipc call lock lock'
-    )) {
-        if ($sessionLock -notmatch $requiredLockArgument) {
-            $errors.Add("GREYWARD session lock is missing the DMS lock IPC contract: $requiredLockArgument")
-        }
-    }
-    if ($sessionLock -match 'swaylock|gtklock|--ignore-empty-password|loginctl terminate|systemctl (restart|stop) greetd') {
-        $errors.Add('GREYWARD session lock must use the DMS-native PAM/Wayland surface without a competing locker, empty-password bypass, or greetd restart.')
     }
 }
 
@@ -823,16 +812,14 @@ if (Test-Path -LiteralPath $dmsSettingsPath) {
     if ($dmsSettings -match '(?i)/home/stendev|stendev') {
         $errors.Add('Production DMS settings contain a developer-home reference.')
     }
-    foreach ($requiredDmsPath in @('/usr/share/greyward/dms/greyward-obsidian.json', '/usr/share/greyward/dms/greyward-symbol.svg')) {
+    foreach ($requiredDmsPath in @('/usr/share/greyward/dms/greyward-obsidian.json', '/usr/share/greyward/dms/greyward-symbol.svg', '/usr/share/backgrounds/greyward/greyward-wallpaper-black-art-4k.jpg')) {
         if ($dmsSettings -notmatch [regex]::Escape($requiredDmsPath)) {
             $errors.Add("Production DMS settings do not use the stable system asset path: $requiredDmsPath")
         }
     }
     $dmsSettingsJson = $dmsSettings | ConvertFrom-Json
-    $greeterWallpaperSync = Get-Content -Raw -LiteralPath $greeterWallpaperSyncPath
-    if ($greeterWallpaperSync -notmatch '"wallpaperPath": "/usr/share/backgrounds/greyward/greyward-wallpaper-black-art-4k\.jpg"' -or
-        $greeterWallpaperSync -notmatch '"wallpaperFillMode": "PreserveAspectCrop"') {
-        $errors.Add('DMS Greeter must receive the canonical GREYWARD wallpaper through its session.json contract.')
+    if ($dmsSettingsJson.greeterWallpaperFillMode -ne 'Fill') {
+        $errors.Add('DMS settings must keep the GREYWARD greetd background in Fill mode.')
     }
     if ($dmsSettingsJson.widgetBackgroundCustomColor -ne '#D8E0E7' -or [double]$dmsSettingsJson.widgetBackgroundCustomStrength -lt 0.2 -or $dmsSettingsJson.controlCenterTileColorMode -ne 'primary' -or $dmsSettingsJson.buttonColorMode -ne 'primary') {
         $errors.Add('DMS must retain the light-grey translucent widget material for the frosted desktop treatment.')
@@ -878,7 +865,7 @@ if (Test-Path -LiteralPath $dmsAppsDockLabelsPatchPath) {
 
 if (Test-Path -LiteralPath $dmsAppsDockToggleMinimizePatchPath) {
     $dmsAppsDockToggleMinimizePatch = Get-Content -Raw -LiteralPath $dmsAppsDockToggleMinimizePatchPath
-    if ($dmsAppsDockToggleMinimizePatch -notmatch 'toplevel\.minimized = true' -or $dmsAppsDockToggleMinimizePatch -notmatch 'toplevel\.activate\(\)') {
+    if ($dmsAppsDockToggleMinimizePatch -notmatch 'CompositorService\.toggleToplevel' -or $dmsAppsDockToggleMinimizePatch -notmatch 'CompositorService\.canMinimize') {
         $errors.Add('The GREYWARD AppsDock patch must restore unfocused windows and minimize the focused window.')
     }
 }
@@ -1085,11 +1072,8 @@ if (-not (Test-Path -LiteralPath $wallpaperDirectory -PathType Container)) {
         (Join-Path $repo 'environment\session\labwc\autostart')
     )) {
         $autostart = Get-Content -Raw -LiteralPath $autostartPath
-        if ($autostart -notmatch 'wallpaper set /usr/share/backgrounds/greyward/greyward-wallpaper-black-art-4k\.jpg') {
-            $errors.Add("Labwc autostart does not apply the real shared wallpaper path: $autostartPath")
-        }
-        if ($autostart -match 'wallpaper set .*DankMaterialShell/greyward-wallpaper\.png') {
-            $errors.Add("Labwc autostart still applies the compatibility symlink instead of the shared wallpaper path: $autostartPath")
+        if ($autostart -match 'ipc call wallpaper set') {
+            $errors.Add("Labwc autostart overrides user wallpaper state instead of using first-start defaults: $autostartPath")
         }
     }
 }

@@ -27,6 +27,7 @@ STATIC_REQUIRED = {
     "repositories.txt",
     "external-rpms.txt",
     "install-dms.sh",
+    "dms-release.json",
     "install-offline-flatpaks.sh",
     "provision.sh",
     "provision-firstboot.sh",
@@ -114,7 +115,7 @@ def main() -> int:
             if relative.lower() not in tree.files:
                 failures.append(f"ISO production payload is missing: {relative}")
 
-        for package in ("greyward-security-center", "greyward-security-context", "greyward-branding"):
+        for package in ("greyward-security-center", "greyward-security-context", "greyward-branding", "greyward-dms"):
             matches = sorted(
                 relative
                 for relative in tree.files

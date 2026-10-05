@@ -7,7 +7,9 @@ status first, then the repository map before editing a subsystem.
 
 Read the [ISO rebuild quickstart](architecture/ISO_REBUILD_QUICKSTART.md), then
 the full [ISO creation and installation runbook](architecture/ISO_CREATION.md)
-before creating, attaching, or validating any GREYWARD installer ISO. It is
+before creating, attaching, or validating any GREYWARD installer ISO.
+Also read the active [installer compatibility investigation](architecture/ISO_INSTALLER_COMPATIBILITY.md):
+only the product ISO may boot during acceptance; no answer media or preseeded interactions. It is
 the canonical recipe and incident-prevention record for the internal alpha
 image path; do not rely on an old session report or an unrecorded VM workflow.
 The runbook also records the known-good 2026-09-11 Flatpak-finalization ISO
@@ -46,6 +48,16 @@ For any task, read only this minimum context before opening a large subsystem:
 Then inspect the smallest implementation and test files named by the map. Read
 `docs/history/` only when historical evidence or a migration decision is
 relevant; it never overrides current documentation.
+
+The active [DMS 1.6.2 migration tracker](architecture/DMS_1_6_MIGRATION_PLAN.md)
+defines candidate packaging, exact patch assembly and acceptance gates. It is not a
+release-validation record.
+
+The 4 October [final architecture audit](architecture/FINAL_ARCHITECTURE_AUDIT.md)
+and [build/ISO audit](architecture/BUILD_ISO_AUDIT.md) assess the actual local
+candidate and development guest. Their [pre-release backlog](plans/PRE_RELEASE_IMPROVEMENTS.md)
+contains proposed engineering work; the audit does not change release acceptance
+or replace the executable ISO runbook.
 
 ## Task routing
 
@@ -143,6 +155,10 @@ implementation.
   — current Software/Flatpak integration plan.
 
 ## Historical material
+
+The [5 October pre-release implementation record](history/migrations/2026-10-05-pre-release-implementation.md)
+documents the published migration, installer and portable-DNS changes and their
+validation limits.
 
 Historical migration notes, session reports, screenshots, and superseded plans
 are under [history/](history/README.md). They explain decisions or evidence but are not

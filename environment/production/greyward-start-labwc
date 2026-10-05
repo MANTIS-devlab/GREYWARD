@@ -44,4 +44,9 @@ if [ "$software_renderer" = true ]; then
   export WLR_DRM_NO_MODIFIERS=1
 fi
 
+# UWSM 0.24.3's Labwc plugin writes 55_reload.conf before creating its
+# destination. Prepare both supported unit rungs in this package-owned
+# launcher; reinstalling UWSM cannot remove this fix. No upstream file edits.
+install -d -m 0755 "${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user/wayland-wm@labwc.service.d"
+install -d -m 0755 "${XDG_RUNTIME_DIR:?Missing user runtime directory}/systemd/user/wayland-wm@labwc.service.d"
 exec uwsm start -D Labwc:GREYWARD labwc

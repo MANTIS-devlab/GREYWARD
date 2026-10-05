@@ -8,13 +8,13 @@ set -euo pipefail
 
 usage() {
   cat <<'EOF'
-Usage: environment/image/build.sh [--output DIRECTORY] [--security-rpm FILE]... [--security-build-manifest FILE] [--production-rpm FILE]... --branding-rpm FILE [--baseline FILE] [--require-complete]
+Usage: environment/image/build.sh [--output DIRECTORY] [--security-rpm FILE]... [--security-build-manifest FILE] [--dms-rpm FILE] [--production-rpm FILE]... --branding-rpm FILE [--baseline FILE] [--require-complete]
 
 Without --security-rpm this prepares an incomplete development input set and
 marks the missing production RPMs in the manifest. A production image tool
-must supply exactly three GREYWARD RPMs: greyward-branding,
+must supply exactly five GREYWARD RPMs: greyward-branding, greyward-session,
 greyward-security-center, and
-greyward-security-context, plus every pinned external production RPM listed in
+greyward-security-context, greyward-dms, plus every pinned external production RPM listed in
 environment/production/external-rpms.txt. Use
   --require-complete to reject an incomplete input set instead of preparing it
   for source inspection. Complete staging also requires the manifest emitted
@@ -28,6 +28,8 @@ output="$repo_root/output/greyward-production-inputs"
 security_rpms=()
 production_rpms=()
 branding_rpm=''
+dms_rpm=''
+session_rpm=''
 security_build_manifest=''
 baseline=''
 require_complete=false
@@ -60,6 +62,14 @@ while (($#)); do
     --production-rpm)
       (($# >= 2)) || { usage >&2; exit 2; }
       production_rpms+=("$(realpath -e "$2")")
+      shift 2
+      ;;
+    --session-rpm) (($# >= 2)) || exit 2; session_rpm=$(realpath -e "$2"); test "$(rpm -qp --qf '%{NAME}' "$session_rpm")" = greyward-session; shift 2 ;;
+    --dms-rpm)
+      (($# >= 2)) || { usage >&2; exit 2; }
+      [[ -z "$dms_rpm" ]] || { echo 'Duplicate DMS runtime RPM' >&2; exit 2; }
+      dms_rpm=$(realpath -e "$2")
+      test "$(rpm_query -qp --qf '%{NAME}' "$dms_rpm")" = greyward-dms
       shift 2
       ;;
     --branding-rpm)
@@ -127,17 +137,16 @@ for required in \
   "$production/provision-firstboot.sh" "$production/provision-firstboot.service" \
   "$production/firstboot-status.sh" "$production/firstboot-status.service" \
   "$production/greyward-sync-greeter-wallpaper" \
-  "$production/artifact-policy.json" \
+  "$production/artifact-policy.json" "$production/dms-release.json" \
   "$production/security-center-contract.tsv" \
   "$security_context_unit" \
   "$production/manifest.json" "$patches/dms/launcher-canonical-hitbox.patch" \
-  "$patches/dms/polkit-auth-dialog.patch" "$patches/dms/running-apps-icon-scale.patch" \
+  "$patches/dms/polkit-auth-dialog.patch" \
   "$patches/dms/greyward-settings-curation.patch" \
   "$patches/dms/greyward-labwc-runtime.patch" \
   "$patches/dms/apps-dock-taskbar-labels.patch" \
   "$patches/dms/apps-dock-toggle-minimize.patch" \
   "$patches/dms/apps-dock-spacing.patch" \
-  "$patches/dms/disable-changelog.patch" \
   "$patches/dms/greyward-flatpak-icon-resolution.patch" \
   "$patches/dms/greyward-tray-icon-fallback.patch" \
   "$session/dankmaterialshell/settings.json" \
@@ -177,6 +186,13 @@ if ((center_count > 1 || context_count > 1)); then
 fi
 if $require_complete && ((center_count != 1 || context_count != 1)); then
   echo "Complete production staging requires one greyward-security-center RPM and one greyward-security-context RPM." >&2
+  exit 2
+fi
+if $require_complete && [[ -z "$session_rpm" ]]; then
+  echo "Complete staging requires a greyward-session RPM" >&2; exit 2
+fi
+if $require_complete && [[ -z "$dms_rpm" ]]; then
+  echo "Complete production staging requires a verified greyward-dms RPM." >&2
   exit 2
 fi
 if $require_complete && [[ -z "$branding_rpm" ]]; then
@@ -221,7 +237,7 @@ cp -a "$production/packages.txt" "$production/repositories.txt" "$production/ins
   "$production/provision-firstboot.service" "$production/firstboot-status.sh" \
   "$production/firstboot-status.service" "$production/greyward-sync-greeter-wallpaper" \
   "$production/manifest.json" \
-  "$production/artifact-policy.json" "$production/security-center-contract.tsv" "$output/"
+  "$production/artifact-policy.json" "$production/dms-release.json" "$production/security-center-contract.tsv" "$output/"
 mkdir -p "$output/desktop-entry-overrides"
 cp -a "$production/desktop-entry-overrides/rygel-preferences.desktop" \
   "$output/desktop-entry-overrides/"
@@ -236,12 +252,6 @@ mkdir -p "$output/audit" "$output/selinux" "$output/crypto-policy"
 cp -a "$production/crypto-policy/GREYWARD.pmod" "$output/crypto-policy/"
 cp -a "$production/audit/greyward.rules" "$output/audit/"
 cp -a "$production/selinux/greyward-dms-greeter.cil" "$output/selinux/"
-cp -a "$production/patch-uwsm-labwc.sh" "$output/"
-mkdir -p "$output/security-context"
-# Keep the session unit in the production stage as well as in the RPM. This
-# lets the first-boot finalizer replace a stale package-owned unit when an ISO
-# is rebuilt from an older component RPM, while retaining one canonical source.
-cp -a "$security_context_unit" "$output/security-context/"
 # Keep the production stage deliberately curated.  The source session tree
 # also contains the disposable VM's Labwc environment/autostart files; those
 # force a software renderer and a Virtual-1 mode and must stay in the
@@ -251,12 +261,14 @@ mkdir -p "$output/session"
 for session_file in \
   greyward-decoration.tokens.conf \
   greyward-display-power \
+  greyward-dms \
+  greyward-dms-state-migrate \
+  greyward-dms-runtime-check \
   greyward-dms-session-migrate \
   greyward-dms.service \
   greyward-labwc.desktop \
   greyward-minimize.sh \
   greyward-restore.sh \
-  greyward-session-idle.service \
   greyward-session-lock \
   hyprland.conf; do
   cp -a "$session/$session_file" "$output/session/"
@@ -264,7 +276,7 @@ done
 cp -a "$production/labwc-autostart" "$production/labwc-environment" "$output/"
 cp -a "$production/greyward-start-labwc" "$output/"
 cp -a "$production/dconf" "$output/dconf"
-cp -a "$patches/dms" "$output/patches/dms"
+# DMS patches are build inputs already recorded in the runtime receipt.
 # Labwc's compositor definition and theme are shared with the development VM,
 # but its VM-only environment and autostart are intentionally not staged.
 mkdir -p "$output/labwc/Greyward"
@@ -272,10 +284,13 @@ cp -a "$session/labwc/rc.xml" "$output/labwc/"
 cp -a "$session/labwc/themerc" "$output/labwc/Greyward/"
 cp -a "$session/labwc/Greyward"/*.svg "$output/labwc/Greyward/"
 cp -a "$session/dankmaterialshell" "$output/dankmaterialshell"
+rm -rf "$output/dankmaterialshell/plugins"
 cp -a "$flatpak" "$output/flatpak"
 cp -a "$branding" "$output/branding"
 cp -a "$kickstart" "$output/installer.ks.tmpl"
 
+if [[ -n "$dms_rpm" ]]; then cp -a "$dms_rpm" "$output/rpms/"; fi
+if [[ -n "$session_rpm" ]]; then cp -a "$session_rpm" "$output/rpms/"; fi
 if [[ -n "$branding_rpm" ]]; then cp -a "$branding_rpm" "$output/rpms/"; fi
 for rpm in "${security_rpms[@]}"; do cp -a "$rpm" "$output/rpms/"; done
 for rpm in "${production_rpms[@]}"; do cp -a "$rpm" "$output/rpms/"; done
@@ -294,8 +309,9 @@ security_source_tree_sha256() {
   (
     cd "$repo_root/security-center"
     LC_ALL=C find . -type f \
-      ! -path './target/*' \
-      ! -path './node_modules/*' \
+      ! -path '*/target/*' \
+      ! -path '*/node_modules/*' \
+      ! -path '*/__pycache__/*' ! -name '*.pyc' \
       ! -path './.git/*' \
       -print0 | LC_ALL=C sort -z | while IFS= read -r -d '' file; do
         sha256sum "$file"
@@ -304,6 +320,18 @@ security_source_tree_sha256() {
 }
 
 if $require_complete; then
+  release_id=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["releaseId"])' "$production/dms-release.json")
+  receipt_path="./usr/lib/greyward/dms/$release_id/release.json"
+  rpm2cpio "$dms_rpm" | cpio -i --quiet --to-stdout "$receipt_path" > "$output/artifacts/dms-build-manifest.json"
+  python3 - "$production/dms-release.json" "$output/artifacts/dms-build-manifest.json" <<'PY'
+import json,sys
+expected,actual=[json.load(open(p)) for p in sys.argv[1:]]
+for key in ('schema','releaseId','dms','inputs','patches','shell','build','compatibility'):
+    if key == 'build':
+        if any(actual[key].get(k) != v for k,v in expected[key].items()): raise SystemExit('DMS build input mismatch')
+    elif expected[key] != actual.get(key): raise SystemExit('DMS runtime receipt mismatch: '+key)
+if not actual.get('binarySha256') or not actual.get('firstPartyFiles'): raise SystemExit('Incomplete DMS RPM receipt')
+PY
   for branding_path in \
     /usr/share/anaconda/pixmaps/greyward-anaconda-logo.png \
     /usr/share/anaconda/pixmaps/greyward-anaconda.css \
@@ -352,6 +380,9 @@ fi
   done < "$production/packages.txt"
   if [[ -n "$branding_rpm" ]]; then
     printf 'rpm\t%s\t%s\tGREYWARD_PACKAGE_INPUT\n' "$(basename "$branding_rpm")" "$(basename "$branding_rpm")"
+  fi
+  if [[ -n "$dms_rpm" ]]; then
+    printf 'rpm\t%s\t%s\tGREYWARD_PACKAGE_INPUT\n' "$(basename "$dms_rpm")" "$(basename "$dms_rpm")"
   fi
   for rpm in "${security_rpms[@]}"; do
     printf 'rpm\t%s\t%s\tNEVRA_REQUIRES_FEDORA_QUERY\n' "$(basename "$rpm")" "$(basename "$rpm")"
@@ -405,10 +436,12 @@ cat > "$output/build-manifest.json" <<EOF
   "kickstart_template_sha256": "$(sha256 "$kickstart")",
   "artifact_policy_sha256": "$(sha256 "$production/artifact-policy.json")",
   "branding_rpm": "$(basename "${branding_rpm:-MISSING}")",
+  "dms_rpm": "$(basename "${dms_rpm:-MISSING}")",
+  "dms_release_manifest_sha256": "$(sha256 "$production/dms-release.json")",
   "security_rpm_count": ${#security_rpms[@]},
   "security_build_manifest": "$(if [[ -n "$security_build_manifest" ]]; then printf '%s' artifacts/security-center-build-manifest.tsv; else printf '%s' MISSING; fi)",
   "production_dependency_rpm_count": ${#production_rpms[@]},
-  "production_inputs_complete": $([[ -n "$branding_rpm" && $center_count -eq 1 && $context_count -eq 1 && ${#production_rpms[@]} -eq ${#expected_production_rpms[@]} ]] && printf true || printf false),
+  "production_inputs_complete": $([[ -n "$session_rpm" && -n "$dms_rpm" && -n "$branding_rpm" && $center_count -eq 1 && $context_count -eq 1 && ${#production_rpms[@]} -eq ${#expected_production_rpms[@]} ]] && printf true || printf false),
   "security_rpms": [$security_rpm_json],
   "artifacts": {
     "package_inventory": "artifacts/package-inventory.txt",
@@ -421,8 +454,8 @@ cat > "$output/build-manifest.json" <<EOF
 }
 EOF
 
-if [[ -z "$branding_rpm" ]] || ((${#security_rpms[@]} != 2 || ${#production_rpms[@]} != ${#expected_production_rpms[@]})); then
-  echo "WARNING: staged inputs are incomplete; provide the GREYWARD branding RPM, two Security Center RPMs, and every pinned external RPM for production image construction." >&2
+if [[ -z "$branding_rpm" || -z "$dms_rpm" ]] || ((${#security_rpms[@]} != 2 || ${#production_rpms[@]} != ${#expected_production_rpms[@]})); then
+  echo "WARNING: staged inputs are incomplete; provide the GREYWARD branding and DMS RPMs, two Security Center RPMs, and every pinned external RPM for production image construction." >&2
 fi
 # cp preserves Windows checkout line endings. Normalize only the staged source
 # after provenance checks, before dependency building and payload hashing.

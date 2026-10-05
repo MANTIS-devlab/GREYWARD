@@ -1,5 +1,14 @@
 # Public repository publication
 
+The clean public checkout is `F:\GREYWARD-public`, with remote
+`https://github.com/MANTIS-devlab/GREYWARD.git`. Update that checkout from the
+validated current source tree; never merge or push engineering repository refs
+into it. Preserve unrelated public-only files and release records, stage only
+reviewed source changes, retain executable script modes, and scan the candidate
+for secrets before committing and pushing. The initial-export procedure below
+applies when creating a new public checkout, not to subsequent commits in the
+existing clean public history.
+
 The existing local repository is an engineering record, not a publication
 artifact. Earlier commits contain development-only credentials and workstation
 identifiers that were removed from the current tree but remain recoverable from

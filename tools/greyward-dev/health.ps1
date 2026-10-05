@@ -20,8 +20,8 @@ else
 fi
 check QUICKSHELL pgrep -u "$USER" -f '(^|/)qs( |$)|quickshell'
 check USER_SHELL systemctl --user is-active greyward-dms.service
-check DMS_PIN bash -lc 'test -x /usr/local/bin/greyward-dms && test "$(cat /usr/local/share/greyward-dms/v1.5.3/COMMIT)" = 069ddab041c738236a8910e4c39b65d9628d3018'
-check DMS_MONITOR bash -lc 'test -x /usr/bin/dgop'
+check DMS_PIN /usr/libexec/greyward-dms-verify
+check DMS_MONITOR /usr/local/libexec/greyward-dms-runtime-check
 check DMS_SEARCH bash -lc 'test -x /usr/bin/dsearch'
 check GREETD sudo systemctl is-active greetd.service
 check GREETER bash -lc 'test -x /usr/bin/dms-greeter && test -s /etc/greetd/config.toml && test -s /etc/pam.d/greetd'

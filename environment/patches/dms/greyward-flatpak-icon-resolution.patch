@@ -1,50 +1,66 @@
 --- a/quickshell/dms/Services/IconThemeService.qml
 +++ b/quickshell/dms/Services/IconThemeService.qml
-@@ -13,9 +13,9 @@ Singleton {
+@@ -20,6 +20,8 @@
+     property string systemProbedTheme: ""
+     readonly property string managedTheme: settingsTheme || systemProbedTheme
  
-     readonly property string managedTheme: {
-         if (typeof SettingsData === "undefined")
--            return "";
-+            return "hicolor";
-         const t = SettingsData.resolveIconTheme();
--        return (!t || t === "System Default") ? "" : t;
-+        return (!t || t === "System Default") ? "hicolor" : t;
-     }
- 
++    property var flatpakActiveShares: []
++    property int flatpakGeneration: 0
      property var _searchDirs: []
-@@ -29,7 +29,17 @@ Singleton {
-         const localData = Paths.strip(StandardPaths.writableLocation(StandardPaths.GenericDataLocation));
-         const home = Paths.strip(StandardPaths.writableLocation(StandardPaths.HomeLocation));
-         const dataDirs = xdg.trim() !== "" ? xdg.split(":").concat([localData]) : ["/usr/share", "/usr/local/share", localData];
--        for (const flatpak of [localData + "/flatpak/exports/share", "/var/lib/flatpak/exports/share"]) {
-+        // Flatpak normally publishes these through its exports directory. Some
-+        // valid installations also retain the current deployment only below
-+        // app/<id>/<arch>/<branch>/active/export. Include both locations so
-+        // icon lookup remains correct after an app update and does not require
-+        // copying third-party artwork into GREYWARD's icon theme.
-+        for (const flatpak of [
-+            localData + "/flatpak/exports/share",
-+            "/var/lib/flatpak/exports/share",
-+            localData + "/flatpak/app/*/*/*/active/export/share",
-+            "/var/lib/flatpak/app/*/*/*/active/export/share"
-+        ]) {
+     property string _dirsForTheme: ""
+     property var _cache: ({})
+@@ -45,7 +47,7 @@
              if (!dataDirs.includes(flatpak))
                  dataDirs.push(flatpak);
          }
-@@ -51,12 +61,6 @@ Singleton {
+-        return dataDirs.filter((dir, index) => dir && dataDirs.indexOf(dir) === index);
++        return dataDirs.concat(flatpakActiveShares).filter((dir, index) => dir && dataDirs.indexOf(dir) === index);
+     }
  
-     function _rebuild() {
-         _cache = ({});
--        if (!managedTheme) {
--            _searchDirs = [];
--            _dirsForTheme = "";
--            _bumpRevision();
--            return;
--        }
-         const theme = managedTheme;
-         const bases = _baseDirs.join(" ");
-         const script = `BASES="${bases}"
-@@ -86,7 +90,7 @@ for t in $order; do for b in $BASES; do d="$b/$t"; [ -d "$d" ] && echo "$d"; done; done`;
+     readonly property var _baseDirs: {
+@@ -65,8 +67,10 @@
+     }
+ 
+     onManagedThemeChanged: _rebuild()
++    onFlatpakActiveSharesChanged: _rebuild()
+     Component.onCompleted: {
+         Paths.iconResolver = name => resolve(name);
++        _probeActiveExports();
+         _probeSystemTheme();
+         _rebuild();
+     }
+@@ -75,11 +79,30 @@
+         target: DesktopEntries
+ 
+         function onApplicationsChanged() {
++            root._probeActiveExports();
+             root._indexLooseIcons(() => root._invalidateMisses());
+         }
+     }
+ 
+     // "System Default" leaves Qt's lookup, which sees only hicolor unless a Qt platform theme or QS_ICON_THEME is configured.
++    // Resolve real directories rather than passing wildcard paths to find.
++    function _probeActiveExports() {
++        const generation = ++flatpakGeneration;
++        const localData = Paths.strip(StandardPaths.writableLocation(StandardPaths.GenericDataLocation));
++        const script = `for base; do
++for dir in "$base"/app/*/*/*/active/export/share; do
++[ -d "$dir/icons" ] && printf '%s\\n' "$dir"
++done
++done`;
++        Proc.runCommand("greywardActiveExports", ["sh", "-c", script, "active-exports", localData + "/flatpak", "/var/lib/flatpak"], (out, code) => {
++            if (root.flatpakGeneration !== generation)
++                return;
++            const shares = (out || "").trim().split("\n").filter(s => s);
++            if (JSON.stringify(shares) !== JSON.stringify(root.flatpakActiveShares))
++                root.flatpakActiveShares = shares;
++        });
++    }
++
+     function _probeSystemTheme() {
+         if (Quickshell.env("QS_ICON_THEME"))
+             return;
+@@ -182,7 +205,7 @@
  
      function resolve(name) {
          const _dep = revision;

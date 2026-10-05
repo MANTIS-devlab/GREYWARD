@@ -1,7 +1,8 @@
 [CmdletBinding()]
-param([switch]$SkipBrandingValidation)
+param([switch]$SkipBrandingValidation, [string]$DmsRuntimeRpm)
 . (Join-Path $PSScriptRoot 'common.ps1')
 Repair-GreywardSsh | Out-Null
+if ($DmsRuntimeRpm -and -not (Test-Path -LiteralPath $DmsRuntimeRpm)) { throw 'DMS runtime RPM does not exist.' }
 if (-not $SkipBrandingValidation) {
     & (Join-Path $script:RepoRoot 'tools\validate-branding.ps1')
     if ($LASTEXITCODE -ne 0) { throw 'Branding validation failed; deployment was not started.' }
@@ -9,10 +10,13 @@ if (-not $SkipBrandingValidation) {
 $release = (Get-Date).ToUniversalTime().ToString('yyyyMMddTHHmmssZ')
 $remoteRoot = "/home/stendev/.local/share/greyward/releases/$release"
 Invoke-GreywardSessionSsh "mkdir -p '$remoteRoot'"
-Invoke-GreywardSessionSsh "mkdir -p '$remoteRoot/patches'"
 Invoke-GreywardScp -Recursive -Source (Join-Path $script:RepoRoot 'branding') -Destination "$($script:SshAlias):$remoteRoot/"
 Invoke-GreywardScp -Recursive -Source (Join-Path $script:RepoRoot 'environment\production') -Destination "$($script:SshAlias):$remoteRoot/"
-Invoke-GreywardScp -Recursive -Source (Join-Path $script:RepoRoot 'environment\patches\dms') -Destination "$($script:SshAlias):$remoteRoot/patches/"
+Invoke-GreywardSessionSsh "mkdir -p '$remoteRoot/production/session'"
+foreach ($helper in @('greyward-dms', 'greyward-dms-state-migrate', 'greyward-dms-runtime-check')) {
+    Invoke-GreywardScp -Source (Join-Path $script:RepoRoot "environment\session\$helper") -Destination "$($script:SshAlias):$remoteRoot/production/session/$helper"
+}
+if ($DmsRuntimeRpm) { Invoke-GreywardScp -Source $DmsRuntimeRpm -Destination "$($script:SshAlias):$remoteRoot/greyward-dms.rpm" }
 Invoke-GreywardScp -Recursive -Source (Join-Path $script:RepoRoot 'environment\session\labwc') -Destination "$($script:SshAlias):$remoteRoot/"
 Invoke-GreywardScp -Recursive -Source (Join-Path $script:RepoRoot 'environment\session\dankmaterialshell') -Destination "$($script:SshAlias):$remoteRoot/"
 Invoke-GreywardScp -Source (Join-Path $script:RepoRoot 'environment\session\hyprland.conf') -Destination "$($script:SshAlias):$remoteRoot/hyprland.conf"
@@ -34,25 +38,22 @@ sudo install -D -m 0644 "`$release/production/crypto-policy/GREYWARD.pmod" /etc/
 sudo update-crypto-policies --set DEFAULT:GREYWARD
 test "`$(sudo update-crypto-policies --show)" = DEFAULT:GREYWARD
 sudo update-crypto-policies --is-applied
-sudo env GREYWARD_DMS_PATCH_DIR="`$release/patches/dms" bash "`$release/production/install-dms.sh"
+if [ -f "`$release/greyward-dms.rpm" ]; then
+  sudo env GREYWARD_DMS_RPM="`$release/greyward-dms.rpm" GREYWARD_DMS_ACTIVATE=1 bash "`$release/production/install-dms.sh"
+else
+  sudo bash "`$release/production/install-dms.sh"
+fi
 if command -v rsvg-convert >/dev/null 2>&1; then rsvg-convert -w 1920 -h 1080 "`$release/branding/wallpaper/greyward-wallpaper.svg" -o "`$release/branding/wallpaper/greyward-wallpaper.png"; fi
 mkdir -p ~/.local/share/greyward
 mkdir -p ~/.config/DankMaterialShell
 install -D -m 0644 "`$release/dankmaterialshell/greyward-obsidian.json" ~/.config/DankMaterialShell/greyward-obsidian.json
-install -D -m 0644 "`$release/dankmaterialshell/plugin_settings.json" ~/.config/DankMaterialShell/plugin_settings.json
+test -e ~/.config/DankMaterialShell/plugin_settings.json || install -D -m 0644 "`$release/dankmaterialshell/plugin_settings.json" ~/.config/DankMaterialShell/plugin_settings.json
 install -D -m 0644 "`$release/branding/source/greyward-symbol.svg" ~/.config/DankMaterialShell/greyward-symbol.svg
 sudo install -d -m 0755 /usr/share/greyward/dms
 sudo install -D -m 0644 "`$release/dankmaterialshell/greyward-obsidian.json" /usr/share/greyward/dms/greyward-obsidian.json
 sudo install -D -m 0644 "`$release/branding/source/greyward-symbol.svg" /usr/share/greyward/dms/greyward-symbol.svg
 sudo install -d -o greeter -g greeter -m 2770 /var/cache/dms-greeter
 sudo install -D -m 0644 "`$release/dankmaterialshell/settings.json" /var/cache/dms-greeter/settings.json
-sudo install -D -m 0644 /dev/null /var/cache/dms-greeter/session.json
-sudo tee /var/cache/dms-greeter/session.json >/dev/null <<'EOF'
-{
-  "wallpaperPath": "/usr/share/backgrounds/greyward/greyward-wallpaper-black-art-4k.jpg",
-  "wallpaperFillMode": "PreserveAspectCrop"
-}
-EOF
 sudo install -d -m 0755 /usr/share/backgrounds/greyward
 find "`$release/branding/wallpaper" -maxdepth 1 -type f -name 'greyward-wallpaper-*.jpg' -exec sudo install -m 0644 {} /usr/share/backgrounds/greyward/ \;
 test "`$(find "`$release/branding/wallpaper" -maxdepth 1 -type f -name 'greyward-wallpaper-*.jpg' | wc -l)" -eq 2
@@ -60,34 +61,19 @@ for wallpaper_file in \
   greyward-wallpaper-black-art-4k.jpg \
   greyward-wallpaper-2109-4k.jpg; do test -f "/usr/share/backgrounds/greyward/`$wallpaper_file"; done
 sudo install -D -m 0644 /usr/share/backgrounds/greyward/greyward-wallpaper-black-art-4k.jpg /var/cache/dms-greeter/greeter_wallpaper_override.jpg
-sudo chown greeter:greeter /var/cache/dms-greeter/settings.json /var/cache/dms-greeter/session.json /var/cache/dms-greeter/greeter_wallpaper_override.jpg
+sudo chown greeter:greeter /var/cache/dms-greeter/settings.json /var/cache/dms-greeter/greeter_wallpaper_override.jpg
 rm -f ~/.config/DankMaterialShell/greyward-wallpaper.png
 ln -s /usr/share/backgrounds/greyward/greyward-wallpaper-black-art-4k.jpg ~/.config/DankMaterialShell/greyward-wallpaper.png
-mkdir -p ~/.config/DankMaterialShell/plugins/greywardPublicIp
-install -D -m 0644 "`$release/dankmaterialshell/plugins/greywardPublicIp/plugin.json" ~/.config/DankMaterialShell/plugins/greywardPublicIp/plugin.json
-install -D -m 0644 "`$release/dankmaterialshell/plugins/greywardPublicIp/PublicIpWidget.qml" ~/.config/DankMaterialShell/plugins/greywardPublicIp/PublicIpWidget.qml
-mkdir -p ~/.config/DankMaterialShell/plugins/greywardNetworkTraffic
-install -D -m 0644 "`$release/dankmaterialshell/plugins/greywardNetworkTraffic/plugin.json" ~/.config/DankMaterialShell/plugins/greywardNetworkTraffic/plugin.json
-install -D -m 0644 "`$release/dankmaterialshell/plugins/greywardNetworkTraffic/NetworkTrafficWidget.qml" ~/.config/DankMaterialShell/plugins/greywardNetworkTraffic/NetworkTrafficWidget.qml
-install -D -m 0644 "`$release/dankmaterialshell/plugins/greywardNetworkTraffic/NetworkTrafficModel.qml" ~/.config/DankMaterialShell/plugins/greywardNetworkTraffic/NetworkTrafficModel.qml
-install -D -m 0644 "`$release/dankmaterialshell/plugins/greywardNetworkTraffic/NetworkTrafficMath.js" ~/.config/DankMaterialShell/plugins/greywardNetworkTraffic/NetworkTrafficMath.js
-mkdir -p ~/.config/DankMaterialShell/plugins/greywardSecure
-install -D -m 0644 "`$release/dankmaterialshell/plugins/greywardSecure/plugin.json" ~/.config/DankMaterialShell/plugins/greywardSecure/plugin.json
-install -D -m 0644 "`$release/dankmaterialshell/plugins/greywardSecure/SecureWidget.qml" ~/.config/DankMaterialShell/plugins/greywardSecure/SecureWidget.qml
-mkdir -p ~/.config/DankMaterialShell/plugins/greywardSoftware
-install -D -m 0644 "`$release/dankmaterialshell/plugins/greywardSoftware/plugin.json" ~/.config/DankMaterialShell/plugins/greywardSoftware/plugin.json
-install -D -m 0644 "`$release/dankmaterialshell/plugins/greywardSoftware/SoftwareWidget.qml" ~/.config/DankMaterialShell/plugins/greywardSoftware/SoftwareWidget.qml
-grep -q '"version": "2.0.0"' ~/.config/DankMaterialShell/plugins/greywardSecure/plugin.json
-test -s ~/.config/DankMaterialShell/plugins/greywardSecure/SecureWidget.qml
-grep -q '"id": "greywardNetworkTraffic"' ~/.config/DankMaterialShell/plugins/greywardNetworkTraffic/plugin.json
-test -s ~/.config/DankMaterialShell/plugins/greywardNetworkTraffic/NetworkTrafficWidget.qml
+# The runtime RPM owns first-party plugins; preserve user copies/preferences.
+test -s /etc/xdg/quickshell/dms-plugins/greywardSecure/SecureWidget.qml
+test -s /etc/xdg/quickshell/dms-plugins/greywardNetworkTraffic/NetworkTrafficWidget.qml
 mkdir -p ~/.config/labwc ~/.local/share/themes/Greyward/labwc
 mkdir -p ~/.config/greyward
 cp "`$release/labwc/rc.xml" ~/.config/labwc/rc.xml
 cp "`$release/labwc/environment" ~/.config/labwc/environment
 cp "`$release/labwc/autostart" ~/.config/labwc/autostart
 chmod 0755 ~/.config/labwc/autostart
-install -D -m 0644 "`$release/dankmaterialshell/settings.json" ~/.config/DankMaterialShell/settings.json
+test -e ~/.config/DankMaterialShell/settings.json || install -D -m 0644 "`$release/dankmaterialshell/settings.json" ~/.config/DankMaterialShell/settings.json
 if [ ! -e ~/.local/share/themes/Greyward/labwc/themerc.greyward-original ] && [ -e ~/.local/share/themes/Greyward/labwc/themerc ]; then cp ~/.local/share/themes/Greyward/labwc/themerc ~/.local/share/themes/Greyward/labwc/themerc.greyward-original; fi
 cp "`$release/labwc/Greyward/themerc" ~/.local/share/themes/Greyward/labwc/themerc
 find "`$release/labwc/Greyward" -maxdepth 1 -type f -name '*.svg' -exec cp {} ~/.local/share/themes/Greyward/labwc/ \;
@@ -95,6 +81,9 @@ sudo install -D -m 0644 "`$release/greyward-labwc.desktop" /usr/share/wayland-se
 sudo install -D -m 0755 "`$release/greyward-start-labwc" /usr/local/libexec/greyward-start-labwc
 sudo install -D -m 0644 "`$release/greyward-dms.service" /etc/systemd/user/greyward-dms.service
 sudo install -D -m 0755 "`$release/greyward-dms-session-migrate" /usr/local/libexec/greyward-dms-session-migrate
+sudo install -D -m 0755 "`$release/production/session/greyward-dms-state-migrate" /usr/local/libexec/greyward-dms-state-migrate
+sudo install -D -m 0755 "`$release/production/session/greyward-dms-runtime-check" /usr/local/libexec/greyward-dms-runtime-check
+install -D -m 0755 "`$release/production/session/greyward-dms" ~/.local/bin/greyward-dms
 sudo install -D -m 0644 "`$release/flatpak/labwc-portals.conf" /etc/xdg-desktop-portal/labwc-portals.conf
 sudo install -d -m 0755 /usr/share/greyward/bazaar /usr/local/libexec
 sudo install -D -m 0644 "`$release/flatpak/greyward-privacy-runtime.yaml" /usr/share/greyward/bazaar/greyward-privacy.yaml
@@ -130,8 +119,8 @@ done
 sudo install -D -m 0640 "`$release/production/audit/greyward.rules" /etc/audit/rules.d/40-greyward.rules
 sudo install -D -m 0644 "`$release/production/selinux/greyward-dms-greeter.cil" /etc/selinux/targeted/greyward-dms-greeter.cil
 sudo semodule -i /etc/selinux/targeted/greyward-dms-greeter.cil
-sudo install -D -m 0755 "`$release/production/patch-uwsm-labwc.sh" /usr/local/libexec/greyward-patch-uwsm-labwc
-sudo /usr/local/libexec/greyward-patch-uwsm-labwc
+rpm -q greyward-session >/dev/null
+rpm -qf /usr/local/libexec/greyward-start-labwc >/dev/null
 sudo systemctl enable auditd.service audit-rules.service
 if sudo auditctl -s | grep -q '^enabled 2'; then
     sudo auditctl -l | grep -Eq '(^|[[:space:]])-k[[:space:]]+identity([[:space:]]|$)|(^|[[:space:]])key=identity([[:space:]]|$)'

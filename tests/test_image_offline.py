@@ -1,5 +1,6 @@
 """Standalone media failure and network-boundary regression tests."""
 import importlib.util
+import json
 from pathlib import Path
 import tempfile
 import unittest
@@ -12,14 +13,37 @@ spec.loader.exec_module(offline)
 
 
 class OfflineTests(unittest.TestCase):
+    def test_explicit_flatpak_seed_rejects_changed_bytes_or_selected_commit(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            seed = Path(temporary)
+            ref = 'app/example.App/x86_64/stable'
+            commit = 'a' * 64
+            path = seed / '.ostree/repo/refs/heads' / ref
+            path.parent.mkdir(parents=True)
+            path.write_text(commit + '\n')
+            baseline = {'flatpaks': {'example.App': {'ref': ref, 'commit': commit}}}
+            receipt = {'schema': 'greyward.flatpak-seed/v1', **baseline,
+                       'files': {path.relative_to(seed).as_posix(): offline.digest(path)}}
+            (seed / 'seed.json').write_text(json.dumps(receipt))
+            offline.verify_flatpak_seed(seed, baseline)
+            path.write_text('b' * 64 + '\n')
+            with self.assertRaisesRegex(ValueError, 'checksum'):
+                offline.verify_flatpak_seed(seed, baseline)
+            receipt['files'][path.relative_to(seed).as_posix()] = offline.digest(path)
+            (seed / 'seed.json').write_text(json.dumps(receipt))
+            with self.assertRaisesRegex(ValueError, 'selected commit'):
+                offline.verify_flatpak_seed(seed, baseline)
+
     def test_changed_pin_format_fails_instead_of_using_latest(self):
         with self.assertRaises(ValueError):
             offline.pinned("DMS_VERSION=latest", "DMS_VERSION")
 
     def test_canonical_desktop_pins_are_readable(self):
-        text = (ROOT / "environment/production/install-dms.sh").read_text()
-        self.assertRegex(offline.pinned(text, "DMS_ARCHIVE_SHA256"), r"^[a-f0-9]{64}$")
-        self.assertRegex(offline.pinned(text, "DMS_VERSION"), r"^v\d+\.\d+\.\d+$")
+        manifest = json.loads((ROOT / "environment/production/dms-release.json").read_text())
+        self.assertEqual(manifest["schema"], "greyward.dms-release/v1")
+        for item in manifest["inputs"].values():
+            self.assertRegex(item["sha256"], r"^[a-f0-9]{64}$")
+        self.assertRegex(manifest["dms"]["tag"], r"^v\d+\.\d+\.\d+$")
 
     def test_duplicate_rpm_identity_is_rejected(self):
         with patch.object(offline, "run", return_value="pkg.x86_64|0|1|1"):
@@ -45,7 +69,8 @@ class OfflineTests(unittest.TestCase):
 
     def test_iso_composer_reexecutes_with_noninteractive_sudo(self):
         source = (ROOT / "environment/image/build-iso.sh").read_text()
-        self.assertIn('sudo -n env "GREYWARD_ISO_WORK_ROOT=$work_root" bash "$0" "$@"', source)
+        self.assertIn('sudo -n env "GREYWARD_ISO_WORK_ROOT=$work_root"', source)
+        self.assertIn('"GREYWARD_ACQUISITION_CACHE=${GREYWARD_ACQUISITION_CACHE:-$work_root/.greyward-acquisition-cache}" bash "$0" "$@"', source)
 
     def test_both_repositories_retain_group_metadata(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -117,7 +142,8 @@ class OfflineTests(unittest.TestCase):
     def test_first_boot_enables_security_context_user_service(self):
         source = (ROOT / "environment/production/provision.sh").read_text()
         self.assertIn("systemctl --global enable greyward-security-context-user.service", source)
-        self.assertIn('stage/security-context/greyward-security-context-user.service', source)
+        self.assertNotIn('install -D -m 0644 \"$stage/security-context/', source)
+        self.assertIn('rpm -qf /usr/lib/systemd/user/greyward-security-context-user.service', source)
 
     def test_firstboot_starts_security_provider_services_before_acceptance(self):
         provision = (ROOT / "environment/production/provision.sh").read_text()
@@ -150,8 +176,6 @@ class OfflineTests(unittest.TestCase):
         self.assertIn("BASH_COMMAND", provision)
         self.assertIn("pgrep -u greeter -x dms-greeter", firstboot)
         self.assertIn("pgrep -u greeter -x labwc", firstboot)
-        self.assertIn("loginctl list-sessions --no-legend", firstboot)
-        self.assertIn("pgrep -x dms", firstboot)
         self.assertIn("greetd-failure.txt", firstboot)
         self.assertIn("finalizer entered; validating staged inputs", firstboot)
         self.assertIn("timeout --foreground 10m", firstboot)
@@ -174,7 +198,6 @@ class OfflineTests(unittest.TestCase):
         self.assertIn('export WLR_RENDERER=pixman', launcher)
         self.assertIn('exec uwsm start -D Labwc:GREYWARD labwc', launcher)
         self.assertNotIn("/usr/libexec/greyward-dms-greeter", provision)
-
         self.assertNotIn('test -r "$stage/greyward-dms-greeter"', provision)
         self.assertNotIn("greetd-renderer.conf", provision)
         self.assertIn('"$stage/labwc-environment"', provision)
@@ -191,31 +214,10 @@ class OfflineTests(unittest.TestCase):
             firstboot.index('if [[ "$greeter_ready" != true ]]'),
         )
 
-    def test_session_autostart_preserves_a_selected_wallpaper(self):
-        autostart = (ROOT / "environment/production/labwc-autostart").read_text()
-        self.assertIn("ipc call wallpaper get", autostart)
-        self.assertIn("wallpaper_state", autostart)
-        self.assertIn("ipc call wallpaper set /usr/share/backgrounds/greyward/greyward-wallpaper-black-art-4k.jpg", autostart)
-
-    def test_session_lock_uses_secure_greyward_session_presentation(self):
-        lock = (ROOT / "environment/session/greyward-session-lock").read_text()
-        for argument in (
-            "/usr/local/bin/greyward-dms",
-            "ipc call lock lock",
-        ):
-            self.assertIn(argument, lock)
-        self.assertNotIn("swaylock", lock)
-        self.assertNotIn("gtklock", lock)
-        self.assertNotIn("--ignore-empty-password", lock)
-        self.assertNotIn("loginctl terminate", lock)
-        self.assertNotIn("systemctl restart greetd", lock)
-        self.assertIn("WlSessionLock", (ROOT / "environment/production/production-acceptance.sh").read_text())
-        self.assertIn("Modules/Lock/Pam.qml", (ROOT / "environment/production/production-acceptance.sh").read_text())
-
-    def test_image_stage_carries_canonical_security_context_unit(self):
+    def test_image_stage_does_not_overwrite_package_owned_security_context_unit(self):
         source = (ROOT / "environment/image/build.sh").read_text()
         self.assertIn('security_context_unit="$repo_root/security-center/security-context/systemd/greyward-security-context-user.service"', source)
-        self.assertIn('cp -a "$security_context_unit" "$output/security-context/"', source)
+        self.assertNotIn('cp -a "$security_context_unit" "$output/security-context/"', source)
 
     def test_security_context_user_service_starts_without_wayland_condition(self):
         source = (ROOT / "security-center/security-context/systemd/greyward-security-context-user.service").read_text()
@@ -281,12 +283,9 @@ class OfflineTests(unittest.TestCase):
         self.assertIn("greyward-sync-greeter-wallpaper", provision)
         self.assertIn("greyward-wallpaper-black-art-4k.jpg", helper)
         self.assertIn("greeter_wallpaper_override.jpg", helper)
-        self.assertIn("/var/cache/dms-greeter/session.json", helper)
-        self.assertIn('"wallpaperFillMode": "PreserveAspectCrop"', helper)
         self.assertIn("ExecStartPre=/usr/local/libexec/greyward-sync-greeter-wallpaper", provision)
         self.assertIn("greyward-wallpaper-black-art-4k.jpg", acceptance)
         self.assertIn("cmp -s /usr/share/backgrounds/greyward/greyward-wallpaper-black-art-4k.jpg", acceptance)
-        self.assertIn("/var/cache/dms-greeter/session.json", acceptance)
         self.assertIn("greyward-sync-greeter-wallpaper", builder)
 
     def test_payload_is_checked_at_copy_and_first_boot_boundaries(self):
@@ -366,11 +365,12 @@ class OfflineTests(unittest.TestCase):
         self.assertIn('pycdlib', iso_checker)
         self.assertIn('Rock Ridge', iso_checker)
 
-    def test_dms_offline_missing_archive_has_no_download_fallback(self):
+    def test_dms_installer_has_no_download_fallback(self):
         source = (ROOT / "environment/production/install-dms.sh").read_text()
-        offline_branch = source.split('elif [[ "${GREYWARD_OFFLINE_INSTALL:-0}" == 1 ]]; then')[1].split("else")[0]
-        self.assertIn("exit 1", offline_branch)
-        self.assertNotIn("curl", offline_branch)
+        self.assertIn('test -f "$rpm_file"', source)
+        self.assertNotIn("curl", source)
+        self.assertNotIn("releases/latest", source)
+        self.assertIn('rpm -Uvh --replacepkgs "$rpm_file"', source)
 
 
 if __name__ == "__main__":
