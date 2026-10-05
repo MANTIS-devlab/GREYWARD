@@ -23,6 +23,6 @@ fn main() {
     assert!(text.contains("greyward.security.export/v1"));
     assert!(!text.contains("172.29.241.10"));
     clear_activity().expect("clear");
-    assert_eq!(load_activity().expect("load after clear"), [] as [greyward_security_backends::ActivityItem; 0]);
+    assert_eq!(load_activity().expect("load after clear").len(), 0);
     println!("export={} clear=ok", path.display());
 }
