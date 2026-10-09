@@ -7,12 +7,9 @@ use crate::facts::*;
 use chrono::Utc;
 use greyward_security_domain::{CollectionIssue, CollectionIssueCategory, LocalizedMessage};
 use std::fs;
-use std::io::{self, Read};
-use std::process::{Command, Output, Stdio};
+
 use std::thread;
 use std::time::{Duration, Instant};
-
-const COMMAND_TIMEOUT: Duration = Duration::from_secs(8);
 
 fn startup_provider_trace<T>(name: &str, provider: impl FnOnce() -> T) -> T {
     let trace_enabled = std::env::var_os("GREYWARD_STARTUP_TRACE").is_some()
@@ -28,69 +25,7 @@ fn startup_provider_trace<T>(name: &str, provider: impl FnOnce() -> T) -> T {
     value
 }
 
-/// Run one fixed provider command with a hard deadline.  A provider that is
-/// missing, wedged, or waiting on an unavailable system service must become a
-/// typed degraded fact instead of holding the whole Security Center request.
-pub(crate) fn bounded_output(program: &str, args: &[&str]) -> io::Result<Output> {
-    let mut child = Command::new(program)
-        .args(args)
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()?;
-    let mut stdout = child
-        .stdout
-        .take()
-        .ok_or_else(|| io::Error::other("provider stdout was not captured"))?;
-    let mut stderr = child
-        .stderr
-        .take()
-        .ok_or_else(|| io::Error::other("provider stderr was not captured"))?;
-    // Drain both pipes while the process runs. Waiting for the child before
-    // reading can deadlock when a provider emits more than a pipe buffer.
-    let stdout_reader = thread::spawn(move || {
-        let mut bytes = Vec::new();
-        let _ = stdout.read_to_end(&mut bytes);
-        bytes
-    });
-    let stderr_reader = thread::spawn(move || {
-        let mut bytes = Vec::new();
-        let _ = stderr.read_to_end(&mut bytes);
-        bytes
-    });
-    let deadline = Instant::now() + COMMAND_TIMEOUT;
-    loop {
-        match child.try_wait() {
-            Ok(Some(status)) => {
-                let stdout = stdout_reader.join().unwrap_or_default();
-                let stderr = stderr_reader.join().unwrap_or_default();
-                return Ok(Output {
-                    status,
-                    stdout,
-                    stderr,
-                });
-            }
-            Ok(None) => {}
-            Err(error) => {
-                let _ = child.kill();
-                let _ = child.wait();
-                let _ = stdout_reader.join();
-                let _ = stderr_reader.join();
-                return Err(error);
-            }
-        }
-        if Instant::now() >= deadline {
-            let _ = child.kill();
-            let _ = child.wait();
-            let _ = stdout_reader.join();
-            let _ = stderr_reader.join();
-            return Err(io::Error::new(
-                io::ErrorKind::TimedOut,
-                "provider command timed out",
-            ));
-        }
-        thread::sleep(Duration::from_millis(25));
-    }
-}
+pub(crate) use crate::provider_process::bounded_output;
 pub fn collect_core_facts() -> (Vec<AdapterFacts>, Vec<CollectionIssue>) {
     let now = Utc::now();
     let mut issues = Vec::new();
@@ -482,7 +417,9 @@ fn parse_zone(zone: &str) -> TrustZone {
 }
 
 pub fn collect_flatpak_facts() -> FlatpakFacts {
-    let version = bounded_output("flatpak", &["--version"]);
+    let deadline = Instant::now() + Duration::from_secs(8);
+    let version =
+        crate::provider_process::bounded_output_until("/usr/bin/flatpak", &["--version"], deadline);
     if version
         .as_ref()
         .map(|output| !output.status.success())
@@ -496,9 +433,25 @@ pub fn collect_flatpak_facts() -> FlatpakFacts {
     }
     let mut failed_scopes = 0u8;
     let mut inspected_scopes = 0u8;
+    // Named system installations need the new registry provider. Until then,
+    // this compatibility view must disclose incomplete discovery instead of
+    // claiming the default system/user scopes are the complete installation set.
+    let default_installation_only = crate::provider_process::bounded_output_until(
+        "/usr/bin/flatpak",
+        &["--installations"],
+        deadline,
+    )
+    .ok()
+    .filter(|output| output.status.success())
+    .and_then(|output| String::from_utf8(output.stdout).ok())
+    .is_some_and(|text| {
+        text.lines()
+            .filter(|line| !line.is_empty())
+            .eq(["/var/lib/flatpak"])
+    });
     let (user, system) = thread::scope(|scope| {
-        let user = scope.spawn(|| collect_flatpak_scope("user"));
-        let system = scope.spawn(|| collect_flatpak_scope("system"));
+        let user = scope.spawn(|| collect_flatpak_scope("user", deadline));
+        let system = scope.spawn(|| collect_flatpak_scope("system", deadline));
         (
             user.join().unwrap_or(Err(())),
             system.join().unwrap_or(Err(())),
@@ -523,68 +476,38 @@ pub fn collect_flatpak_facts() -> FlatpakFacts {
     FlatpakFacts {
         availability: match (inspected_scopes, failed_scopes) {
             (0, _) => FlatpakAvailability::Error,
-            (_, 0) => FlatpakAvailability::Available,
+            (_, 0)
+                if default_installation_only
+                    && apps
+                        .iter()
+                        .all(|app| app.permissions_state == FlatpakAvailability::Available) =>
+            {
+                FlatpakAvailability::Available
+            }
             _ => FlatpakAvailability::Partial,
         },
         apps,
         broad_permission_apps,
     }
 }
-fn collect_flatpak_scope(scope: &str) -> Result<Vec<FlatpakApp>, ()> {
+fn collect_flatpak_scope(scope: &str, deadline: Instant) -> Result<Vec<FlatpakApp>, ()> {
     let scope_flag = format!("--{scope}");
-    let output = bounded_output(
-        "flatpak",
+    let output = crate::provider_process::bounded_output_until(
+        "/usr/bin/flatpak",
         &[
             "list",
             "--app",
             scope_flag.as_str(),
+            "--json",
             "--columns=application,name,version,origin,arch,branch,runtime",
         ],
+        deadline,
     )
     .map_err(|_| ())?;
     if !output.status.success() {
         return Err(());
     }
-    let descriptors = String::from_utf8_lossy(&output.stdout)
-        .lines()
-        .filter_map(|line| {
-            let mut fields = line.split('\t');
-            let app_id = fields
-                .next()
-                .map(str::trim)
-                .filter(|value| !value.is_empty())?
-                .to_owned();
-            Some((
-                app_id.clone(),
-                fields.next().unwrap_or(app_id.as_str()).trim().to_owned(),
-                fields
-                    .next()
-                    .map(str::trim)
-                    .filter(|value| !value.is_empty())
-                    .map(ToOwned::to_owned),
-                fields
-                    .next()
-                    .map(str::trim)
-                    .filter(|value| !value.is_empty())
-                    .map(ToOwned::to_owned),
-                fields
-                    .next()
-                    .map(str::trim)
-                    .filter(|value| !value.is_empty())
-                    .map(ToOwned::to_owned),
-                fields
-                    .next()
-                    .map(str::trim)
-                    .filter(|value| !value.is_empty())
-                    .map(ToOwned::to_owned),
-                fields
-                    .next()
-                    .map(str::trim)
-                    .filter(|value| !value.is_empty())
-                    .map(ToOwned::to_owned),
-            ))
-        })
-        .collect::<Vec<_>>();
+    let descriptors = crate::flatpak_inventory::installed_records(&output.stdout)?;
     let mut apps = Vec::with_capacity(descriptors.len());
     // Flatpak has no supported bulk permission endpoint here. Keep the
     // authoritative per-app reads, but bound parallelism to four workers so
@@ -595,64 +518,98 @@ fn collect_flatpak_scope(scope: &str) -> Result<Vec<FlatpakApp>, ()> {
         let results = thread::scope(|scope| {
             let handles = batch
                 .into_iter()
-                .map(|(app_id, name, version, origin, arch, branch, runtime)| {
+                .map(|descriptor| {
                     let scope_flag = format!("--{scope_name}");
                     let app_scope = scope_name.clone();
-                    scope.spawn(move || FlatpakApp {
-                        permissions: flatpak_permissions(&app_id, scope_flag.as_str()),
-                        overrides: flatpak_overrides(&app_id, scope_flag.as_str()),
-                        app_id,
-                        name,
-                        scope: app_scope,
-                        origin,
-                        version,
-                        arch,
-                        branch,
-                        runtime,
+                    scope.spawn(move || {
+                        let reference = descriptor.reference();
+                        let before = flatpak_commit(&reference, &scope_flag, deadline);
+                        let (mut permissions, mut permissions_state) =
+                            flatpak_permissions(&reference, scope_flag.as_str(), deadline);
+                        let overrides =
+                            flatpak_overrides(&descriptor.application_id, &scope_flag, deadline);
+                        let after = flatpak_commit(&reference, &scope_flag, deadline);
+                        let (deployment_commit, identity_state) = match (before, after) {
+                            (Some(first), Some(second)) if first == second => {
+                                (Some(first), FlatpakAvailability::Available)
+                            }
+                            _ => {
+                                permissions.clear();
+                                permissions_state = FlatpakAvailability::Unavailable;
+                                (None, FlatpakAvailability::Unavailable)
+                            }
+                        };
+                        FlatpakApp {
+                            permissions,
+                            permissions_state,
+                            deployment_commit,
+                            identity_state,
+                            overrides,
+                            app_id: descriptor.application_id.clone(),
+                            name: descriptor.name.unwrap_or(descriptor.application_id),
+                            scope: app_scope,
+                            origin: descriptor.origin,
+                            version: descriptor.version,
+                            arch: Some(descriptor.arch),
+                            branch: Some(descriptor.branch),
+                            runtime: descriptor.runtime,
+                        }
                     })
                 })
                 .collect::<Vec<_>>();
             handles
                 .into_iter()
-                .filter_map(|handle| handle.join().ok())
-                .collect::<Vec<_>>()
+                .map(|handle| handle.join().map_err(|_| ()))
+                .collect::<Result<Vec<_>, _>>()
         });
-        apps.extend(results);
+        apps.extend(results?);
     }
     Ok(apps)
 }
-fn flatpak_permissions(app_id: &str, scope_flag: &str) -> Vec<String> {
-    bounded_output(
-        "flatpak",
-        &["info", scope_flag, "--show-permissions", app_id],
+fn flatpak_commit(
+    reference: &str,
+    scope_flag: &str,
+    deadline: Instant,
+) -> Option<greyward_security_domain::ContentGeneration> {
+    crate::provider_process::bounded_output_until(
+        "/usr/bin/flatpak",
+        &["info", scope_flag, "--show-commit", reference],
+        deadline,
     )
     .ok()
     .filter(|output| output.status.success())
-    .map(|output| {
-        String::from_utf8_lossy(&output.stdout)
-            .lines()
-            .take(64)
-            .map(str::trim)
-            .filter(|value| !value.is_empty())
-            .map(ToOwned::to_owned)
-            .collect()
-    })
-    .unwrap_or_default()
+    .and_then(|output| crate::flatpak_inventory::deployment_commit(&output.stdout).ok())
 }
-fn flatpak_overrides(app_id: &str, scope_flag: &str) -> Vec<String> {
-    bounded_output("flatpak", &["override", scope_flag, "--show", app_id])
-        .ok()
-        .filter(|output| output.status.success())
-        .map(|output| {
-            String::from_utf8_lossy(&output.stdout)
-                .lines()
-                .take(64)
-                .map(str::trim)
-                .filter(|value| !value.is_empty())
-                .map(ToOwned::to_owned)
-                .collect()
-        })
-        .unwrap_or_default()
+
+fn flatpak_permissions(
+    app_id: &str,
+    scope_flag: &str,
+    deadline: Instant,
+) -> (Vec<String>, FlatpakAvailability) {
+    let result = crate::provider_process::bounded_output_until(
+        "/usr/bin/flatpak",
+        &["info", scope_flag, "--show-permissions", app_id],
+        deadline,
+    )
+    .ok()
+    .filter(|output| output.status.success())
+    .ok_or(FlatpakAvailability::Unavailable)
+    .and_then(|output| crate::flatpak_permissions::permission_records(&output.stdout));
+    match result {
+        Ok(records) => (records, FlatpakAvailability::Available),
+        Err(state) => (Vec::new(), state),
+    }
+}
+fn flatpak_overrides(app_id: &str, scope_flag: &str, deadline: Instant) -> Vec<String> {
+    crate::provider_process::bounded_output_until(
+        "/usr/bin/flatpak",
+        &["override", scope_flag, "--show", app_id],
+        deadline,
+    )
+    .ok()
+    .filter(|output| output.status.success())
+    .and_then(|output| crate::flatpak_permissions::permission_records(&output.stdout).ok())
+    .unwrap_or_default()
 }
 pub fn collect_portal_facts() -> PortalFacts {
     let (desktop, documents, permission_store) = thread::scope(|scope| {

@@ -1,0 +1,132 @@
+policy_module(greyward_administration, 0.1.0)
+
+# Inert installation. No ordinary login mapping or role is widened. PID 1
+# admits the immutable terminal into a distinct administrator SELinux user.
+role greyward_admin_r;
+type greyward_admin_t;
+domain_type(greyward_admin_t)
+role greyward_admin_r types greyward_admin_t;
+allow greyward_admin_t self:process { fork getcap getsched getpgid setpgid sigchld signull signal sigkill };
+allow greyward_admin_t self:unix_stream_socket create_stream_socket_perms;
+allow greyward_admin_t self:fifo_file rw_fifo_file_perms;
+allow greyward_admin_t self:file { open read getattr };
+allow greyward_admin_t self:dir { open read search getattr };
+allow greyward_admin_t self:lnk_file { read getattr };
+libs_use_ld_so(greyward_admin_t)
+libs_use_shared_libs(greyward_admin_t)
+files_read_usr_files(greyward_admin_t)
+files_read_etc_files(greyward_admin_t)
+files_search_home(greyward_admin_t)
+files_read_generic_tmp_files(greyward_admin_t)
+auth_use_nsswitch(greyward_admin_t)
+auth_read_passwd(greyward_admin_t)
+kernel_read_system_state(greyward_admin_t)
+dev_rw_null(greyward_admin_t)
+dev_read_urand(greyward_admin_t)
+corecmd_exec_bin(greyward_admin_t)
+corecmd_exec_shell(greyward_admin_t)
+init_use_fds(greyward_admin_t)
+userdom_manage_user_home_content_files(greyward_admin_t)
+userdom_manage_user_home_content_dirs(greyward_admin_t)
+type greyward_admin_exec_t;
+domain_entry_file(greyward_admin_t, greyward_admin_exec_t)
+type greyward_admin_runtime_t;
+files_pid_file(greyward_admin_runtime_t)
+type greyward_admin_shm_t;
+files_type(greyward_admin_shm_t)
+type greyward_admin_devpts_t;
+term_pty(greyward_admin_devpts_t)
+term_create_pty(greyward_admin_t, greyward_admin_devpts_t)
+fs_tmpfs_filetrans(greyward_admin_t, greyward_admin_shm_t, file)
+allow greyward_admin_t greyward_admin_shm_t:file { create open read write map getattr setattr unlink };
+read_files_pattern(greyward_admin_t, greyward_admin_runtime_t, greyward_admin_runtime_t)
+allow greyward_admin_t greyward_admin_runtime_t:dir search;
+allow greyward_admin_t greyward_admin_exec_t:file execute_no_trans;
+miscfiles_read_fonts(greyward_admin_t)
+fs_getattr_xattr_fs(greyward_admin_t)
+
+# Dedicated sudo/PAM subjects. Do not reuse ordinary same-user helpers for
+# password input or allow any transition from the ordinary role.
+gen_require(` type sudo_exec_t; attribute sudodomain; type chkpwd_exec_t; type sysadm_t; role sysadm_r; type unconfined_service_t; ')
+type greyward_admin_sudo_t, sudodomain;
+domain_type(greyward_admin_sudo_t)
+domain_entry_file(greyward_admin_sudo_t, sudo_exec_t)
+domain_interactive_fd(greyward_admin_sudo_t)
+domain_role_change_exemption(greyward_admin_sudo_t)
+role greyward_admin_r types greyward_admin_sudo_t;
+domtrans_pattern(greyward_admin_t, sudo_exec_t, greyward_admin_sudo_t)
+allow greyward_admin_sudo_t greyward_admin_t:process { getpgid sigchld signal };
+allow greyward_admin_sudo_t greyward_admin_t:dir search_dir_perms;
+allow greyward_admin_sudo_t greyward_admin_t:file read_file_perms;
+allow greyward_admin_t greyward_admin_sudo_t:process signal_perms;
+allow greyward_admin_t greyward_admin_sudo_t:process { getpgid setpgid };
+allow greyward_admin_t greyward_admin_sudo_t:fd use;
+allow greyward_admin_t greyward_admin_sudo_t:fifo_file rw_fifo_file_perms;
+kernel_read_system_state(greyward_admin_sudo_t)
+seutil_libselinux_linked(greyward_admin_sudo_t)
+auth_use_nsswitch(greyward_admin_sudo_t)
+logging_send_syslog_msg(greyward_admin_sudo_t)
+term_use_generic_ptys(greyward_admin_sudo_t)
+term_setattr_generic_ptys(greyward_admin_sudo_t)
+# Fedora's sudodomain creates user_devpts_t. Both outer and sudo PTYs live in
+# a root-owned private devpts mount namespace, never the ordinary /dev/pts.
+allow greyward_admin_sudo_t greyward_admin_devpts_t:chr_file { open read write getattr ioctl setattr lock };
+allow greyward_admin_t greyward_admin_devpts_t:chr_file { open read write getattr ioctl setattr };
+allow sysadm_t greyward_admin_devpts_t:chr_file { open read write getattr ioctl setattr };
+# Real sudo invoked from an already authenticated root shell uses Fedora's
+# sysadm_sudo_t. Keep its nested PTY in the same private mount; this does not
+# admit an ordinary subject or add any administrator transition.
+gen_require(` type sysadm_sudo_t; ')
+allow sysadm_sudo_t greyward_admin_devpts_t:chr_file { open read write getattr ioctl setattr lock };
+allow greyward_admin_sudo_t sysadm_t:process transition;
+allow sysadm_t greyward_admin_t:process sigchld;
+allow sysadm_t greyward_admin_sudo_t:process sigchld;
+allow sysadm_t greyward_admin_sudo_t:fd use;
+allow sysadm_t greyward_admin_sudo_t:fifo_file rw_fifo_file_perms;
+allow sysadm_t greyward_admin_t:fd use;
+allow sysadm_t greyward_admin_t:fifo_file rw_fifo_file_perms;
+allow greyward_admin_r sysadm_r;
+allow system_r greyward_admin_r;
+
+type greyward_admin_password_t;
+domain_type(greyward_admin_password_t)
+domain_entry_file(greyward_admin_password_t, chkpwd_exec_t)
+role greyward_admin_r types greyward_admin_password_t;
+role sysadm_r types greyward_admin_password_t;
+domtrans_pattern(greyward_admin_sudo_t, chkpwd_exec_t, greyward_admin_password_t)
+type greyward_admin_password_exec_t;
+domain_entry_file(greyward_admin_password_t, greyward_admin_password_exec_t)
+domtrans_pattern(greyward_admin_sudo_t, greyward_admin_password_exec_t, greyward_admin_password_t)
+domtrans_pattern(sysadm_sudo_t, greyward_admin_password_exec_t, greyward_admin_password_t)
+allow { greyward_admin_sudo_t sysadm_sudo_t } greyward_admin_password_t:process2 nosuid_transition;
+allow greyward_admin_password_t self:capability { setuid setgid audit_write dac_read_search };
+allow greyward_admin_password_t greyward_admin_devpts_t:chr_file { read write getattr ioctl };
+libs_use_ld_so(greyward_admin_password_t)
+libs_use_shared_libs(greyward_admin_password_t)
+auth_use_nsswitch(greyward_admin_password_t)
+auth_read_passwd(greyward_admin_password_t)
+auth_read_shadow(greyward_admin_password_t)
+logging_send_audit_msgs(greyward_admin_password_t)
+logging_send_syslog_msg(greyward_admin_password_t)
+dev_rw_null(greyward_admin_password_t)
+
+allow unconfined_service_t greyward_admin_t:process transition;
+allow greyward_admin_t unconfined_service_t:process sigchld;
+allow greyward_admin_t unconfined_service_t:fd use;
+allow greyward_admin_t unconfined_service_t:fifo_file { getattr write };
+gen_require(` type greyward_as_display_t; ')
+gen_require(` type greyward_as_display_shm_t; ')
+allow greyward_admin_t greyward_as_display_shm_t:file { read map getattr };
+gen_require(` type user_tmp_t; ')
+allow greyward_admin_t user_tmp_t:dir { search getattr };
+allow greyward_admin_t user_tmp_t:sock_file { open write getattr };
+allow greyward_admin_t greyward_as_display_t:unix_stream_socket connectto;
+allow greyward_as_display_t greyward_admin_shm_t:file { open read write map getattr };
+allow greyward_as_display_t greyward_admin_t:fd use;
+
+# Ordinary processes cannot use a protected terminal or its cached privilege.
+gen_require(` attribute greyward_as_ordinary; ')
+neverallow greyward_as_ordinary greyward_admin_exec_t:file { execute entrypoint };
+neverallow greyward_as_ordinary greyward_admin_password_exec_t:file { execute entrypoint };
+neverallow greyward_as_ordinary { greyward_admin_t greyward_admin_sudo_t greyward_admin_password_t }:process { transition dyntransition ptrace signal sigkill sigstop };
+neverallow greyward_as_ordinary { greyward_admin_t greyward_admin_sudo_t greyward_admin_password_t }:fd use;

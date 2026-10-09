@@ -1,5 +1,12 @@
 # Acceptance contract
 
+Application Security source acceptance is scoped by the
+[current audit](APPLICATION_SECURITY_PLAN.md); its successful UID-1002 workflow
+is not production acceptance. [Enrollment gates E0–E5](APPLICATION_SECURITY_ENROLLMENT.md)
+are PLANNED and all remain unpassed for production. Extended matrices are
+DEFERRED HARDENING; enabled kernel grants, session coverage and recovery cannot
+be deferred while claiming PROTECTED.
+
 Acceptance defines the product outcome independently from implementation ease.
 V0 passes only when all criteria below have traceable evidence. Post-V0 features
 are explicitly excluded from the V0 gate.

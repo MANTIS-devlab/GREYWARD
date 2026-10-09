@@ -26,6 +26,24 @@ class OperationTests(unittest.TestCase):
             runtime.invalidate()
             self.assertEqual(schedule.call_count, 2)
 
+    def test_background_reconciliation_precedes_read_projection(self):
+        runtime = self.runtime
+        runtime.dirty = True
+        runtime.last_full = 0
+        runtime.shell, runtime.files, runtime.network = {}, {}, {}
+        calls = []
+        runtime.service.reconcile_history.side_effect = lambda: calls.append("ingest")
+        runtime.service.GetShellSummary.side_effect = lambda: calls.append("project") or '{}'
+        runtime.service.GetFileSecuritySummary.return_value = '{}'
+        runtime.service.GetPrivacyCapsule.return_value = '{}'
+        runtime.service.usb.devices.return_value = ([], None)
+        runtime.router.records = {}
+        with patch('greyward_security_context.user_bus.network_summary', return_value={}), \
+                patch('greyward_security_context.shell_runtime.build_experience', return_value={}), \
+                patch('greyward_security_context.shell_runtime.GLib.idle_add'):
+            runtime._collect()
+        self.assertEqual(calls, ["ingest", "project"])
+
     def setUp(self):
         self.runtime = object.__new__(ShellRuntime)
         self.runtime.lock = threading.Lock()
@@ -35,6 +53,16 @@ class OperationTests(unittest.TestCase):
         self.runtime.service = Mock()
         self.runtime.router = Mock()
         self.runtime.running = False
+
+    def test_display_lease_renewal_does_not_change_revision_or_notifications(self):
+        self.runtime.snapshot.update(fresh_until='expired', display_fresh_until='old')
+        value = copy.deepcopy(self.runtime.snapshot)
+        value.update(display_fresh_until='renewed')
+        self.runtime._publish(value, False)
+        self.assertEqual(self.runtime.snapshot['revision'], 1)
+        self.assertEqual(self.runtime.snapshot['display_fresh_until'], 'renewed')
+        self.runtime.service.ShellSummaryChanged.assert_not_called()
+        self.runtime.router.reconcile.assert_not_called()
 
     def test_ack_is_published_before_worker_and_duplicate_coalesces(self):
         with patch('greyward_security_context.shell_runtime.threading.Thread') as worker:

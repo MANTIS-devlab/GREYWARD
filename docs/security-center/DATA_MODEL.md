@@ -15,6 +15,51 @@ level.
 - Renaming a check requires an explicit migration alias. Meaning changes require
   a new definition version.
 
+## Application Security source contract
+
+The executable definitions are in
+`security-center/crates/greyward-security-domain/src/application_security.rs`.
+Schema: `greyward.application-security/v1`. Closed decoders reject malformed
+references, generations, foreign owners, revisions and incoherent leases.
+The [plan](APPLICATION_SECURITY_PLAN.md) distinguishes implemented provider
+semantics from unsupported target capabilities.
+
+| Wire type | Present fields / meaning |
+|---|---|
+| `ApplicationIdentity` | Optional presentation name, application/installation references, content generation, provider, owner UID and provenance. Labels/names never authorize. |
+| `ExecutionIdentity` | Execution/optional installation reference, UID, boot ID, PID/start ticks and SELinux context. Missing reliable attribution remains UNKNOWN. |
+| `ProtectionSnapshot` | Requested/optional effective profile, health, seven coverage gates, isolation evidence, reviewed exception, policy revision and evidence age. |
+| `PermissionSnapshot` | Capability, optional resource reference, effective decision, provider/layer sources, health and policy revision. |
+| `ProtectedResource` | Resource reference, owner, category/display label, coverage and revision. Private object/path authority is not exposed by the metadata read. |
+| `AccessGrant` | Grant/installation references, owner, generation, resource/access sets, lifetime and revision. Actual provider supports persistent READ only. |
+| `PolicyChangePreview` | Operation/installation/generation/resources, risks, expected revision and bounded expiry, bound to actual peer. |
+| `OperationResult` | Outcome, optional committed revision, verified readback and optional failure. Authorization/commit alone is not success. |
+
+`EnforcementEvidence` distinguishes SELinux enforcing, production-policy loaded,
+subject confined, complete session coverage and isolation. Enforcement evidence
+expires after at most 30 seconds; Context read leases are at most five seconds
+and cannot exceed remaining evidence freshness. The deliberately enrolled normal
+`.149` account has verified scoped evidence;
+unenrolled or incomplete sessions have no effective profile. UNKNOWN, UNAVAILABLE
+and DEGRADED must never become PROTECTED/TRUSTED for display convenience.
+
+Desired grant/resource journals and observed history are separate from live
+policy/object/execution readback. A successful development grant operation does
+not certify whole-session coverage. Normalized denied-access events extend the
+existing telemetry store, not the policy database or a parallel Activity DB.
+Only authoritative kernel/provider evidence can label an event blocked; current
+root-audit application attribution remains UNKNOWN. Context 70/runtime 27 also
+retain optional `details.observed_process` with a historical kernel PID,
+executable basename (maximum 128 safe ASCII characters) and `KERNEL_AUDIT`
+source. This is not `ExecutionIdentity`: no start-time/generation binding or
+live PID lookup is inferred. New records use the kernel audit occurrence time;
+legacy records retain their original Context observation timestamps.
+`details.policy_revision` is the collector's policy revision, not proof of a
+historical grant decision. No argv, process title, executable path or secret
+contents cross the root projection. Security History resolves bounded current
+registry labels only for presentation; those labels do not rewrite events or
+establish enforcement.
+
 ## Core types
 
 ```text
@@ -90,14 +135,14 @@ ApplicationAccess
     counts when AVAILABLE; discovered-only counts when PARTIAL
   applications[]:
     name: user-facing application name
-    access_state: SCOPED | REVIEW_NEEDED
+    access_state: SCOPED | REVIEW_NEEDED | UNAVAILABLE
     access_categories: normalized NETWORK | PERSONAL_FILES | HOST_FILES |
-      DEVICES | ALL_DEVICES | DESKTOP_SERVICES | SCOPED
+      DEVICES | ALL_DEVICES | DESKTOP_SERVICES | ADDITIONAL_FILES | SCOPED
     review_reasons: normalized categories only
-    technical: app identifier, installation/runtime identity, manifest grants,
+    technical: app identifier, installation/runtime identity, effective context,
       and local overrides
-  effective access: backend applies manifest context before local override
-    additions/removals; raw records never determine primary presentation
+  effective access: Flatpak supplies its merged context, including global/app
+    system/user override precedence. Local override records are disclosure only and are never reapplied. Failed, malformed or truncated reads remain unavailable/partial, never an empty safe grant set. The historical manifest_permissions wire key is a compatibility alias of effective_permissions, not a raw manifest.
 
 EvidencePresentation
   domain_key, title_key, summary_key, recorded_result_key, recommendation_key:

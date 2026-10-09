@@ -72,6 +72,10 @@ class ClamAvScan(dbus.service.Object):
         return json.dumps(value, sort_keys=True, separators=(',', ':'))
 
     @dbus.service.method(BUS_NAME, in_signature='', out_signature='s')
+    def GetClamAvStatus(self):
+        return json.dumps(clamav_status(), sort_keys=True, separators=(',', ':'))
+
+    @dbus.service.method(BUS_NAME, in_signature='', out_signature='s')
     def GetFileSecuritySummary(self):
         try:
             scans = self.manager.reconcile_interrupted_scans(32)

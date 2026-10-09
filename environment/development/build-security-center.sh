@@ -11,6 +11,7 @@ for command in cargo rpmbuild rpm desktop-file-validate pkg-config tar sha256sum
   command -v "$command" >/dev/null
 done
 pkg-config --exists webkit2gtk-4.1
+pkg-config --exists sqlite3
 
 build_parent="${GREYWARD_RPMBUILD_PARENT:-${HOME}/.cache/greyward-build}"
 cargo_target="${GREYWARD_CARGO_TARGET_DIR:-${HOME}/.cache/greyward/package-cargo-target}"
@@ -42,6 +43,7 @@ if not tag.exists():
 stamp=target/'.greyward-component-inputs.json'
 previous=json.loads(stamp.read_text()) if stamp.exists() else {}
 packages={'greyward-security-domain':[root/'crates/greyward-security-domain'],
+          'greyward-application-security':[root/'crates/greyward-application-security'],
           'greyward-security-backends':[root/'crates/greyward-security-backends'],
           'greyward-security-center':[root/'tauri/src-tauri',root/'tauri/frontend']}
 current={}

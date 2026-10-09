@@ -213,7 +213,7 @@ iteration-3 captures below.
 ## VALIDATION UPDATE — CLEAN FEDORA PACKAGE PATH
 
 The earlier `/tmp` quota limitation was resolved by placing the source and RPM
-build tree under `/home/stendev`. The repository-defined RPM spec then completed
+build tree under `/home/development-user`. The repository-defined RPM spec then completed
 its full `%build`, `%check`, and `%install` path successfully.
 
 - Clean source RPM build: PASS.

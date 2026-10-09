@@ -12,6 +12,39 @@ CURRENT_UID = getattr(os, "getuid", lambda: None)()
 
 
 class FileSecurityContractTests(unittest.TestCase):
+    def test_source_existence_is_fresh_and_preserves_detection_history(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / 'detected.txt'
+            source.write_text('fixture')
+            store = TelemetryStore(root / 'events.sqlite3')
+            manager = FileSecurityManager(store)
+            manager.record_legacy_result(str(source), {'state': 'THREAT', 'detection_name': 'Fixture'})
+            self.assertEqual(manager.detections()[0]['source_status'], 'PRESENT')
+            source.unlink()
+            missing = manager.detections()[0]
+            self.assertEqual(missing['source_status'], 'MISSING')
+            self.assertEqual(missing['state'], 'DETECTED')
+            self.assertNotIn('source_status', store.list_file_detections()[0])
+            source.write_text('replacement')
+            self.assertEqual(manager.detections()[0]['source_status'], 'PRESENT')
+
+    def test_inaccessible_or_aliased_source_does_not_clear_review(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / 'detected.txt'
+            source.write_text('fixture')
+            manager = FileSecurityManager(TelemetryStore(root / 'events.sqlite3'))
+            manager.record_legacy_result(str(source), {'state': 'THREAT', 'detection_name': 'Fixture'})
+            with patch.object(Path, 'lstat', side_effect=PermissionError('denied')):
+                self.assertEqual(manager.detections()[0]['source_status'], 'UNKNOWN')
+            source.unlink()
+            try:
+                source.symlink_to(root / 'absent-target')
+            except OSError:
+                self.skipTest('symlinks unavailable')
+            self.assertEqual(manager.detections()[0]['source_status'], 'UNKNOWN')
+
     def test_legacy_results_share_durable_detection_store_and_deduplicate(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

@@ -17,7 +17,9 @@ backend, authorization, update, remediation, or service-recovery validation.
 ## Runtime targets
 
 Review the installed application under the real Fedora/WebKitGTK GREYWARD-DEV
-environment with native Labwc server-side decorations intact.
+environment with the integrated application-owned controls and native GTK/Labwc
+window operations. Review normal, maximized and restored states, edge/corner
+resizing, drag/double-click, keyboard control activation and focus treatment.
 
 Review at minimum:
 

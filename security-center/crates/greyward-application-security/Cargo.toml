@@ -1,0 +1,37 @@
+[package]
+name = "greyward-application-security"
+description = "Application identity and enforcement foundation for GREYWARD"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+greyward-security-domain = { path = "../greyward-security-domain" }
+greyward-security-backends = { path = "../greyward-security-backends" }
+serde.workspace = true
+serde_json.workspace = true
+sha2 = "=0.10.9"
+thiserror.workspace = true
+rusqlite = { version = "=0.37.0", default-features = false }
+rustix = { version = "=1.1.4", features = ["fs", "event", "process", "net", "mount"] }
+landlock = "=0.4.7"
+libseccomp = "=0.4.0"
+libc = "=0.2.189"
+dbus = "=0.9.12"
+
+[lints]
+workspace = true
+
+[[example]]
+name = "native-restriction-check"
+path = "tests/support/native_restriction_check.rs"
+
+[[example]]
+name = "resource-policy-check"
+path = "tests/support/resource_policy_check.rs"
+
+[[example]]
+name = "reviewed-tool-check"
+path = "tests/support/reviewed_tool_check.rs"

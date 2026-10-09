@@ -16,7 +16,7 @@ rights. Generated files inherit the status of their canonical source.
 | `source/greyward-symbol.svg` | `dd925d9f9ef3edc174f9b9fcbc0972a60d13a3d21c9d6864ac39727a028b6f22` | canonical symbol |
 | `source/greyward-wordmark.svg` | `3cc9f65e9e677dab5a4deb0cc86368fe46ab61195be5069713247cb77b2441a2` | canonical wordmark |
 | `source/greyward-wordmark.png` | `3e5bc969e59d3314cc3641f5077aeb1bee9389b281cf9612413dbd7bee54752e` | raster wordmark |
-| `source/greyward-security-status.svg` | `8f9768936e6c6227bc567dfe06404f4230a2f098f0789e21effd15d3bedde46d` | Security Center emblem |
+| `source/greyward-security-status.svg` | `db8498f6928b58a8b1962bb68af9c60f671747f2da73bec4e0d8c85c8ed97411` | shared Security Center shield-G emblem |
 | `source/greyward-terminal.svg` | `9107af619b980da9d00071159ddcc7fd8ca602b598b1b9236eeab513ecbe4817` | terminal identity icon |
 | `wallpaper/greyward-wallpaper.svg` | `f7bcb113e6116897c601ba1328811ccf62e94f44b08cd4d63c428fc4cee83a16` | canonical environmental source |
 | `wallpaper/greyward-wallpaper-black-art-4k.jpg` | `30f33a7f347c53e29dab65e8b6ef49345063d2ae674bcf102bed693c7db431c7` | desktop wallpaper |
@@ -28,3 +28,10 @@ origin is recorded above; any private source or chain-of-title evidence should
 be retained outside Git. The separate historical greeter JPG was removed from
 the publication candidate rather than making an unsupported rights claim.
 Do not add third-party material to this table.
+
+The current Security Center emblem was approved by the maintainer on 8 October
+2026 after built-in image generation using the canonical GREYWARD symbol as
+reference. The repository SVG is a polygonal refinement of that candidate;
+the launcher SVG and PNG are derived assets. The previous small emblem hash
+`8f9768936e6c6227bc567dfe06404f4230a2f098f0789e21effd15d3bedde46d`
+describes the historical design.

@@ -27,8 +27,17 @@ Only one file-security operation may run at a time.
 Scanning is available only when the ClamAV engine and a current security
 database are both confirmed. The packaged `clamav-update`/freshclam service
 owns definition installation and refresh; the Security Context reports
-`CURRENT`, `INITIALIZING`, `UPDATING`, `OUTDATED`, or `UNAVAILABLE` from that
-lifecycle and never starts an ad-hoc update. If the engine or definitions are
+`CURRENT`, `OUTDATED`, `ERROR`, or `UNAVAILABLE` from verified metadata and
+never starts an ad-hoc update. The existing root scanner's read-only
+`ClamAvScan1.GetClamAvStatus` supplies bounded engine/definition metadata to
+Context; the confined session never probes scanner execution or database files.
+Absent, denied, malformed or stale provider evidence is UNAVAILABLE, even when
+freshclam is active. Engine availability, definition presence/freshness and scan
+activity are separate; CURRENT means on-demand scan capability, not real-time
+protection. Database mtime is a definition timestamp, not proof of a successful
+update transaction; `last_successful_update` remains null without that evidence.
+Additive status fields default to absent for older Rust consumers' inputs.
+This source correction is **IMPLEMENTED; live confined-session validation pending**. If the engine or definitions are
 not ready, the service refuses a new operation rather than queueing a scan that
 could not produce a trustworthy result; the UI keeps the page readable and
 explains the actual state.
@@ -64,6 +73,21 @@ history. States are:
 The detection name is evidence from ClamAV. A detection does not prove that a
 file executed or compromised the system.
 
+The active review list contains unresolved detections, restored files and
+failed actions. Successfully quarantined and deleted detections move to the
+collapsed **Handled detections and history** section; restore/delete controls
+remain available there for quarantined objects. Viewing a detection alone does
+not acknowledge or remediate it.
+
+For `DETECTED` records, the service also projects fresh `source_status` metadata:
+`PRESENT`, `MISSING` or `UNKNOWN`. An absent source moves the historical record
+out of active review and displays **Source no longer present**, without offering
+an impossible quarantine action. This does not claim that the file was cleaned
+or quarantined. Permission errors and symlink aliases remain `UNKNOWN` and
+require review. The durable detection and action history are unchanged; if the
+source reappears, it returns to active review. Remediation still independently
+checks identity/hash and does not trust this existence projection.
+
 ## Quarantine and restore
 
 Quarantine is root-owned under `/var/lib/greyward/quarantine/<owner uid>` with
@@ -91,6 +115,31 @@ successful restore so the File Security page can identify where the restored
 copy was placed without replaying a raw action log. Permanent deletion removes
 that quarantined object and records the action. Quarantine is excluded from
 system scans.
+
+## Safe Open descriptor contract
+
+Current functional source holds the ordinary selected file descriptor through
+classification and handler selection, then sends it to the shared application
+broker's `PrepareSelectedDocumentLaunch(hsasb)` workflow. Root preparation
+revalidates the selected object, refuses protected-label content copying and
+uses the same immutable code/private home/namespace/Landlock/seccomp worker
+and lifetime as Guard. Script/AppImage handlers use its validated payload
+provider; graphical handlers use private nested Labwc/clipboard.
+
+The former standalone bubblewrap preparation and fallback are retired.
+A changed selection, absent provider, failed confinement or unsupported handler
+returns failure/unavailable; Safe Open does not retry unrestricted or select a
+different handler silently. A configured Flatpak document handler is explicitly
+UNAVAILABLE pending a provider that preserves native Flatpak/portal semantics.
+Ordinary Flatpak launches/overrides otherwise remain unchanged.
+
+Preparation/starting is not proof that the document was successfully viewed.
+Later exit/readback determines the operation result in existing telemetry.
+The separate-account product workflow verifies ordinary native-handler viewing
+and protected selection refusal; it does not validate installed production
+packages or the active desktop's complete handler catalogue. Exact receipt and
+limits: [current application-security audit](APPLICATION_SECURITY_PLAN.md).
+Old bubblewrap-only receipts are historical, not current acceptance.
 
 ## Privilege boundary
 

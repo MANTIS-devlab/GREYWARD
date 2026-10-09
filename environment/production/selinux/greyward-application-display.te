@@ -1,0 +1,161 @@
+policy_module(greyward_application_display, 0.1.0)
+
+# Fixed root-prepared compositor. Never a userdomain or resource/grant holder.
+# Only PID 1 selects the entry; configuration and executable generation are
+# immutable. Its ordinary children transition back into the ordinary subject.
+gen_require(`
+    role greyward_guard_r;
+    type greyward_guard_t;
+    type bin_t;
+    type init_t;
+    type xserver_exec_t;
+    type user_tmp_t;
+')
+type greyward_as_display_t;
+type greyward_as_display_exec_t;
+domain_type(greyward_as_display_t)
+files_type(greyward_as_display_exec_t)
+domain_entry_file(greyward_as_display_t, greyward_as_display_exec_t)
+role greyward_guard_r types greyward_as_display_t;
+allow init_t greyward_as_display_t:process transition;
+allow greyward_as_display_t init_t:process sigchld;
+init_nnp_daemon_domain(greyward_as_display_t)
+allow greyward_as_display_t greyward_as_display_exec_t:file execute_no_trans;
+
+allow greyward_as_display_t self:process { fork getcap getsched setsched sigchld signull signal sigkill };
+allow greyward_as_display_t self:file { read open getattr };
+allow greyward_as_display_t self:dir { read open search getattr };
+allow greyward_as_display_t self:lnk_file { read getattr };
+allow greyward_as_display_t self:fifo_file rw_fifo_file_perms;
+allow greyward_as_display_t self:unix_stream_socket { create_stream_socket_perms connectto };
+allow greyward_as_display_t self:unix_dgram_socket create_socket_perms;
+libs_use_ld_so(greyward_as_display_t)
+libs_use_shared_libs(greyward_as_display_t)
+files_read_usr_files(greyward_as_display_t)
+files_read_etc_files(greyward_as_display_t)
+kernel_read_system_state(greyward_as_display_t)
+auth_use_nsswitch(greyward_as_display_t)
+auth_read_passwd(greyward_as_display_t)
+dev_rw_null(greyward_as_display_t)
+dev_read_urand(greyward_as_display_t)
+init_use_fds(greyward_as_display_t)
+init_read_state(greyward_as_display_t)
+miscfiles_read_fonts(greyward_as_display_t)
+fs_getattr_xattr_fs(greyward_as_display_t)
+
+type greyward_as_display_runtime_t;
+files_pid_file(greyward_as_display_runtime_t)
+manage_dirs_pattern(greyward_as_display_t, greyward_as_display_runtime_t, greyward_as_display_runtime_t)
+manage_files_pattern(greyward_as_display_t, greyward_as_display_runtime_t, greyward_as_display_runtime_t)
+manage_sock_files_pattern(greyward_as_display_t, greyward_as_display_runtime_t, greyward_as_display_runtime_t)
+allow greyward_as_display_t greyward_as_display_runtime_t:file map;
+type greyward_as_display_shm_t;
+files_type(greyward_as_display_shm_t)
+allow greyward_as_display_t greyward_as_display_shm_t:file { create open read write map getattr setattr unlink };
+fs_tmpfs_filetrans(greyward_as_display_t, greyward_as_display_shm_t, file)
+
+# libseat/logind owns the actual seat device handoff. Ordinary applications do
+# not inherit direct input/console rights from this compositor subject.
+dbus_system_bus_client(greyward_as_display_t)
+systemd_dbus_chat_logind(greyward_as_display_t)
+systemd_read_logind_sessions_files(greyward_as_display_t)
+systemd_login_read_pid_files(greyward_as_display_t)
+dev_rw_input_dev(greyward_as_display_t)
+dev_rw_dri(greyward_as_display_t)
+term_use_unallocated_ttys(greyward_as_display_t)
+type greyward_as_seat_tty_t;
+dev_node(greyward_as_seat_tty_t)
+gen_require(` attribute ttynode; ')
+typeattribute greyward_as_seat_tty_t ttynode;
+allow greyward_as_display_t greyward_as_seat_tty_t:chr_file { open read write ioctl getattr setattr };
+
+# The public Wayland socket uses the ordinary user's runtime type. Peer SID
+# filtering in the matched compositor gates input/capture/session-lock rights.
+manage_dirs_pattern(greyward_as_display_t, user_tmp_t, user_tmp_t)
+manage_sock_files_pattern(greyward_as_display_t, user_tmp_t, user_tmp_t)
+allow greyward_guard_t greyward_as_display_t:unix_stream_socket connectto;
+allow greyward_as_display_t greyward_guard_t:unix_stream_socket connectto;
+
+corecmd_exec_bin(greyward_as_display_t)
+type_transition greyward_as_display_t bin_t:process greyward_guard_t;
+allow greyward_as_display_t greyward_guard_t:process transition;
+allow greyward_guard_t greyward_as_display_t:process sigchld;
+allow greyward_as_display_t greyward_guard_t:process { signal sigkill signull };
+allow greyward_as_display_t xserver_exec_t:file { execute open read getattr map };
+type_transition greyward_as_display_t xserver_exec_t:process greyward_guard_t;
+allow greyward_guard_t xserver_exec_t:file entrypoint;
+
+gen_require(` type greyward_as_auth_t; ')
+allow greyward_as_auth_t greyward_as_display_t:unix_stream_socket connectto;
+allow greyward_as_auth_t user_tmp_t:dir { search getattr };
+allow greyward_as_auth_t user_tmp_t:sock_file { open read write getattr };
+
+# This fixed helper can only create the restricted Wayland listener. It holds
+# no input, capture, authentication or protected-resource authority.
+type greyward_as_gateway_t;
+type greyward_as_gateway_exec_t;
+domain_type(greyward_as_gateway_t)
+files_type(greyward_as_gateway_exec_t)
+role greyward_guard_r types greyward_as_gateway_t;
+domtrans_pattern(greyward_guard_t, greyward_as_gateway_exec_t, greyward_as_gateway_t)
+allow greyward_guard_t greyward_as_gateway_t:process2 nnp_transition;
+libs_use_ld_so(greyward_as_gateway_t)
+libs_use_shared_libs(greyward_as_gateway_t)
+files_read_usr_files(greyward_as_gateway_t)
+kernel_read_system_state(greyward_as_gateway_t)
+allow greyward_as_gateway_t self:process { getcap getsched sigchld };
+allow greyward_as_gateway_t self:file { open read getattr };
+allow greyward_as_gateway_t self:dir { open read search getattr };
+allow greyward_as_gateway_t self:unix_stream_socket create_stream_socket_perms;
+allow greyward_as_gateway_t self:fifo_file rw_fifo_file_perms;
+allow greyward_as_gateway_t greyward_as_display_t:unix_stream_socket connectto;
+allow greyward_as_gateway_t user_tmp_t:dir { search write add_name getattr };
+allow greyward_as_gateway_t user_tmp_t:sock_file { create open read write getattr setattr unlink };
+allow greyward_as_gateway_t greyward_guard_t:fd use;
+allow greyward_as_gateway_t greyward_guard_t:fifo_file { open read write getattr };
+
+# PID 1's fixed root Python admission worker uses Fedora's service subject.
+# Only that privileged preparation may select the immutable worker entry.
+gen_require(` type unconfined_service_t; ')
+allow unconfined_service_t greyward_as_display_t:process transition;
+allow greyward_as_display_t unconfined_service_t:process sigchld;
+allow greyward_as_display_t unconfined_service_t:fd use;
+
+# Root configuration/fonts remain the only readable inputs. Search permits
+# filesystem traversal and ordinary child startup; no home-file read is added.
+userdom_search_user_home_dirs(greyward_as_display_t)
+
+# logind retains seat ownership and hands device descriptors only to the tested
+# compositor controller. This fixed VT type is never ordinary terminal input.
+gen_require(` type systemd_logind_t; type xdm_t; ')
+allow systemd_logind_t greyward_as_seat_tty_t:chr_file { open read write ioctl getattr setattr };
+allow xdm_t greyward_as_seat_tty_t:chr_file { open read write ioctl getattr setattr };
+
+# Read-only seat-device discovery and descriptors handed off by logind.
+allow greyward_as_display_t self:netlink_kobject_uevent_socket create_socket_perms;
+udev_read_db(greyward_as_display_t)
+udev_read_state(greyward_as_display_t)
+allow greyward_as_display_t systemd_logind_t:fd use;
+
+# The compositor's fixed socket lock is private metadata, separate from the
+# public Wayland socket. No ordinary runtime-file read/write is added.
+type_transition greyward_as_display_t user_tmp_t:file greyward_as_display_runtime_t "wayland-0.lock";
+
+# Trusted renderer imports only the shared pixel-buffer descriptor.
+gen_require(` type greyward_as_auth_shm_t; ')
+allow greyward_as_display_t greyward_as_auth_t:fd use;
+allow greyward_as_display_t greyward_as_auth_shm_t:file { read write map getattr };
+allow greyward_as_display_t greyward_guard_t:fd use;
+# Wayland selection transfer supplies an ordinary client's pipe descriptor.
+# Labwc writes the selection into that pipe; denying it closes Black Box during
+# paste. This adds no read/open permission, protected-file or grant-domain access.
+allow greyward_as_display_t greyward_guard_t:fifo_file write;
+allow greyward_as_display_t user_tmp_t:file { read write map getattr };
+
+# Wayland exports the nonsecret keyboard map as a read-only descriptor. The
+# receiver still cannot read renderer process memory or private runtime files.
+gen_require(` attribute greyward_as_ordinary; ')
+allow greyward_as_ordinary greyward_as_display_t:fd use;
+allow greyward_as_ordinary greyward_as_display_shm_t:file { read map getattr };
+allow greyward_as_auth_t greyward_as_display_t:fd use;
+allow greyward_as_auth_t greyward_as_display_shm_t:file { read map getattr };

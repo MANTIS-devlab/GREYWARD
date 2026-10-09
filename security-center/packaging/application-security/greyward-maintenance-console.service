@@ -1,0 +1,26 @@
+[Unit]
+Description=GREYWARD LUKS authenticated administrative console
+DefaultDependencies=no
+Requires=sysinit.target
+After=sysinit.target
+Conflicts=getty@tty1.service greetd.service
+ConditionKernelCommandLine=systemd.unit=greyward-maintenance.target
+
+[Service]
+Type=idle
+ExecStart=/usr/libexec/greyward-maintenance
+StandardInput=tty-force
+StandardOutput=tty
+StandardError=tty
+TTYPath=/dev/tty1
+TTYReset=yes
+TTYVHangup=yes
+TTYVTDisallocate=yes
+UtmpIdentifier=tty1
+UtmpMode=user
+Environment=PATH=/usr/sbin:/usr/bin LANG=C.UTF-8
+UMask=0077
+Restart=no
+
+# Deliberate offline root authority after fresh LUKS authentication. This unit
+# is never part of normal boot and supplies no D-Bus or Polkit shell endpoint.

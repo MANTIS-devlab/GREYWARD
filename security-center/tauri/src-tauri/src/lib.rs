@@ -1,15 +1,22 @@
 use chrono::Utc;
+mod window_chrome;
 use dbus::blocking::Connection;
 use greyward_security_backends::{
-    ActivityCategory, ActivityItem, ActivitySeverity, CoreCollection, FlatpakAvailability,
-    TrustZone, change_active_trust_zone, choose_overall_posture, clear_activity,
-    collect_core_collection, collect_core_snapshot, collect_device_snapshot, collect_flatpak_facts,
-    collect_network_facts, collect_portal_facts, evidence_domain_key, evidence_domain_route,
-    evidence_presentation, external_service_manifest, load_activity,
-    load_opensnitch_context_summary, read_actual_state, record_activity, resolve_flatpak_access,
-    set_accepted_deviation, write_safe_export,
+    ActivityCategory, ActivityItem, ActivitySeverity, ApplicationPageQuery, CoreCollection,
+    FlatpakAvailability, MAX_APPLICATION_READ_BYTES, ProtectedResourcePageQuery, TrustZone,
+    change_active_trust_zone, choose_overall_posture, clear_activity, collect_core_collection,
+    collect_core_snapshot, collect_device_snapshot, collect_flatpak_facts, collect_network_facts,
+    collect_portal_facts, decode_application_coverage, decode_application_detail,
+    decode_application_page, decode_protected_resource_lookup, decode_protected_resource_page,
+    evidence_domain_key, evidence_domain_route, evidence_presentation, external_service_manifest,
+    load_activity, load_opensnitch_context_summary, read_actual_state, record_activity,
+    resolve_flatpak_access, set_accepted_deviation, write_safe_export,
 };
-use greyward_security_domain::{ClamAvStatus, PostureState, Requiredness};
+use greyward_security_domain::{
+    AccessGrant, ApplicationCoverage, ApplicationInventoryPage, ApplicationLookup,
+    ApplicationReadEnvelope, ClamAvStatus, OperationResult, PostureState, ProtectedResourceLookup,
+    ProtectedResourcePage, Requiredness, SecurityReference, WorkflowPreview,
+};
 use serde::Serialize;
 use serde_json::{Value, json};
 use std::path::PathBuf;
@@ -42,10 +49,13 @@ const SECURITY_CENTER_ROUTES: &[&str] = &[
     "updates",
     "files",
     "applications",
+    "protected-data",
     "devices",
     "evidence",
     "activity",
     "threats",
+    "history",
+    "recovery",
 ];
 
 struct CachedCoreSnapshot {
@@ -110,6 +120,7 @@ pub struct OverviewPayload {
     pub metrics: MetricsSummary,
     pub domains: Vec<DomainSummary>,
     pub activity: Vec<ActivitySummary>,
+    pub activity_state: String,
     pub clamav: Option<ClamAvStatus>,
 }
 #[derive(Clone, Serialize)]
@@ -208,6 +219,9 @@ pub struct ApplicationTechnicalDetails {
     pub branch: Option<String>,
     pub runtime: Option<String>,
     pub manifest_permissions: Vec<String>,
+    pub effective_permissions: Vec<String>,
+    pub deployment_commit: Option<greyward_security_domain::ContentGeneration>,
+    pub identity_state: String,
     pub local_overrides: Vec<String>,
 }
 #[derive(Clone, Serialize)]
@@ -268,6 +282,7 @@ pub struct PrivacyPayload {
     pub local: Vec<StatusRow>,
     pub disclosures: Vec<DisclosureSummary>,
     pub activity: Vec<ActivitySummary>,
+    pub activity_state: String,
     pub clamav: Option<ClamAvStatus>,
     pub retention_days: i64,
     pub max_activity_items: usize,
@@ -304,24 +319,27 @@ fn get_overview() -> Result<OverviewPayload, String> {
         .checks
         .iter()
         .filter(|check| {
-            matches!(
-                check.state,
-                PostureState::ReviewNeeded | PostureState::ActionRequired
-            )
+            check.reason_code != "accepted-deviation"
+                && matches!(
+                    check.state,
+                    PostureState::ReviewNeeded | PostureState::ActionRequired
+                )
         })
         .count();
     let unavailable = snapshot
         .checks
         .iter()
         .filter(|check| {
-            matches!(
-                check.state,
-                PostureState::Unavailable | PostureState::Unknown
-            )
+            check.reason_code != "accepted-deviation"
+                && matches!(
+                    check.state,
+                    PostureState::Unavailable | PostureState::Unknown
+                )
         })
         .count();
     let required_uncertain = snapshot.checks.iter().any(|check| {
-        check.requiredness == Requiredness::Required
+        check.reason_code != "accepted-deviation"
+            && check.requiredness == Requiredness::Required
             && matches!(
                 check.state,
                 PostureState::Unknown | PostureState::Unavailable
@@ -339,10 +357,11 @@ fn get_overview() -> Result<OverviewPayload, String> {
         .checks
         .iter()
         .filter(|c| {
-            matches!(
-                c.state,
-                PostureState::ReviewNeeded | PostureState::ActionRequired
-            )
+            c.reason_code != "accepted-deviation"
+                && matches!(
+                    c.state,
+                    PostureState::ReviewNeeded | PostureState::ActionRequired
+                )
         })
         .take(3)
         .map(|check| {
@@ -414,6 +433,7 @@ fn get_overview() -> Result<OverviewPayload, String> {
             .ok()
         })
         .and_then(|summary| summary.clamav);
+    // Optional history must not hold authoritative posture behind a busy session bus.
     let result = Ok(OverviewPayload {
         posture: PostureSummary {
             state: state.into(),
@@ -430,11 +450,17 @@ fn get_overview() -> Result<OverviewPayload, String> {
             unavailable,
         },
         domains,
-        activity: activity_summaries(),
+        activity: Vec::new(),
+        activity_state: "LOADING".into(),
         clamav,
     });
     startup_trace("get_overview_complete");
     result
+}
+#[tauri::command(async)]
+fn get_overview_activity() -> Result<Value, String> {
+    let (activity, activity_state) = activity_summaries();
+    Ok(json!({"activity": activity, "activity_state": activity_state}))
 }
 #[tauri::command]
 fn set_deviation(check_id: String, accepted: bool) -> Result<OverviewPayload, String> {
@@ -644,8 +670,12 @@ fn set_network_trust_zone(
 }
 #[tauri::command(async)]
 fn get_applications() -> Result<ApplicationPayload, String> {
-    let flatpak = collect_flatpak_facts();
-    let portal = collect_portal_facts();
+    let (flatpak, portal) = std::thread::scope(|scope| {
+        let inventory = scope.spawn(collect_flatpak_facts);
+        let portal = collect_portal_facts();
+        (inventory.join(), portal)
+    });
+    let flatpak = flatpak.map_err(|_| "Application inventory is unavailable.".to_string())?;
     let inventory_state = match flatpak.availability {
         FlatpakAvailability::Available => "AVAILABLE",
         FlatpakAvailability::Partial => "PARTIAL",
@@ -721,7 +751,9 @@ fn normalize_application_access(app: greyward_security_backends::FlatpakApp) -> 
         .collect();
     ApplicationSummary {
         name: app.name,
-        access_state: if effective_access.needs_review() {
+        access_state: if effective_access.availability != FlatpakAvailability::Available {
+            "UNAVAILABLE".to_string()
+        } else if effective_access.needs_review() {
             "REVIEW_NEEDED".to_string()
         } else {
             "SCOPED".to_string()
@@ -736,7 +768,19 @@ fn normalize_application_access(app: greyward_security_backends::FlatpakApp) -> 
             arch: app.arch,
             branch: app.branch,
             runtime: app.runtime,
-            manifest_permissions: app.permissions,
+            // Historical wire key retained as a compatibility alias; the
+            // provider returns an effective context, not a raw manifest.
+            manifest_permissions: app.permissions.clone(),
+            effective_permissions: app.permissions,
+            deployment_commit: app.deployment_commit,
+            identity_state: match app.identity_state {
+                greyward_security_backends::FlatpakAvailability::Available => "AVAILABLE",
+                greyward_security_backends::FlatpakAvailability::Partial => "PARTIAL",
+                greyward_security_backends::FlatpakAvailability::Unavailable
+                | greyward_security_backends::FlatpakAvailability::Error => "UNAVAILABLE",
+                greyward_security_backends::FlatpakAvailability::Unknown => "UNKNOWN",
+            }
+            .to_owned(),
             local_overrides: app.overrides,
         },
     }
@@ -1038,7 +1082,7 @@ fn restore_backup_files(paths: Vec<String>) -> Result<Value, String> {
 }
 
 #[tauri::command(async)]
-fn get_devices() -> Result<DevicePayload, String> {
+fn get_devices(include_history: Option<bool>) -> Result<DevicePayload, String> {
     // Devices only needs local USB/recovery facts. Do not make it wait for the
     // full posture graph's unrelated firmware, package, Flatpak, portal, and
     // network providers.
@@ -1065,7 +1109,8 @@ fn get_devices() -> Result<DevicePayload, String> {
                 label: String::new(),
                 label_key: Some(presentation.title_key.into()),
                 value: display_state(check.state),
-                value_key: None,
+                value_key: (check.reason_code == "accepted-deviation")
+                    .then(|| "evidence.limitation.accepted".into()),
                 detail: String::new(),
                 detail_key: Some(presentation.summary_key.into()),
                 copy_values: presentation.values,
@@ -1084,6 +1129,11 @@ fn get_devices() -> Result<DevicePayload, String> {
     // helper paths before the page can render.
     let (device_history, recovery_v1, backup) = std::thread::scope(|scope| {
         let device_history = scope.spawn(|| {
+            // Backup/recovery has no device-history surface. Keep its required
+            // local readiness/status reads independent of this optional user-bus read.
+            if include_history == Some(false) {
+                return json!({"summary":{"source_state":"UNAVAILABLE","connected_external":null,"new_unknown_count":null,"new_unknown":[]},"devices":[]});
+            }
             security_context_method(
                 "systems.mantis.greyward.SecurityContext1.GetDeviceOverview",
             )
@@ -1109,7 +1159,7 @@ fn get_devices() -> Result<DevicePayload, String> {
                     "UNAVAILABLE"
                 },
                 &format!(
-                    "Installed capability: {} · Enforcement: {:?}",
+                    "Installed capability: {} Â· Enforcement: {:?}",
                     if usb_installed { "present" } else { "absent" },
                     usb.policy
                 ),
@@ -1125,7 +1175,7 @@ fn get_devices() -> Result<DevicePayload, String> {
                 "CONNECTED DEVICES",
                 &usb.connected_devices.to_string(),
                 &format!(
-                    "Authorized: {} · Unknown: {}",
+                    "Authorized: {} Â· Unknown: {}",
                     usb.authorized_devices, usb.unknown_devices
                 ),
                 "unknown",
@@ -1243,6 +1293,389 @@ where
     serde_json::from_str(&payload).map_err(|_| "Security Context returned invalid JSON.".into())
 }
 
+// Only the fixed commands below can call this source read transport. No UI
+// argument selects a member, claimed UID, filesystem path or policy operation.
+fn application_security_read<A>(member: &'static str, arguments: A) -> Result<String, String>
+where
+    A: dbus::arg::AppendAll,
+{
+    let connection = Connection::new_session()
+        .map_err(|_| "Application Security Context is unavailable.".to_string())?;
+    let proxy = connection.with_proxy(
+        SECURITY_CONTEXT_BUS_NAME,
+        SECURITY_CONTEXT_OBJECT_PATH,
+        Duration::from_secs(8),
+    );
+    let (payload,): (String,) = proxy
+        .method_call(SECURITY_CONTEXT_BUS_NAME, member, arguments)
+        .map_err(|_| "Application Security Context refused the read.".to_string())?;
+    if payload.len() > MAX_APPLICATION_READ_BYTES {
+        return Err("Application Security exceeded its response budget.".into());
+    }
+    Ok(payload)
+}
+
+#[tauri::command(async)]
+fn get_administration_state() -> Result<serde_json::Value, String> {
+    let payload = application_security_read("GetAdministrationState", ())?;
+    let value: serde_json::Value = serde_json::from_str(&payload)
+        .map_err(|_| "Administration state is unavailable.".to_string())?;
+    if value.get("schema") != Some(&serde_json::json!("greyward.administration/v1"))
+        || !value
+            .get("available")
+            .is_some_and(serde_json::Value::is_boolean)
+        || !value
+            .get("active")
+            .is_some_and(serde_json::Value::is_boolean)
+        || value.get("authentication_window_seconds") != Some(&serde_json::json!(120))
+        || value.as_object().is_none_or(|object| object.len() != 4)
+    {
+        return Err("Administration returned invalid state.".into());
+    }
+    Ok(value)
+}
+#[tauri::command(async)]
+fn open_administration() -> Result<(), String> {
+    let payload = application_security_read("OpenAdministration", ())?;
+    let value: serde_json::Value = serde_json::from_str(&payload)
+        .map_err(|_| "Administration returned an invalid response.".to_string())?;
+    if value != serde_json::json!({"opened":true}) {
+        return Err("Administration could not be opened.".into());
+    }
+    Ok(())
+}
+#[tauri::command(async)]
+fn get_application_security_coverage()
+-> Result<ApplicationReadEnvelope<ApplicationCoverage>, String> {
+    let payload = application_security_read("GetApplicationCoverage", ())?;
+    decode_application_coverage(&payload, Utc::now()).map_err(|error| error.to_string())
+}
+
+#[tauri::command(async)]
+fn list_application_security_applications(
+    query: ApplicationPageQuery,
+) -> Result<ApplicationReadEnvelope<ApplicationInventoryPage>, String> {
+    query.validate().map_err(|error| error.to_string())?;
+    let after = query.after.as_ref().map_or("", SecurityReference::as_str);
+    let payload = application_security_read(
+        "ListApplications",
+        (
+            query.limit,
+            query.revision.is_some(),
+            query.revision.unwrap_or(0),
+            after,
+        ),
+    )?;
+    decode_application_page(&payload, &query, Utc::now()).map_err(|error| error.to_string())
+}
+
+#[tauri::command(async)]
+fn get_application_security_application(
+    installation_ref: SecurityReference,
+) -> Result<ApplicationReadEnvelope<ApplicationLookup>, String> {
+    if installation_ref.namespace() != "installation" {
+        return Err("Application Security rejected an invalid installation reference.".into());
+    }
+    let payload = application_security_read("GetApplication", (installation_ref.as_str(),))?;
+    decode_application_detail(&payload, &installation_ref, Utc::now())
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command(async)]
+fn list_application_security_resources(
+    query: ProtectedResourcePageQuery,
+) -> Result<ApplicationReadEnvelope<ProtectedResourcePage>, String> {
+    query.validate().map_err(|error| error.to_string())?;
+    let after = query.after.as_ref().map_or("", SecurityReference::as_str);
+    let payload = application_security_read(
+        "ListProtectedResources",
+        (
+            query.limit,
+            query.revision.is_some(),
+            query.revision.unwrap_or(0),
+            after,
+        ),
+    )?;
+    decode_protected_resource_page(&payload, &query, Utc::now()).map_err(|error| error.to_string())
+}
+
+#[tauri::command(async)]
+fn get_application_security_resource(
+    resource_ref: SecurityReference,
+) -> Result<ApplicationReadEnvelope<ProtectedResourceLookup>, String> {
+    if resource_ref.namespace() != "resource" {
+        return Err("Application Security rejected an invalid resource reference.".into());
+    }
+    let payload = application_security_read("GetProtectedResource", (resource_ref.as_str(),))?;
+    decode_protected_resource_lookup(&payload, &resource_ref, Utc::now())
+        .map_err(|error| error.to_string())
+}
+
+#[derive(serde::Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+struct ApplicationGrantList {
+    schema: String,
+    policy_revision: u64,
+    enforcement_health: String,
+    grants: Vec<AccessGrant>,
+    #[serde(default)]
+    capabilities: ApplicationWorkflowCapabilities,
+}
+#[derive(Default, serde::Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+struct ApplicationWorkflowCapabilities {
+    isolation: bool,
+    policy_changes: bool,
+}
+#[tauri::command(async)]
+fn list_application_security_grants() -> Result<ApplicationGrantList, String> {
+    let payload = application_security_read("ListApplicationAccessGrants", ())?;
+    let list: ApplicationGrantList = serde_json::from_str(&payload)
+        .map_err(|_| "Application Security returned invalid grants.".to_string())?;
+    if list.schema != greyward_security_domain::APPLICATION_SECURITY_SCHEMA
+        || list.policy_revision == 0
+        || list.enforcement_health != "UNKNOWN"
+        || list.grants.len() > 256
+    {
+        return Err("Application Security returned invalid grants.".into());
+    }
+    let mut seen = std::collections::BTreeSet::new();
+    for grant in &list.grants {
+        grant.validate().map_err(|error| error.to_string())?;
+        if grant.owner_uid != rustix::process::getuid().as_raw()
+            || grant.policy_revision > list.policy_revision
+            || !seen.insert(&grant.grant_ref)
+        {
+            return Err("Application Security returned invalid grants.".into());
+        }
+    }
+    Ok(list)
+}
+fn application_review(payload: &str) -> Result<WorkflowPreview, String> {
+    let preview: WorkflowPreview = serde_json::from_str(payload)
+        .map_err(|_| "Application Security returned an invalid review.".to_string())?;
+    preview.validate().map_err(|error| error.to_string())?;
+    Ok(preview)
+}
+fn application_picker(directory: bool) -> Result<Option<String>, String> {
+    let mut command = Command::new("zenity");
+    command.args([
+        "--file-selection",
+        "--title=Application Guard â€” choose a resource or installed tool",
+    ]);
+    if directory {
+        command.arg("--directory");
+    }
+    let output = interactive_output(&mut command)?;
+    if !output.status.success() {
+        return Ok(None);
+    }
+    let path =
+        String::from_utf8(output.stdout).map_err(|_| "The selection was invalid.".to_string())?;
+    let path = path.trim_end_matches(['\r', '\n']);
+    if path.is_empty() || path.len() > 4096 || !path.starts_with('/') || path.contains('\0') {
+        return Err("The selection was invalid.".into());
+    }
+    Ok(Some(path.to_owned()))
+}
+#[tauri::command(async)]
+fn pick_application_security_resource(
+    revision: u64,
+    label: String,
+    category: Option<String>,
+) -> Result<Option<WorkflowPreview>, String> {
+    let category = category.as_deref().unwrap_or("CUSTOM");
+    if ![
+        "CREDENTIALS",
+        "CLOUD",
+        "DEVELOPMENT",
+        "BROWSER_SESSION",
+        "CUSTOM",
+    ]
+    .contains(&category)
+    {
+        return Err("Choose a supported resource category.".into());
+    }
+    if revision == 0 || label.is_empty() || label.len() > 256 || label.chars().any(char::is_control)
+    {
+        return Err("Choose a bounded resource label and refresh policy first.".into());
+    }
+    let Some(path) = application_picker(true)? else {
+        return Ok(None);
+    };
+    let directory = rustix::fs::open(
+        &path,
+        rustix::fs::OFlags::PATH
+            | rustix::fs::OFlags::DIRECTORY
+            | rustix::fs::OFlags::NOFOLLOW
+            | rustix::fs::OFlags::CLOEXEC,
+        rustix::fs::Mode::empty(),
+    )
+    .map_err(|_| "The selected directory could not be held.".to_string())?;
+    let file = std::fs::File::from(directory);
+    let payload = application_security_read(
+        "PreviewProtectedResource",
+        (file, category, label, revision),
+    )?;
+    let preview = application_review(&payload)?;
+    if !matches!(&preview, WorkflowPreview::Registration(p) if p.resource.owner_uid == rustix::process::getuid().as_raw())
+    {
+        return Err("The provider returned a different review.".into());
+    }
+    Ok(Some(preview))
+}
+#[tauri::command(async)]
+fn pick_application_security_grant(
+    resource_refs: Vec<SecurityReference>,
+    revision: u64,
+) -> Result<Option<WorkflowPreview>, String> {
+    if revision == 0
+        || resource_refs.is_empty()
+        || resource_refs.len() > 64
+        || resource_refs.iter().any(|r| r.namespace() != "resource")
+    {
+        return Err("Select registered resources and refresh policy first.".into());
+    }
+    let Some(path) = application_picker(false)? else {
+        return Ok(None);
+    };
+    greyward_security_domain::InstalledExecutablePath::try_from(path.as_str())
+        .map_err(|error| error.to_string())?;
+    let resources: Vec<_> = resource_refs
+        .iter()
+        .map(SecurityReference::as_str)
+        .collect();
+    let payload =
+        application_security_read("PreviewApplicationGrant", (path, resources, revision))?;
+    let preview = application_review(&payload)?;
+    if !matches!(&preview, WorkflowPreview::Grant { .. }) {
+        return Err("The provider returned a different review.".into());
+    }
+    Ok(Some(preview))
+}
+#[tauri::command(async)]
+fn pick_application_security_revocation(
+    grant_ref: SecurityReference,
+    revision: u64,
+) -> Result<Option<WorkflowPreview>, String> {
+    if grant_ref.namespace() != "grant" || revision == 0 {
+        return Err("Invalid grant review.".into());
+    }
+    let payload = application_security_read(
+        "PreviewApplicationRevocation",
+        (grant_ref.as_str(), "", revision),
+    )?;
+    let preview = application_review(&payload)?;
+    if !matches!(&preview, WorkflowPreview::Revocation(_)) {
+        return Err("The provider returned a different review.".into());
+    }
+    Ok(Some(preview))
+}
+fn application_operation(
+    member: &'static str,
+    operation_ref: &SecurityReference,
+) -> Result<OperationResult, String> {
+    if operation_ref.namespace() != "operation" {
+        return Err("Invalid operation reference.".into());
+    }
+    let payload = application_security_read(member, (operation_ref.as_str(),))?;
+    let result: OperationResult = serde_json::from_str(&payload)
+        .map_err(|_| "Application Security returned an invalid result.".to_string())?;
+    result.validate().map_err(|error| error.to_string())?;
+    if &result.operation_ref != operation_ref {
+        return Err("Application Security returned a different operation.".into());
+    }
+    Ok(result)
+}
+#[derive(serde::Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+struct ApplicationLaunchReview {
+    schema: String,
+    launch_ref: SecurityReference,
+    requested_profile: String,
+    enforcement_health: String,
+    private_display_requested: bool,
+    expires_after_ms: u64,
+}
+#[derive(serde::Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+struct ApplicationLaunchResult {
+    schema: String,
+    launch_ref: SecurityReference,
+    state: String,
+    isolation_established: bool,
+    enforcement_health: String,
+    private_display: bool,
+}
+#[tauri::command(async)]
+fn pick_application_security_launch() -> Result<Option<ApplicationLaunchReview>, String> {
+    let Some(path) = application_picker(false)? else {
+        return Ok(None);
+    };
+    let descriptor = rustix::fs::open(
+        &path,
+        rustix::fs::OFlags::PATH | rustix::fs::OFlags::NOFOLLOW | rustix::fs::OFlags::CLOEXEC,
+        rustix::fs::Mode::empty(),
+    )
+    .map_err(|_| "The selected code could not be held.".to_string())?;
+    let payload = application_security_read(
+        "PrepareApplicationLaunch",
+        (std::fs::File::from(descriptor), true),
+    )?;
+    let review: ApplicationLaunchReview = serde_json::from_str(&payload)
+        .map_err(|_| "Application Guard returned an invalid preparation.".to_string())?;
+    if review.schema != greyward_security_domain::APPLICATION_SECURITY_SCHEMA
+        || review.launch_ref.namespace() != "launch"
+        || review.requested_profile != "ISOLATED"
+        || review.enforcement_health != "UNKNOWN"
+        || !review.private_display_requested
+        || review.expires_after_ms == 0
+        || review.expires_after_ms > 90000
+    {
+        return Err("Application Guard returned an invalid preparation.".into());
+    }
+    Ok(Some(review))
+}
+#[tauri::command(async)]
+fn start_application_security_launch(
+    launch_ref: SecurityReference,
+) -> Result<ApplicationLaunchResult, String> {
+    if launch_ref.namespace() != "launch" {
+        return Err("Invalid launch reference.".into());
+    }
+    let payload = application_security_read("StartApplicationLaunch", (launch_ref.as_str(),))?;
+    let result: ApplicationLaunchResult = serde_json::from_str(&payload)
+        .map_err(|_| "Application Guard returned an invalid launch readback.".to_string())?;
+    if result.schema != greyward_security_domain::APPLICATION_SECURITY_SCHEMA
+        || result.launch_ref != launch_ref
+        || result.state != "LAUNCHED"
+        || !result.isolation_established
+        || !result.private_display
+        || result.enforcement_health != "UNKNOWN"
+    {
+        return Err("Application Guard could not confirm private isolation.".into());
+    }
+    Ok(result)
+}
+#[tauri::command(async)]
+fn apply_application_security_policy(
+    operation_ref: SecurityReference,
+) -> Result<OperationResult, String> {
+    application_operation("ApplyApplicationPolicy", &operation_ref)
+}
+#[tauri::command(async)]
+fn get_application_security_operation(
+    operation_ref: SecurityReference,
+) -> Result<OperationResult, String> {
+    application_operation("GetApplicationOperation", &operation_ref)
+}
+#[tauri::command(async)]
+fn cancel_application_security_operation(
+    operation_ref: SecurityReference,
+) -> Result<OperationResult, String> {
+    application_operation("CancelApplicationOperation", &operation_ref)
+}
+
 #[tauri::command]
 fn get_clamav_status() -> Result<ClamAvStatus, String> {
     serde_json::from_value(security_context_method(
@@ -1293,6 +1726,16 @@ fn consume_navigation_request(app: tauri::AppHandle) -> Result<Option<String>, S
     let mut lines = raw.lines();
     let value = lines.next().unwrap_or("").trim().to_string();
     let event_id = lines.next().unwrap_or("").trim().to_string();
+    if value == "protected-data"
+        && !event_id.is_empty()
+        && (event_id.len() != 73
+            || !event_id.starts_with("resource_")
+            || !event_id[9..]
+                .bytes()
+                .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b)))
+    {
+        return Ok(None);
+    }
     // A shell deep-link can arrive while the existing Security Center window
     // is minimized. Restore and focus that same window before the frontend
     // switches pages; this preserves the single-instance taskbar identity.
@@ -1302,11 +1745,12 @@ fn consume_navigation_request(app: tauri::AppHandle) -> Result<Option<String>, S
         let _ = window.set_focus();
     }
     if SECURITY_CENTER_ROUTES.contains(&value.as_str()) {
-        let value = if value == "threats" && !event_id.is_empty() {
-            format!("{value}|{event_id}")
-        } else {
-            value
-        };
+        let value =
+            if matches!(value.as_str(), "threats" | "protected-data") && !event_id.is_empty() {
+                format!("{value}|{event_id}")
+            } else {
+                value
+            };
         use tauri::Emitter;
         let _ = app.emit("security-navigation", &value);
         return Ok(Some(value));
@@ -1560,7 +2004,7 @@ fn get_filesecurity() -> Result<serde_json::Value, String> {
 #[tauri::command(async)]
 fn get_privacy() -> Result<PrivacyPayload, String> {
     let actual = read_actual_state().ok();
-    let items = activity_summaries();
+    let (items, activity_state) = activity_summaries();
     let clamav = get_clamav_status().ok();
     let profile = actual
         .as_ref()
@@ -1712,11 +2156,12 @@ fn get_privacy() -> Result<PrivacyPayload, String> {
             })
             .collect(),
         activity: items,
+        activity_state,
         retention_days: greyward_security_backends::RETENTION_DAYS,
         max_activity_items: greyward_security_backends::MAX_ACTIVITY_ITEMS,
     })
 }
-#[tauri::command]
+#[tauri::command(async)]
 fn export_posture(app: tauri::AppHandle) -> Result<ActionResult, String> {
     let path = write_safe_export(&collect_core_snapshot()).map_err(|e| e.to_string())?;
     let message = format!("Safe posture export written to {}.", path.display());
@@ -1730,7 +2175,7 @@ fn export_posture(app: tauri::AppHandle) -> Result<ActionResult, String> {
         path: Some(path.to_string_lossy().into_owned()),
     })
 }
-#[tauri::command]
+#[tauri::command(async)]
 fn clear_history(app: tauri::AppHandle) -> Result<ActionResult, String> {
     clear_activity().map_err(|e| e.to_string())?;
     emit_state_changed(&app);
@@ -1759,7 +2204,7 @@ fn network_payload() -> NetworkPayload {
                 .as_deref()
                 .unwrap_or("UNAVAILABLE"),
             &format!(
-                "Interface: {} · Type: {}",
+                "Interface: {} Â· Type: {}",
                 network.interface.as_deref().unwrap_or("unknown"),
                 network.connection_type.as_deref().unwrap_or("unknown")
             ),
@@ -1884,9 +2329,11 @@ fn state_tone(state: PostureState) -> &'static str {
         _ => "unknown",
     }
 }
-fn activity_summaries() -> Vec<ActivitySummary> {
-    load_activity()
-        .unwrap_or_default()
+fn activity_summaries() -> (Vec<ActivitySummary>, String) {
+    let Ok(items) = load_activity() else {
+        return (Vec::new(), "UNAVAILABLE".into());
+    };
+    let result = items
         .into_iter()
         .rev()
         .take(8)
@@ -1897,7 +2344,8 @@ fn activity_summaries() -> Vec<ActivitySummary> {
             severity: format!("{:?}", item.severity),
             occurred_at: item.occurred_at.to_rfc3339(),
         })
-        .collect()
+        .collect();
+    (result, "AVAILABLE".into())
 }
 fn record_action(title: &str, detail: &str) -> Result<(), String> {
     record_activity(ActivityItem {
@@ -2006,16 +2454,60 @@ pub fn run() {
             // for a fresh window and keeps the single-instance launch path
             // observable in the installed desktop session.
             if let Some(window) = app.get_webview_window("main") {
+                #[cfg(target_os = "linux")]
+                {
+                    use gtk::prelude::GtkWindowExt;
+                    let native = window.gtk_window()?;
+                    // The main window owns its chrome. GTK can retain a native
+                    // titlebar despite the initial Wayland decoration hint.
+                    native.set_titlebar(None::<&gtk::Widget>);
+                    native.set_decorated(false);
+                }
+                // WebKit does not inherit the desktop locale automatically.
+                // Set its native language preference before frontend startup.
+                #[cfg(target_os = "linux")]
+                window.with_webview(|webview| {
+                    use webkit2gtk::{WebContextExt, WebViewExt};
+                    let languages: Vec<String> = webkit2gtk::glib::language_names()
+                        .iter()
+                        .filter_map(|language| {
+                            let language = language.split('.').next()?.split('@').next()?;
+                            (!matches!(language, "C" | "POSIX")).then(|| language.replace('_', "-"))
+                        })
+                        .take(16)
+                        .collect();
+                    let preferred: Vec<&str> = languages.iter().map(String::as_str).collect();
+                    if let Some(context) = webview.inner().context() {
+                        context.set_preferred_languages(&preferred);
+                    }
+                })?;
                 let _ = window.unminimize();
                 let _ = window.show();
                 let _ = window.set_focus();
                 startup_trace("window_show_requested");
             }
+            // Hidden WebKit timers pause navigation polling. A native wake-up
+            // consumes only an explicit shell request, including covered windows;
+            // it never polls collectors or changes policy in the background.
+            let navigation_app = app.handle().clone();
+            std::thread::spawn(move || {
+                loop {
+                    std::thread::sleep(std::time::Duration::from_millis(1500));
+                    if navigation_app.get_webview_window("main").is_none() {
+                        break;
+                    }
+                    if navigation_request_path().exists() {
+                        let _ = consume_navigation_request(navigation_app.clone());
+                    }
+                }
+            });
             startup_trace("tauri_setup_complete");
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            window_chrome::window_chrome,
             get_overview,
+            get_overview_activity,
             get_clamav_status,
             get_updates,
             consume_navigation_request,
@@ -2062,6 +2554,22 @@ pub fn run() {
             network_prompt_decision,
             set_network_trust_zone,
             get_applications,
+            get_application_security_coverage,
+            list_application_security_applications,
+            get_application_security_application,
+            list_application_security_resources,
+            get_application_security_resource,
+            list_application_security_grants,
+            pick_application_security_resource,
+            pick_application_security_grant,
+            pick_application_security_revocation,
+            pick_application_security_launch,
+            start_application_security_launch,
+            open_administration,
+            get_administration_state,
+            apply_application_security_policy,
+            get_application_security_operation,
+            cancel_application_security_operation,
             get_devices,
             get_recovery,
             create_recovery_point,

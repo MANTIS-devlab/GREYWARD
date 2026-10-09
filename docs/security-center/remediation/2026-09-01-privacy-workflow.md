@@ -50,7 +50,7 @@ after normal return to `Standard`.
 
 The subsequent guest-local run reached the real Tauri app and passed the export
 workflow, including the visible backend-returned destination
-`/home/stendev/.local/state/greyward/security-center/exports/posture-latest.json`,
+`/home/development-user/.local/state/greyward/security-center/exports/posture-latest.json`,
 mode `600`, valid JSON, and exact-file cleanup. The run then failed to publish a
 result within the 360-second bound while continuing through the combined legacy
 interaction scenarios. SSH remained unreachable afterward. No canonical

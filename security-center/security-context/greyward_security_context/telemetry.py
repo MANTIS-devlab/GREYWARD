@@ -20,6 +20,8 @@ import uuid
 from pathlib import Path
 from typing import Any, Mapping
 
+from greyward_security_context.findings import device_finding, event_finding
+
 try:
     import grp
 except ImportError:  # pragma: no cover - Windows source/test host
@@ -331,6 +333,20 @@ class TelemetryStore:
         except (OSError, sqlite3.Error) as error:
             raise TelemetryError(f"Telemetry storage is unavailable: {type(error).__name__}") from error
 
+    def _connect_readonly(self) -> sqlite3.Connection:
+        """A projection never creates storage, migrates schema or changes modes."""
+        connection = None
+        try:
+            connection = sqlite3.connect(self.path.resolve().as_uri() + "?mode=ro", uri=True, timeout=2)
+            connection.row_factory = sqlite3.Row
+            connection.execute("PRAGMA query_only=ON")
+            connection.execute("PRAGMA busy_timeout=2000")
+            return connection
+        except (OSError, sqlite3.Error) as error:
+            if connection is not None:
+                connection.close()
+            raise TelemetryError(f"Telemetry storage is unavailable: {type(error).__name__}") from error
+
     @staticmethod
     def _schema(connection: sqlite3.Connection) -> None:
         connection.executescript(
@@ -493,7 +509,7 @@ class TelemetryStore:
     @staticmethod
     def _record_value(connection: sqlite3.Connection, value: Mapping[str, Any]) -> None:
         details = json.dumps(_safe_value(value.get("details", {})), sort_keys=True, separators=(",", ":"))
-        connection.execute(
+        cursor = connection.execute(
                     """INSERT OR IGNORE INTO events
                     (event_id,schema,occurred_at,observed_at,monotonic_ns,boot_id,session_id,component,source,category,event_type,
                      action,outcome,severity,assessment,application,operation_id,transaction_id,unit,rule_id,destination_json,protocol,port,decision,correlation_json,
@@ -518,6 +534,13 @@ class TelemetryStore:
                         _text(value["retention_class"], 24), _text(value["expires_at"], 64), stamp(),
                     ),
                 )
+        # Deduplication and findings commit together; replay cannot reopen a
+        # resolved finding simply because history is inspected/imported again.
+        finding = event_finding(value) if cursor.rowcount and value["expires_at"] >= stamp() else None
+        if finding is not None:
+            existing = connection.execute("SELECT last_seen,resolved_at FROM findings WHERE finding_id = ?", (finding["finding_id"],)).fetchone()
+            if existing is None or finding["last_seen"] > (existing["resolved_at"] or existing["last_seen"]):
+                TelemetryStore._upsert_finding(connection, finding)
         for relation in value.get("relations", [])[:MAX_RELATIONS]:
             if not isinstance(relation, Mapping) or not relation.get("event_id"):
                 continue
@@ -550,6 +573,40 @@ class TelemetryStore:
             connection.close()
         self.prune()
         return len(prepared)
+
+    def reconcile_findings(self, *, limit: int = 64) -> dict[str, Any]:
+        """One-time bounded backfill at reconciliation, never inside a projection.
+
+        Existing resolved findings remain resolved. Cursor and derived writes
+        commit together, so an interrupted migration resumes without duplication.
+        """
+        limit = max(1, min(64, int(limit)))
+        connection = self._connect()
+        try:
+            with connection:
+                saved = connection.execute("SELECT value FROM metadata WHERE key = 'finding-event-migration/v1'").fetchone()
+                try:
+                    progress = json.loads(saved["value"]) if saved else {"cursor": "", "complete": False}
+                    if (set(progress) != {"cursor", "complete"} or not isinstance(progress["cursor"], str)
+                            or len(progress["cursor"]) > 96 or type(progress["complete"]) is not bool):
+                        raise ValueError("Invalid reconciliation cursor")
+                except (TypeError, ValueError, json.JSONDecodeError) as error:
+                    raise TelemetryError("Finding migration state is invalid") from error
+                if progress["complete"]:
+                    return {"complete": True, "processed": 0}
+                # Use the stable event primary key: VACUUM can renumber rowids.
+                rows = connection.execute("SELECT * FROM events WHERE event_id > ? ORDER BY event_id LIMIT ?", (progress["cursor"], limit)).fetchall()
+                for row in rows:
+                    finding = event_finding(self._row_value(row)) if row["expires_at"] >= stamp() else None
+                    if finding is not None:
+                        existing = connection.execute("SELECT state,last_seen FROM findings WHERE finding_id = ?", (finding["finding_id"],)).fetchone()
+                        if existing is None or (existing["state"] == "UNRESOLVED" and finding["last_seen"] > existing["last_seen"]):
+                            self._upsert_finding(connection, finding)
+                progress = {"cursor": rows[-1]["event_id"] if rows else progress["cursor"], "complete": len(rows) < limit}
+                connection.execute("INSERT INTO metadata(key,value) VALUES('finding-event-migration/v1',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", (json.dumps(progress, separators=(",", ":")),))
+                return {"complete": progress["complete"], "processed": len(rows)}
+        finally:
+            connection.close()
 
     def prune(self, connection: sqlite3.Connection | None = None, now: str | None = None) -> dict[str, int]:
         owned = connection is None
@@ -680,10 +737,18 @@ class TelemetryStore:
                 by_id[row["related_event_id"]].setdefault("relations", []).append({"event_id": row["event_id"], "relation": row["relation"], "confidence": row["confidence"], "basis": row["basis"]})
         return values
 
-    def query(self, filters: Mapping[str, Any] | None = None) -> dict[str, Any]:
+    def query(self, filters: Mapping[str, Any] | None = None, *, read_only: bool = False) -> dict[str, Any]:
         filters = filters or {}
         limit = max(1, min(MAX_QUERY_EVENTS, int(filters.get("limit", 128))))
         clauses, params = [], []
+        scope = filters.get("scope")
+        if scope not in (None, "SECURITY"):
+            raise TelemetryError("Invalid telemetry scope")
+        if scope == "SECURITY":
+            # Filter before LIMIT/cursor pagination so dense network traffic
+            # cannot hide the separate security history.
+            clauses.append("category != ?")
+            params.append("NETWORK")
         for key in ("component", "source", "category", "event_type", "severity", "assessment", "application", "boot_id"):
             value = filters.get(key)
             if value:
@@ -726,7 +791,7 @@ class TelemetryStore:
             clauses.append("(occurred_at < ? OR (occurred_at = ? AND event_id < ?))")
             params.extend([cursor[0], cursor[0], cursor[1]])
         where = " WHERE " + " AND ".join(clauses) if clauses else ""
-        connection = self._connect()
+        connection = self._connect_readonly() if read_only else self._connect()
         try:
             rows = connection.execute(f"SELECT * FROM events{where} ORDER BY occurred_at DESC, event_id DESC LIMIT ?", (*params, limit + 1)).fetchall()
             truncated = len(rows) > limit
@@ -746,11 +811,13 @@ class TelemetryStore:
                 result["truncated"] = True
                 result["size_limited"] = True
             return result
+        except sqlite3.Error as error:
+            raise TelemetryError("Telemetry history cannot be read") from error
         finally:
             connection.close()
 
-    def related(self, event_id: str, limit: int = 128) -> dict[str, Any]:
-        connection = self._connect()
+    def related(self, event_id: str, limit: int = 128, *, read_only: bool = False) -> dict[str, Any]:
+        connection = self._connect_readonly() if read_only else self._connect()
         try:
             root = connection.execute("SELECT * FROM events WHERE event_id = ?", (_text(event_id, 96),)).fetchone()
             if root is None:
@@ -765,6 +832,8 @@ class TelemetryStore:
             values = [self._row_value(root)] + [self._row_value(row) for row in related if row["event_id"] != root["event_id"]]
             values = self._attach_relations(connection, values)
             return {"schema": QUERY_SCHEMA, "generated_at": stamp(), "seed_event_id": event_id, "events": values[:MAX_QUERY_EVENTS], "source_state": self.status(connection)}
+        except sqlite3.Error as error:
+            raise TelemetryError("Telemetry related history cannot be read") from error
         finally:
             connection.close()
 
@@ -920,6 +989,9 @@ class TelemetryStore:
                 return {"source_state": source_quality, "devices": [], "changed": False}
             current = stamp()
             with connection:
+                previous = connection.execute("SELECT identity_id FROM devices WHERE connected = 1 LIMIT 129").fetchall()
+                if len(previous) > 128:
+                    raise TelemetryError("Device reconciliation exceeds the bounded inventory")
                 connection.execute("UPDATE devices SET connected = 0 WHERE connected = 1")
                 for item in observations[:128]:
                     identity = _text(item.get("identity_id"), 96)
@@ -940,6 +1012,13 @@ class TelemetryStore:
                          1, int(bool(item.get("trusted"))), _text(item.get("state"), 24) or "UNKNOWN", _text(source_quality, 32),
                          _text(item.get("event_id"), 96) or None, reviewed),
                     )
+                affected = {row["identity_id"] for row in previous}
+                affected.update(_text(item.get("identity_id"), 96) for item in observations[:128])
+                for identity in affected:
+                    row = connection.execute("SELECT * FROM devices WHERE identity_id = ?", (identity,)).fetchone()
+                    finding = device_finding(self._device_row(row)) if row is not None else None
+                    if finding is not None:
+                        self._upsert_finding(connection, finding)
             rows = connection.execute("SELECT * FROM devices ORDER BY last_seen DESC, identity_id DESC LIMIT 128").fetchall()
             return {"source_state": "AVAILABLE", "devices": [self._device_row(row) for row in rows], "changed": True}
         finally:
@@ -964,20 +1043,31 @@ class TelemetryStore:
         try:
             with connection:
                 cursor = connection.execute("UPDATE devices SET reviewed = 1 WHERE identity_id = ?", (_text(identity_id, 96),))
+                row = connection.execute("SELECT * FROM devices WHERE identity_id = ?", (_text(identity_id, 96),)).fetchone()
+                finding = device_finding(self._device_row(row)) if row is not None else None
+                if finding is not None:
+                    self._upsert_finding(connection, finding)
             return cursor.rowcount == 1
         finally:
             connection.close()
 
     def upsert_finding(self, value: Mapping[str, Any]) -> dict[str, Any]:
+        connection = self._connect()
+        try:
+            with connection:
+                return self._upsert_finding(connection, value)
+        finally:
+            connection.close()
+
+    @staticmethod
+    def _upsert_finding(connection: sqlite3.Connection, value: Mapping[str, Any]) -> dict[str, Any]:
+        value = _safe_value(value)
         finding_id = _text(value.get("finding_id"), 128)
         if not finding_id:
             raise TelemetryError("Finding ID is required")
-        connection = self._connect()
-        try:
-            now = _text(value.get("last_seen"), 64) or stamp()
-            existing = connection.execute("SELECT * FROM findings WHERE finding_id = ?", (finding_id,)).fetchone()
-            with connection:
-                connection.execute(
+        now = _text(value.get("last_seen"), 64) or stamp()
+        existing = connection.execute("SELECT * FROM findings WHERE finding_id = ?", (finding_id,)).fetchone()
+        connection.execute(
                     """INSERT INTO findings(finding_id,kind,subject_key,state,severity,title,summary,destination,first_seen,last_seen,resolved_at,evidence_json)
                        VALUES(?,?,?,?,?,?,?,?,?,?,?,?)
                        ON CONFLICT(finding_id) DO UPDATE SET state=excluded.state,severity=excluded.severity,title=excluded.title,
@@ -987,12 +1077,10 @@ class TelemetryStore:
                      _text(value.get("severity"), 24), _text(value.get("title"), 160), _text(value.get("summary"), 320),
                      _text(value.get("destination"), 64) or "overview", _text(value.get("first_seen"), 64) or (existing["first_seen"] if existing else now),
                      now, _text(value.get("resolved_at"), 64) or None, json.dumps(_safe_value(value.get("evidence", [])), separators=(",", ":"))))
-            return dict(connection.execute("SELECT * FROM findings WHERE finding_id = ?", (finding_id,)).fetchone())
-        finally:
-            connection.close()
+        return dict(connection.execute("SELECT * FROM findings WHERE finding_id = ?", (finding_id,)).fetchone())
 
-    def list_findings(self, *, unresolved_only: bool = False, limit: int = 64) -> list[dict[str, Any]]:
-        connection = self._connect()
+    def list_findings(self, *, unresolved_only: bool = False, limit: int = 64, read_only: bool = False) -> list[dict[str, Any]]:
+        connection = self._connect_readonly() if read_only else self._connect()
         try:
             where = " WHERE state = 'UNRESOLVED'" if unresolved_only else ""
             rows = connection.execute(f"SELECT * FROM findings{where} ORDER BY CASE severity WHEN 'CRITICAL' THEN 0 WHEN 'WARNING' THEN 1 ELSE 2 END, last_seen DESC LIMIT ?", (max(1, min(64, int(limit))),)).fetchall()
@@ -1003,6 +1091,8 @@ class TelemetryStore:
                 except (TypeError, json.JSONDecodeError): value["evidence"] = []
                 values.append(value)
             return values
+        except sqlite3.Error as error:
+            raise TelemetryError("Telemetry findings cannot be read") from error
         finally:
             connection.close()
 

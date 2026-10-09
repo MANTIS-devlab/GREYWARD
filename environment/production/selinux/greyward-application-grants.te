@@ -1,0 +1,44 @@
+policy_module(greyward_application_grants, 0.1.0)
+
+# Shared substrate for root-generated, reviewed tool subjects. This module
+# contains no resource access, login mapping or ordinary-to-tool entry rule.
+# Typed launch/profile checks, immutable code and kernel readback are mandatory.
+gen_require(`
+    type greyward_guard_t;
+    type init_t;
+    type bin_t;
+    type user_home_t;
+')
+attribute greyward_as_managed_tool;
+init_nnp_daemon_domain(greyward_as_managed_tool)
+corecmd_bin_entry_type(greyward_as_managed_tool)
+corecmd_exec_bin(greyward_as_managed_tool)
+libs_use_ld_so(greyward_as_managed_tool)
+libs_use_shared_libs(greyward_as_managed_tool)
+files_read_usr_files(greyward_as_managed_tool)
+files_read_etc_files(greyward_as_managed_tool)
+auth_read_passwd(greyward_as_managed_tool)
+# auth_use_nsswitch requires a concrete type, not this shared attribute.
+# Root-generated grant_context_cil assigns nsswitch_domain and netlabel_peer_type
+# to each verified concrete tool subject; neither interface accepts attributes.
+miscfiles_read_generic_certs(greyward_as_managed_tool)
+# kernel_read_system_state also requires a concrete type. Its corresponding
+# kernel_system_state_reader membership is assigned by grant_context_cil.
+dev_rw_null(greyward_as_managed_tool)
+dev_read_urand(greyward_as_managed_tool)
+init_use_fds(greyward_as_managed_tool)
+userdom_search_user_home_dirs(greyward_as_managed_tool)
+allow greyward_as_managed_tool user_home_t:dir { search getattr };
+allow greyward_as_managed_tool self:process { getcap getsched sigchld };
+allow greyward_as_managed_tool self:file { read open getattr };
+allow greyward_as_managed_tool self:dir { read open search getattr };
+allow init_t greyward_as_managed_tool:process transition;
+allow greyward_as_managed_tool init_t:process sigchld;
+# A launched ordinary helper loses the grant. The initial immutable entry uses
+# PID 1's explicit root-selected context, never a user-controlled transition.
+role system_r types greyward_guard_t;
+type_transition greyward_as_managed_tool bin_t:process greyward_guard_t;
+allow greyward_as_managed_tool greyward_guard_t:process transition;
+allow greyward_as_managed_tool greyward_guard_t:process2 nnp_transition;
+allow greyward_guard_t greyward_as_managed_tool:process sigchld;
+allow greyward_guard_t greyward_as_managed_tool:fd use;

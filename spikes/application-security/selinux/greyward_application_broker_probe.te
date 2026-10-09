@@ -1,0 +1,86 @@
+policy_module(greyward_application_broker_probe, 0.1.0)
+
+# Experimental read broker domain, never selected by production provisioning.
+# Root identity does not grant this service access to credential file content.
+type greyward_application_broker_t;
+type greyward_application_broker_exec_t;
+init_daemon_domain(greyward_application_broker_t, greyward_application_broker_exec_t)
+# Fedora's daemon macro covers initrc transitions; explicitly cover systemd
+# with the packaged NoNewPrivileges boundary as well.
+init_domain(greyward_application_broker_t, greyward_application_broker_exec_t)
+
+type greyward_application_broker_state_t;
+files_type(greyward_application_broker_state_t)
+manage_dirs_pattern(greyward_application_broker_t, greyward_application_broker_state_t, greyward_application_broker_state_t)
+manage_files_pattern(greyward_application_broker_t, greyward_application_broker_state_t, greyward_application_broker_state_t)
+type_transition greyward_application_broker_t greyward_application_broker_state_t:{ dir file } greyward_application_broker_state_t;
+
+libs_use_ld_so(greyward_application_broker_t)
+libs_use_shared_libs(greyward_application_broker_t)
+files_read_usr_files(greyward_application_broker_t)
+# Fixed installed metadata collector, never package installation/verification
+# scriptlets. Execute RPM without a transition to its privileged package domain;
+# read the database and ordinary installed executable bytes only.
+rpm_exec(greyward_application_broker_t)
+rpm_read_db(greyward_application_broker_t)
+corecmd_read_bin_files(greyward_application_broker_t)
+files_search_var_lib(greyward_application_broker_t)
+files_search_etc(greyward_application_broker_t)
+init_use_fds(greyward_application_broker_t)
+init_rw_stream_sockets(greyward_application_broker_t)
+dev_rw_null(greyward_application_broker_t)
+dev_read_urand(greyward_application_broker_t)
+kernel_read_system_state(greyward_application_broker_t)
+selinux_get_enforce_mode(greyward_application_broker_t)
+dbus_system_bus_client(greyward_application_broker_t)
+# The fixed read service must claim its bus name; client messaging alone does
+# not permit service ownership. The separate bus configuration restricts its
+# exported methods and permits name ownership only to root.
+dbus_connect_system_bus(greyward_application_broker_t)
+
+allow greyward_application_broker_t self:process { getattr getcap getsched getpgid setpgid sigchld sigkill };
+allow greyward_application_broker_t self:capability { dac_read_search sys_ptrace };
+allow greyward_application_broker_t self:unix_stream_socket create_stream_socket_perms;
+
+gen_require(`
+    type greyward_guard_t;
+    type greyward_guard_secret_t;
+    type user_home_dir_t;
+    type user_home_t;
+    type unconfined_t;
+    type bin_t;
+')
+# Only process metadata is consumed: real proc identity and held executable
+# stamps. No user-home/credential file read, ptrace or signal permission.
+allow greyward_application_broker_t { greyward_guard_t unconfined_t }:file { getattr open read };
+allow greyward_application_broker_t { greyward_guard_t unconfined_t }:lnk_file { getattr read };
+allow greyward_application_broker_t { greyward_guard_t unconfined_t }:dir { getattr open read search };
+allow greyward_application_broker_t { greyward_guard_t unconfined_t }:process getattr;
+allow greyward_application_broker_t { user_home_dir_t user_home_t }:dir { getattr search };
+allow greyward_application_broker_t { user_home_t bin_t }:file getattr;
+allow greyward_application_broker_t greyward_guard_secret_t:dir { getattr search };
+allow greyward_application_broker_t greyward_guard_secret_t:file getattr;
+allow { greyward_guard_t unconfined_t } greyward_application_broker_t:dbus send_msg;
+allow greyward_application_broker_t { greyward_guard_t unconfined_t }:dbus send_msg;
+
+# Fixed synthetic FD producer, excluded from the read broker package. Only
+# systemd can enter it; it deliberately opens the test credential and passes
+# that FD into the broker domain. Ordinary applications have no entry path.
+type greyward_application_fd_driver_t;
+type greyward_application_fd_driver_exec_t;
+init_daemon_domain(greyward_application_fd_driver_t, greyward_application_fd_driver_exec_t)
+init_domain(greyward_application_fd_driver_t, greyward_application_fd_driver_exec_t)
+libs_use_ld_so(greyward_application_fd_driver_t)
+libs_use_shared_libs(greyward_application_fd_driver_t)
+files_read_usr_files(greyward_application_fd_driver_t)
+files_search_etc(greyward_application_fd_driver_t)
+kernel_read_system_state(greyward_application_fd_driver_t)
+init_use_fds(greyward_application_fd_driver_t)
+init_rw_stream_sockets(greyward_application_fd_driver_t)
+dev_rw_null(greyward_application_fd_driver_t)
+allow greyward_application_fd_driver_t self:process { getattr getsched sigchld };
+allow greyward_application_fd_driver_t self:capability dac_read_search;
+allow greyward_application_fd_driver_t { user_home_dir_t user_home_t greyward_guard_secret_t }:dir { getattr search };
+allow greyward_application_fd_driver_t greyward_guard_secret_t:file { getattr open read };
+domain_auto_trans(greyward_application_fd_driver_t, greyward_application_broker_exec_t, greyward_application_broker_t)
+allow greyward_application_fd_driver_t greyward_application_broker_t:process2 nnp_transition;

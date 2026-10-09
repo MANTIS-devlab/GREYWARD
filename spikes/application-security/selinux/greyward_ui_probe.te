@@ -1,0 +1,97 @@
+policy_module(greyward_ui_probe, 0.1.0)
+
+# Temporary WebDriver infrastructure, not an application/grant profile. Only
+# the fixed root unit selects it; the unit has a private network/filesystem.
+gen_require(`
+    role greyward_guard_r;
+    type greyward_guard_t;
+    type init_t;
+    type user_home_t;
+    type user_tmp_t;
+    type dbusd_exec_t;
+    type user_tmpfs_t;
+    type xserver_exec_t;
+    class dbus { send_msg acquire_svc };
+')
+type greyward_ui_probe_driver_t;
+domain_type(greyward_ui_probe_driver_t)
+domain_user_exemption_target(greyward_ui_probe_driver_t)
+ubac_constrained(greyward_ui_probe_driver_t)
+init_nnp_daemon_domain(greyward_ui_probe_driver_t)
+role greyward_guard_r types greyward_ui_probe_driver_t;
+corecmd_bin_entry_type(greyward_ui_probe_driver_t)
+corecmd_shell_entry_type(greyward_ui_probe_driver_t)
+corecmd_exec_bin(greyward_ui_probe_driver_t)
+corecmd_exec_shell(greyward_ui_probe_driver_t)
+libs_use_ld_so(greyward_ui_probe_driver_t)
+libs_use_shared_libs(greyward_ui_probe_driver_t)
+files_read_usr_files(greyward_ui_probe_driver_t)
+files_read_etc_files(greyward_ui_probe_driver_t)
+miscfiles_read_generic_certs(greyward_ui_probe_driver_t)
+auth_read_passwd(greyward_ui_probe_driver_t)
+init_search_pid_dirs(greyward_ui_probe_driver_t)
+systemd_login_read_pid_files(greyward_ui_probe_driver_t)
+files_tmp_filetrans(greyward_ui_probe_driver_t, user_tmp_t, { dir file sock_file })
+kernel_read_system_state(greyward_ui_probe_driver_t)
+fs_read_cgroup_files(greyward_ui_probe_driver_t)
+fs_getattr_xattr_fs(greyward_ui_probe_driver_t)
+# wlroots keymaps and software-rendered buffers are ordinary shared memory.
+fs_tmpfs_filetrans(greyward_ui_probe_driver_t, user_tmpfs_t, file)
+userdom_manage_tmpfs_files(greyward_ui_probe_driver_t)
+allow greyward_ui_probe_driver_t user_tmpfs_t:file map;
+dev_read_urand(greyward_ui_probe_driver_t)
+dev_rw_null(greyward_ui_probe_driver_t)
+init_use_fds(greyward_ui_probe_driver_t)
+init_rw_stream_sockets(greyward_ui_probe_driver_t)
+# The private fixture bus computes decisions; this grants neither enforcement
+# changes nor credential access to the application subject.
+selinux_get_enforce_mode(greyward_ui_probe_driver_t)
+selinux_compute_access_vector(greyward_ui_probe_driver_t)
+allow greyward_ui_probe_driver_t self:netlink_selinux_socket { create_socket_perms read };
+allow init_t greyward_ui_probe_driver_t:process transition;
+allow greyward_ui_probe_driver_t init_t:process sigchld;
+allow greyward_ui_probe_driver_t self:process { fork getcap getsched signal sigkill sigchld signull execmem };
+allow greyward_ui_probe_driver_t self:unix_stream_socket { create_stream_socket_perms connectto };
+allow greyward_ui_probe_driver_t self:unix_dgram_socket create_socket_perms;
+allow greyward_ui_probe_driver_t self:tcp_socket create_stream_socket_perms;
+allow greyward_ui_probe_driver_t self:dbus { send_msg acquire_svc };
+corenet_tcp_bind_generic_node(greyward_ui_probe_driver_t)
+corenet_tcp_bind_generic_port(greyward_ui_probe_driver_t)
+corenet_tcp_connect_generic_port(greyward_ui_probe_driver_t)
+corenet_tcp_sendrecv_generic_if(greyward_ui_probe_driver_t)
+corenet_tcp_sendrecv_generic_node(greyward_ui_probe_driver_t)
+corenet_tcp_sendrecv_generic_port(greyward_ui_probe_driver_t)
+userdom_search_user_home_dirs(greyward_ui_probe_driver_t)
+allow greyward_ui_probe_driver_t { user_home_t user_tmp_t }:dir manage_dir_perms;
+allow greyward_ui_probe_driver_t { user_home_t user_tmp_t }:file manage_file_perms;
+# The private Context fixture uses the shared SQLite WAL index. Its mmap is
+# ordinary user-owned history, never a grant-bearing credential type. No
+# application-to-driver transition or sensitive-resource permission is added.
+allow greyward_ui_probe_driver_t user_home_t:file map;
+allow greyward_ui_probe_driver_t { user_home_t user_tmp_t }:sock_file manage_sock_file_perms;
+allow greyward_ui_probe_driver_t { user_home_t user_tmp_t }:lnk_file read_lnk_file_perms;
+allow greyward_ui_probe_driver_t dbusd_exec_t:file { execute execute_no_trans open read getattr map };
+# Labwc verifies its nested Xwayland helper during startup. The private unit
+# supplies no host display socket; this never permits an application to use X.
+allow greyward_ui_probe_driver_t xserver_exec_t:file { execute execute_no_trans open read getattr map };
+
+# Only the root-owned, digest-recorded Tauri fixture transitions into the
+# ordinary subject. No ordinary-subject transition into the driver is allowed.
+type greyward_ui_probe_application_exec_t;
+files_type(greyward_ui_probe_application_exec_t)
+domain_entry_file(greyward_guard_t, greyward_ui_probe_application_exec_t)
+domain_auto_trans(greyward_ui_probe_driver_t, greyward_ui_probe_application_exec_t, greyward_guard_t)
+allow greyward_ui_probe_driver_t greyward_guard_t:process2 nnp_transition;
+allow greyward_guard_t greyward_ui_probe_driver_t:fd use;
+allow greyward_guard_t greyward_ui_probe_driver_t:unix_stream_socket connectto;
+allow greyward_ui_probe_driver_t greyward_guard_t:unix_stream_socket connectto;
+allow greyward_guard_t greyward_ui_probe_driver_t:dbus send_msg;
+# The source Context process is confined as an ordinary guard subject. Owning
+# its private presentation name conveys no root policy or credential authority.
+allow greyward_guard_t greyward_ui_probe_driver_t:dbus acquire_svc;
+allow greyward_ui_probe_driver_t greyward_guard_t:dbus send_msg;
+allow greyward_ui_probe_driver_t greyward_guard_t:process getattr;
+allow greyward_ui_probe_driver_t greyward_guard_t:process sigkill;
+allow greyward_ui_probe_driver_t greyward_guard_t:dir { getattr search };
+allow greyward_ui_probe_driver_t greyward_guard_t:lnk_file read_lnk_file_perms;
+allow greyward_ui_probe_driver_t greyward_guard_t:file { open read getattr };

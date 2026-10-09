@@ -6,6 +6,8 @@ import os
 import re
 import subprocess
 import sys
+import socket
+import struct
 from pathlib import Path
 
 
@@ -21,6 +23,8 @@ RPM_QUERY_TIMEOUT = 30
 PACKAGE_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9+_.:-]*$")
 OPERATION_ID = re.compile(r"^dnf5-[0-9]{1,20}$")
 MAX_DRIVER_PACKAGES = 32
+HELPER = "/usr/libexec/greyward-update-action"
+WORKER_SOCKET = "/run/greyward-update-worker.sock"
 
 env = os.environ.copy()
 env["LC_ALL"] = "C"
@@ -176,7 +180,89 @@ def apply(args):
     return 0
 
 
+def privileged_worker(args):
+    """PID 1 owns privileged execution after the fixed Polkit authorization.
+
+    Root UID inside an enrolled application domain still lacks administrative
+    MAC rights. Transfer only this validated plan over a root-only activation
+    socket; never grant ordinary applications administrative service control.
+    """
+    if os.geteuid() != 0:
+        raise RuntimeError("The update action requires authenticated root authority.")
+    if not OPERATION_ID.fullmatch(args.operation_id):
+        raise ValueError("invalid update operation id")
+    packages = validate_driver_packages(getattr(args, "driver_package", []))
+    if args.command == "apply" and (not (args.system or args.system_flatpak or args.firmware) or (packages and not args.system)):
+        raise ValueError("invalid privileged update provider plan")
+    if args.worker:
+        context = Path('/proc/self/attr/current').read_text().strip('\0\n')
+        if os.getppid() != 1 or not context.startswith('system_u:system_r:'):
+            raise RuntimeError("The update worker requires root system-service authority.")
+        with socket.fromfd(0, socket.AF_UNIX, socket.SOCK_STREAM) as peer:
+            _pid, uid, _gid = struct.unpack('3i', peer.getsockopt(socket.SOL_SOCKET, socket.SO_PEERCRED, 12))
+        if uid != 0:
+            raise RuntimeError("The update worker requires an authenticated root peer.")
+        if args.command == "check":
+            load_recovery_create()  # Load only the installed root-owned module.
+            from greyward_security_context.recovery import ensure_btrfs_root
+            from greyward_security_context.dms_compatibility import constraints
+            ensure_btrfs_root()
+            constraints()
+            emit("preflight", state="AVAILABLE")
+            return 0
+        return apply(args)
+    command = [args.command, "--operation-id", args.operation_id]
+    if args.command == "apply":
+        for name, flag in (("system", "--system"), ("system_flatpak", "--system-flatpak"), ("firmware", "--firmware")):
+            if getattr(args, name):
+                command.append(flag)
+        for package in packages:
+            command.extend(("--driver-package", package))
+    result = None
+    with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as worker:
+        worker.settimeout(PROVIDER_TIMEOUT * 3 + 660)
+        worker.connect(WORKER_SOCKET)
+        worker.sendall(json.dumps(command).encode('utf-8') + b'\n')
+        worker.shutdown(socket.SHUT_WR)
+        with worker.makefile('r', encoding='utf-8') as output:
+            for line in output:
+                try:
+                    event = json.loads(line)
+                except json.JSONDecodeError:
+                    event = None
+                if isinstance(event, dict) and event.get('greyward_update_event') == 'worker_exit':
+                    result = event.get('status')
+                else:
+                    sys.stdout.write(line)
+                    sys.stdout.flush()
+    if type(result) is not int or result < 0 or result > 255:
+        raise RuntimeError("The root update worker ended without a verified exit status.")
+    return result
+
+
 def main(argv=None):
+    arguments = list(sys.argv[1:] if argv is None else argv)
+    if arguments == ['serve']:
+        # Socket activation supplies a connected descriptor, never a user path.
+        if os.geteuid() != 0 or os.getppid() != 1:
+            raise RuntimeError("Root socket activation required")
+        with socket.fromfd(0, socket.AF_UNIX, socket.SOCK_STREAM) as peer:
+            _pid, uid, _gid = struct.unpack('3i', peer.getsockopt(socket.SOL_SOCKET, socket.SO_PEERCRED, 12))
+            if uid != 0:
+                raise RuntimeError("Authenticated root peer required")
+            peer.settimeout(10)
+            with peer.makefile('rb') as request:
+                payload = request.readline(16385)
+        if len(payload) > 16384 or not payload.endswith(b'\n'):
+            raise ValueError("Invalid update request size")
+        request = json.loads(payload)
+        if (not isinstance(request, list) or not request or request[0] not in ('apply', 'check')
+                or len(request) > 72 or any(not isinstance(v, str) or len(v) > 240 for v in request)
+                or '--worker' in request):
+            raise ValueError("Invalid update worker request")
+        status = main([*request, '--worker'])
+        emit('worker_exit', status=status)
+        return status
     parser = argparse.ArgumentParser(description="GREYWARD fixed native-provider update transaction")
     subparsers = parser.add_subparsers(dest="command", required=True)
     apply_parser = subparsers.add_parser("apply")
@@ -185,9 +271,13 @@ def main(argv=None):
     apply_parser.add_argument("--system-flatpak", action="store_true")
     apply_parser.add_argument("--firmware", action="store_true")
     apply_parser.add_argument("--driver-package", action="append", default=[])
-    args = parser.parse_args(argv)
+    apply_parser.add_argument("--worker", action="store_true", help=argparse.SUPPRESS)
+    check_parser = subparsers.add_parser("check", help="Check privileged recovery and desktop policy readiness without preparing updates")
+    check_parser.add_argument("--operation-id", required=True)
+    check_parser.add_argument("--worker", action="store_true", help=argparse.SUPPRESS)
+    args = parser.parse_args(arguments)
     try:
-        return apply(args)
+        return privileged_worker(args)
     except (OSError, subprocess.SubprocessError, RuntimeError, ValueError) as error:
         print(str(error), file=sys.stderr)
         return 1

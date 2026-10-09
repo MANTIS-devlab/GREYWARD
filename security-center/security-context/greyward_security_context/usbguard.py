@@ -1,5 +1,7 @@
 """Narrow USBGuard adapter. Enforcement and persistent policy remain upstream."""
 import hashlib
+import json
+import os
 import re
 import dbus
 
@@ -70,6 +72,24 @@ class UsbGuardAdapter:
         return values[0] if values else None
 
     def list_devices(self):
+        # Enrolled ordinary subjects have no direct USBGuard access. The fixed
+        # system projection reads authoritative state; mutations keep their
+        # existing typed authorization boundary. Missing projection is failure.
+        if os.getuid() != 0:
+            try:
+                with open('/proc/self/attr/current', encoding='ascii') as context:
+                    enrolled = context.read().startswith('greyward_guard_u:')
+            except OSError:
+                enrolled = False
+            if enrolled:
+                try:
+                    proxy = self.bus.get_object('systems.mantis.greyward.ApplicationSecurity1', '/systems/mantis/greyward/ApplicationSecurity1', introspect=False)
+                    value = json.loads(str(proxy.get_dbus_method('GetDeviceProtection', 'systems.mantis.greyward.ApplicationSecurity1')(timeout=6)))
+                    if value.get('schema') != 'greyward.device-projection/v1' or not isinstance(value.get('devices'), list):
+                        raise ValueError('Invalid device projection')
+                    return value['devices']
+                except (dbus.DBusException, ValueError, TypeError) as error:
+                    raise UsbGuardError('USBGuard device state is unavailable.') from error
         try:
             owner = str(self.bus.get_name_owner(USB_SERVICE))
             listing = self.method(DEVICES_PATH, DEVICES_INTERFACE, 'listDevices')

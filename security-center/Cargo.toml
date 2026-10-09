@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "crates/greyward-security-domain",
+    "crates/greyward-application-security",
     "crates/greyward-security-backends",
     "tauri/src-tauri",
 ]

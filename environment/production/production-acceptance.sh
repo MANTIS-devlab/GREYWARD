@@ -38,7 +38,7 @@ checkpoint 'security provider services'
 for provider_service in opensnitch.service greyward-opensnitch-control-plane.service \
   greyward-opensnitch-policy.service greyward-clamav-scan.service \
   clamav-freshclam.service greyward-secure-dns.service usbguard.service \
-  usbguard-dbus.service; do
+  usbguard-dbus.service greyward-update-worker.socket; do
   systemctl is-active --quiet "$provider_service" || fail "Security provider service is not active: $provider_service"
 done
 test -s /usr/share/backgrounds/greyward/greyward-wallpaper-black-art-4k.jpg || fail 'GREYWARD desktop wallpaper is missing'

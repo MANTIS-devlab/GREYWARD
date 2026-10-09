@@ -92,24 +92,27 @@ pub fn posture_digest(snapshot: &PostureSnapshot) -> serde_json::Value {
         .checks
         .iter()
         .filter(|check| {
-            matches!(
-                check.state,
-                PostureState::ReviewNeeded | PostureState::ActionRequired
-            )
+            check.reason_code != "accepted-deviation"
+                && matches!(
+                    check.state,
+                    PostureState::ReviewNeeded | PostureState::ActionRequired
+                )
         })
         .count();
     let unavailable = snapshot
         .checks
         .iter()
         .filter(|check| {
-            matches!(
-                check.state,
-                PostureState::Unknown | PostureState::Unavailable
-            )
+            check.reason_code != "accepted-deviation"
+                && matches!(
+                    check.state,
+                    PostureState::Unknown | PostureState::Unavailable
+                )
         })
         .count();
     let required_uncertain = snapshot.checks.iter().any(|check| {
-        check.requiredness == Requiredness::Required
+        check.reason_code != "accepted-deviation"
+            && check.requiredness == Requiredness::Required
             && matches!(
                 check.state,
                 PostureState::Unknown | PostureState::Unavailable
@@ -118,5 +121,16 @@ pub fn posture_digest(snapshot: &PostureSnapshot) -> serde_json::Value {
     let states: Vec<_> = snapshot.domains.iter().map(|domain| domain.state).collect();
     let (state, _, _, _, _) =
         choose_overall_posture(&states, review, unavailable, required_uncertain);
-    serde_json::json!({"schema": "greyward.security.posture/v1", "posture": {"state": state, "evaluated_at": snapshot.generated_at.to_rfc3339()}, "metrics": {"review_needed": review, "unavailable": unavailable}})
+    let checks: Vec<_> = snapshot
+        .checks
+        .iter()
+        .map(|check| {
+            serde_json::json!({
+                "check_id": check.check_id.as_str(), "state": check.state,
+                "accepted_deviation": check.reason_code == "accepted-deviation",
+                "requiredness": check.requiredness,
+            })
+        })
+        .collect();
+    serde_json::json!({"schema": "greyward.security.posture/v1", "posture": {"state": state, "evaluated_at": snapshot.generated_at.to_rfc3339()}, "metrics": {"review_needed": review, "unavailable": unavailable}, "checks": checks})
 }

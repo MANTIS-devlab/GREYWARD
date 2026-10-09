@@ -1,6 +1,6 @@
 Name:           greyward-security-context
 Version:        0.1.0
-Release:        64%{?dist}
+Release:        82%{?dist}
 Summary:        GREYWARD OpenSnitch control plane and Security Context session bus
 License:        GPL-3.0-only
 Source0:        %{name}-%{version}.tar.gz
@@ -71,6 +71,8 @@ install -Dm0644 security-context/systemd/greyward-feodo-update.timer %{buildroot
 install -Dm0644 security-context/systemd/greyward-auto-update.service %{buildroot}%{_unitdir}/greyward-auto-update.service
 install -Dm0644 security-context/systemd/greyward-auto-update.timer %{buildroot}%{_unitdir}/greyward-auto-update.timer
 install -Dm0644 security-context/systemd/greyward-update-center.service %{buildroot}%{_userunitdir}/greyward-update-center.service
+install -Dm0644 security-context/systemd/greyward-update-worker.socket %{buildroot}%{_unitdir}/greyward-update-worker.socket
+install -Dm0644 security-context/systemd/greyward-update-worker@.service %{buildroot}%{_unitdir}/greyward-update-worker@.service
 install -Dm0644 security-context/dbus/systems.mantis.greyward.ClamAvScan1.conf %{buildroot}%{_sysconfdir}/dbus-1/system.d/systems.mantis.greyward.ClamAvScan1.conf
 install -Dm0644 security-context/dbus/systems.mantis.greyward.SecurityContext1.service %{buildroot}%{_datadir}/dbus-1/services/systems.mantis.greyward.SecurityContext1.service
 install -Dm0644 security-context/dbus/org.greyward.Update1.service %{buildroot}%{_datadir}/dbus-1/services/org.greyward.Update1.service
@@ -95,6 +97,7 @@ install -Dm0644 security-context/tmpfiles.d/greyward-secure-dns.conf %{buildroot
 %systemd_post greyward-auto-update.timer
 %systemd_post greyward-clamav-scan.service
 %systemd_post greyward-secure-dns.service
+%systemd_post greyward-update-worker.socket
 %systemd_user_post greyward-security-context-user.service
 %systemd_user_post greyward-update-center.service
 
@@ -105,6 +108,7 @@ install -Dm0644 security-context/tmpfiles.d/greyward-secure-dns.conf %{buildroot
 %systemd_preun greyward-auto-update.timer
 %systemd_preun greyward-clamav-scan.service
 %systemd_preun greyward-secure-dns.service
+%systemd_preun greyward-update-worker.socket
 
 %postun
 %systemd_postun_with_restart greyward-opensnitch-control-plane.service
@@ -113,6 +117,7 @@ install -Dm0644 security-context/tmpfiles.d/greyward-secure-dns.conf %{buildroot
 %systemd_postun_with_restart greyward-auto-update.timer
 %systemd_postun_with_restart greyward-clamav-scan.service
 %systemd_postun_with_restart greyward-secure-dns.service
+%systemd_postun_with_restart greyward-update-worker.socket
 %systemd_user_postun_with_restart greyward-security-context-user.service
 %systemd_user_postun_with_restart greyward-update-center.service
 
@@ -131,6 +136,8 @@ install -Dm0644 security-context/tmpfiles.d/greyward-secure-dns.conf %{buildroot
 %{_libexecdir}/greyward-clamav-scan
 %{_libexecdir}/greyward-update-center
 %{_libexecdir}/greyward-update-action
+%{_unitdir}/greyward-update-worker.socket
+%{_unitdir}/greyward-update-worker@.service
 %{_libexecdir}/greyward-auto-update
 %{_libexecdir}/greyward-recovery-point
 %{_libexecdir}/greyward-backup
@@ -166,6 +173,64 @@ install -Dm0644 security-context/tmpfiles.d/greyward-secure-dns.conf %{buildroot
 
 
 %changelog
+* Sat Oct 10 2026 MANTIS SYSTEMS - 0.1.0-82
+- Read bounded scanner metadata through the existing trusted system service.
+- Fail closed on unavailable metadata; do not infer updates from service state.
+- Report VPN routing observations without asserting encryption or leak protection.
+
+* Fri Oct 09 2026 MANTIS SYSTEMS - 0.1.0-81
+- Forward fixed Administration operations and trusted USBGuard device reads for enrolled sessions.
+
+* Fri Oct 09 2026 MANTIS SYSTEMS - 0.1.0-80
+- Route sensitive access Review to the exact protected resource without granting permission.
+
+* Fri Oct 09 2026 GREYWARD <development@mantis.systems> - 0.1.0-79
+- Activate the fixed update worker through a root-only socket with peer credential validation; no ordinary-domain system-service control grant.
+
+* Fri Oct 09 2026 GREYWARD <development@mantis.systems> - 0.1.0-78
+- Execute the fixed authenticated update plan through PID 1 instead of inheriting the ordinary application SELinux domain; preserve recovery verification errors.
+
+* Fri Oct 09 2026 GREYWARD <development@mantis.systems> - 0.1.0-77
+- Match DNF daemon and CLI transaction resolution to the selected desktop compatibility holds used by Apply.
+
+* Thu Oct 08 2026 GREYWARD <development@mantis.systems> - 0.1.0-76
+- Share Center evaluated checks, accepted deviations and File Security readiness with shell warnings.
+
+* Thu Oct 08 2026 GREYWARD <development@mantis.systems> - 0.1.0-75
+- Keep display lease renewals independent of content revisions and notifications.
+
+* Thu Oct 08 2026 GREYWARD maintainers <maintainers@mantis.systems> - 0.1.0-74
+- Initialize D-Bus GLib threading before collectors; separate negative display freshness from action evidence.
+- Exclude absent detection sources from active shell alerts without erasing history.
+
+* Thu Oct 08 2026 GREYWARD maintainers <maintainers@mantis.systems> - 0.1.0-73
+- Use the shared Security Center shield-G emblem for shell notifications.
+
+* Thu Oct 08 2026 GREYWARD maintainers <maintainers@mantis.systems> - 0.1.0-72
+- Project fresh detection source availability without erasing history or treating read failures as removal.
+
+* Thu Oct 08 2026 GREYWARD maintainers <maintainers@mantis.systems> - 0.1.0-71
+- Normalize kernel occurrence times through the shared UTC telemetry formatter.
+
+* Thu Oct 08 2026 GREYWARD maintainers <maintainers@mantis.systems> - 0.1.0-70
+- Retain bounded historical kernel process metadata without asserting application identity.
+
+* Thu Oct 08 2026 MANTIS SYSTEMS - 0.1.0-69
+- Filter separate security history before pagination in the existing event store.
+- Preserve network history queries and live protection authorities.
+
+* Thu Oct 08 2026 MANTIS SYSTEMS - 0.1.0-68
+- Forward actual confined-session coverage and typed protected authentication.
+* Wed Oct 07 2026 MANTIS SYSTEMS - 0.1.0-67
+- Discard workflow leases on broker owner changes and reauthenticate the next call.
+- Never replay a mutation after a backend restart.
+* Wed Oct 07 2026 MANTIS SYSTEMS - 0.1.0-66
+- Validate typed managed-isolation and policy-change capabilities independently.
+- Keep legacy providers conservative without changing security-service owners.
+* Wed Oct 07 2026 MANTIS SYSTEMS - 0.1.0-65
+- Package typed Application Guard reads, tested grant reviews and shared Activity.
+- Preserve unavailable enforcement states and keep production enrollment disabled.
+
 * Mon Oct 05 2026 MANTIS SYSTEMS - 0.1.0-64
 - Explicitly clear resolved's retained public routing domain during scope removal.
 

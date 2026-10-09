@@ -4,8 +4,9 @@
 
 Security Center observes sensitive system state and may request narrowly scoped
 changes. It must not become a privilege-escalation mechanism or a new store of
-sensitive telemetry. This threat model covers the V0 application, its data,
-upstream services, packaging, and the planned future privilege boundary.
+sensitive telemetry. This threat model covers the Tauri application, Context, narrow privileged
+services, packaging and experimental Application Security source. Production
+enrollment/whole-session guarantees remain unvalidated.
 
 It does not claim to defend against an attacker who already controls the kernel,
 firmware, root account, or the upstream security daemon being queried. It must,
@@ -23,18 +24,43 @@ however, report evidence limitations and avoid amplifying such compromise.
 
 ## Trust boundaries
 
-1. Untrusted presentation inputs entering the unprivileged GTK process.
+1. Untrusted presentation inputs entering the unprivileged Tauri webview/Rust facade.
 2. The user session bus and portal services.
 3. The system bus and upstream root services.
 4. Polkit authorization between the user action and upstream mechanism.
 5. Kernel/library evidence sources exposed to the unprivileged process.
 6. User-owned persistent state and explicit exports.
 7. Package build/install boundaries.
-8. Future GREYWARD user monitor and, separately, any future root service.
+8. Existing Security Context and narrow root services, including the
+   experimental application-security policy/worker boundary.
 
 The UI is not trusted merely because it is first-party. Upstream D-Bus services
 are trusted only for the capability they own. Cached evidence is never an
 authorization input.
+
+## Protected administration boundary
+
+Protected desktop administration adds a separate, explicit privileged session.
+The enrolled ordinary-role closure must not execute real sudo, attach to its
+processes, access private PTYs/descriptors, inject protected input, reuse tickets
+or receive command output through handoff. PID 1 verifies peer/session identity
+and matched immutable inputs; native argument review and fresh PAM precede
+elevation. Compositor verification identifies exclusive input; first-party window
+titles and screenshots are not authorization evidence. The webview has fixed
+open/status capabilities and no privileged command executor.
+
+An authenticated administrator may read Protected Data and change policy. Code
+deliberately run inside Administration shares that authority. Confined sysadm
+does not make root commands harmless, and a timestamp expiry cannot revoke an
+already running root shell. Root/kernel compromise remains outside this boundary.
+See [the enrollment authority](APPLICATION_SECURITY_ENROLLMENT.md) for scoped
+evidence and recovery limitations. The subsequent
+[normal-seat compatibility receipt](../history/security-center/2026-10-09-desktop-compatibility.md)
+records actual activation, fresh Administration authentication, native locking,
+937 kernel decisions, Flatpak alias denial and grant reuse/revocation. Nested
+sudo uses a generation-matched private Fedora password helper, never the shared
+ordinary helper. Screen capture/sharing is unavailable until a consented path
+can exclude protected surfaces; broad capture is not an acceptable workaround.
 
 ## Adversaries
 
@@ -86,12 +112,14 @@ authorization input.
 - Prepare from an authoritative read, then re-resolve immediately before apply.
 - Verify the result from a new authoritative read.
 - Invalidate undo if the object, service owner, boot, or session has changed.
-- Future file operations use file descriptors and `openat2`-style resolution
+- File selection/registration/preparation uses held descriptors and secure resolution
   constraints; they never trust caller-provided absolute paths.
 
 ### Config, cache, symlink, and path attacks
 
-- State directories are user-owned `0700`; files are regular `0600` files.
+- Presentation/cache directories are user-owned `0700`, files `0600`. Root
+  policy/database/journals use separately root-owned restrictive directories;
+  user-owned history cannot supply authoritative policy.
 - Reject symlinks, hard-link surprises, device files, and unexpected owners.
 - Write bounded data atomically in the destination directory.
 - Signatures are not used to pretend user-owned cache is trusted. Cached data is
@@ -100,15 +128,18 @@ authorization input.
 
 ### Compromised UI
 
-- V0 gives the UI no direct root process and no GREYWARD root API.
+- The UI never runs as root. Fixed typed adapters reach narrow privileged
+  operations; authorization and policy stay outside presentation.
 - Upstream mechanisms enforce their own typed operations and Polkit policy.
-- Control adapters expose only the two V0 operation families.
+- Control adapters expose an explicit allowlist; no generic shell, D-Bus
+  forwarding, filesystem export or policy-generation command is accepted.
 - The UI cannot turn a recommendation or arbitrary evidence into an action ID.
 - Rate-limit retries and prevent background authorization prompts.
 
-### Compromised future helper
+### Compromised root helper/broker
 
-- Keep the service D-Bus activated and absent from V0.
+- Activation is owner-specific. The default experimental Application Security
+  service has no preset or automatic bus activation; enabling it is not enrollment.
 - Minimize code, dependencies, methods, writable paths, Linux capabilities, and
   network address families.
 - Apply systemd sandboxing, SELinux confinement, seccomp where compatible, and
@@ -130,8 +161,9 @@ authorization input.
 
 ### Availability and lockout
 
-- V0 controls cannot alter authentication, boot, encryption, USB policy, or
-  outbound application policy.
+- Existing typed USB/network/recovery/update operations retain their narrow
+  owners. Application Security source does not alter Fedora authentication,
+  native DMS locking, boot or installer encryption flows.
 - Firewall-zone changes have preview, previous-value capture, verification, and
   undo; tests include remote-development and active-connection cases.
 - Portal permission revocation never deletes the underlying user file.
@@ -152,8 +184,8 @@ authorization input.
 ## Security invariants
 
 - UI UID is never zero.
-- The UI contains no `sudo`, shell, command template, or generic executor. The
-  Recovery V1 fixed-path helper is the sole GREYWARD Polkit exception.
+- The UI contains no `sudo`, shell, command template, or generic executor. Narrow
+  root services and Recovery V1 retain explicit typed Polkit boundaries.
 - Read-only collection never triggers Polkit.
 - Background activity never triggers authentication.
 - No state is reported changed until verified.
@@ -161,6 +193,50 @@ authorization input.
 - Optional backend absence cannot be silently converted into success.
 - External communication is disclosed and has the pre-request controls defined
   in `PRIVACY.md`; a saved opt-out is loaded before any provider request.
+
+## Application Guard and Protected Data — implemented experimental boundary
+
+The current provider is fixed to the isolated development account. SELinux
+mandatory denial, descriptor-held registration, root-prepared immutable grant
+subjects and persistent READ revocation pass scoped kernel tests. Ordinary
+direct execution cannot acquire a reviewed subject through launcher bypass.
+The default public read service and installed unconfined session have no
+production coverage promise. Exact scope: [current plan](APPLICATION_SECURITY_PLAN.md).
+
+Threats include same-user direct/interpreter/service execution, resource aliases
+and replacement, ptrace/process FD access, forged identities/reviews and trusted
+service/portal deputies. Limited tests do not prove every enabled production
+path. The ordinary compiler currently targets the test subject; production must
+cover all permitted transitions. Synthetic owner-role/test permissions must not
+enter production enrollment. Kernel enforcement does not depend on UI/history.
+
+Raw grants expose credentials to code/extensions inside the reviewed tool;
+already-read/copied data cannot be recalled. Managed isolation has private
+namespaces/home/network-off and a private graphical compositor/clipboard.
+Security-context host connections alone do not isolate host clipboard. Unknown
+RPM signer/source, unsupported payload/Flatpak Safe Open and absent enforcement
+stay UNKNOWN/UNAVAILABLE, never implicitly trusted. Root/kernel, compromised
+broker/policy installation and malicious privileged package scripts remain
+outside the isolation boundary.
+
+DEFERRED HARDENING includes exhaustive optional deputy/portal, hardware,
+performance and independent review matrices. Enabled production deputies,
+correct grants/live coverage and recoverable session enrollment remain mandatory
+before a protection claim. [Enrollment/recovery design](APPLICATION_SECURITY_ENROLLMENT.md)
+records approved decisions and initial source, with no production activation.
+Synthetic UID-1002 tests exposed an inherited same-domain memory/pipe-read gap;
+blanket denial also prevents required self-inspection. The separate authentication
+subject now passes cross-domain denial, native PAM and two fresh GUI Polkit
+challenges on a private headless display. Persistent launch contracts reject
+legacy generic grants, changed identity/revision and broader arguments; the
+only current profile discards every output stream from pinned key inspection.
+Production input/agent admission, temporary fallback, additional raw-access tool
+profiles and lifecycle/recovery remain mandatory work before automatic enrollment.
+The [scoped authentication receipt](../history/security-center/2026-10-07-application-security-authentication.md)
+does not establish physical-seat or production coverage. The existing account mappings, native DMS
+locking and Fedora PAM remain unchanged. Scoped
+[evidence](../history/security-center/2026-10-07-application-security-enrollment-initial.md)
+must not be treated as a passed production coverage or recovery gate.
 
 ## Validation ownership
 

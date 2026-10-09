@@ -16,7 +16,7 @@ PluginComponent {
     // The shell projection itself has a 30-second bounded freshness lease.
     // Do not place recovery on the same edge: a missed D-Bus signal previously
     // made the pill discard its live content before the fallback read returned.
-    readonly property int capsuleWatchdogIntervalMs: 15000
+    readonly property int capsuleWatchdogIntervalMs: 5000
     readonly property int flyoutWidth: Math.min(400, Math.max(280, Number(parentScreen?.width || 432) - 32))
     readonly property int flyoutHeightLimit: Math.max(180, Math.min(660, Number(parentScreen?.height || 756) - 96))
     property var presentation: ({items: [], activity: [], details: []})
@@ -39,13 +39,15 @@ PluginComponent {
     // request. This closes the expiry/readback gap without treating stale
     // evidence as actionable: `fresh` remains the control authority.
     readonly property bool fresh: freshnessLeaseValid
-    readonly property bool showingSnapshot: fresh || requestPending
+    // Confirmed unavailability has a display lease, never an action lease.
+    readonly property bool displayFresh: initialized && Date.parse(presentation.display_fresh_until || presentation.fresh_until || "") > clockNow
+    readonly property bool showingSnapshot: displayFresh || requestPending
     readonly property var items: showingSnapshot ? presentation.items || [] : []
     readonly property var activities: showingSnapshot ? presentation.activity || [] : []
     readonly property var primaryItem: items.length ? items[0] : null
-    readonly property string statusLabel: fresh ? presentation.label || qsTr("Status unavailable") : initialized ? qsTr("Status unavailable") : qsTr("Connecting")
-    readonly property string statusReason: fresh ? presentation.reason || "" : initialized ? qsTr("Current security status cannot be confirmed") : qsTr("Reading security status")
-    readonly property color accent: !fresh ? "#aebbc4" : presentation.severity === "CRITICAL" ? "#eeaaa7" : ["ACTION", "WARNING"].includes(presentation.severity) ? "#e5c084" : "#c5d4de"
+    readonly property string statusLabel: displayFresh ? presentation.label || qsTr("Status unavailable") : initialized ? qsTr("Status unavailable") : qsTr("Connecting")
+    readonly property string statusReason: displayFresh ? presentation.reason || "" : initialized ? qsTr("Current security status cannot be confirmed") : qsTr("Reading security status")
+    readonly property color accent: !displayFresh ? "#aebbc4" : presentation.severity === "CRITICAL" ? "#eeaaa7" : ["ACTION", "WARNING"].includes(presentation.severity) ? "#e5c084" : "#c5d4de"
     readonly property var liveIcons: {
         const result = []; const seen = {};
         for (const item of activities) {
@@ -99,16 +101,19 @@ PluginComponent {
     }
     function activateSecurityCenterWindow() {
         for (const window of (ToplevelManager?.toplevels?.values || [])) {
-            if (String(window?.appId || "").toLowerCase().includes("greyward.securitycenter") && typeof window.activate === "function") { window.activate(); return; }
+            if (["greyward-security-center", "systems.mantis.greyward.securitycenter"].includes(String(window?.appId || "").toLowerCase()) && typeof window.activate === "function") { window.activate(); return; }
         }
     }
-    function openRoute(route) {
+    function openRoute(route, resourceRef) {
         activateSecurityCenterWindow();
-        Quickshell.execDetached(["/usr/bin/greyward-security-center-route", route || "overview"]);
+        const command = ["/usr/bin/greyward-security-center-route", route || "overview"];
+        if (route === "protected-data" && /^resource_[0-9a-f]{64}$/.test(String(resourceRef || ""))) command.push(resourceRef);
+        Quickshell.execDetached(command);
     }
     function openSecurityCenter() { activateSecurityCenterWindow(); Quickshell.execDetached(["/usr/bin/greyward-security-center-launch"]); }
     function runAction(item, action) {
         if (!freshnessLeaseValid || actionPending) return;
+        if (action.id === "open") { openRoute(item.route, item.resource_ref); return; }
         actionPending = true;
         actionTimeout.restart();
         const finish = function(result) {
@@ -258,7 +263,9 @@ PluginComponent {
                                 Flow {
                                     Layout.fillWidth: true; Layout.preferredHeight: childrenRect.height; spacing: 8
                                     Repeater {
-                                        model: eventCard.modelData.actions || []
+                                        // Dismiss is owned by the notification publisher; this widget
+                                        // exposes only actions its typed handler can actually perform.
+                                        model: (eventCard.modelData.actions || []).filter(action => action.id !== "dismiss")
                                         delegate: SecurityButton {
                                             required property var modelData
                                             text: modelData.label; primary: modelData.id === "trust_once" || modelData.id === "clear_clipboard"
@@ -266,7 +273,7 @@ PluginComponent {
                                             onClicked: root.runAction(eventCard.modelData, modelData)
                                         }
                                     }
-                                    SecurityButton { text: qsTr("Review"); visible: !(eventCard.modelData.actions || []).length && !["PENDING","VERIFYING","INDETERMINATE"].includes(eventCard.modelData.operation); onClicked: root.openRoute(eventCard.modelData.route) }
+                                    SecurityButton { text: qsTr("Review"); visible: !(eventCard.modelData.actions || []).length && !["PENDING","VERIFYING","INDETERMINATE"].includes(eventCard.modelData.operation); onClicked: root.openRoute(eventCard.modelData.route, eventCard.modelData.resource_ref) }
                                 }
                             }
                         }

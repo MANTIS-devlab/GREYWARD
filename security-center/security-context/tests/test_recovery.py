@@ -10,6 +10,12 @@ from greyward_security_context import recovery, restic_backup
 
 
 class RecoveryTests(unittest.TestCase):
+    def test_root_probe_failure_preserves_the_permission_error(self):
+        result = subprocess.CompletedProcess([], 1, "", "ERROR: Operation not permitted")
+        with patch.object(recovery.shutil, "which", return_value="/usr/bin/btrfs"), patch.object(recovery, "run", return_value=result):
+            with self.assertRaisesRegex(recovery.RecoveryError, "Operation not permitted"):
+                recovery.ensure_btrfs_root()
+
     def test_root_state_directory_cannot_be_redirected_by_environment(self):
         with patch.dict(os.environ, {"GREYWARD_RECOVERY_STATE_DIR": "/tmp/untrusted-recovery"}):
             self.assertEqual(recovery.state_dir(), recovery.DEFAULT_STATE_DIR)

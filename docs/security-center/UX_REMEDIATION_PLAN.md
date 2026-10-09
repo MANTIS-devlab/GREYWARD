@@ -54,7 +54,8 @@ posture decisions.
 ## 6. Visual hierarchy and accessibility
 
 - Apply the specification's focal-plane, typography, status, action, responsive
-  and reduced-motion rules consistently; preserve native Labwc decorations.
+  and reduced-motion rules consistently; preserve native window operations in
+  the integrated chrome defined by `DESIGN.md` (superseding server decorations).
 - Validate keyboard order/focus, accessible names/live announcements, contrast,
   text scaling, long values, narrow layout, and non-color status meaning.
 - Accept when all primary and contextual views are usable at both supported

@@ -2,11 +2,13 @@
 //!
 //! This crate deliberately has no GTK, D-Bus, subprocess, or backend dependency.
 
+mod application_security;
 mod context;
 mod evaluate;
 mod model;
 mod snapshot;
 
+pub use application_security::*;
 pub use context::*;
 pub use evaluate::{
     CheckDefinition, CheckObservation, EvidenceRequirement, PredicateResult, aggregate_domain,

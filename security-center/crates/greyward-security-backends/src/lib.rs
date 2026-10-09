@@ -1,27 +1,33 @@
 mod adapters;
+mod application_reads;
 mod context;
 mod control;
 mod facts;
+mod flatpak_inventory;
+mod flatpak_permissions;
 mod framework;
 mod policy;
 mod posture;
 mod presentation;
 mod privacy;
 mod profiles;
+mod provider_process;
+mod rpm_metadata;
 pub use adapters::{
     collect_core_facts, collect_device_facts, collect_flatpak_facts, collect_network_facts,
     collect_portal_facts, collect_recovery_facts, collect_usb_facts,
+};
+pub use application_reads::{
+    ApplicationPageQuery, ApplicationReadError, MAX_APPLICATION_READ_BYTES,
+    ProtectedResourcePageQuery, decode_application_coverage, decode_application_detail,
+    decode_application_page, decode_protected_resource_lookup, decode_protected_resource_page,
 };
 use chrono::Utc;
 pub use context::{
     OPENSNITCH_CONTEXT_SUMMARY_PATH, context_summary, load_opensnitch_context_summary,
     notification_class, retain_context_events,
 };
-pub use control::{
-    FlatpakPermissionError, TrustZoneError, change_active_trust_zone,
-    change_home_filesystem_permission, restore_home_filesystem_permission,
-    rollback_active_trust_zone,
-};
+pub use control::{TrustZoneError, change_active_trust_zone, rollback_active_trust_zone};
 pub use facts::{
     AdapterFacts, BootFacts, EffectiveFlatpakAccess, FirmwareFacts, FlatpakAccessCategory,
     FlatpakApp, FlatpakAvailability, FlatpakFacts, NetworkFacts, PortalFacts, PortalHealth,
@@ -42,13 +48,14 @@ pub use presentation::{
 pub use privacy::{
     ActivityCategory, ActivityItem, ActivitySeverity, ExternalServiceDisclosure,
     MAX_ACTIVITY_ITEMS, PrivacyError, RETENTION_DAYS, SafeExport, build_safe_export,
-    clear_activity, external_service_manifest, load_activity, load_activity_from, record_activity,
-    retain_activity, state_directory, write_safe_export,
+    clear_activity, external_service_manifest, load_activity, record_activity, retain_activity,
+    state_directory, write_safe_export,
 };
 pub use profiles::{
     MacPolicy, NativeProfileOps, PrivacyProfile, PrivacyState, ProfileError, apply_native_profile,
     apply_profile, read_actual_state,
 };
+pub use rpm_metadata::{RPM_EXECUTABLE_QUERY, RpmMetadataError, read_installed_rpm_metadata};
 #[derive(Clone)]
 pub struct CoreCollection {
     pub snapshot: PostureSnapshot,
@@ -323,13 +330,34 @@ mod tests {
             .expect("secure boot check");
         assert_eq!(
             check.state,
-            greyward_security_domain::PostureState::Protected
+            greyward_security_domain::PostureState::ActionRequired
         );
         assert_eq!(check.reason_code, "accepted-deviation");
         assert_eq!(
             snapshot.accepted_deviations,
             vec!["system.boot.secure-boot"]
         );
+    }
+
+    #[test]
+    fn posture_projection_keeps_evaluated_checks_and_accepted_deviation() {
+        let snapshot = evaluate_facts_with_deviations(
+            &[AdapterFacts::Boot(BootFacts {
+                firmware: FirmwareMode::Uefi,
+                secure_boot: SecureBootState::Disabled,
+            })],
+            &["system.boot.secure-boot".into()],
+        );
+        let projection = posture_digest(&snapshot);
+        let check = projection["checks"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|check| check["check_id"] == "system.boot.secure-boot")
+            .unwrap();
+        assert_eq!(check["state"], "ACTION_REQUIRED");
+        assert_eq!(check["accepted_deviation"], true);
+        assert_eq!(projection["metrics"]["review_needed"], 0);
     }
 
     #[test]
@@ -347,7 +375,7 @@ mod tests {
             .expect("TPM presence check");
         assert_eq!(
             check.state,
-            greyward_security_domain::PostureState::Protected
+            greyward_security_domain::PostureState::Unavailable
         );
         assert_eq!(check.reason_code, "accepted-deviation");
     }
@@ -373,7 +401,7 @@ mod tests {
             .expect("recovery readiness check");
         assert_eq!(
             check.state,
-            greyward_security_domain::PostureState::Protected
+            greyward_security_domain::PostureState::ReviewNeeded
         );
         assert_eq!(check.reason_code, "accepted-deviation");
     }

@@ -1,0 +1,110 @@
+--- a/include/session-lock.h
++++ b/include/session-lock.h
+@@ -20,6 +20,8 @@
+ 	 */
+ 	struct wlr_session_lock_v1 *lock;
+ 	bool locked;
++	struct wlr_scene_tree *attention_tree;
++	struct wl_event_source *attention_timer;
+ 
+ 	struct wl_list lock_outputs;
+ 
+@@ -31,6 +33,7 @@
+ 	struct wl_listener lock_destroy;
+ };
+ 
++void session_lock_security_attention(struct server *server);
+ void session_lock_init(struct server *server);
+ void session_lock_output_create(struct session_lock_manager *manager, struct output *output);
+ void session_lock_update_for_layout_change(struct server *server);
+--- a/src/session-lock.c
++++ b/src/session-lock.c
+@@ -9,6 +9,8 @@
+ #include "labwc.h"
+ #include "node.h"
+ #include "output.h"
++#include "config/rcxml.h"
++#include "scaled-buffer/scaled-font-buffer.h"
+ 
+ struct session_lock_output {
+ 	struct wlr_scene_tree *tree;
+@@ -358,11 +360,62 @@
+ 	wlr_session_lock_v1_send_locked(lock);
+ }
+ 
++
++/* Physical secure-attention verification. Ordinary peers receive neither
++ * virtual-keyboard nor capture globals. The answer is compositor-owned and
++ * drawn above all client surfaces; a client title/icon is never evidence. */
++static int
++clear_security_attention(void *data)
++{
++ struct session_lock_manager *manager = data;
++ if (manager->attention_tree) wlr_scene_node_destroy(&manager->attention_tree->node);
++ manager->attention_tree = NULL;
++ if (manager->attention_timer) wl_event_source_remove(manager->attention_timer);
++ manager->attention_timer = NULL;
++ return 0;
++}
++
++void
++session_lock_security_attention(struct server *server)
++{
++ struct session_lock_manager *manager = server->session_lock_manager;
++ clear_security_attention(manager);
++ manager->attention_tree = wlr_scene_tree_create(&server->scene->tree);
++ if (!manager->attention_tree) return;
++ bool protected = manager->locked && manager->lock;
++ float bg[4] = {.12f,.15f,.16f,1.f};
++ float fg[4] = {.87f,.90f,.91f,1.f};
++ float accent[4] = {.63f,.83f,.73f,1.f};
++ if (!protected) { accent[0]=.89f; accent[1]=.76f; accent[2]=.53f; }
++ struct output *output;
++ wl_list_for_each(output, &server->outputs, link) {
++  struct wlr_box box;
++  wlr_output_layout_get_box(server->output_layout,output->wlr_output,&box);
++  struct wlr_scene_tree *panel=wlr_scene_tree_create(manager->attention_tree);
++  if (!panel) continue;
++  int width=box.width<580?box.width:580;
++  wlr_scene_node_set_position(&panel->node,box.x+box.width-width,box.y+12);
++  wlr_scene_rect_create(panel,width,72,bg);
++  wlr_scene_rect_create(panel,4,72,accent);
++  struct scaled_font_buffer *title=scaled_font_buffer_create(panel);
++  struct scaled_font_buffer *detail=scaled_font_buffer_create(panel);
++  if (!title || !detail) continue;
++  scaled_font_buffer_update(title,protected?"Protected input active":"Ordinary desktop surface",width-32,&rc.font_osd,accent,bg);
++  scaled_font_buffer_update(detail,protected?"GREYWARD compositor verification":"Do not enter an administrative password here.",width-32,&rc.font_osd,fg,bg);
++  wlr_scene_node_set_position(&title->scene_buffer->node,16,12);
++  wlr_scene_node_set_position(&detail->scene_buffer->node,16,38);
++ }
++ wlr_scene_node_raise_to_top(&manager->attention_tree->node);
++ manager->attention_timer=wl_event_loop_add_timer(server->wl_event_loop,clear_security_attention,manager);
++ if (manager->attention_timer) wl_event_source_timer_update(manager->attention_timer,4000);
++}
++
+ static void
+ handle_manager_destroy(struct wl_listener *listener, void *data)
+ {
+ 	struct session_lock_manager *manager =
+ 		wl_container_of(listener, manager, destroy);
++	clear_security_attention(manager);
+ 	session_lock_destroy(manager);
+ 	wl_list_remove(&manager->new_lock.link);
+ 	wl_list_remove(&manager->destroy.link);
+--- a/src/input/keyboard.c
++++ b/src/input/keyboard.c
+@@ -506,6 +506,14 @@
+ 		}
+ 	}
+ 
++	/* Reserved physical verification precedes VT switching and client input. */
++ if ((keyinfo.modifiers & (WLR_MODIFIER_CTRL | WLR_MODIFIER_ALT | WLR_MODIFIER_SHIFT | WLR_MODIFIER_LOGO)) == (WLR_MODIFIER_CTRL | WLR_MODIFIER_ALT)
++     && keyinfo.raw.nr_syms == 1 && keyinfo.raw.syms[0] == XKB_KEY_F12) {
++  session_lock_security_attention(server);
++  key_state_store_pressed_key_as_bound(event->keycode);
++  return LAB_KEY_HANDLED_TRUE;
++ }
++
+ 	/* Catch C-A-F1 to C-A-F12 to change tty */
+ 	if (handle_change_vt_key(server, keyboard, &keyinfo.translated)) {
+ 		key_state_store_pressed_key_as_bound(event->keycode);

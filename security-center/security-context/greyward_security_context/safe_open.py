@@ -1,10 +1,11 @@
-"""Disposable, fail-closed file opening using bubblewrap."""
+"""Descriptor-bound selected documents through the shared Application Guard."""
 import os
 from pathlib import Path
 import shutil
 import shlex
 import subprocess
 import threading
+import stat
 
 SECRET_DIRS={".ssh",".gnupg",".pki","private","secrets","credentials"}
 SECRET_NAMES={"passwd","shadow","gshadow","authorized_keys","id_rsa","id_ed25519","credentials.json","secrets.json"}
@@ -19,10 +20,11 @@ def _roots(home=None):
 
 def validate_path(raw, roots=None):
  if not isinstance(raw,str) or not raw.strip(): raise SafeOpenError("A file must be explicitly selected.")
+ if len(raw)>4096 or "\0" in raw: raise SafeOpenError("The selected file path is invalid.")
  candidate=Path(raw).expanduser()
  if not candidate.is_absolute(): raise SafeOpenError("Safe Open requires an absolute file path.")
  try: path=candidate.resolve(strict=True)
- except OSError as error: raise SafeOpenError("The selected file is unavailable.") from error
+ except (OSError,ValueError,RuntimeError) as error: raise SafeOpenError("The selected file is unavailable.") from error
  if not path.is_file(): raise SafeOpenError("Safe Open accepts regular files only.")
  allowed=False
  for root in (roots or _roots()):
@@ -36,15 +38,53 @@ def validate_path(raw, roots=None):
   raise SafeOpenError("Safe Open refuses credential and secret locations.")
  return path
 
+class SelectedFile:
+ """Held selected inode, not Protected Data classification or an immutable copy."""
+ def __init__(self,raw,roots=None):
+  self.fd=None
+  self.path=validate_path(raw,roots)
+  parent=None
+  try:
+   expected=self.path.stat(follow_symlinks=False)
+   parent=os.open("/",os.O_PATH|os.O_DIRECTORY|os.O_CLOEXEC)
+   for component in self.path.parts[1:-1]:
+    next_parent=os.open(component,os.O_PATH|os.O_DIRECTORY|os.O_CLOEXEC|os.O_NOFOLLOW,dir_fd=parent)
+    os.close(parent); parent=next_parent
+   self.fd=os.open(self.path.name,os.O_RDONLY|os.O_CLOEXEC|os.O_NOFOLLOW|os.O_NONBLOCK,dir_fd=parent)
+   current=os.fstat(self.fd)
+   if not stat.S_ISREG(current.st_mode) or self._stamp(current)!=self._stamp(expected):
+    raise SafeOpenError("The selected file changed; select it again.")
+   self.stamp=self._stamp(current)
+  except (OSError,ValueError) as error:
+   self.close()
+   raise SafeOpenError("The selected file is unavailable or changed.") from error
+  except SafeOpenError:
+   self.close(); raise
+  finally:
+   if parent is not None: os.close(parent)
+ @staticmethod
+ def _stamp(value):
+  return (value.st_dev,value.st_ino,value.st_mode,value.st_uid,value.st_gid,value.st_size,value.st_mtime_ns,value.st_ctime_ns,value.st_nlink)
+ def revalidate(self):
+  if self.fd is None or self._stamp(os.fstat(self.fd))!=self.stamp:
+   raise SafeOpenError("The selected file changed; select it again.")
+ def close(self):
+  if self.fd is not None:
+   os.close(self.fd); self.fd=None
+ def __enter__(self): return self
+ def __exit__(self,*unused): self.close()
+
 def _display_path(path):
  name=path.name[:160]
  return "/run/greyward-open/Safe Open - " + name
 
 def _desktop_dirs():
  home=Path.home()
+ data=Path(os.environ.get("XDG_DATA_HOME",str(home/".local/share")))
+ if not data.is_absolute(): data=home/".local/share"
  return {
-  "user":home/".local/share/applications",
-  "user-flatpak":home/".local/share/flatpak/exports/share/applications",
+  "user":data/"applications",
+  "user-flatpak":data/"flatpak/exports/share/applications",
   "system-flatpak":Path("/var/lib/flatpak/exports/share/applications"),
   "system":Path("/usr/share/applications"),
   "system-local":Path("/usr/local/share/applications"),
@@ -62,10 +102,11 @@ def _desktop_supports(desktop_path,content_type):
 def _supported_type(content_type):
  return content_type.startswith("text/") or content_type in SUPPORTED_IMAGE_TYPES
 
-def resolve_application(path):
+def resolve_application(path,selected_fd=None):
  """Resolve an explicit supported text/image handler without a shell."""
  try:
-  info=subprocess.run(["gio","info","-a","standard::content-type",str(path)],capture_output=True,text=True,check=False,timeout=HANDLER_COMMAND_TIMEOUT)
+  source=str(path) if selected_fd is None else f"/proc/self/fd/{selected_fd}"
+  info=subprocess.run(["gio","info","-a","standard::content-type",source],capture_output=True,text=True,check=False,timeout=HANDLER_COMMAND_TIMEOUT,pass_fds=() if selected_fd is None else (selected_fd,))
  except (OSError,subprocess.SubprocessError) as error:
   raise SafeOpenError("Safe Open could not determine the file type.") from error
  content_type=""
@@ -110,63 +151,35 @@ def resolve_application(path):
  argv[0]=executable
  if not inserted: argv.append("/run/greyward-open/input")
  return argv
-def build_command(path, bwrap="/usr/bin/bwrap", runtime=None, application=None):
- if not Path(bwrap).is_file(): raise SafeOpenError("bubblewrap is unavailable; Safe Open refused to fall back.")
- runtime=Path(runtime or os.environ.get("XDG_RUNTIME_DIR",""))
- if not runtime.is_dir(): raise SafeOpenError("The graphical session runtime is unavailable.")
- application=application or ["/usr/bin/xdg-open"]
- command=[bwrap,"--die-with-parent","--new-session","--unshare-all","--unshare-net","--clearenv",
-          "--ro-bind","/usr","/usr","--ro-bind","/bin","/bin","--ro-bind","/lib","/lib"]
- if Path("/lib64").exists(): command += ["--ro-bind","/lib64","/lib64"]
- command += ["--proc","/proc","--dev","/dev",
-             "--tmpfs","/tmp","--dir","/run","--dir","/run/greyward-open",
-             "--ro-bind",str(path),"/run/greyward-open/input",
-             "--ro-bind",str(path),_display_path(path),
-             "--ro-bind","/etc/passwd","/etc/passwd","--ro-bind","/etc/group","/etc/group",
-             "--ro-bind","/etc/nsswitch.conf","/etc/nsswitch.conf",
-             "--ro-bind","/etc/mime.types","/etc/mime.types","--ro-bind","/etc/xdg","/etc/xdg",
-             "--ro-bind","/usr/share/applications","/usr/share/applications"]
- mimeapps=Path.home()/".config/mimeapps.list"
- if mimeapps.is_file():
-  command += ["--dir","/tmp/.config","--ro-bind",str(mimeapps),"/tmp/.config/mimeapps.list"]
- wayland_display=os.environ.get("WAYLAND_DISPLAY","")
- wayland_socket=runtime/wayland_display if wayland_display else None
- if wayland_socket and wayland_socket.is_socket():
-  command += ["--ro-bind",str(wayland_socket),"/run/wayland-0"]
- user_apps=Path.home()/".local/share/applications"
- if user_apps.is_dir(): command += ["--dir","/tmp/.local/share/applications","--ro-bind",str(user_apps),"/tmp/.local/share/applications"]
- flatpak_store=Path.home()/".local/share/flatpak"
- if flatpak_store.is_dir(): command += ["--dir","/tmp/.local/share/flatpak","--ro-bind",str(flatpak_store),"/tmp/.local/share/flatpak"]
- if Path("/var/lib/flatpak").is_dir(): command += ["--ro-bind","/var/lib/flatpak","/var/lib/flatpak"]
- if Path("/var/lib/flatpak/exports/share/applications").is_dir(): command += ["--ro-bind","/var/lib/flatpak/exports/share/applications","/var/lib/flatpak/exports/share/applications"]
- executable=Path(str(application[0]))
- if executable.is_absolute() and executable.exists() and len(executable.parts)>1 and executable.parts[1] not in {"usr","bin","lib","lib64"}:
-  command += ["--ro-bind",str(executable),str(executable)]
- command += ["--setenv","HOME","/tmp","--setenv","PATH","/usr/bin:/bin",
-             "--setenv","XDG_CURRENT_DESKTOP","GNOME","--setenv","GIO_USE_PORTALS","0",
-             "--setenv","GTK_THEME","Adwaita:dark",
-             "--setenv","GTK_APPLICATION_PREFER_DARK_THEME","1",
-             "--setenv","ADW_DEBUG_COLOR_SCHEME","prefer-dark",
-             "--setenv","QT_QPA_PLATFORMTHEME","gtk3",
-             "--setenv","GREYWARD_SAFE_OPEN","1",
-             "--setenv","WAYLAND_DISPLAY","wayland-0",
-             "--setenv","XDG_RUNTIME_DIR","/run","--chdir","/tmp",
-             "--"] + application
- return command
-
-def launch(raw, roots=None, popen=subprocess.Popen):
- path=validate_path(raw,roots)
- application=resolve_application(path)
- command=build_command(path,application=application)
- try: process=popen(command,stdin=subprocess.DEVNULL,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,start_new_session=True)
- except OSError as error: raise SafeOpenError("The restricted Safe Open process could not start.") from error
- return process, path
+def launch(raw, roots=None, workflows=None, actor=None):
+ with SelectedFile(raw,roots) as selected:
+  application=resolve_application(selected.path,selected_fd=selected.fd)
+  selected.revalidate()
+  if Path(application[0]).name == "flatpak":
+   raise SafeOpenError("The configured Flatpak handler has no supported private Safe Open launch. Choose a native handler; existing Flatpak permissions were not changed.")
+  if workflows is not None:
+   # The broker classifies the held inode against mandatory resource labels.
+   # No generic document export or path-based reopening can override a grant.
+   from .application_security import ApplicationReadError
+   import dbus
+   arguments=["/run/guard-document" if item in {_display_path(selected.path),"/run/greyward-open/input"} else item for item in application[1:]]
+   if any("/run/greyward-open/" in item for item in arguments):
+    raise SafeOpenError("The configured file handler requires an unsupported selection format.")
+   try:
+    review=workflows.prepare_launch(actor,dbus.types.UnixFd(selected.fd),handler=application[0],arguments=arguments)
+    process,_=workflows.start_launch(actor,review["launch_ref"])
+   except ApplicationReadError as error:
+    raise SafeOpenError("Application Guard could not establish the selected-file isolation; no fallback was launched.") from error
+   return process,selected.path
+  raise SafeOpenError("Application Guard is unavailable; Safe Open refused to launch a standalone fallback.")
 
 def redact_error(error):
  return str(error).replace(str(Path.home()),"~")[:240]
 
 def monitor(process, callback):
  def wait():
-  code=process.wait()
+  from .application_security import ApplicationReadError
+  try: code=process.wait()
+  except (OSError,RuntimeError,ApplicationReadError): code=None
   callback(code)
  threading.Thread(target=wait,daemon=True).start()

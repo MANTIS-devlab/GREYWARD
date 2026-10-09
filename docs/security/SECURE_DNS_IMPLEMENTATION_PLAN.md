@@ -39,16 +39,22 @@ Runtime state is written to `/run/greyward-secure-dns/state.json` and separates:
 - `effective_policy`: `SecureProvider`, `VPNOwned`, `NetworkDefault`,
   `Unavailable` or `Disconnected`;
 - `effective_owner`: `Greyward`, `VPN`, `Network`, or `None`;
-- `effective_transport`: `DoT`, `VPNProtected`, `Plain`, `None` or `Unknown`;
+- `effective_transport`: `DoT`, `VPNTunnel`, `Plain`, `None` or `Unknown`;
 - `degradation_reason`: `CaptivePortal`, `DoTUnavailable`,
   `ResolverUnreachable`, `DNSSECUnavailable`, `SplitDnsAmbiguous`,
   `NetworkDnsOnly`, `NoActiveLink`, `ProviderMisconfigured`,
   `AllProvidersUnavailable` or `StaleState`;
 - measured encryption, validation, resolver, link and reconciliation data.
 
-`VPNProtected` means DNS is inside the active VPN tunnel even when the
-protocol inside that tunnel is ordinary DNS. It is not a DNS leak. `Plain` is
-only unprotected DNS leaving the device outside a protecting VPN.
+`VPNTunnel` records a detected VPN and its observed DNS ownership/routing only.
+It does not prove transport encryption, leak protection or kill-switch behavior.
+The VPN branch reports encryption and validation Unknown, with separate
+`encryption_verification`, `kill_switch_verification` and
+`leak_protection_verification` UNKNOWN fields. `routing_observed` contains the
+resolve1 link/domain/default-route observation, not a full leak test. The
+reconciler still preserves VPN precedence and does not change the connection.
+This source correction is implemented; the installed VPN projection is unchanged
+until an explicitly approved matched deployment and live check.
 
 ## Precedence and modes
 
@@ -64,7 +70,7 @@ provider that passes encrypted transport, DNSSEC and resolution validation. If
 all three fail, the state is `Unavailable` and direct DNS is fail-closed;
 GREYWARD does not silently fall back to DHCP DNS. NetworkDefault remains an
 explicit operator opt-out. Ordinary non-DNS networking remains intact.
-NetworkDefault reports the measured `DoT`, `VPNProtected` or `Plain` state.
+NetworkDefault reports the measured `DoT`, `VPNTunnel` or `Plain` state.
 Its DNS-port exception permits only resolved itself to contact the currently
 observed active-link servers. Applications and unrelated servers remain denied;
 Automatic/Privacy never enable that exception after provider failure.
@@ -75,7 +81,7 @@ bounded periodic reconciliation (30 seconds) and `RetrySecureDns` for an
 immediate probe; provider and resolver changes are restored transactionally.
 
 Search suffixes also own private lookup routes. Existing search/routing domains,
-VPNs and multiple links remain protected; ambiguous private ownership reports
+VPNs and multiple links retain their existing ownership; ambiguous private ownership reports
 `SplitDnsAmbiguous`, without claiming encrypted protection. The test VM remains
 on Default Switch: changing switches was rejected as a product workaround.
 No hypervisor-specific runtime exemption ships.
@@ -173,7 +179,7 @@ port 853)'` to prove strict modes do not emit external plaintext DNS. Test
 Ethernet, Wi-Fi, IPv4/IPv6, DNSSEC-valid and DNSSEC-broken names, DoT outage,
 captive/restricted networks, LAN names, network switching, suspend/resume,
 reboot, Proton VPN, Mullvad, generic WireGuard/OpenVPN and split DNS. Confirm
-VPN DNS is reported `VPNProtected`, secure state returns automatically after
+VPN DNS is reported `VPNTunnel`, secure state returns automatically after
 outage, and policy/state survive GREYWARD update and rollback.
 
 ## Rollback and recovery
@@ -218,7 +224,7 @@ Provider references: [Quad9 encrypted service documentation](https://docs.quad9.
   that class requires a separate transparent DNS proxy or browser/application
   policy layer and is not claimed by this implementation.
 - Per-link, VPN-aware and split-DNS-aware precedence is deterministic.
-- `DoT`, `VPNProtected` and `Plain` are distinct measured transports.
+- `DoT`, `VPNTunnel` and `Plain` are distinct measured transports.
 - Desired and effective policy/owner/degradation are separate.
 - Provider failover is visible, ordered and self-healing.
 - The managed profile never silently downgrades to DHCP DNS.

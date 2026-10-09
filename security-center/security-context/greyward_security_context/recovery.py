@@ -63,8 +63,10 @@ def is_subvolume(path: Path) -> bool:
 def ensure_btrfs_root() -> None:
     if shutil.which("btrfs") is None:
         raise RecoveryError("btrfs-progs is unavailable")
-    if not is_subvolume(Path("/")):
-        raise RecoveryError("The installed root is not a Btrfs subvolume")
+    result = run(["btrfs", "subvolume", "show", "/"], check=False)
+    if result.returncode != 0:
+        detail = (result.stderr or result.stdout or "No subvolume evidence was returned").strip()[:MAX_TEXT]
+        raise RecoveryError("The root recovery subvolume could not be verified: " + detail)
 
 
 def atomic_write(path: Path, value: object) -> None:

@@ -85,7 +85,7 @@ verified on 2026-09-16; the current IP and attached ISO can change between tests
 | Installer media | Candidate ISO attached to the SATA CD/DVD device and connected |
 | Graphics | VMware 3D enabled; VMX caps are 2560x1440, but this is not a DRM-mode guarantee; see the VMware Wayland diagnostic |
 | Network | Bridged `vmxnet3`; DHCP address resolved through the managed alias |
-| Guest access | `stendev`, SSH public-key authentication only; password SSH disabled |
+| Guest access | `development-user`, SSH public-key authentication only; password SSH disabled |
 | VMware Tools | `vmrun checkToolsState` currently reports `unknown`; do not assume guest operations are available |
 
 ### Short SSH protocol for an agent
@@ -165,6 +165,17 @@ desktop-entry cache before restarting DMS. For a fresh development account it al
 GREYWARD Black Box configuration while preserving the existing Oh My Zsh/Powerlevel10k shell setup.
 
 ## Real Tauri interaction automation
+
+Application Security now uses the installed public workflow broker on `.149`.
+Its explicit activation tool is `tools/greyward-dev/application-security-live-enable.sh`;
+its `application-security-live-rollback.sh --check` companion verifies whether
+that isolation-only activation can safely be withdrawn. Both require the fixed
+root-private receipts. They never enroll a login or label user credentials.
+Resource/grant changes remain subject to enrolled-owner/authentication checks;
+managed isolation is separately available to normal local users. See the
+[live development receipt](../history/security-center/2026-10-07-application-security-live-development.md)
+for exact packages, results and remaining work. The private harness remains
+supporting evidence, not the deployment target.
 
 The canonical real-UI path is `tools/greyward-dev/run-security-center-interaction.ps1`.
 It syncs Security Center source to the disposable guest, builds the development Tauri binary,

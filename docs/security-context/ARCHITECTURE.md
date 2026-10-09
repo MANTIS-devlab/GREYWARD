@@ -25,6 +25,41 @@ feed, while OpenSnitch remains the only application-network enforcement engine.
 
 `SecurityContextSummary` uses `greyward.security.context/v1` and contains posture-derived state, freshness, attention count, live states, and at most 64 recent events for the current summary. Historical normalized events use the separate `greyward.telemetry.event/v1` contract and bounded SQLite store; raw network, USB serial, sensor, or detailed Portmaster history is not duplicated.
 
+## Application Security adapter — current source
+
+Source `application_security.py` and `application_workflows.py` implement typed
+owner-pinned root-broker reads, descriptor registration/grant/revoke reviews,
+operations, launches and audit ingestion. Center receives projections through
+this existing session API; Guard uses the same root authority. The Context is
+not a second policy database or enforcement owner. See the
+[Center architecture](../security-center/ARCHITECTURE.md) and
+[current source/validation authority](../security-center/APPLICATION_SECURITY_PLAN.md).
+
+The default public broker provides five reads only; the explicitly enabled
+installed workflow unit adds managed isolation on `.149` through the same bus.
+The adapter, introduced in Context 67, validates separate `isolation` and `policy_changes` booleans, with
+absent legacy capabilities defaulting to false. Policy changes still require
+confined enrollment; the enrolled normal `.149` account now has fresh scoped
+PROTECTED coverage. Unenrolled/incomplete scopes remain UNKNOWN or UNAVAILABLE. A root-owned opt-in
+selects the separate UID-1002 development bus only for that test account; it
+cannot enroll another account or establish whole-session coverage. The adapter
+rejects changed root ownership, foreign/stale operations and malformed replies.
+Incomplete read evidence has no effective profile; missing providers remain
+UNAVAILABLE. Managed preparation verifies readiness, not successful application
+use. A frontend timeout is not cancellation of backend work.
+
+Root AVC/failed-syscall denials enter existing telemetry. New Context 70/runtime
+27 records retain bounded historical PID/basename and kernel audit occurrence
+time; legacy records retain observation time. Application attribution stays
+UNKNOWN, with no live PID lookup or executable path retention; loss and
+truncation remain explicit.
+Existing aggregation/publisher owns Review/Dismiss notification replacement;
+no instant Allow, new Activity database or coverage inference is introduced.
+These workflows are installed in Context 70 on the deliberately enrolled
+normal development account. The production activation/upgrade/rescue lifecycle
+in [enrollment](../security-center/APPLICATION_SECURITY_ENROLLMENT.md) remains
+unvalidated; development evidence is not release acceptance.
+
 ## Ownership
 
 - firewalld: inbound baseline, zones, trust, SSH/service exposure, and its nftables state.
@@ -98,6 +133,14 @@ Purpose-built projections are also available for the product surfaces:
 `GetCapabilityHistory`. `GetShellSummary` is the compact DMS projection.
 `GetSecurityCenterDigest` and `GetShellSummary` share one backend aggregation
 path; neither frontend interprets raw history.
+
+The shared historical aggregation now opens SQLite read-only. Event ingestion
+and device reconciliation/review own finding changes, and the existing shell
+runtime imports the root spool and runs a bounded, resumable legacy backfill
+before background projection. History reads cannot recreate resolved findings.
+Live provider collection still reconciles observations; it is not an
+authorization boundary. This continuation is source validation, pending a new
+packaged Context and installed acceptance.
 
 Secure DNS is exposed through `GetSecureDnsState`, `SetSecureDnsMode`,
 `SetSecureDnsProvider`, and `RetrySecureDns` on this user bus. These methods

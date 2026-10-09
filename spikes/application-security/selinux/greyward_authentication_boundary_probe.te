@@ -1,0 +1,38 @@
+policy_module(greyward_authentication_boundary_probe, 0.1.0)
+
+# Test infrastructure only. The authentication subject itself is defined by
+# the production source module. No account or login mapping is changed.
+gen_require(`
+    type greyward_as_auth_t;
+    type greyward_guard_t;
+    type init_t;
+    type unconfined_t;
+    type unconfined_service_t;
+    attribute greyward_as_managed_tool;
+')
+role system_r types greyward_guard_t;
+allow init_t greyward_guard_t:process transition;
+allow greyward_guard_t init_t:process sigchld;
+# Only the root controller's synthetic marker transport. No ordinary peer can
+# acquire these authentication FDs or connect to an authentication socket.
+allow greyward_as_auth_t unconfined_t:fd use;
+allow greyward_as_auth_t unconfined_t:fifo_file { read write getattr ioctl };
+allow greyward_as_auth_t unconfined_service_t:fd use;
+allow greyward_as_auth_t unconfined_service_t:fifo_file { read write getattr ioctl };
+
+# A fixed nonexporting OpenSSH inspection fixture, not another auth process.
+type greyward_as_profile_probe_t;
+type greyward_as_profile_probe_exec_t;
+typeattribute greyward_as_profile_probe_t greyward_as_managed_tool;
+domain_type(greyward_as_profile_probe_t)
+role system_r types greyward_as_profile_probe_t;
+# Fixed fixture label only, not a production/user entry transition.
+files_type(greyward_as_profile_probe_exec_t)
+
+type greyward_as_profile_probe_secret_t;
+files_auth_file(greyward_as_profile_probe_secret_t)
+allow greyward_guard_t greyward_as_profile_probe_secret_t:dir { search getattr };
+allow greyward_guard_t greyward_as_profile_probe_secret_t:file getattr;
+allow greyward_as_profile_probe_t greyward_as_profile_probe_secret_t:dir { search getattr };
+allow greyward_as_profile_probe_t self:process { getcap getsched sigchld signull };
+allow greyward_as_profile_probe_t self:file { read open getattr };

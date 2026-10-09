@@ -129,12 +129,13 @@ pub struct NetworkFacts {
     pub firewall: FirewallState,
     pub trust_zone: TrustZone,
 }
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
 pub enum FlatpakAvailability {
     Available,
     Partial,
     Unavailable,
     Error,
+    #[default]
     Unknown,
 }
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -147,7 +148,17 @@ pub struct FlatpakApp {
     pub arch: Option<String>,
     pub branch: Option<String>,
     pub runtime: Option<String>,
+    /// Full observed deployment commit, never a shortened display hash or
+    /// proof that a user-controlled installation has verified provenance.
+    #[serde(default)]
+    pub deployment_commit: Option<greyward_security_domain::ContentGeneration>,
+    #[serde(default)]
+    pub identity_state: FlatpakAvailability,
     pub permissions: Vec<String>,
+    /// `permissions` is Flatpak's already-merged effective context. A failed
+    /// read is not a successful empty set; old serialized records are UNKNOWN.
+    #[serde(default)]
+    pub permissions_state: FlatpakAvailability,
     pub overrides: Vec<String>,
 }
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -159,7 +170,7 @@ pub struct FlatpakFacts {
 
 /// Product-facing access categories derived from Flatpak's effective context.
 ///
-/// The raw manifest and local override records stay on `FlatpakApp` for the
+/// The provider's effective context and local override records stay on `FlatpakApp` for the
 /// technical disclosure. Product status and review decisions must use this
 /// normalized model so a negating override cannot be presented as an active
 /// permission.
@@ -169,6 +180,7 @@ pub enum FlatpakAccessCategory {
     Network,
     PersonalFiles,
     HostFiles,
+    AdditionalFiles,
     Devices,
     AllDevices,
     DesktopServices,
@@ -181,6 +193,7 @@ impl FlatpakAccessCategory {
             Self::Network => "NETWORK",
             Self::PersonalFiles => "PERSONAL_FILES",
             Self::HostFiles => "HOST_FILES",
+            Self::AdditionalFiles => "ADDITIONAL_FILES",
             Self::Devices => "DEVICES",
             Self::AllDevices => "ALL_DEVICES",
             Self::DesktopServices => "DESKTOP_SERVICES",
@@ -190,6 +203,7 @@ impl FlatpakAccessCategory {
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct EffectiveFlatpakAccess {
+    pub availability: FlatpakAvailability,
     pub categories: Vec<FlatpakAccessCategory>,
     pub review_reasons: Vec<FlatpakAccessCategory>,
 }
@@ -200,16 +214,24 @@ impl EffectiveFlatpakAccess {
     }
 }
 
-/// Resolve a Flatpak application's effective access from its manifest and
-/// local overrides. Override entries are applied after manifest entries and
-/// support the `!permission` form emitted by `flatpak override --show`.
+/// Summarize the provider's effective context. `flatpak info --show-permissions`
+/// already applies system/user global/app overrides; applying a lower-priority
+/// override again can incorrectly undo the result. Overrides are disclosure only.
+/// Effective records support the `!permission` form without overriding the provider.
 pub fn resolve_flatpak_access(app: &FlatpakApp) -> EffectiveFlatpakAccess {
+    if app.permissions_state != FlatpakAvailability::Available {
+        return EffectiveFlatpakAccess {
+            availability: app.permissions_state.clone(),
+            categories: Vec::new(),
+            review_reasons: Vec::new(),
+        };
+    }
     let mut filesystems = BTreeSet::new();
     let mut devices = BTreeSet::new();
     let mut shares = BTreeSet::new();
     let mut desktop_services = false;
 
-    for records in [&app.permissions, &app.overrides] {
+    for records in [&app.permissions] {
         let mut section = "";
         for record in records {
             let record = record.trim();
@@ -222,7 +244,7 @@ pub fn resolve_flatpak_access(app: &FlatpakApp) -> EffectiveFlatpakAccess {
             };
             let key = raw_key.trim().trim_start_matches('-').to_ascii_lowercase();
             let values = raw_values
-                .split([';', ','])
+                .split(';')
                 .map(str::trim)
                 .filter(|value| !value.is_empty());
             match key.as_str() {
@@ -245,12 +267,12 @@ pub fn resolve_flatpak_access(app: &FlatpakApp) -> EffectiveFlatpakAccess {
                     apply_permission_values(&mut shares, values, true);
                 }
                 "talk-name" | "own-name" | "system-talk-name" | "system-own-name" => {
-                    desktop_services = true;
+                    desktop_services |= values.clone().any(|value| value != "none");
                 }
                 _ if section.eq_ignore_ascii_case("Session Bus Policy")
                     || section.eq_ignore_ascii_case("System Bus Policy") =>
                 {
-                    desktop_services = true;
+                    desktop_services |= values.clone().any(|value| value != "none");
                 }
                 _ => {}
             }
@@ -278,6 +300,10 @@ pub fn resolve_flatpak_access(app: &FlatpakApp) -> EffectiveFlatpakAccess {
     } else if !devices.is_empty() {
         categories.push(FlatpakAccessCategory::Devices);
     }
+    if filesystems.iter().any(|value| value.starts_with('/')) {
+        categories.push(FlatpakAccessCategory::AdditionalFiles);
+        review_reasons.push(FlatpakAccessCategory::AdditionalFiles);
+    }
     if desktop_services {
         categories.push(FlatpakAccessCategory::DesktopServices);
     }
@@ -285,6 +311,7 @@ pub fn resolve_flatpak_access(app: &FlatpakApp) -> EffectiveFlatpakAccess {
         categories.push(FlatpakAccessCategory::Scoped);
     }
     EffectiveFlatpakAccess {
+        availability: FlatpakAvailability::Available,
         categories,
         review_reasons,
     }
@@ -296,14 +323,19 @@ fn apply_permission_values<'a>(
     remove: bool,
 ) {
     for raw_entry in entries {
-        let entry = raw_entry.trim().to_ascii_lowercase();
+        let entry = raw_entry.trim();
         let negated = entry.starts_with('!');
-        let normalized = entry
-            .trim_start_matches('!')
-            .split(':')
-            .next()
-            .unwrap_or_default()
-            .trim();
+        let value = entry.trim_start_matches('!');
+        // Paths are case-sensitive and may contain colons. Only actual access
+        // mode suffixes may be stripped; host:reset is never an active grant.
+        if value == "host:reset" {
+            values.clear();
+            continue;
+        }
+        let normalized = [":ro", ":rw", ":create"]
+            .into_iter()
+            .find_map(|suffix| value.strip_suffix(suffix))
+            .unwrap_or(value);
         if normalized.is_empty() {
             continue;
         }
@@ -395,7 +427,10 @@ mod tests {
             arch: None,
             branch: None,
             runtime: None,
+            deployment_commit: None,
+            identity_state: FlatpakAvailability::Unknown,
             permissions: permissions.iter().map(|value| (*value).into()).collect(),
+            permissions_state: FlatpakAvailability::Available,
             overrides: overrides.iter().map(|value| (*value).into()).collect(),
         }
     }
@@ -432,13 +467,65 @@ mod tests {
     }
 
     #[test]
-    fn negating_override_removes_a_manifest_grant_before_review() {
+    fn lower_priority_override_cannot_undo_the_provider_effective_context() {
         let access = resolve_flatpak_access(&app(
-            &["[Context]", "filesystems=home;", "devices=all;"],
             &["[Context]", "filesystems=!home;", "devices=!all;"],
+            &["[Context]", "filesystems=home;", "devices=all;"],
         ));
         assert_eq!(access.categories, vec![FlatpakAccessCategory::Scoped]);
         assert_eq!(access.review_reasons, [] as [FlatpakAccessCategory; 0]);
+    }
+
+    #[test]
+    fn failed_permission_read_never_becomes_a_scoped_sandbox() {
+        let mut record = app(&[], &[]);
+        for state in [
+            FlatpakAvailability::Unavailable,
+            FlatpakAvailability::Partial,
+            FlatpakAvailability::Unknown,
+        ] {
+            record.permissions_state = state.clone();
+            let access = resolve_flatpak_access(&record);
+            assert_eq!(access.availability, state);
+            assert!(access.categories.is_empty());
+        }
+        let mut wire = serde_json::to_value(app(&[], &[])).unwrap();
+        wire.as_object_mut().unwrap().remove("permissions_state");
+        let old: FlatpakApp = serde_json::from_value(wire).unwrap();
+        assert!(resolve_flatpak_access(&old).categories.is_empty());
+    }
+
+    #[test]
+    fn removing_home_does_not_remove_an_explicit_subdirectory_grant() {
+        let access =
+            resolve_flatpak_access(&app(&["[Context]", "filesystems=!home;~/.ssh:ro;"], &[]));
+        assert!(access.needs_review());
+        assert_eq!(
+            access.categories,
+            vec![FlatpakAccessCategory::PersonalFiles]
+        );
+    }
+
+    #[test]
+    fn denied_bus_names_are_not_desktop_service_access() {
+        let access = resolve_flatpak_access(&app(
+            &["[Session Bus Policy]", "org.example.Service=none"],
+            &[],
+        ));
+        assert_eq!(access.categories, vec![FlatpakAccessCategory::Scoped]);
+    }
+
+    #[test]
+    fn case_sensitive_explicit_paths_and_colons_are_not_scoped_or_deleted() {
+        let access = resolve_flatpak_access(&app(
+            &["[Context]", "filesystems=/tmp/A:B,C:ro;!/tmp/a:b,c;"],
+            &[],
+        ));
+        assert_eq!(
+            access.categories,
+            vec![FlatpakAccessCategory::AdditionalFiles]
+        );
+        assert!(access.needs_review());
     }
 
     #[test]

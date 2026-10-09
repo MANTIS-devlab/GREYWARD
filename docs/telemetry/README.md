@@ -25,3 +25,15 @@ authoritative; this layer provides safe semantic history and bounded queries.
 
 The SQLite store is local history, not a SIEM and not a replacement for native
 evidence.
+
+Findings are derived when normalized events are ingested and when device state
+is reconciled/reviewed. Digest/history reads use read-only SQLite connections;
+they do not create storage, migrate schema, import the root spool or reopen
+resolved findings. The existing session runtime imports the root spool during
+background collection. It also backfills existing event-derived findings in
+batches of at most 64, with a transactional stable-event-ID cursor and without
+resetting existing resolutions. No parallel history database is introduced.
+Live provider collection and device observation remain separate from that
+historical projection; they can reconcile state. Missing/corrupt history stays
+unavailable rather than becoming an empty successful result. This source change
+is not yet deployed in a new Context package.

@@ -5,7 +5,7 @@ session payloads, production repositories, encrypted-root installation inputs,
 and installed GREYWARD components there.
 
 `development/`, `greyward.pkr.hcl`, and the `greyward-dev` Kickstart templates
-are disposable VM/factory infrastructure. They may add SSH, `stendev`,
+are disposable VM/factory infrastructure. They may add SSH, `development-user`,
 passwordless sudo, Hyper-V agents, compilers, and diagnostics, but production
 must never depend on them.
 

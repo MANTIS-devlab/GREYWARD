@@ -10,6 +10,77 @@ localized command output, or silently switches to a weaker evidence source.
 Fallbacks must be explicit. A fallback can reduce evidence quality and produce
 `UNKNOWN`; it cannot preserve a protected result merely for visual continuity.
 
+## Overview read scheduling
+
+`get_overview` collects the unchanged core posture snapshot and reports optional
+recent history as `LOADING`. `get_overview_activity` is a fixed asynchronous
+Tauri read that reuses the existing bounded Context activity reader, returning
+at most eight summaries and an explicit availability state. It adds no broker,
+new event store, policy authority or generic command execution. History timeout
+cannot delay the posture response or become an empty successful history.
+Backup/recovery passes `includeHistory=false` to `get_devices`, omitting the
+unrelated Context device-history read. Local readiness, backup and recovery
+status remain unchanged; the device view retains history by default.
+
+## Application Security source provider
+
+The shared Rust domain declares `greyward.application-security/v1`; the root
+runtime owns policy, descriptors, generations, operations and kernel readback.
+Context pins its root system-bus owner; the Tauri facade exposes only typed
+fixed methods. The default broker supplies five scoped reads. Development
+registration/reviewed READ-grant/revoke dispatch remains subject to enrolled
+confined-owner checks. The explicit installed workflow service also supplies
+restrictive isolation to normal local accounts on `.149`, using the same
+dispatcher/store. The normal development account is now deliberately enrolled;
+coverage comes from fresh root session/kernel/object readback. Independent
+isolation and policy-change capabilities never establish PROTECTED by themselves.
+The resource adapter accepts the authoritative leased coverage enum, including
+PROTECTED; wrong owners, stale leases and invalid revisions still refuse.
+No arbitrary command, UID, policy text or provider fallback enters this API.
+
+RPM content binding validates held executable ancestry and content against
+bounded fixed package observations. Package membership is not approved source
+or harmlessness. Script/interpreter composite generations and bounded AppImage
+extraction share the managed runner. Reads and provider workers have bounded
+admission/output/deadlines; caller wait expiry does not cancel blocked kernel
+work. Saturation/failed collection cannot become an empty safe inventory.
+
+Flatpak effective permissions use the exact installation/architecture/branch
+context, retaining override layers as separate observations. Existing overrides
+are not reset. Partial identity/provenance/read failures stay explicit;
+production population and permission preview/apply/readback are pending.
+Configured Flatpak Safe Open handlers remain UNAVAILABLE, not silently wrapped.
+Inventory-only evidence remains UNKNOWN. Enrolled workflow coverage requires
+separate fresh verified readback; desired registry metadata never independently
+mints PROTECTED.
+Implemented development dispatch (same root interface/object; separate bus):
+
+| Workflow | Fixed root methods | Source Context methods |
+|---|---|---|
+| Resource review | `PreviewResourceRegistration` with Unix FD/category/label/revision | `PreviewProtectedResource` |
+| READ grant / revoke review | `PreviewPolicyChange`, `PreviewGrantRevocation` | `PreviewApplicationGrant`, `PreviewApplicationRevocation` |
+| Apply / monitor / cancel | `ApplyPolicyChange`, `GetOperation`, `CancelOperation` | `ApplyApplicationPolicy`, `GetApplicationOperation`, `CancelApplicationOperation` |
+| Grant observation | `ListAccessGrants` | `ListApplicationAccessGrants` |
+| Prepared workload | `PrepareLaunch`, `PrepareIsolatedLaunch`, `PrepareGraphicalLaunch`, `StartPreparedLaunch`, `GetLaunch` | `PrepareApplicationLaunch`, `StartApplicationLaunch`; Guard uses direct reviewed-launch preparation |
+| Safe Open | `PrepareSelectedDocumentLaunch(hsasb)` | Existing typed Safe Open workflow uses the shared adapter |
+| Denials | `ReadSecurityEvents` | Background bounded ingestion into existing telemetry |
+
+`ReadSecurityEvents` joins enforcing registered-resource AVC denials and
+failed syscalls by audit ID and enrolled UID. Optional historical PID/basename,
+audit time and collection policy revision are bounded metadata, not validated
+application identity. Context accepts legacy records and strictly validates
+new optional fields before inserting any batch into the existing history.
+Registration previews must keep coverage UNKNOWN; only authoritative post-apply
+readback may report protection.
+
+The approved target's standalone `RegisterProtectedResource`, `RevokeGrant`,
+custom-resource removal and revision signals are not all public implemented
+methods. Current registration/revoke use preview plus authorized apply;
+unsupported future methods must not appear as installed capabilities.
+
+See [current audit and limits](APPLICATION_SECURITY_PLAN.md) and
+[planned enrollment](APPLICATION_SECURITY_ENROLLMENT.md).
+
 ## System adapters
 
 ### SELinux
@@ -259,6 +330,24 @@ backend.
 
 ## Flatpak application evidence
 
-Flatpak application details are collected by the typed backend adapter for both user and system scopes. The normalized evidence includes application ID, origin, version, branch, architecture, runtime, manifest permissions, user/system overrides, and an understandable access summary. The effective-access resolver applies manifest context first, then local override additions/removals, before classifying network, filesystem, device, and desktop-service access. Publisher verification is `UNKNOWN` unless an authoritative local source confirms it; Flathub publisher verification is not a safety verdict. Broad filesystem/device access is review evidence, not proof of compromise. The collector does not impose an arbitrary application-list cap: partial scope collection is carried as partial inventory evidence rather than represented as an empty list.
+The current source adapter reads default user and system installations, full
+deployment commits, source/channel metadata and Flatpak's effective permissions.
+`flatpak info --show-permissions` supplies the merged context; local overrides
+are technical disclosure and are not applied a second time. Failure, malformed
+serialization, changed deployment or unsupported installations remain explicitly
+partial/unavailable. Inventory is bounded to 2,000 records and each scope uses
+bounded provider workers, output and deadlines. Failed reads do not become a
+successful empty permission set. Publisher verification remains `UNKNOWN`
+without independently approved source evidence. Broad filesystem/device access
+is review evidence, not proof of compromise or Protected Data enforcement.
+
+The unused exported home-override mutation/restore helper is retired after a
+repository reference audit found no callers. It checked only a local user
+override and could not establish effective access or restore layered policy.
+Effective read evidence uses the shared provider. Permission mutations require
+the planned revision-bound preview/apply/readback provider; no replacement
+mutation API is exposed before that implementation is ready. Existing overrides
+are retained, including explicit subpaths after a `home` exclusion. This source
+continuation is not acceptance of the currently installed package tuple.
 
 Security Center remains read-mostly for Flatpak. It does not expose arbitrary override editing or generic command execution. Installation and removal belong to Software, and application updates belong to `org.greyward.Update1`.

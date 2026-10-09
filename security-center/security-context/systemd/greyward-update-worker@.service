@@ -1,0 +1,14 @@
+[Unit]
+Description=GREYWARD fixed authenticated update worker
+
+[Service]
+Type=exec
+ExecStart=/usr/bin/python3 -I /usr/libexec/greyward-update-action serve
+User=root
+Group=root
+WorkingDirectory=/
+UMask=0077
+StandardInput=socket
+StandardOutput=socket
+StandardError=inherit
+TimeoutStartSec=6000

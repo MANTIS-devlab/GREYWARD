@@ -17,6 +17,7 @@ from gi.repository import GLib
 from greyward_security_context.update_center import BUS_NAME, OBJECT_PATH, SCHEMA, essential_driver_package_names, load_history, selected_system_provider, snapshot
 from greyward_security_context.telemetry import event as telemetry_event
 from greyward_security_context.telemetry import record_event
+from greyward_security_context import dms_compatibility
 
 STATE_DIR = Path(os.environ.get("XDG_STATE_HOME", Path.home() / ".local/state")) / "greyward-update-center"
 TRANSACTION_PATH = STATE_DIR / "transaction.json"
@@ -172,6 +173,12 @@ def load_transaction():
         if result.get("error") and result.get("finished_at") and result.get("phase") not in {"FAILED", "CANCELLED", "COMPLETE", "READY_TO_RESTART"}:
             result["phase"] = "FAILED"
             result["progress"] = None
+        if result.get("phase") == "RESOLVING":
+            # A new service process cannot own the previous process's worker.
+            # Otherwise a crashed metadata check permanently blocks all actions.
+            result.update(phase="FAILED", progress=None, cancellable=False,
+                          current_item=None, error="The update check was interrupted. Check for updates again.",
+                          finished_at=stamp(), updated_at=stamp())
         return result
     except (OSError, json.JSONDecodeError):
         return default_transaction()
@@ -254,12 +261,19 @@ def dnf_options(**values):
 
 def native_session():
     global _native_bus, _native_root, _native_session, _native_session_path
+    # Use the same selected desktop hold as the fixed privileged helper.
+    # Read/validate it even when reusing a session; invalid policy fails closed.
+    held = dms_compatibility.constraints()
+    options = dnf_options()
+    if held:
+        options["config"] = dbus.Dictionary(
+            {"excludepkgs": ",".join(sorted(held))}, signature="ss")
     with _native_lock:
         if _native_session is not None:
             return _native_session
         _native_bus = dbus.SystemBus()
         _native_root = _native_bus.get_object(DNF_BUS, DNF_ROOT)
-        _native_session_path = _native_root.open_session(dnf_options(), dbus_interface=f"{DNF_BUS}.SessionManager", timeout=DNF_DBUS_TIMEOUT)
+        _native_session_path = _native_root.open_session(options, dbus_interface=f"{DNF_BUS}.SessionManager", timeout=DNF_DBUS_TIMEOUT)
         _native_session = _native_bus.get_object(DNF_BUS, _native_session_path)
         register_progress_signals(_native_session_path)
         return _native_session
@@ -496,7 +510,7 @@ def cli_upgrade_items():
     env["LANG"] = "C"
     try:
         completed = subprocess.run(
-            ["dnf5", "check-upgrade", "--json"],
+            ["dnf5", "check-upgrade", "--json", *dms_compatibility.dnf_options()],
             capture_output=True,
             text=True,
             timeout=60,

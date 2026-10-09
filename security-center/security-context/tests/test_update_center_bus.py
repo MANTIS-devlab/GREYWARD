@@ -2,9 +2,11 @@ import importlib
 import importlib.machinery
 import sys
 import types
+import tempfile
+import json
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 
 
 sys.path.insert(0, str(Path(__file__).parents[1]))
@@ -119,7 +121,54 @@ class FakePrivilegedProcess:
 
 
 class UpdateCenterBusTests(unittest.TestCase):
+    def update_helper(self):
+        loader = importlib.machinery.SourceFileLoader("update_worker_test", str(Path(__file__).parents[1] / "bin" / "greyward-update-action"))
+        spec = importlib.util.spec_from_loader(loader.name, loader)
+        helper = importlib.util.module_from_spec(spec)
+        loader.exec_module(helper)
+        return helper
+
+    def test_update_worker_rejects_an_ordinary_uid_before_dispatch(self):
+        helper = self.update_helper()
+        with patch.object(helper.os, "geteuid", return_value=1001, create=True), patch.object(helper.subprocess, "run") as run:
+            self.assertEqual(helper.main(["check", "--operation-id", "dnf5-123"]), 1)
+        run.assert_not_called()
+
+    def test_authenticated_handoff_executes_only_the_fixed_provider_plan(self):
+        helper = self.update_helper()
+        connection = MagicMock()
+        connection.__enter__.return_value = connection
+        connection.makefile.return_value.__enter__.return_value = iter(['{"greyward_update_event":"worker_exit","status":0}\n'])
+        with patch.object(helper.os, "geteuid", return_value=0, create=True), patch.object(helper.socket, "socket", return_value=connection), patch.object(helper.socket, "AF_UNIX", 1, create=True):
+            self.assertEqual(helper.main(["apply", "--operation-id", "dnf5-123", "--system", "--driver-package", "kernel-modules-extra"]), 0)
+        connection.connect.assert_called_once_with(helper.WORKER_SOCKET)
+        self.assertEqual(json.loads(connection.sendall.call_args.args[0]), ["apply", "--operation-id", "dnf5-123", "--system", "--driver-package", "kernel-modules-extra"])
+
+    def test_root_worker_rejects_an_unprivileged_socket_peer(self):
+        helper = self.update_helper()
+        peer = MagicMock()
+        peer.__enter__.return_value = peer
+        peer.getsockopt.return_value = helper.struct.pack('3i', 42, 1001, 1001)
+        with patch.object(helper.os, "geteuid", return_value=0, create=True), patch.object(helper.os, "getppid", return_value=1), patch.object(helper.socket, "fromfd", return_value=peer), patch.object(helper.socket, "AF_UNIX", 1, create=True), patch.object(helper.socket, "SO_PEERCRED", 17, create=True):
+            with self.assertRaisesRegex(RuntimeError, "root peer"):
+                helper.main(['serve'])
+
+    def test_root_in_ordinary_domain_cannot_invoke_the_internal_worker(self):
+        helper = self.update_helper()
+        with patch.object(helper.os, "geteuid", return_value=0, create=True), patch.object(helper.os, "getppid", return_value=1), patch.object(helper.Path, "read_text", return_value="greyward_guard_u:greyward_guard_r:greyward_guard_t:s0"), patch.object(helper, "apply") as apply:
+            self.assertEqual(helper.main(["apply", "--worker", "--operation-id", "dnf5-123", "--system"]), 1)
+        apply.assert_not_called()
+
     def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        state = patch.object(update_center_bus, "TRANSACTION_PATH", Path(temporary.name) / "transaction.json")
+        state.start()
+        self.addCleanup(state.stop)
+        events = patch.object(update_center_bus, "record_event")
+        events.start()
+        self.addCleanup(events.stop)
+        update_center_bus._transaction = update_center_bus.default_transaction()
         update_center_bus._native_session = None
         update_center_bus._native_session_path = None
         update_center_bus._native_root = None
@@ -134,11 +183,42 @@ class UpdateCenterBusTests(unittest.TestCase):
     def test_native_session_uses_a_typed_empty_options_dictionary(self):
         root = FakeRoot()
         bus = types.SimpleNamespace(get_object=lambda name, path: root if path == update_center_bus.DNF_ROOT else object())
-        with patch.object(update_center_bus.dbus, "SystemBus", return_value=bus), patch.object(update_center_bus, "register_progress_signals"):
+        with patch.object(update_center_bus.dbus, "SystemBus", return_value=bus), patch.object(update_center_bus, "register_progress_signals"), patch.object(update_center_bus.dms_compatibility, "constraints", return_value={}):
             update_center_bus.native_session()
         self.assertIsInstance(root.options, FakeDictionary)
         self.assertEqual(root.options.signature, "sv")
         self.assertEqual(dict(root.options), {})
+
+    def test_restart_does_not_keep_an_unowned_resolver_active(self):
+        value = update_center_bus.default_transaction()
+        value.update(phase="RESOLVING", boot_id="same-boot", id="interrupted-check")
+        update_center_bus.TRANSACTION_PATH.write_text(json.dumps(value))
+        with patch.object(update_center_bus, "current_boot_id", return_value="same-boot"):
+            result = update_center_bus.load_transaction()
+        self.assertEqual(result["phase"], "FAILED")
+        self.assertEqual(result["id"], "interrupted-check")
+        self.assertFalse(result["cancellable"])
+
+    def test_native_resolver_excludes_the_same_desktop_tuple_as_apply(self):
+        root = FakeRoot()
+        bus = types.SimpleNamespace(get_object=lambda name, path: root if path == update_center_bus.DNF_ROOT else object())
+        held = {name: "test-1" for name in ("quickshell", "labwc", "uwsm", "dms-greeter")}
+        with patch.object(update_center_bus.dbus, "SystemBus", return_value=bus), patch.object(update_center_bus, "register_progress_signals"), patch.object(update_center_bus.dms_compatibility, "constraints", return_value=held):
+            update_center_bus.native_session()
+        self.assertEqual(root.options["config"].signature, "ss")
+        self.assertEqual(root.options["config"]["excludepkgs"], "dms-greeter,labwc,quickshell,uwsm")
+
+    def test_invalid_desktop_policy_cannot_reuse_a_cached_session(self):
+        update_center_bus._native_session = object()
+        with patch.object(update_center_bus.dms_compatibility, "constraints", side_effect=ValueError("Invalid policy")):
+            with self.assertRaises(ValueError):
+                update_center_bus.native_session()
+
+    def test_cli_resolver_passes_desktop_exclusions_to_dnf(self):
+        completed = types.SimpleNamespace(returncode=0, stdout='{"upgrades": []}')
+        with patch.object(update_center_bus.shutil, "which", return_value="/usr/bin/dnf5"), patch.object(update_center_bus.subprocess, "run", return_value=completed) as run, patch.object(update_center_bus, "essential_driver_package_names", return_value=[]), patch.object(update_center_bus.dms_compatibility, "dnf_options", return_value=["--exclude=quickshell"]):
+            self.assertEqual(update_center_bus.cli_upgrade_items(), [])
+        self.assertEqual(run.call_args.args[0], ["dnf5", "check-upgrade", "--json", "--exclude=quickshell"])
 
     def test_pending_snapshot_uses_only_the_selected_system_provider(self):
         with patch.object(update_center_bus, "selected_system_provider", return_value=("DNF5", None)):

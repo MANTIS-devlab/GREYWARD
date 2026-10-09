@@ -1,0 +1,87 @@
+diff --git a/src/server.c b/src/server.c
+index b8abc63..7901adf 100644
+--- a/src/server.c
++++ b/src/server.c
+@@ -1,8 +1,10 @@
+ // SPDX-License-Identifier: GPL-2.0-only
+ #define _POSIX_C_SOURCE 200809L
++#define _GNU_SOURCE
+ #include "config.h"
+ #include <signal.h>
+ #include <string.h>
++#include <sys/socket.h>
+ #include <sys/wait.h>
+ #include <wlr/backend/headless.h>
+ #include <wlr/backend/multi.h>
+@@ -296,6 +298,42 @@ allow_for_sandbox(const struct wlr_security_context_v1_state *security_state,
+ 	return false;
+ }
+ 
++/* Kernel socket identity, never app_id, PID titles or client-supplied metadata.
++ * Privileged clients are fixed root-prepared authentication/display subjects.
++ * Ordinary clients keep desktop chrome, but never input, capture or lock rights.
++ * Security-context clients retain upstream's stricter allowlist above. */
++static bool
++greyward_client_domain(const struct wl_client *client, const char *expected)
++{
++	char context[256] = {0};
++	socklen_t size = sizeof(context) - 1;
++	if (getsockopt(wl_client_get_fd((struct wl_client *)client), SOL_SOCKET,
++			SO_PEERSEC, context, &size) != 0 || size >= sizeof(context)) {
++		return false;
++	}
++	context[size] = '\0';
++	return !strcmp(context, expected);
++}
++
++static bool
++greyward_ordinary_protocol(const struct wl_interface *iface)
++{
++	if (allow_for_sandbox(NULL, iface)) {
++		return true;
++	}
++	static const char * const chrome[] = {
++		"zwlr_layer_shell_v1", "zwlr_foreign_toplevel_manager_v1",
++		"ext_foreign_toplevel_list_v1", "ext_idle_notifier_v1",
++		"ext_workspace_manager_v1", "zcosmic_workspace_manager_v1",
++	};
++	for (size_t i = 0; i < ARRAY_SIZE(chrome); i++) {
++		if (!strcmp(iface->name, chrome[i])) {
++			return true;
++		}
++	}
++	return false;
++}
++
+ static bool
+ server_global_filter(const struct wl_client *client, const struct wl_global *global, void *data)
+ {
+@@ -309,9 +347,9 @@ server_global_filter(const struct wl_client *client, const struct wl_global *glo
+ 		? server->xwayland->server->client
+ 		: NULL;
+ 
+-	if (client != xwayland_client && !strcmp(iface->name, xwayland_shell_v1_interface.name)) {
+-		/* Filter out the xwayland shell for usual clients */
+-		return false;
++	if (!strcmp(iface->name, xwayland_shell_v1_interface.name)) {
++		/* The compositor-created Xwayland client alone receives this global. */
++		return client == xwayland_client;
+ 	}
+ #endif
+ 
+@@ -344,7 +382,14 @@ server_global_filter(const struct wl_client *client, const struct wl_global *glo
+ 		return allow;
+ 	}
+ 
+-	return true;
++	return greyward_client_domain(client, "system_u:system_r:greyward_as_auth_t:s0")
++		|| (greyward_client_domain(client, "greyward_admin_u:greyward_admin_r:greyward_admin_t:s0")
++			&& (allow_for_sandbox(NULL, iface)
++				|| !strcmp(iface->name, "ext_session_lock_manager_v1")))
++		|| greyward_client_domain(client, "greyward_guard_u:greyward_guard_r:greyward_as_display_t:s0")
++		|| (greyward_client_domain(client, "greyward_guard_u:greyward_guard_r:greyward_as_gateway_t:s0")
++			&& !strcmp(iface->name, "wp_security_context_manager_v1"))
++		|| greyward_ordinary_protocol(iface);
+ }
+ 
+ /*

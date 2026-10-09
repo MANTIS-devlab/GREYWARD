@@ -7,6 +7,7 @@ import json
 import os
 import re
 import shutil
+import sqlite3
 import stat
 import subprocess
 import sys
@@ -23,7 +24,7 @@ import dbus.mainloop.glib
 import dbus.service
 from gi.repository import GLib
 from greyward_security_context.usbguard import UsbGuardAdapter, UsbGuardError
-from greyward_security_context.clamav import permitted, status as clamav_status
+from greyward_security_context.clamav import permitted, system_status as clamav_status
 from greyward_security_context.sensors import PipeWireMonitor
 from greyward_security_context.persistence import PersistenceMonitor
 from greyward_security_context.summaries import weekly_summary
@@ -36,6 +37,9 @@ from greyward_security_context.telemetry import QUERY_SCHEMA, TelemetryError, Te
 from greyward_security_context.aggregation import build_security_digest
 from greyward_security_context.file_security import FileSecurityManager, _open_readonly_nofollow, _unlink_verified_source, file_activity_items
 from greyward_security_context.network_location import country_resolution_for_destination
+from greyward_security_context.application_security import ApplicationSecurityReads, ApplicationReadError, unavailable_read as unavailable_application_read
+from greyward_security_context.application_workflows import ApplicationSecurityWorkflows
+from greyward_security_context import local_activity
 BUS_NAME="systems.mantis.greyward.SecurityContext1"; OBJECT_PATH="/systems/mantis/greyward/SecurityContext1"; STATE_PATH=Path("/run/greyward-security-context/opensnitch-summary.json"); SCHEMA="greyward.security.context/v1"
 NETWORK_STATE_PATH=Path("/run/greyward-security-context/network-protection.json"); NETWORK_SCHEMA="greyward.security.network/v1"
 SECURE_DNS_STATE_PATH=Path("/run/greyward-secure-dns/state.json")
@@ -94,6 +98,8 @@ def authoritative_posture():
     unavailable_count=max(0,int(metrics.get("unavailable",0)))
     observed_at=dt.datetime.now(dt.timezone.utc)
     posture={"state":state,"review_count":review_count,"unavailable_count":unavailable_count,"attention_count":review_count+unavailable_count,"detail":"Posture evaluated by GREYWARD Security Center.","observed_at":stamp(observed_at),"fresh_until":stamp(observed_at+dt.timedelta(seconds=AUTHORITATIVE_POSTURE_CACHE_SECONDS))}
+    if isinstance(payload.get("checks"),list):
+     posture["checks"]=[{key:check.get(key) for key in ("check_id","state","accepted_deviation","requiredness")} for check in payload["checks"][:128] if isinstance(check,dict) and isinstance(check.get("check_id"),str)]
   except (OSError,ValueError,subprocess.SubprocessError,TypeError):
    posture=None
   _AUTHORITATIVE_POSTURE_CACHE=(current,posture)
@@ -112,7 +118,12 @@ def apply_authoritative_posture(value):
  source_states=value.get("live_states",[])
  source_unavailable=any(item.get("state")=="UNAVAILABLE" for item in source_states)
  source_review=bool(value.get("review_count",0)) or any(item.get("state")=="REVIEW NEEDED" for item in source_states)
- if source_unavailable:
+ if "checks" in posture:
+  # The same evaluator and accepted-deviation store as Center own check health.
+  # Missing detailed device access must not become a second posture evaluator.
+  value["state"]=posture["state"]
+  value["evaluated_checks"]=posture["checks"]
+ elif source_unavailable:
   value["state"]="UNAVAILABLE"
  elif source_review and posture["state"]=="SECURE":
   value["state"]="REVIEW NEEDED"
@@ -121,6 +132,10 @@ def apply_authoritative_posture(value):
  value["review_count"]=max(int(value.get("review_count",0)),posture["review_count"])
  value["unavailable_count"]=max(int(value.get("unavailable_count",0)),posture.get("unavailable_count",0))
  value["attention_count"]=max(int(value.get("review_count",0))+int(value.get("unavailable_count",0)),posture.get("attention_count",0))
+ if "checks" in posture:
+  value["review_count"]=posture["review_count"]
+  value["unavailable_count"]=posture["unavailable_count"]
+  value["attention_count"]=posture["attention_count"]
  value["live_states"]=[item for item in source_states if item.get("kind")!="POSTURE"]
  value["live_states"].append({"kind":"POSTURE","state":value["state"],"detail":posture["detail"],"observed_at":posture.get("observed_at",stamp(now()))})
  if posture.get("fresh_until"): value["fresh_until"]=posture["fresh_until"]
@@ -258,17 +273,18 @@ def telemetry_query(payload):
  try:
   filters=json.loads(payload) if isinstance(payload,str) else payload
   if not isinstance(filters,dict): raise TelemetryError("Telemetry query must be an object.")
-  store=user_store(); import_root_spool(store); return store.query(filters)
+  store=user_store(); return store.query(filters,read_only=True)
  except (TelemetryError,TypeError,ValueError,json.JSONDecodeError) as error:
   return {"schema":QUERY_SCHEMA,"generated_at":stamp(now()),"events":[],"truncated":False,"source_state":{"source":"greyward-sqlite-history","state":"UNAVAILABLE","reason":str(error)[:160]}}
 def telemetry_related(payload):
+ event_id=""
  try:
   request=json.loads(payload) if isinstance(payload,str) else payload
   if not isinstance(request,dict) or not isinstance(request.get("event_id"),str): raise TelemetryError("A telemetry event ID is required.")
   event_id=request["event_id"]
   options=request.get("options") or {}
   limit=options.get("limit",128) if isinstance(options,dict) else 128
-  store=user_store(); import_root_spool(store); return store.related(event_id,limit)
+  store=user_store(); return store.related(event_id,limit,read_only=True)
  except (TelemetryError,TypeError,ValueError,json.JSONDecodeError) as error:
   return {"schema":QUERY_SCHEMA,"generated_at":stamp(now()),"seed_event_id":str(event_id)[:96],"events":[],"source_state":{"source":"greyward-sqlite-history","state":"UNAVAILABLE","reason":str(error)[:160]}}
 def _secure_dns_call(method,payload=None):
@@ -514,6 +530,7 @@ class ClipboardObserver:
 
 class SecurityContext(dbus.service.Object):
  def __init__(self,bus,usb,sensors,persistence=None):
+  self._application_bus=bus; self.application_workflows=ApplicationSecurityWorkflows()
   super().__init__(bus,OBJECT_PATH); self.usb=usb; self.sensors=sensors; self.persistence=persistence or PersistenceMonitor(); self.safe_open_processes={}; self.file_security=FileSecurityManager(); self.privacy_capsule=PrivacyCapsule(); self._capsule_lock=threading.Lock(); self._summary_cache=None; self._summary_cache_at=0.0; self._summary_cache_lock=threading.Lock(); self.clipboard_category=None; self.clipboard_observed_at=None; self._network_notification_seen=set(); self._network_notification_initialized=False; self._network_notification_deadlines={}; self.clipboard_observer=ClipboardObserver(lambda category: GLib.idle_add(self._on_clipboard_category,category)); self.portal=PortalContext(bus,lambda: GLib.idle_add(self._on_privacy_source_changed)); self.sensors.start(lambda: GLib.idle_add(self._on_privacy_source_changed)); self.clipboard_observer.start()
 
  def _invalidate_caches(self):
@@ -776,6 +793,103 @@ class SecurityContext(dbus.service.Object):
   value["recent_events"] = value.get("recent_events",[])[-64:]
   return value
  @dbus.service.method(BUS_NAME,in_signature="",out_signature="s")
+ def GetApplicationCoverage(self):
+  return json.dumps(ApplicationSecurityReads().coverage(),separators=(",",":"))
+ @dbus.service.method(BUS_NAME,in_signature="",out_signature="s")
+ def GetAdministrationState(self):
+  return self._application_workflow(self.application_workflows.administration_state)
+ @dbus.service.method(BUS_NAME,in_signature="",out_signature="s",sender_keyword="sender")
+ def OpenAdministration(self,sender=None):
+  self._application_actor(sender)
+  return self._application_workflow(self.application_workflows.open_administration)
+ def _application_actor(self,sender):
+  try:
+   credentials=self._application_bus.call_blocking("org.freedesktop.DBus","/org/freedesktop/DBus","org.freedesktop.DBus","GetConnectionCredentials","s",(sender,),timeout=2)
+   uid=int(credentials["UnixUserID"]); pid=int(credentials["ProcessID"])
+   if uid != os.getuid() or pid <= 0: raise ValueError()
+   path=Path(f"/proc/{pid}/stat")
+   if path.stat().st_uid != uid: raise ValueError()
+   value=path.read_text(encoding="utf-8"); start=int(value.rsplit(")",1)[1].split()[19])
+   return (uid,pid,start)
+  except (OSError,ValueError,KeyError,IndexError,dbus.DBusException):
+   raise dbus.DBusException("Application Security caller could not be verified.",name=BUS_NAME+".ApplicationSecurityUnavailable")
+ def _application_workflow(self,call):
+  try: return json.dumps(call(),separators=(",",":"))
+  except (ApplicationReadError,TypeError,ValueError,OverflowError):
+   raise dbus.DBusException("Application Security refused the reviewed operation.",name=BUS_NAME+".ApplicationSecurityUnavailable")
+ @dbus.service.method(BUS_NAME,in_signature="",out_signature="s")
+ def ListApplicationAccessGrants(self):
+  return self._application_workflow(self.application_workflows.grants)
+ @dbus.service.method(BUS_NAME,in_signature="hsst",out_signature="s",sender_keyword="sender")
+ def PreviewProtectedResource(self,directory,category,label,revision,sender=None):
+  actor=self._application_actor(sender)
+  return self._application_workflow(lambda:self.application_workflows.preview(actor,"PreviewResourceRegistration","hsst",(directory,str(category),str(label),int(revision))))
+ @dbus.service.method(BUS_NAME,in_signature="sast",out_signature="s",sender_keyword="sender")
+ def PreviewApplicationGrant(self,path,resources,revision,sender=None):
+  actor=self._application_actor(sender)
+  return self._application_workflow(lambda:self.application_workflows.preview(actor,"PreviewPolicyChange","sast",(str(path),list(map(str,resources)),int(revision))))
+ @dbus.service.method(BUS_NAME,in_signature="sst",out_signature="s",sender_keyword="sender")
+ def PreviewApplicationRevocation(self,grant,path,revision,sender=None):
+  actor=self._application_actor(sender)
+  return self._application_workflow(lambda:self.application_workflows.preview(actor,"PreviewGrantRevocation","sst",(str(grant),str(path),int(revision))))
+ @dbus.service.method(BUS_NAME,in_signature="s",out_signature="s",sender_keyword="sender")
+ def ApplyApplicationPolicy(self,operation,sender=None):
+  actor=self._application_actor(sender)
+  return self._application_workflow(lambda:self.application_workflows.operation(actor,str(operation),"ApplyPolicyChange"))
+ @dbus.service.method(BUS_NAME,in_signature="s",out_signature="s",sender_keyword="sender")
+ def GetApplicationOperation(self,operation,sender=None):
+  actor=self._application_actor(sender)
+  return self._application_workflow(lambda:self.application_workflows.operation(actor,str(operation)))
+ @dbus.service.method(BUS_NAME,in_signature="s",out_signature="s",sender_keyword="sender")
+ def CancelApplicationOperation(self,operation,sender=None):
+  actor=self._application_actor(sender)
+  return self._application_workflow(lambda:self.application_workflows.operation(actor,str(operation),"CancelOperation"))
+ @dbus.service.method(BUS_NAME,in_signature="hb",out_signature="s",sender_keyword="sender")
+ def PrepareApplicationLaunch(self,selected,graphical,sender=None):
+  actor=self._application_actor(sender)
+  return self._application_workflow(lambda:self.application_workflows.prepare_launch(actor,selected,bool(graphical)))
+ @dbus.service.method(BUS_NAME,in_signature="s",out_signature="s",sender_keyword="sender")
+ def StartApplicationLaunch(self,reference,sender=None):
+  actor=self._application_actor(sender)
+  def start():
+   process,receipt=self.application_workflows.start_launch(actor,str(reference))
+   monitor_safe_open(process,lambda code:self._application_launch_finished(str(reference),code))
+   return receipt
+  return self._application_workflow(start)
+ def _application_launch_finished(self,reference,code):
+  # Exit status describes the workload, not protection or malware evidence.
+  try:
+   record_event(telemetry_event(component="greyward-application-security",source="root-workload-readback",category="APPLICATION_SECURITY",event_type="ISOLATED_LAUNCH_EXIT",action="RUN",outcome="SUCCESS" if code==0 else "UNKNOWN" if code is None else "FAILURE",correlation={"launch_ref":reference},details={"exit_code":code},quality={"source_state":"AVAILABLE" if code is not None else "UNAVAILABLE","attribution":"EXACT","confidence":"EXACT"},retention_class="semantic"),self.usb.telemetry)
+  except (OSError,ValueError,TelemetryError): pass
+ @dbus.service.method(BUS_NAME,in_signature="ubts",out_signature="s")
+ def ListApplications(self,limit,has_revision,revision,after):
+  try:
+   value=ApplicationSecurityReads().applications(int(limit),bool(has_revision),int(revision),str(after))
+  except ApplicationReadError:
+   value=unavailable_application_read()
+  return json.dumps(value,separators=(",",":"))
+ @dbus.service.method(BUS_NAME,in_signature="s",out_signature="s")
+ def GetApplication(self,installation_ref):
+  try:
+   value=ApplicationSecurityReads().application(str(installation_ref))
+  except ApplicationReadError:
+   value=unavailable_application_read()
+  return json.dumps(value,separators=(",",":"))
+ @dbus.service.method(BUS_NAME,in_signature="ubts",out_signature="s")
+ def ListProtectedResources(self,limit,has_revision,revision,after):
+  try:
+   value=ApplicationSecurityReads().resources(int(limit),bool(has_revision),int(revision),str(after))
+  except ApplicationReadError:
+   value=unavailable_application_read()
+  return json.dumps(value,separators=(",",":"))
+ @dbus.service.method(BUS_NAME,in_signature="s",out_signature="s")
+ def GetProtectedResource(self,resource_ref):
+  try:
+   value=ApplicationSecurityReads().resource(str(resource_ref))
+  except ApplicationReadError:
+   value=unavailable_application_read()
+  return json.dumps(value,separators=(",",":"))
+ @dbus.service.method(BUS_NAME,in_signature="",out_signature="s")
  def GetSummary(self):
   with self._summary_cache_lock:
    current=time.monotonic()
@@ -795,7 +909,7 @@ class SecurityContext(dbus.service.Object):
    except Exception: network=unavailable_network_summary()
    clamav=summary.get("clamav") if isinstance(summary,dict) else None
    profile=_profile_call("--read")
-   store=user_store(); import_root_spool(store)
+   store=user_store()
    digest=build_security_digest(summary,network=network,device_state=summary.get("usb",{}).get("device_state") if isinstance(summary,dict) else None,store=store,now_value=summary_observed_at)
    try: dns=secure_dns_state()
    except Exception: dns={}
@@ -820,6 +934,32 @@ class SecurityContext(dbus.service.Object):
  def start_shell_runtime(self,bus):
   from greyward_security_context.shell_runtime import ShellRuntime
   self.shell_runtime=ShellRuntime(self,bus)
+ def reconcile_history(self):
+  # Background ingestion owns root import and bounded legacy finding migration.
+  # Historical projections never create/migrate storage or derive findings.
+  try:
+   store=user_store(); imported=import_root_spool(store); migration=store.reconcile_findings()
+   try: local=local_activity.migrate(store)
+   except (TelemetryError,OSError,ValueError): local={"complete":False,"state":"UNAVAILABLE"}
+   return {"state":"AVAILABLE","import":imported,"migration":migration,"local_activity":local}
+  except (TelemetryError,OSError):
+   return {"state":"UNAVAILABLE","reason":"Telemetry reconciliation is unavailable."}
+ @dbus.service.method(BUS_NAME,in_signature="",out_signature="s")
+ def GetLocalActivity(self):
+  try: value=local_activity.read()
+  except (TelemetryError,OSError,ValueError,sqlite3.Error): value={"schema":local_activity.SCHEMA,"state":"UNAVAILABLE","items":None}
+  return json.dumps(value,sort_keys=True,separators=(",",":"))
+ @dbus.service.method(BUS_NAME,in_signature="s",out_signature="s")
+ def RecordLocalActivity(self,payload):
+  # Presentation-only metadata; never a root event, policy result or finding.
+  try: value=local_activity.record(str(payload))
+  except (TelemetryError,OSError,ValueError,TypeError,sqlite3.Error): value={"schema":local_activity.SCHEMA,"state":"UNAVAILABLE","items":None}
+  return json.dumps(value,sort_keys=True,separators=(",",":"))
+ @dbus.service.method(BUS_NAME,in_signature="",out_signature="s")
+ def ClearLocalActivity(self):
+  try: value=local_activity.clear()
+  except (TelemetryError,OSError,ValueError,sqlite3.Error): value={"schema":local_activity.SCHEMA,"state":"UNAVAILABLE","items":None}
+  return json.dumps(value,sort_keys=True,separators=(",",":"))
  @dbus.service.signal(BUS_NAME,signature="t")
  def PrivacyCapsuleChanged(self,revision): pass
  @dbus.service.method(BUS_NAME,in_signature="",out_signature="s")
@@ -883,7 +1023,7 @@ class SecurityContext(dbus.service.Object):
   try: options=json.loads(payload) if isinstance(payload,str) and payload else {}
   except json.JSONDecodeError: options={}
   summary=json.loads(self.GetSummary()); network=network_summary(); devices=self.usb.device_overview()
-  store=user_store(); import_root_spool(store)
+  store=user_store()
   return json.dumps(build_security_digest(summary,network=network,device_state=devices,store=store,now_value=now()),sort_keys=True,separators=(",",":"))
  @dbus.service.method(BUS_NAME,in_signature="s",out_signature="s")
  def GetNetworkHistory(self,payload):
@@ -891,8 +1031,8 @@ class SecurityContext(dbus.service.Object):
    filters=json.loads(payload) if isinstance(payload,str) else payload
    if not isinstance(filters,dict): raise TelemetryError("Network history query must be an object.")
    filters.update({"category":"NETWORK","limit":min(int(filters.get("limit",128)),256)})
-   store=user_store(); import_root_spool(store)
-   result=store.query(filters)
+   store=user_store()
+   result=store.query(filters,read_only=True)
    result["events"]=[_with_network_location(event) for event in result.get("events",[]) if isinstance(event,dict)]
    return json.dumps(result,sort_keys=True,separators=(",",":"))
   except (TelemetryError,TypeError,ValueError,json.JSONDecodeError) as error:
@@ -900,7 +1040,7 @@ class SecurityContext(dbus.service.Object):
  @dbus.service.method(BUS_NAME,in_signature="",out_signature="s")
  def GetDeviceOverview(self):
   state=self.usb.device_overview()
-  store=user_store(); import_root_spool(store)
+  store=user_store()
   digest=build_security_digest(device_state=state,store=store,now_value=now())
   state["summary"]=digest.get("devices",{})
   return json.dumps(state,sort_keys=True,separators=(",",":"))
@@ -912,7 +1052,7 @@ class SecurityContext(dbus.service.Object):
    filters["limit"]=min(int(filters.get("limit",64)),128)
    if filters.get("capability"):
     filters["component"]=str(filters.pop("capability"))[:96]
-   store=user_store(); import_root_spool(store); return json.dumps(store.query(filters),sort_keys=True,separators=(",",":"))
+   store=user_store(); return json.dumps(store.query(filters,read_only=True),sort_keys=True,separators=(",",":"))
   except (TelemetryError,TypeError,ValueError,json.JSONDecodeError) as error:
    return json.dumps({"schema":QUERY_SCHEMA,"events":[],"truncated":False,"source_state":{"state":"UNAVAILABLE","reason":str(error)[:160]}},separators=(",",":"))
  @dbus.service.method(BUS_NAME,in_signature="s",out_signature="s")
@@ -1091,34 +1231,37 @@ class SecurityContext(dbus.service.Object):
  def UsbRevokeTrust(self,device_id,rule_id): return self.action(self.usb.adapter.revoke,device_id,rule_id)
  def _safe_open_event(self,event_id,title,detail,file_ref=None,outcome="SUCCESS"):
   self.usb.events=[event for event in self.usb.events if event["event_id"]!=event_id]
-  event={"event_id":event_id,"kind":"SAFE_OPEN_RESULT","notification":"HISTORY_ONLY","occurred_at":stamp(now()),"title":title,"detail":detail[:320],"source":"safe-open/bwrap"}
+  event={"event_id":event_id,"kind":"SAFE_OPEN_RESULT","notification":"HISTORY_ONLY","occurred_at":stamp(now()),"title":title,"detail":detail[:320],"source":"safe-open/application-guard"}
   if file_ref: event["file_ref"]=file_ref
   self.usb.events.append(event)
   self._record_file_security_event("SAFE_OPEN_RESULT", "OPEN", outcome, file_ref, {"message":detail[:320]})
  def _record_file_security_event(self,event_type,action,outcome,file_ref=None,details=None):
-  record_event(telemetry_event(component="greyward-file-security",source="security-context",category="FILE_SECURITY",event_type=event_type,action=action,outcome=outcome,severity="NOTICE" if outcome=="SUCCESS" else "ERROR",assessment="NOTEWORTHY" if outcome=="SUCCESS" else "FAILED",correlation={"file_ref":file_ref} if file_ref else {},details={"result":outcome,**(details or {})},quality={"source_state":"AVAILABLE","attribution":"EXACT","confidence":"EXACT"},retention_class="semantic"),self.usb.telemetry)
+  record_event(telemetry_event(component="greyward-file-security",source="security-context",category="FILE_SECURITY",event_type=event_type,action=action,outcome=outcome,severity="NOTICE" if outcome in {"SUCCESS","STARTED"} else "ERROR",assessment="NOTEWORTHY" if outcome in {"SUCCESS","STARTED"} else "FAILED",correlation={"file_ref":file_ref} if file_ref else {},details={"result":outcome,**(details or {})},quality={"source_state":"AVAILABLE","attribution":"EXACT","confidence":"EXACT"},retention_class="semantic"),self.usb.telemetry)
  def _safe_open_finished(self,event_id,code):
   entry=self.safe_open_processes.pop(event_id,None)
   file_ref=entry[1] if entry else None
-  outcome="SUCCESS" if code == 0 else "FAILURE"
+  outcome="SUCCESS" if code == 0 else "UNKNOWN" if code is None else "FAILURE"
   title="Safe Open context exited" if outcome == "SUCCESS" else "Safe Open context failed"
   detail="The disposable restricted context exited and its temporary namespace was cleaned up." if outcome == "SUCCESS" else "The disposable restricted context exited without opening the file successfully."
+  if code is None:
+   title="Safe Open result unavailable"
+   detail="The workload outcome could not be read. No successful exit or cancellation is assumed."
   self._safe_open_event(event_id,title,detail,file_ref,outcome)
- @dbus.service.method(BUS_NAME,in_signature="s",out_signature="s")
- def SafeOpen(self,path):
+ @dbus.service.method(BUS_NAME,in_signature="s",out_signature="s",sender_keyword="sender")
+ def SafeOpen(self,path,sender=None):
   try:
-   process,selected=launch_safe_open(path)
+   process,selected=launch_safe_open(path,workflows=self.application_workflows,actor=self._application_actor(sender))
   except SafeOpenError as error:
-   ref=_file_ref(Path(path).resolve())
+   ref=_file_ref(Path(path).expanduser()) if isinstance(path,str) and len(path)<=4096 and "\0" not in path else None
    event_id="safe-open-failed-"+uuid.uuid4().hex
    self._safe_open_event(event_id,"Safe Open refused",redact_error(error),ref,outcome="FAILURE")
    return json.dumps({"ok":False,"state":"FAILED","detail":redact_error(error)},separators=(",",":"))
-  ref=_file_ref(Path(selected).resolve())
+  ref=_file_ref(selected)
   event_id="safe-open-"+uuid.uuid4().hex
   self.safe_open_processes[event_id]=(process,ref)
-  self._safe_open_event(event_id,"Safe Open launched","The selected file was opened in a disposable restricted context with read-only file access and no network.",ref)
+  self._safe_open_event(event_id,"Safe Open starting","Safe Open is preparing a disposable restricted context. Its result will be recorded when it exits.",ref,outcome="STARTED")
   monitor_safe_open(process,lambda code:self._safe_open_finished(event_id,code))
-  return json.dumps({"ok":True,"state":"LAUNCHED","detail":"Safe Open launched in a disposable restricted context."},separators=(",",":"))
+  return json.dumps({"ok":True,"state":"LAUNCHED","detail":"Application Guard established selected-file isolation with a private display and no network. Session protection remains separately reported."},separators=(",",":"))
  def scan_high_risk_path(self,path):
   try:
    if not permitted(path, os.getuid()): return {"state":"ERROR","detail":"Only regular files owned by your user can be scanned."}
@@ -1133,5 +1276,7 @@ class SecurityContext(dbus.service.Object):
   if hasattr(self,"shell_runtime"): self.shell_runtime.invalidate()
   return json.dumps(value,separators=(",",":"))
 def main():
+ # Required before observers/collectors create threads using GLib D-Bus.
+ dbus.mainloop.glib.threads_init()
  dbus.mainloop.glib.DBusGMainLoop(set_as_default=True); bus=dbus.SessionBus(); name=dbus.service.BusName(BUS_NAME,bus=bus); service=SecurityContext(bus,UsbContext(),SensorContext()); service.start_shell_runtime(bus); GLib.MainLoop().run()
 if __name__=="__main__": main()

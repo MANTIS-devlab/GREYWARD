@@ -20,11 +20,29 @@ The capsule remains the authoritative sensor projection. The DMS widget now
 reads the composed `GetShellPresentation()` (`greyward.security.experience/v1`)
 and subscribes to `ShellSummaryChanged(uint64 revision)`. That presentation
 combines the capsule with existing posture, device, network and file providers.
-The notification router consumes the same items. The widget's 15-second
+The notification router consumes the same items. The widget's 5-second
 watchdog is recovery only, deliberately ahead of the projection's 30-second
 freshness lease. While its replacement read is in flight it retains the last
 confirmed presentation, but disables mutation actions once that lease expires;
 no frontend security monitor or notification emitter is installed.
+
+The presentation has separate deadlines: `fresh_until` remains the evidence
+and action lease; additive `display_fresh_until` permits a confirmed unavailable
+observation to explain its warnings for 30 seconds. It never renews positive
+security evidence or enables actions. Deadline-only renewal does not change the
+content revision or repeat notifications. Transport failure expires the display;
+missing detection source files remain in history but leave active shell alerts.
+Both GLib D-Bus entrypoints initialize threading before starting observers.
+See the [development stability receipt](../history/security-center/2026-10-08-security-plugin-stability.md).
+
+Protection review uses the same evaluated check results and accepted-deviation
+store as Security Center, exposed additively by the fixed read-only posture
+helper. Detailed USB reads and privacy-profile reads are not independent health
+evaluators. Unresolved firewall/device checks route to `evidence`, the existing
+System checks review workflow. Accepted exceptions remain disclosed in details;
+they do not grant device permissions. Scanner readiness comes from the same
+`GetFileSecuritySummary().clamav` response that the Files & scans page uses.
+Missing shared checks remain unavailable rather than inheriting overall success.
 
 Security Context owns collection, event generations, freshness, aggregation,
 and policy interpretation. DMS owns only presentation, accessibility, flyout
@@ -48,7 +66,9 @@ The viewport-constrained 400-pixel flyout orders status/reason, the highest
 priority item, live activity, disclosed protection details and Open Security
 Center. Other items stay available through disclosure. Critical > actionable >
 warning; privacy indicators remain independent. The canonical small emblem is
-`branding/source/greyward-security-status.svg`. Graphite opaque surfaces, silver
+`branding/source/greyward-security-status.svg`, shared with the launcher and
+running-app taskbar through the [application identity contract](../../branding/BRANDING.md#security-center-application-identity).
+Graphite opaque surfaces, silver
 edges, 16/14/13/12-pixel type and 34-pixel action targets are shared with the
 GREYWARD-only DMS notification patch. DMS's None animation setting removes the
 widget's size and color transitions. Deferred capabilities remain hidden.

@@ -1,0 +1,10 @@
+{
+  "schema": "greyward.application-security.wayland-input/v1",
+  "upstream": "https://gitlab.freedesktop.org/wayland/wayland-protocols",
+  "tag": "1.44",
+  "path": "staging/security-context/security-context-v1.xml",
+  "source": "https://raw.githubusercontent.com/wayland-mirror/wayland-protocols/1.44/staging/security-context/security-context-v1.xml",
+  "sha256": "f4f8ba15ebd2df62db611b1de32e992f660a4aeeea83250cb88fa468da42ffcb",
+  "license": "MIT",
+  "scope": "Private UID-1002 protocol feasibility only; no production broker or launch provider"
+}

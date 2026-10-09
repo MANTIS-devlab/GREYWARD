@@ -1,6 +1,103 @@
-# Security Center performance pass 2 and startup audit
+# Security Center performance evidence
 
-This is the canonical performance record for the September 2026 GREYWARD
+## Current development pass — 8 October 2026
+
+Installed comparison on the normal enrolled `.149` desktop: Center 80 → 84,
+Context 72 and Application Security runtime 27 unchanged. This is measured
+development evidence, not clean-image, cold-boot or release acceptance.
+The [dated receipt](../history/security-center/2026-10-08-security-center-performance.md)
+records the exact inputs, checks and remaining issues.
+
+### Changes justified by profiling
+
+- Retain the navigation, window chrome and application shell between route
+  changes. Replace only page content; keep active/parent navigation and busy
+  state accurate. The 110-visit run eliminated 222 full-shell renders.
+- Overlap the independent Flatpak permission read with Guard inventory reads.
+  Provider uncertainty, authoritative readback and route freshness stay intact.
+- Renew protection evidence before its actual deadline, using measured read
+  cost and a safety margin. The maximum visible renewal delay is 3 seconds;
+  the provider's 5-second lease is unchanged. Thirty-second Overview reads
+  fell from 15 to 9. Lease-only renewals do not rebuild the whole Overview.
+- Load optional recent activity independently of authoritative posture.
+  A traced 4-second history wait no longer delays initial protection controls.
+  Loading, failed reads and genuinely empty history remain distinct; late
+  responses preserve disclosure focus and cannot populate another visit.
+- Recovery omits unused Context device history, retaining all recovery,
+  backup and device readiness facts. Normal Devices still collects history.
+- Bind Network Activity and scan-operation responses to their original
+  route visit/operation, including failures and follow-up timers.
+
+An offscreen-row rendering experiment was rejected: three 90-frame scroll
+passes over 120 real rows gave worse median/p95 frame intervals (24/49 ms
+versus 29/65 ms). No CSS/material change from that experiment remains.
+
+### Measurements
+
+Ten real process starts per build with warm OS/filesystem caches; ten samples
+per route; 60-second idle process/cgroup samples after 110 visits. Startup is
+to usable authoritative Overview, excluding independently loading optional
+history. Route timings are DOM readiness, not paint latency. At ten samples,
+nearest-rank p95 is the largest sample, so outliers remain visible.
+
+| Metric | Center 80 | Center 84 |
+|---|---:|---:|
+| Startup median / p95 | 2,596 / 3,189 ms | 2,520 / 2,597 ms |
+| Applications median / p95 | 1,961 / 2,196 ms | 1,701 / 1,923 ms |
+| Center + WebKit idle CPU, mean, one core | 0.43% | 0.25% |
+| Center + WebKit summed RSS, median | 1,145.6 MiB | 1,032.3 MiB |
+| Application Security broker idle CPU, mean, one core | 24.31% | 15.01% |
+| Context idle CPU, mean, one core | 15.11% | 16.69% |
+
+Summed RSS counts shared pages more than once; it is not PSS or unique physical
+memory. Center's sampled cgroup includes the idle native driver. Context's
+periodic work increased in this sample; do not infer that every component got
+cheaper. Combined mean CPU decreased about 20% in these matched observations.
+
+| Route DOM readiness, median / p95 | Center 80 | Center 84 |
+|---|---:|---:|
+| Overview | 1,263 / 1,388 ms | 1,175 / 1,499 ms |
+| Protected Data | 1,728 / 2,379 ms | 1,756 / 2,218 ms |
+| Files | 81 / 3,965 ms | 65 / 6,205 ms |
+| Network | 754 / 7,499 ms | 800 / 12,105 ms |
+| System | 1,070 / 1,162 ms | 1,168 / 1,749 ms |
+| Security History | 1,260 / 1,303 ms | 1,334 / 1,853 ms |
+| Updates | 93 / 158 ms | 95 / 143 ms |
+| Recovery | 143 / 241 ms | 158 / 266 ms |
+| Privacy | 926 / 1,052 ms | 961 / 1,191 ms |
+| Network Activity | 375 / 3,701 ms | 394 / 2,561 ms |
+
+### Stability, limits and follow-up
+
+Two consecutive final runs exercised 220 route visits plus idle observations.
+Neither produced JavaScript errors or unhandled rejections. Each had one
+Network read exceed the 12-second UI deadline; other later visits succeeded.
+A separate final retry also displayed unavailable. Synchronous Context/provider
+contention remains unresolved; Files, History and Activity also have occasional
+long tails. Consequently this pass does **not** establish universal latency
+improvement or complete performance acceptance. Keep real failure states;
+do not hide these delays by reporting stale data as healthy.
+
+After the second 110 visits, summed Center/WebKit RSS was 1,063.2 MiB versus
+1,032.3 MiB after the first run (about 3% higher). The two sampled Network
+Activity DOM counts were both 7,643 nodes. These bounded observations do not
+prove absence of all leaks or establish an indefinite memory plateau.
+
+Actual normal, maximized/restored and 1100×700 views were inspected, with no
+horizontal overflow at minimum size. Recovery and default Devices loaded;
+real late activity readback retained the same focused, open disclosure summary.
+Protected Data and root desktop verification remained authoritative. Existing
+physical gesture, suspend and release gates are not claimed by this pass.
+
+Reproduce read-only navigation profiling with
+`tools/greyward-dev/security-center-benchmark.py` against an existing native
+WebKit session on the normal desktop. It removes its instrumentation on exit,
+records explicit failures and never mutates protection policy. Run process
+sampling separately without compilation competing for VM resources.
+
+## Historical September 2026 pass 2 and startup audit
+
+This is the historical performance record for the September 2026 GREYWARD
 Security Center work. Pass 1 established bounded shared snapshots, targeted
 Updates rendering, adaptive scan polling, telemetry indexes, and action
 refreshes. Pass 2 concentrates on Fedora/Tauri runtime evidence and the

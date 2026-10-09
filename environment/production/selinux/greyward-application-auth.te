@@ -1,0 +1,139 @@
+policy_module(greyward_application_auth, 0.1.0)
+
+# Separate authentication subject. Deliberately not userdomain, unconfined or a
+# credential grant holder. Only root PID 1 selects this domain. Its executable,
+# QML closure, settings, runtime and input endpoint must be root-prepared.
+type greyward_as_auth_t;
+type greyward_as_auth_exec_t;
+init_daemon_domain(greyward_as_auth_t, greyward_as_auth_exec_t)
+init_nnp_daemon_domain(greyward_as_auth_t)
+
+# Self-inspection remains valid; ordinary -> authentication is separately denied
+# by the matched CIL module. No home, secret, raw device or ordinary PTY access.
+allow greyward_as_auth_t self:process { fork getcap getsched sigchld signull signal sigkill };
+allow greyward_as_auth_t self:file { getattr open read };
+allow greyward_as_auth_t self:dir { getattr open read search };
+allow greyward_as_auth_t self:lnk_file { getattr read };
+allow greyward_as_auth_t self:fifo_file rw_fifo_file_perms;
+allow greyward_as_auth_t self:unix_stream_socket { create_stream_socket_perms connectto };
+allow greyward_as_auth_t self:unix_dgram_socket create_socket_perms;
+# Fixed root-prepared helper generations can remain in this subject. This does
+# not authorize ordinary code, a user-owned QML tree or a generic /usr command.
+allow greyward_as_auth_t greyward_as_auth_exec_t:file execute_no_trans;
+libs_use_ld_so(greyward_as_auth_t)
+libs_use_shared_libs(greyward_as_auth_t)
+files_read_usr_files(greyward_as_auth_t)
+files_read_etc_files(greyward_as_auth_t)
+kernel_read_system_state(greyward_as_auth_t)
+dev_rw_null(greyward_as_auth_t)
+dev_read_urand(greyward_as_auth_t)
+init_use_fds(greyward_as_auth_t)
+# libsystemd anchors its own-session cgroup lookup against PID 1's cgroup.
+# This reads PID-1 metadata; it does not grant ordinary process inspection.
+init_read_state(greyward_as_auth_t)
+
+# A matched private root-owned runtime is mandatory. This is neither /run/user
+# nor a user-selected configuration or command directory.
+type greyward_as_auth_runtime_t;
+files_pid_file(greyward_as_auth_runtime_t)
+manage_dirs_pattern(greyward_as_auth_t, greyward_as_auth_runtime_t, greyward_as_auth_runtime_t)
+manage_files_pattern(greyward_as_auth_t, greyward_as_auth_runtime_t, greyward_as_auth_runtime_t)
+manage_lnk_files_pattern(greyward_as_auth_t, greyward_as_auth_runtime_t, greyward_as_auth_runtime_t)
+manage_sock_files_pattern(greyward_as_auth_t, greyward_as_auth_runtime_t, greyward_as_auth_runtime_t)
+allow greyward_as_auth_t greyward_as_auth_runtime_t:file map;
+# Wayland pixel buffers have a dedicated type. Importing pixels never grants
+# the compositor access to authentication configuration, cache or private IPC.
+type greyward_as_auth_shm_t;
+files_type(greyward_as_auth_shm_t)
+allow greyward_as_auth_t greyward_as_auth_shm_t:file { create open read write map getattr setattr unlink };
+fs_tmpfs_filetrans(greyward_as_auth_t, greyward_as_auth_shm_t, file)
+
+# Existing Fedora password checking only; no authselect/PAM rewrite, passwd
+# update helper, shadow read or generic privileged command permission.
+gen_require(`
+    type chkpwd_exec_t;
+')
+corecmd_search_bin(greyward_as_auth_t)
+# Ordinary sessions can invoke Fedora's common helper too. Use a separate
+# fixed helper domain for this authentication flow so ordinary -> auth FD
+# denial never needs an exception for the common helper subject.
+type greyward_as_password_t;
+domain_type(greyward_as_password_t)
+domain_entry_file(greyward_as_password_t, chkpwd_exec_t)
+role system_r types greyward_as_password_t;
+domtrans_pattern(greyward_as_auth_t, chkpwd_exec_t, greyward_as_password_t)
+allow greyward_as_password_t self:process { getcap getsched sigchld };
+allow greyward_as_password_t self:capability { setuid setgid audit_write };
+# Fedora's fixed checker reads root-owned shadow after dropping to its helper
+# identity. DAC bypass is limited to this helper; MAC still limits file access.
+allow greyward_as_password_t self:capability dac_read_search;
+libs_use_ld_so(greyward_as_password_t)
+libs_use_shared_libs(greyward_as_password_t)
+auth_use_nsswitch(greyward_as_password_t)
+auth_read_passwd(greyward_as_password_t)
+auth_read_shadow(greyward_as_password_t)
+logging_send_audit_msgs(greyward_as_password_t)
+logging_send_syslog_msg(greyward_as_password_t)
+dev_rw_null(greyward_as_password_t)
+auth_use_nsswitch(greyward_as_auth_t)
+auth_read_passwd(greyward_as_auth_t)
+logging_send_audit_msgs(greyward_as_auth_t)
+dbus_system_bus_client(greyward_as_auth_t)
+policykit_dbus_chat(greyward_as_auth_t)
+gen_require(` type policykit_auth_exec_t; ')
+type greyward_as_polkit_t;
+domain_type(greyward_as_polkit_t)
+domain_entry_file(greyward_as_polkit_t, policykit_auth_exec_t)
+role system_r types greyward_as_polkit_t;
+domtrans_pattern(greyward_as_auth_t, policykit_auth_exec_t, greyward_as_polkit_t)
+domtrans_pattern(greyward_as_polkit_t, chkpwd_exec_t, greyward_as_password_t)
+allow greyward_as_auth_t greyward_as_polkit_t:process { signal sigkill };
+allow greyward_as_polkit_t greyward_as_password_t:process { signal sigkill };
+allow greyward_as_polkit_t self:process { getcap getsched sigchld };
+allow greyward_as_polkit_t self:capability { setuid setgid audit_write };
+libs_use_ld_so(greyward_as_polkit_t)
+libs_use_shared_libs(greyward_as_polkit_t)
+auth_use_nsswitch(greyward_as_polkit_t)
+auth_read_passwd(greyward_as_polkit_t)
+auth_read_shadow(greyward_as_polkit_t)
+logging_send_audit_msgs(greyward_as_polkit_t)
+logging_send_syslog_msg(greyward_as_polkit_t)
+dbus_system_bus_client(greyward_as_polkit_t)
+policykit_dbus_chat(greyward_as_polkit_t)
+dev_rw_null(greyward_as_polkit_t)
+systemd_dbus_chat_logind(greyward_as_auth_t)
+systemd_read_logind_sessions_files(greyward_as_auth_t)
+systemd_login_read_pid_files(greyward_as_auth_t)
+gen_require(`
+    class dbus { send_msg acquire_svc };
+')
+allow greyward_as_auth_t self:dbus { send_msg acquire_svc };
+# The private fixed D-Bus transport verifies its peers against the enforcing
+# policy. These are read-only decisions, never policy installation/disable.
+selinux_get_enforce_mode(greyward_as_auth_t)
+selinux_compute_access_vector(greyward_as_auth_t)
+allow greyward_as_auth_t self:netlink_selinux_socket { create_socket_perms read };
+fs_getattr_xattr_fs(greyward_as_auth_t)
+miscfiles_read_fonts(greyward_as_auth_t)
+# Labwc checks availability before lazy Xwayland initialization. Permit that
+# X_OK check only; execute_no_trans/transition/entrypoint remain absent here.
+gen_require(`
+    type xserver_exec_t;
+')
+allow greyward_as_auth_t xserver_exec_t:file execute;
+
+# No generic corecmd_exec_bin or automatic userdomain transition is supplied.
+# PAM/Polkit/compositor integration must add only the tested fixed interfaces;
+# presence of this module alone is not authentication or session coverage.
+
+# PID 1's fixed root Python admission worker uses Fedora's service subject.
+# Only that privileged preparation may select the immutable worker entry.
+gen_require(` type unconfined_service_t; ')
+allow unconfined_service_t greyward_as_auth_t:process transition;
+allow greyward_as_auth_t unconfined_service_t:process sigchld;
+allow greyward_as_auth_t unconfined_service_t:fd use;
+
+# Fixed logind sleep inhibitor handoff; no device or ordinary-user FD access.
+gen_require(` type systemd_logind_t; type systemd_logind_inhibit_var_run_t; ')
+allow greyward_as_auth_t systemd_logind_t:fd use;
+allow greyward_as_auth_t systemd_logind_inhibit_var_run_t:fifo_file { write getattr };

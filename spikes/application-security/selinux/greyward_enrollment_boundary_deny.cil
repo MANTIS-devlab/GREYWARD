@@ -1,0 +1,4 @@
+; Temporary fixture denial: deliberately demonstrates incompatible self reads.
+; Never install as production policy or against the active desktop's domain.
+(deny greyward_boundary_probe_t greyward_boundary_probe_t (file (read)))
+(deny greyward_boundary_probe_t greyward_boundary_probe_t (process (ptrace)))

@@ -20,6 +20,14 @@ User Flatpak stays unprivileged. This is deliberately one prompt rather than a
 passwordless rule: passwordless authorization would let any process in the
 user session trigger privileged system changes.
 
+The authenticated helper hands the validated plan to a one-shot root worker
+through a root-owned mode-0600 Unix socket. The worker checks the kernel peer
+UID, bounds the request, and accepts only the existing fixed provider flags.
+Socket activation establishes system-service authority for recovery and native
+providers; UID 0 inside an ordinary application domain alone does not establish
+that authority. Ordinary applications receive no administrative service-control
+or host capability grants. The UI and user-bus service remain unprivileged.
+
 When an upstream-backed operation needs administrative authority, the app
 invokes the stable upstream D-Bus API and the upstream mechanism performs its
 own Polkit check. The Security Center UI never runs as root and never executes
@@ -36,6 +44,48 @@ keeps `ProtectHome=read-only`: quarantine and restore use explicit prepare /
 user-session mutation / commit phases, with ownership and SHA-256 verification
 at both boundaries. The dedicated `/run/greyward-file-security` transfer area
 is the only additional writable runtime path.
+
+## Protected desktop Administration
+
+The [enrollment authority](APPLICATION_SECURITY_ENROLLMENT.md) owns practical
+administration. Center exposes only fixed open/status operations. The non-setuid
+command adapter submits a bounded untrusted argv proposal; it receives handoff
+status, not command output, a password channel or cached privilege. Real sudo
+remains package-owned and ordinary execution stays denied. Only a root-admitted
+private terminal uses the separate administrator identity and Fedora confined
+sysadm transition. Fresh entry PAM authentication and two-minute tty timestamps
+apply; each external request still requires review. Pipes/redirections belong
+inside Administration. Native DMS locking remains the authentication owner.
+
+Authenticated administration can read protected data and modify or disable
+protections. It is an explicit exception, never a persistent application grant.
+Cache expiry does not end a root shell. The ordinary login mapping and protection
+claims remain separately verified. Normal-seat activation, fresh PAM, confined
+root execution, lock handoff and grant/revocation checks now pass on `.149`.
+The [dated compatibility receipt](../history/security-center/2026-10-09-desktop-compatibility.md)
+records the actual scope and remaining recovery/compatibility gates. Installing
+the package or showing an Administration button alone does not prove isolation.
+
+The unchanged Fedora password helper is generation-checked and read-only bound
+only inside Administration's private mount namespace, with a dedicated entry
+label. The shared ordinary password helper does not receive access to
+administrator descriptors or cached authority. Nested sudo remains confined.
+
+The native console presents a bounded command review and an obsidian/silver
+terminal, with fine grain, a red Administration title and the canonical GREYWARD
+SVG embedded in the generation-verified binary. The review explains that using
+sudo opens this protected workflow to separate passwords and elevated access
+from ordinary applications. Its warning covers credential exposure, disabling controls,
+data loss and privileged script execution. Warning acknowledgement revision 2
+shows the expanded explanation once after this material wording change;
+subsequent requests retain a concise risk reminder and always require approval.
+Both versions explain that the two-minute cache does not end existing root work.
+Enter or the approval button begins authentication; Escape or Cancel cancels. Requests
+that have expired or cannot be displayed completely cannot execute. Default
+terminal cells match the canvas; intentional ANSI backgrounds, reverse video
+and true-color output remain supported, with a legible base ANSI palette.
+See the [obsidian follow-up receipt](../history/security-center/2026-10-09-administration-obsidian.md)
+for the development overlay and actual desktop evidence.
 
 ## Operation classes
 
@@ -198,9 +248,19 @@ demonstrates an unavoidable need.
 
 ## Forbidden designs
 
+These prohibitions apply to ordinary-session/UI elevation. The accepted
+[enrollment design](APPLICATION_SECURITY_ENROLLMENT.md) separately preserves
+interactive root administration through explicit offline maintenance boot,
+fresh existing-LUKS authentication and a trusted foreground console, before
+ordinary workloads start. That source is inert and not boot/rollback validated;
+it exposes no desktop/session-bus elevation API or new recovery account.
+Normal privileged operations remain narrow typed Polkit actions.
+
 - Root GTK application or setuid UI.
 - Long-lived all-powerful daemon “for future use.”
-- `sudo`, `pkexec`, terminal invocation, or shell pipelines.
+- Ordinary UI/backend elevation through generic `sudo`, `pkexec`, terminal
+  invocation or shell pipelines. The explicit reviewed Administration boundary
+  above is a separate, authenticated exception.
 - Allowing the UI to submit nftables, firewalld, USBGuard, SELinux, systemd, or
   filesystem policy text.
 - Authorization cached across unrelated actions or sessions.

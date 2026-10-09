@@ -1,6 +1,6 @@
 Name:           greyward-security-center
 Version:        0.1.0
-Release:        59%{?dist}
+Release:        90%{?dist}
 Summary:        GREYWARD local security posture and control application
 License:        GPL-3.0-only AND Apache-2.0 AND OFL-1.1 AND CC0-1.0
 Source0:        %{name}-%{version}.tar.gz
@@ -16,6 +16,7 @@ BuildRequires:  libxdo-devel
 BuildRequires:  desktop-file-utils
 BuildRequires:  gcc
 BuildRequires:  pkgconfig(libnautilus-extension-4)
+BuildRequires:  pkgconfig(sqlite3)
 Requires:       webkit2gtk4.1
 Requires:       libnotify
 Requires:       nautilus
@@ -34,7 +35,7 @@ surfaces are limited to explicit typed Tauri or Security Context commands.
 %build
 build_started=$SECONDS
 export CARGO_TARGET_DIR="%{greyward_cargo_target}"
-cargo build --workspace --release --locked --features greyward-security-center/custom-protocol
+cargo build -p greyward-security-center -p greyward-security-backends --release --locked --features greyward-security-center/custom-protocol
 printf 'GREYWARD_TIMING stage=rust-tauri-build seconds=%s\n' "$((SECONDS - build_started))"
 
 %check
@@ -67,6 +68,8 @@ desktop-file-install \
   data/systems.mantis.greyward.securitycenter.desktop
 install -Dm0644 data/greyward-security-center.png \
   %{buildroot}%{_datadir}/icons/hicolor/64x64/apps/greyward-security-center.png
+install -Dm0644 data/greyward-security-center.svg \
+  %{buildroot}%{_datadir}/icons/hicolor/scalable/apps/greyward-security-center.svg
 install -Dm0644 data/greyward-symbol.svg \
   %{buildroot}%{_datadir}/greyward-security-center/greyward-symbol.svg
 install -Dm0644 data/fonts/InterVariable.ttf \
@@ -93,6 +96,7 @@ install -Dm0755 greyward-safe-open.so \
 %{_libexecdir}/greyward-file-context
 %{_datadir}/applications/systems.mantis.greyward.securitycenter.desktop
 %{_datadir}/icons/hicolor/64x64/apps/greyward-security-center.png
+%{_datadir}/icons/hicolor/scalable/apps/greyward-security-center.svg
 %{_datadir}/greyward-security-center/greyward-symbol.svg
 %{_datadir}/fonts/greyward-security-center/InterVariable.ttf
 %{_datadir}/fonts/greyward-security-center/MaterialSymbolsRounded.ttf
@@ -102,6 +106,105 @@ install -Dm0755 greyward-safe-open.so \
 %postun
 /usr/bin/fc-cache -f >/dev/null 2>&1 || :
 %changelog
+* Sat Oct 10 2026 MANTIS SYSTEMS - 0.1.0-90
+- Decode matched ClamAV metadata and retain measured accepted limitations.
+- Disclose unverified VPN and portal coverage and narrow supported-grant copy.
+
+* Fri Oct 09 2026 GREYWARD <greyward@mantis.systems> - 0.1.0-89
+- Enforce application-owned main-window chrome after GTK window creation.
+- Wake the same covered or minimized window for explicit shell navigation.
+
+* Fri Oct 09 2026 MANTIS SYSTEMS - 0.1.0-88
+- Add typed protected Administration open/status presentation without privileged webview execution.
+
+* Fri Oct 09 2026 MANTIS SYSTEMS - 0.1.0-87
+- Open blocked-resource reviews in Protected Data and disclose supported access profiles.
+
+* Thu Oct 08 2026 GREYWARD <development@mantis.systems> - 0.1.0-86
+- Center the shared Security Center emblem above sidebar branding, enlarge navigation text, and remove the local-security footer.
+
+* Thu Oct 08 2026 GREYWARD <development@mantis.systems> - 0.1.0-85
+- Expose evaluated check state and accepted deviations to the shared shell projection.
+
+* Thu Oct 08 2026 GREYWARD <build@greyward.local> - 0.1.0-84
+- Keep Backup/recovery independent of unneeded device-history reads.
+
+* Thu Oct 08 2026 GREYWARD <build@greyward.local> - 0.1.0-83
+- Load optional Overview activity independently and preserve unavailable evidence.
+
+* Thu Oct 08 2026 GREYWARD <build@greyward.local> - 0.1.0-82
+- Retain full native activity-row layout after measured off-screen containment regression.
+
+* Thu Oct 08 2026 GREYWARD <build@greyward.local> - 0.1.0-81
+- Retain navigation surfaces, reduce redundant lease rendering and reject stale activity/scan responses.
+
+* Thu Oct 08 2026 GREYWARD <build@greyward.local> - 0.1.0-80
+- Extend the continuous sidebar material beneath application-owned window chrome.
+
+* Thu Oct 08 2026 GREYWARD maintainers <maintainers@mantis.systems> - 0.1.0-79
+- Keep the fixed chrome canvas at the actual viewport height for native WebKit capture.
+
+* Thu Oct 08 2026 GREYWARD maintainers <maintainers@mantis.systems> - 0.1.0-78
+- Integrate native window actions and canonical GREYWARD controls into the application canvas.
+
+* Thu Oct 08 2026 GREYWARD maintainers <maintainers@mantis.systems> - 0.1.0-77
+- Unify launcher, taskbar plugin and notification shield-G artwork.
+
+* Thu Oct 08 2026 GREYWARD maintainers <maintainers@mantis.systems> - 0.1.0-76
+- Separate active detections from contained and missing-source history.
+
+* Thu Oct 08 2026 GREYWARD maintainers <maintainers@mantis.systems> - 0.1.0-75
+- Refine contextual activity disclosures and label collection-time evidence precisely.
+
+* Thu Oct 08 2026 GREYWARD maintainers <maintainers@mantis.systems> - 0.1.0-74
+- Present contextual security activity with shared actor, resource and decision disclosures.
+
+* Thu Oct 08 2026 MANTIS SYSTEMS <systems@mantis.local> - 0.1.0-73
+- Restore graphite grain, silver surface depth and compact activity density
+- Give navigation, resource categories and operations intentional distinct glyphs
+
+* Thu Oct 08 2026 MANTIS SYSTEMS <systems@mantis.local> - 0.1.0-72
+- Restore cohesive materials, semantic colors and responsive Network Activity.
+- Keep initial and cached protection displays bound to fresh backend coverage.
+- Honor the desktop locale in the native WebKit language preferences.
+
+* Thu Oct 08 2026 GREYWARD maintainers <maintainers@mantis.systems> - 0.1.0-70
+- Compare parsed Overview markup to avoid replacing unchanged SVG content.
+
+* Thu Oct 08 2026 GREYWARD maintainers <maintainers@mantis.systems> - 0.1.0-69
+- Renew visible protection evidence before expiry and preserve unchanged view state.
+
+* Thu Oct 08 2026 MANTIS SYSTEMS - 0.1.0-68
+- Keep identity references in technical history disclosure and name Devices accurately.
+
+* Thu Oct 08 2026 MANTIS SYSTEMS - 0.1.0-67
+- Organize Security Center navigation by protection, monitoring and maintenance.
+- Restore dedicated Network Activity and add separate local Security History.
+- Separate Backup and recovery from device controls; retain live Guard coverage.
+
+* Thu Oct 08 2026 MANTIS SYSTEMS - 0.1.0-66
+- Keep background inventory reads off the policy queue during owner review.
+- Preserve operation polling and original evidence expiry.
+
+* Thu Oct 08 2026 MANTIS SYSTEMS - 0.1.0-65
+- Accept fresh authoritative resource coverage in the live Center read adapter.
+- Continue rejecting foreign owners, invalid revisions and expired evidence.
+* Wed Oct 07 2026 MANTIS SYSTEMS - 0.1.0-64
+- Apply the mandatory coverage constraint to the Applications posture row.
+* Wed Oct 07 2026 MANTIS SYSTEMS - 0.1.0-63
+- Require fresh Application Guard coverage before Overview claims full protection.
+* Wed Oct 07 2026 MANTIS SYSTEMS - 0.1.0-62
+- Renew visible Application Security reads without extending cached evidence.
+- Show actual service connectivity and explain unavailable Protected Data changes.
+- Render Guard independently of slower Flatpak permission collection.
+- Build only the Center and its packaged backend companions.
+* Wed Oct 07 2026 MANTIS SYSTEMS - 0.1.0-61
+- Offer installed managed isolation separately from confined-owner policy changes.
+- Read explicit backend capabilities; preserve unavailable grant/enrollment states.
+* Wed Oct 07 2026 MANTIS SYSTEMS - 0.1.0-60
+- Deploy the unified Application Guard, Protected Data and Activity experience.
+- Use typed Context workflows and verified states; production enrollment stays disabled.
+
 * Mon Oct 05 2026 MANTIS SYSTEMS - 0.1.0-59
 - Pair the desktop with the tested repeatable Secure DNS scope restoration.
 

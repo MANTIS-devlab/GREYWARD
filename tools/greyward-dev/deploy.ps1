@@ -8,7 +8,9 @@ if (-not $SkipBrandingValidation) {
     if ($LASTEXITCODE -ne 0) { throw 'Branding validation failed; deployment was not started.' }
 }
 $release = (Get-Date).ToUniversalTime().ToString('yyyyMMddTHHmmssZ')
-$remoteRoot = "/home/stendev/.local/share/greyward/releases/$release"
+$remoteHome = (Invoke-GreywardSessionSsh 'getent passwd "$(id -u)" | cut -d: -f6').Trim()
+if ($remoteHome -notmatch '^/home/[a-zA-Z0-9_.-]+$') { throw 'Unexpected development home; deployment refused.' }
+$remoteRoot = "$remoteHome/.local/share/greyward/releases/$release"
 Invoke-GreywardSessionSsh "mkdir -p '$remoteRoot'"
 Invoke-GreywardScp -Recursive -Source (Join-Path $script:RepoRoot 'branding') -Destination "$($script:SshAlias):$remoteRoot/"
 Invoke-GreywardScp -Recursive -Source (Join-Path $script:RepoRoot 'environment\production') -Destination "$($script:SshAlias):$remoteRoot/"
@@ -174,15 +176,12 @@ if ! command -v flatpak >/dev/null 2>&1 && command -v dnf >/dev/null 2>&1; then 
 command -v flatpak >/dev/null 2>&1
 sudo flatpak remote-add --if-not-exists --system flathub https://dl.flathub.org/repo/flathub.flatpakrepo
 sudo flatpak install --system --noninteractive flathub io.github.kolunmi.Bazaar
-sudo flatpak override --system --reset io.github.kolunmi.Bazaar
-sudo flatpak override --system --filesystem=xdg-config/bazaar:ro io.github.kolunmi.Bazaar
 mapfile -t default_flatpaks < <(awk -F'|' '!/^[[:space:]]*(#|$)/ {gsub(/[[:space:]]/, "", `$1); print `$1}' "`$release/flatpak/default-applications.list")
-test "`${#default_flatpaks[@]}" -eq 4
+test "`${#default_flatpaks[@]}" -eq 5
 sudo flatpak install --system --noninteractive flathub "`${default_flatpaks[@]}"
 mkdir -p ~/.var/app/com.brave.Browser/config
 install -D -m 0644 "`$release/flatpak/brave-flags.conf" ~/.var/app/com.brave.Browser/config/brave-flags.conf
-sudo flatpak override --system --reset org.kde.haruna
-sudo flatpak override --system --unshare=network org.kde.haruna
+sudo python3 "`$release/flatpak/seed-system-permissions.py"
 test -x /usr/local/bin/greyward-dms
 cp "`$release/hyprland.conf" ~/.config/hypr/hyprland.conf
 cp "`$release/greyward-decoration.tokens.conf" ~/.config/hypr/greyward-decoration.tokens.conf

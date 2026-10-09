@@ -358,7 +358,7 @@ fn evidence_field<'a>(evidence: &'a str, key: &str) -> Option<&'a str> {
     })
 }
 
-fn recovery_missing(evidence: &str, accepted_deviations: &[String]) -> Vec<&'static str> {
+fn recovery_missing(evidence: &str, _accepted_deviations: &[String]) -> Vec<&'static str> {
     let mut missing = Vec::new();
     if evidence.contains("rescue-kernel=false") {
         missing.push("evidence.recovery.missing.rescueKernel");
@@ -366,21 +366,13 @@ fn recovery_missing(evidence: &str, accepted_deviations: &[String]) -> Vec<&'sta
     if evidence.contains("uefi=false") {
         missing.push("evidence.recovery.missing.uefi");
     }
-    if evidence.contains("secure-boot=disabled")
-        && !accepted_deviations
-            .iter()
-            .any(|id| id == "system.boot.secure-boot")
-    {
+    if evidence.contains("secure-boot=disabled") {
         missing.push("evidence.recovery.missing.secureBoot");
     }
     if evidence.contains("encryption=plain") {
         missing.push("evidence.recovery.missing.encryption");
     }
-    if (evidence.contains("tpm=missing") || evidence.contains("tpm=unusable"))
-        && !accepted_deviations
-            .iter()
-            .any(|id| id == "devices.tpm.presence" || id == "recovery.readiness")
-    {
+    if evidence.contains("tpm=missing") || evidence.contains("tpm=unusable") {
         missing.push("evidence.recovery.missing.tpm");
     }
     missing
@@ -455,7 +447,7 @@ mod tests {
     }
 
     #[test]
-    fn recovery_presentation_omits_an_accepted_secure_boot_deviation() {
+    fn recovery_presentation_retains_accepted_missing_secure_boot() {
         let value = evidence_presentation(
             &check(
                 "recovery.readiness",
@@ -466,12 +458,15 @@ mod tests {
         );
         assert_eq!(
             value.values.get("missing"),
-            Some(&"evidence.recovery.missing.encryption".to_string())
+            Some(
+                &"evidence.recovery.missing.secureBoot|evidence.recovery.missing.encryption"
+                    .to_string()
+            )
         );
     }
 
     #[test]
-    fn recovery_presentation_omits_an_ignored_tpm_recommendation() {
+    fn recovery_presentation_retains_accepted_missing_tpm() {
         let value = evidence_presentation(
             &check(
                 "recovery.readiness",
@@ -480,6 +475,9 @@ mod tests {
             ),
             &["devices.tpm.presence".into()],
         );
-        assert!(!value.values.contains_key("missing"));
+        assert_eq!(
+            value.values.get("missing").unwrap(),
+            "evidence.recovery.missing.tpm"
+        );
     }
 }

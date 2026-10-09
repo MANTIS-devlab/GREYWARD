@@ -1,5 +1,5 @@
 import unittest
-from unittest.mock import Mock
+from unittest.mock import Mock, patch, mock_open
 try:
     from greyward_security_context.usbguard import parse_rule, UsbGuardAdapter
 except ModuleNotFoundError:
@@ -8,6 +8,19 @@ except ModuleNotFoundError:
 
 @unittest.skipIf(parse_rule is None, 'USBGuard D-Bus adapter requires Fedora dependencies')
 class UsbGuardTests(unittest.TestCase):
+    def test_enrolled_projection_has_no_direct_fallback(self):
+        import json
+        from greyward_security_context.usbguard import UsbGuardError
+        bus=Mock()
+        method=bus.get_object.return_value.get_dbus_method.return_value
+        method.return_value=json.dumps({'schema':'greyward.device-projection/v1','devices':[]})
+        adapter=UsbGuardAdapter(bus)
+        adapter.method=Mock(side_effect=AssertionError('Ordinary USBGuard access is forbidden'))
+        with patch('os.getuid',return_value=1001), patch('builtins.open',mock_open(read_data='greyward_guard_u:greyward_guard_r:greyward_guard_t:s0')):
+            self.assertEqual(adapter.list_devices(),[])
+            method.return_value='{}'
+            with self.assertRaises(UsbGuardError): adapter.list_devices()
+        adapter.method.assert_not_called()
     def test_mutation_requests_upstream_interactive_authorization(self):
         try:
             import dbus.lowlevel

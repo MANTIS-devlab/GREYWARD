@@ -1,0 +1,6 @@
+policy_module(greyward_enrollment_boundary_probe, 0.1.0)
+
+# Synthetic process-isolation fixture only. No login mapping or production use.
+role greyward_boundary_probe_r;
+userdom_unpriv_user_template(greyward_boundary_probe)
+role system_r types greyward_boundary_probe_t;

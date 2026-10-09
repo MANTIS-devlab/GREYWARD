@@ -39,6 +39,14 @@ class NotificationTests(unittest.TestCase):
         self.router = NotificationRouter(self.bus, self.dispatch, self.path)
         self.item = {'id': 'usb:one', 'kind': 'usb', 'severity': 'ACTION', 'title': 'Device', 'detail': 'Blocked', 'actions': [{'id': 'trust_once', 'label': 'Trust once'}]}
 
+    def test_review_uses_existing_typed_check_route_and_rejects_unknown_routes(self):
+        from greyward_security_context.notification_router import open_route
+        with patch('greyward_security_context.notification_router.subprocess.Popen') as launch:
+            open_route('evidence')
+            self.assertEqual(launch.call_args.args[0], ['/usr/bin/greyward-security-center-route', 'evidence'])
+            open_route('arbitrary-command')
+            launch.assert_called_once()
+
     def test_duplicate_replace_resolve_and_stale_action(self):
         self.router.reconcile([self.item])
         self.router.reconcile([self.item])
@@ -49,6 +57,28 @@ class NotificationTests(unittest.TestCase):
         self.assertTrue(self.bus.sent[-1][6]['x-greyward-quiet'])
         self.router._action(1, 'trust_once')
         self.dispatch.assert_not_called()
+        self.router.reconcile([])
+        self.assertEqual(self.bus.closed, [1])
+        self.router._action(1, 'open')
+        self.dispatch.assert_not_called()
+
+    def test_protected_review_handoff_is_scoped_and_never_authorizes(self):
+        from greyward_security_context.notification_router import open_route
+        reference = 'resource_' + 'a' * 64
+        with patch('greyward_security_context.notification_router.subprocess.Popen') as launch:
+            open_route('protected-data', reference)
+            self.assertEqual(launch.call_args.args[0], ['/usr/bin/greyward-security-center-route', 'protected-data', reference])
+            open_route('protected-data', 'resource_../../file')
+            open_route('activity', reference)
+            launch.assert_called_once()
+    def test_application_block_dismiss_is_local_and_never_authorizes(self):
+        item = {**self.item, 'kind': 'application-security', 'actions': [{'id': 'open', 'label': 'Review'}, {'id': 'dismiss', 'label': 'Dismiss'}]}
+        self.router.reconcile([item])
+        self.router._action(1, 'dismiss')
+        self.dispatch.assert_not_called()
+        self.router.reconcile([{**item, 'detail': 'More recorded attempts'}])
+        self.assertEqual(len(self.bus.sent), 1)
+        self.assertEqual(self.bus.closed, [1])
         self.router.reconcile([])
         self.assertEqual(self.bus.closed, [1])
         self.router._action(1, 'open')

@@ -1,5 +1,15 @@
 # GREYWARD production system definition
 
+Application Security enrollment is **PLANNED, not installed behavior**.
+The [source audit](../../docs/security-center/APPLICATION_SECURITY_PLAN.md)
+distinguishes the isolated development provider from the public read-only
+broker. The [enrollment design](../../docs/security-center/APPLICATION_SECURITY_ENROLLMENT.md)
+reuses this installed-system/first-boot boundary, Fedora PAM and the existing
+UWSM/DMS session. It requires proven recovery and explicit account mappings;
+no PAM/login, package/service, installer or enrollment change is part of the
+documentation audit. Preserve interactive account/LUKS/branding and native DMS
+lock behavior when implementing the later design.
+
 This directory is the production-side definition of the future installed
 GREYWARD system. It is intentionally not an ISO builder or a release pipeline.
 
@@ -253,7 +263,10 @@ installed with network access disabled by default for local playback; a user
 can explicitly enable its network permission later if online media features
 are wanted. Brave receives no GREYWARD-specific permission broadening, and
 the other applications use their standard Flatpak sandbox and desktop
-portals.
+portals. Default permission seeding uses
+`environment/flatpak/seed-system-permissions.py`: existing global or application
+overrides are preserved, and the two distributor defaults are seeded only
+when no record exists. Reprovisioning does not reset reviewed user policy.
 
 The Fedora Anaconda installer is co-branded by the GREYWARD branding RPM using
 an automatically detected `/etc/anaconda/profile.d/greyward.conf` profile
@@ -269,7 +282,7 @@ fingerprint; the production contract also verifies the package-owned provider,
 D-Bus, Polkit, helper, and UI paths. This prevents a stable RPM release number
 from allowing an older package payload to enter a new ISO unnoticed.
 
-The production definition must not require the `stendev` account, a developer
+The production definition must not require the `development-user` account, a developer
 password, passwordless sudo, SSH access, Hyper-V services, or developer tools.
 
 The normal installed path uses encrypted Btrfs root. Boot rollback remains a

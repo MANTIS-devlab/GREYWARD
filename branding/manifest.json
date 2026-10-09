@@ -3,10 +3,13 @@
   "canonical": {
     "symbol": "branding/source/greyward-symbol.svg",
     "wordmark": "branding/source/greyward-wordmark.svg",
-    "lockup": "branding/source/greyward-lockup.svg"
+    "lockup": "branding/source/greyward-lockup.svg",
+    "securityCenter": "branding/source/greyward-security-status.svg"
   },
   "consumers": [
+    {"surface":"protected-administration","consumer":"security-center/packaging/application-security/administration/embed-logo.py","source":"branding/source/greyward-symbol.svg","outputs":[],"validation":"canonical symbol embedded in the generation-verified native binary; no runtime asset loading"},
     {"surface":"security-shell","consumer":"security-center/packaging/greyward-security-context.spec","source":"branding/source/greyward-security-status.svg","outputs":["security-center/data/greyward-security-status.svg"],"validation":"canonical SVG equality; widget and notification runtime"},
+    {"surface":"security-launcher-taskbar","consumer":"security-center/packaging/greyward-security-center.spec","source":"branding/source/greyward-security-status.svg","outputs":["security-center/data/greyward-security-center.svg","security-center/data/greyward-security-center.png","security-center/tauri/frontend/greyward-security-center.svg"],"validation":"canonical SVG equality; 64-pixel raster fallback; launcher and running-app taskbar runtime"},
     {"surface":"wallpaper","consumer":"hyprpaper","source":"branding/wallpaper/greyward-wallpaper.svg","outputs":["branding/generated/raster/greyward-wallpaper-3840x2160.png"],"validation":"3840x2160 PNG"},
     {"surface":"wallpaper-variant","consumer":"DMS wallpaper picker","source":"branding/wallpaper/greyward-wallpaper-black-art-4k.jpg","outputs":["/var/cache/dms-greeter/greeter_wallpaper_override.jpg"],"validation":"3840x2160 JPG; canonical logo applied; synchronized to DMS Greeter"},
     {"surface":"wallpaper-variant","consumer":"DMS wallpaper picker","source":"branding/wallpaper/greyward-wallpaper-2109-4k.jpg","outputs":[],"validation":"3840x2160 JPG; canonical logo applied"},

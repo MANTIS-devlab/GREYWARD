@@ -12,6 +12,20 @@ The current target is reducing common desktop risk while making failures and
 unknown state visible. The implementation has not received independent security
 review and lacks broad bare-metal and adversarial validation.
 
+## Application Security development scope
+
+The [current implementation audit](docs/security-center/APPLICATION_SECURITY_PLAN.md)
+records descriptor-held resources, reviewed kernel READ grants/revocation and
+managed native/script/AppImage/private graphical isolation. These use a fixed
+separate-account provider; they are not installed whole-session guarantees.
+Ordinary bypass, multi-user production subjects, enabled deputies/portals and
+live evidence remain governed by mandatory acceptance. Raw grants expose data
+to in-process tool extensions and cannot recall copies already made.
+[Enrollment/recovery](docs/security-center/APPLICATION_SECURITY_ENROLLMENT.md)
+is PLANNED and must not weaken Fedora authentication or native DMS locking.
+Extended optional compatibility/performance/hardware matrices are DEFERRED
+HARDENING, not evidence of protection.
+
 ## Assets
 
 - user documents, application data, browser data, and credentials;
