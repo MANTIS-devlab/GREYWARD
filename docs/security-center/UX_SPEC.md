@@ -1,5 +1,24 @@
 # Security Center UX specification
 
+## Targeted truthfulness correction — source only, 9 October
+
+The verified session baseline covers enrolled execution routes and registered
+resource labels. `deputies_and_portals=false` means **not independently verified**;
+it is no longer derived from seat/labels or required to display that narrower
+baseline. It does not authorize generic portal/Flatpak grants. Portal attribution
+and complete deputy isolation remain UNKNOWN and are explicitly disclosed.
+Accepted deviations retain their measured check state and visible limitation;
+only recommendation aggregation suppresses repeated attention. Acceptance never
+activates Secure Boot, a TPM, recovery or another missing safeguard. Overview's
+PROTECTED label refers to verified protections with accepted limitations, not
+“All required protections are active.” Reviewed access is labelled SSH key
+inspection; generic native/Flatpak/script/IDE access remains unavailable.
+
+These are source changes with local regression evidence, not a new `.149`
+installed tuple. See the [scoped receipt](../history/security-center/2026-10-09-security-truthfulness.md)
+for validation limits and matched deployment/rollback requirements.
+
+
 Status: canonical UX and content authority. Historical UX and visual plans
 provide supporting rationale; this document resolves presentation rules for
 current product work.
@@ -8,8 +27,15 @@ current product work.
 
 Security Center answers, in this order: **Is the device OK? What needs my
 attention? What can I do? What happened?** It presents measured local state,
-not requested configuration or backend implementation detail. General desktop
+not requested configuration or backend implementation detail. The quiet graphite navigation rail groups labelled tasks and scrolls at small window heights. General desktop
 settings remain in DMS Settings.
+
+The focused quality pass preserves this navigation and its typed workflows.
+Structural planes use neutral graphite with local grain and restrained silver
+edges; the activity ledger is compact without shrinking essential text.
+Distinct navigation, resource/provider and operation symbols follow the shared
+registry in `app.js`. Marks explain function, never security trust. See
+[DESIGN.md](DESIGN.md) for the durable material and icon rules.
 
 ### Information hierarchy
 
@@ -48,19 +74,52 @@ pill alone is never sufficient. Do not call a configured Secure DNS policy
 
 ## Navigation and ownership
 
-Primary navigation is exactly: Overview, System security, Network security,
-Privacy, and Updates. File security, Application access, Devices & recovery,
-System checks, and Network activity are contextual destinations reached
-from their named hub, a finding, or a related action. The primary menu has no
-ordinal numbering. The frontend accepts `system` and the historical
-`protection` route and normalizes both to `evidence` (System checks).
+Current navigation is grouped by the task, with one owning destination for each
+workflow. `workspace.css` owns the shell/navigation; `styles.css` owns feature
+composition. `materials.css` centralizes tokens and material/interaction rules;
+its installed Center 72 package passes actual EN/FR desktop visual review.
+Product copy is
+catalogued in EN/FR.
 
-System security opens System checks directly; its contextual navigation keeps
-File security, Application access, and Devices & recovery one click away.
-The selected primary destination remains visible while using contextual tools.
-The assessment's internal policy identifier belongs inside All checks, not in
-the primary summary. Overview presents a two-column domain register with
-name, state, and explanation; repeated check counts are not primary content.
+| Group | Destination | Responsibility |
+|---|---|---|
+| Home | Overview | Measured posture, prioritized actions, domain links and concise session protection. |
+| Protection | Applications | Registered native tools, real protection/grants, isolation launch and visible Flatpak permissions. |
+| Protection | Protected Data | Registered resource categories, actual coverage, descriptor registration, reviewed grants/revocation. |
+| Protection | Files & scans | Scanning, detections, quarantine and shared Safe Open. |
+| Protection | Network security | OpenSnitch, firewall, Secure DNS and contextual threat blocking. |
+| Protection | System & devices | System checks and a contextual Devices view for USB/camera/microphone evidence. |
+| Monitor | Network Activity | Dedicated connection monitoring with existing live/history, pause, filters, details and pagination. |
+| Monitor | Security History | Local non-network policy, file, device, update and recovery events. |
+| Maintain | Updates | Existing reviewed transaction, progress, restart and update history. |
+| Maintain | Backup & recovery | Recovery points, personal backup, verification/restore and real queued operations. |
+| Preferences | Privacy & data | Network privacy choices, retained local data, export and clearing. |
+
+Network Activity retains canonical route `activity`, its own narrow network
+query and live subscription. It never embeds Application Guard or other security
+history. `history` uses the existing telemetry database, with `scope=SECURITY`
+excluding NETWORK before the limit/cursor. It does not certify live protection;
+only the existing kernel-evidence contract can render a sensitive denial as
+confirmed. Unknown outcomes remain unknown. Provider unavailability is distinct
+from a valid empty history. Categories and older/latest navigation use bounded
+queries, with independent query identities so old filter responses cannot replace
+the current view. Application/resource details keep relevant contextual events.
+
+Recovery has canonical route `recovery`, reusing the existing device/recovery
+read projection and typed actions; it is absent from Devices. Network policy has
+one edit workflow. Applications exposes provider permissions in a visible section
+without inventing native identities or equating Flatpak permissions to Guard
+coverage. `system`/`protection` remain aliases for `evidence`; existing routes and
+contextual links are preserved. Selected parents remain visible for devices and
+threat-blocking views. No presentation change broadens authority.
+
+The assessment's internal policy identifier belongs inside All checks. Overview
+presents current posture first, a compact authoritative session summary and domain
+register. Background renewal preserves the current focus/disclosures and withdraws
+positive session state when its lease expires. The sidebar uses the shared Security
+Center shield, centered above its branding, with larger navigation labels. The
+former local-security footer is removed; navigation uses the remaining height and
+scrolls when necessary. Protection status remains in authoritative page summaries.
 
 Recent security activity uses the supplied digest even when it is empty. Only
 an absent digest activity array falls back to local posture history; the heading
@@ -72,14 +131,12 @@ identity or success from a version string.
 
 ## Materials and task composition
 
-Preserve GREYWARD's silver frosted-glass identity. Navigation and primary
-working panels use translucent silver gradients, restrained grain, light edges,
+Preserve GREYWARD's silver frosted-glass identity. Primary working panels use translucent silver gradients, restrained grain, light edges,
 and depth against the dark workspace. Supporting rows remain quieter; text
 contrast and selected controls must stay distinct on both materials.
 
 Privacy profiles explain their firewall and network-identity effects before
-selection, with pending/result feedback beside the choices. Recovery controls
-precede device inventory; a queue appears only for actual pending or running
+selection, with pending/result feedback beside the choices. Recovery has its own maintenance destination; a queue appears only for actual pending or running
 operations. File security prioritizes unresolved detections, keeps an active scan
 visible first, and collapses deleted detections and historical activity. Application
 access leads with applications needing review and discloses runtime diagnostics.
@@ -87,6 +144,12 @@ access leads with applications needing review and discloses runtime diagnostics.
 ## Responsiveness and freshness
 
 Refresh and update polling preserve the current disclosure and keyboard context.
+Application Guard renewal uses the earliest actual provider lease and the
+measured complete-read cost, with a transport margin. Unchanged fresh state
+renews expiry without replacing the page; changing evidence age alone is not
+a product state change. A real failed read or expired lease still withdraws
+positive protection. Background inventory reads pause during reviewed
+authentication/operations and never extend cached authority.
 Repeated requests cannot overwrite a busy button's original label or enable an
 unavailable control. Cached mutable views show refresh activity until readback.
 Local action feedback appears once beside its control; messages without a local
@@ -128,22 +191,24 @@ uses a provider detail as action feedback.
 | Surface | Primary user task | Canonical content | Contextual detail |
 |---|---|---|---|
 | Overview | Understand posture and choose the next decision | posture, freshness, priority findings, direct domain access | full domain register, activity |
-| System security | Review and resolve system findings | System checks with typed actions; contextual file, application, and recovery tools | complete evidence behind All checks |
-| Network security | Choose a network-protection task | firewall, application connection control, Secure DNS, direct activity access | Network activity and connection evidence |
+| System & devices | Review and resolve system/device findings | System checks with typed actions and contextual Devices | complete evidence behind All checks |
+| Network security | Choose a network-protection task | firewall, application connection control, Secure DNS and threat blocking | linked dedicated Network Activity |
 | Updates | Complete one update transaction | availability, command, real progress, restart | provider records and history |
 | Privacy | Choose network privacy and control local data | explained profiles, measured network facts, local export/clear | retention and disclosure details |
 | Network activity | Understand observed application connections | bounded live security activity | connection evidence and typed policy action |
 | Technical details | Inspect evidence | source, timestamp, reason, identifiers | never the default posture view |
 
-## Inventory and current cleanup targets
+## Historical audit inventory and retained treatment rules
 
-| Route or state | Source | Current issue to remove | Required treatment |
+The issues below are the earlier audit rationale, not a list of current regressions. The navigation and ownership table above is current.
+
+| Route or state | Source | Historical issue | Retained treatment |
 |---|---|---|---|
 | Overview | `get_overview` | posture, review count, domain state, and explanatory copy repeat | one posture statement; one priority ledger; domain links only |
 | System checks | evaluator snapshot | repeated posture and generic tutorial compete with findings | lead with actionable findings; retain complete evidence in All checks |
 | Network | `get_network_protection`, Secure DNS, firewalld | product, provider, policy, and control language compete | one Network Protection surface with Firewall, Application Control, and Secure DNS |
 | Applications | Flatpak and portal collectors | implementation terms and inventory density dominate | show user-relevant access first; retain raw grants as detail |
-| Devices & recovery | USB and recovery evidence | read-only facts lack a clear next step | state availability and a handoff only when one exists |
+| Backup & recovery | USB and recovery evidence | read-only facts lack a clear next step | state availability and a handoff only when one exists |
 | File Security | ClamAV and Security Context | prototype exposed Safe Open without a complete scan/remediation workflow | make scan scope, measured result, detection state, and recovery path explicit |
 | Updates | Update Center transaction | provider telemetry competes with transaction outcome | one transaction state and one valid command |
 | Privacy | local state and disclosure manifest | profile names alone do not explain consequences | show incoming-connection and network-identity effects beside each profile; keep local controls visible below |
@@ -152,15 +217,15 @@ uses a provider detail as action feedback.
 | Loading/error/empty/degraded | per-route IPC failures | raw or generic failure copy and inconsistent retry | state what failed, what still works, and the recovery action |
 
 Every visible heading, paragraph, label, tooltip, dialog, success, empty,
-loading, error, and degraded message is owned by its route renderer in
-`tauri/frontend/app.js`; backend strings may supply measured facts, never
+loading, error, and degraded message is owned by its route renderer or shared
+presentational module; backend strings may supply measured facts, never
 unreviewed primary UX copy.
 
 Application Access is an effective-access inventory, not a Flatpak manifest
-viewer. The backend resolves the manifest context first and then applies local
-override additions and removals before deriving the normalized categories and
-review reasons shown in the primary row. Manifest permissions and local
-overrides remain separate technical detail. A complete inventory reports total,
+viewer. Flatpak supplies the effective context with system/user global/app
+override precedence already applied. The backend summarizes that context into categories and
+review reasons shown in the primary row. Effective context and local
+overrides remain separate technical records; a lower-priority override is never reapplied. Permission-read failure is unavailable, not a scoped sandbox. Explicit absolute filesystem grants are disclosed as additional file access. Environment values are excluded from the access projection. A complete inventory reports total,
 shown, and review-needed counts; a partial inventory labels those counts as
 discovered-only, and an unavailable collector is never presented as an empty
 installed-app list.
@@ -169,6 +234,30 @@ Technical Details is product-first even when it exposes technical evidence:
 the primary row contains a title, measured result, recorded outcome, and
 recommendation. Check references, reason codes, and timestamps are in a
 per-row technical record, never the identifying label of the row.
+
+### Application Security workflow scope
+
+Current source provides descriptor/category registration, native persistent
+READ grant review/apply/cancel/revoke, isolated ELF/script/AppImage launch and
+private graphical ISOLATED. Show exact resources, generation, scope and risk;
+in-process extensions share raw grants. Revocation readback cannot recall
+already-read contents. WRITE/timed access and unsupported handlers are
+unavailable, not disabled buttons implying an installed working provider.
+
+Overview protection remains independent of operation success: UNKNOWN when
+whole-session evidence is missing, UNAVAILABLE for missing providers, DEGRADED
+for incomplete coverage. Ordinary denied accesses use existing Security History and
+aggregated Review/Dismiss presentation, no instant Allow or malware inference.
+Safe Open uses the shared runner and refuses protected-label copying; configured
+Flatpak handlers are unavailable pending a native provider, without substitution.
+
+EN/FR source contracts and actual normal-session registration, reviewed
+key-inspection grants, repeated launch and GUI revocation pass. Unsupported tool
+profiles remain unavailable. See [current evidence](APPLICATION_SECURITY_PLAN.md).
+The current shell/navigation CSS is consolidated. Further feature-component
+extraction, exhaustive CSS cleanup and broader accessibility/release matrices
+are DEFERRED HARDENING. [Production enrollment](APPLICATION_SECURITY_ENROLLMENT.md)
+is a proposed administrative lifecycle, not a current onboarding flow.
 
 ### Action inventory
 
@@ -220,7 +309,7 @@ application, destination, decision, protocol, port, and time-range filters.
 protocol. The default row omits redundant type/protocol fields.
 
 Overview shows unresolved findings separately from important activity in the
-last 24 hours. Devices & recovery owns current external devices and seven-day
+last 24 hours. Devices owns current external devices and seven-day
 unknown-device history. The DMS plugin keeps its Security Center emblem, independent live activity
 icons and unresolved-state badge; it does not load raw telemetry. Its current
 visual and notification contract is in
@@ -261,6 +350,24 @@ create traffic toward an observed destination.
   one focal plane.
 - Respect reduced motion. Announce action completion once, not every progress
   update. Technical values remain selectable and copyable after redaction.
+
+## Contextual Security History
+
+`security-history.js` owns the shared event row used by Security History and
+application/resource activity. The collapsed row shows the recorded actor or
+an explicit unknown process, a relevant application/functional glyph, action,
+registered-resource label, outcome and evidence-supported explanation. The
+compact disclosure reveals historical process metadata, attribution limits,
+source, references, policy revision at collection and occurrence time.
+
+Kernel executable basenames are observed processes, not verified applications;
+no brand is guessed for them. Registry names are resolved through bounded typed
+reads and described as labels at refresh. Missing/deleted/unreadable labels do
+not hide events. Older unattributed records remain unknown. Successful policy
+operations say completed, never that data access was allowed. Sensitive blocks
+require the existing correlated kernel-denial contract and offer Review only.
+Local presentation activity remains distinct from enforcement evidence.
+Network Activity retains its existing independent owner and connection view.
 
 ## Runtime acceptance
 

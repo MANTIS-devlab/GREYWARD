@@ -19,7 +19,7 @@ The purpose of DMS is reuse of generic desktop functionality, not adoption of Da
 The canonical endpoint is:
 
 ```text
-stendev@<historical-private-address>:22
+development-user@<historical-private-address>:22
 identity: $env:USERPROFILE\.ssh\greyward-dev_ed25519
 ```
 
@@ -283,7 +283,7 @@ DMS inactive, and no DMS process or D-Bus owner.
 | Wi-Fi absent | `Failed to get initial networks: no WiFi device available`; `DMS API Error ... no WiFi device available`; `WiFi scan failed: no WiFi device available` | once each at startup | VM environment: `nmcli` exposes only connected Ethernet and no Wi-Fi device. Network Wi-Fi UI has no device; no DMS crash. v1.5.3 source explicitly returns this error when `wifiDevice == nil`. |
 | Bluetooth absent | `Failed to initialize bluez manager: no bluetooth adapter found: Could not activate remote peer 'org.bluez'` | once per startup path | VM environment: BlueZ is installed/enabled but systemd skips it because `/sys/class/bluetooth` does not exist. No adapter is present. |
 | Power profiles absent | `Could not launch service org.freedesktop.UPower.PowerProfiles`; `The PowerProfiles service will not work.` | once each | Optional dependency: `power-profiles-daemon` is not installed; DMS doctor labels it optional. No power-profile surface can be validated in this VM. |
-| Input access absent | `Failed to initialize evdev manager: insufficient permissions to access input devices` | once | VM permission boundary: `/dev/input/event*` is `root:input 0660`; `stendev` is not in `input`. It affects Caps Lock state/OSD, not pointer input. Adding the broad `input` group was not performed. |
+| Input access absent | `Failed to initialize evdev manager: insufficient permissions to access input devices` | once | VM permission boundary: `/dev/input/event*` is `root:input 0660`; `development-user` is not in `input`. It affects Caps Lock state/OSD, not pointer input. Adding the broad `input` group was not performed. |
 | Blur capability absent | `Cannot enable background effect as ext-background-effect-v1 is not supported by the current compositor.` | startup/surface capability warning | Labwc capability gap. v1.5.3 doctor and `BlurService.qml` explicitly treat `ext-background-effect-v1` as optional compositor support and provide a non-blur path. No DMS core patch was made. |
 | Graphics/portal/audio | Mesa/Zink device discovery, portal app-ID collision, and PipeWire dummy-output warnings | once at startup | Existing Hyper-V/GREYWARD environment conditions; no new Labwc crash or shell restart. |
 | Compositor adapters | unset `I3SOCK`/`SWAYSOCK` and `HYPRLAND_INSTANCE_SIGNATURE` | once at startup | Expected v1.5.3 generic adapter probes while running Labwc; not a shell failure. |

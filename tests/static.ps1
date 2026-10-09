@@ -663,6 +663,8 @@ foreach ($mutableRoot in $mutableInputRoots) {
         foreach ($line in (Get-Content -LiteralPath $_.FullName)) {
             $lineNumber++
             if ($line.TrimStart().StartsWith('#')) { continue }
+            # A unified patch header is metadata, not a mutable source selector.
+            if ($_.Extension -eq '.patch' -and $line -match '^diff --git a/\S+ b/\S+$') { continue }
             $activeLine = ($line -split '#', 2)[0]
             if ($activeLine -match '(?i)\blatest\b|\bmaster\b|(?:^|[^A-Za-z0-9])[^\s/]+-git(?:[^A-Za-z0-9]|$)') {
                 $errors.Add("Mutable build input selector in $($_.FullName):$lineNumber")
@@ -961,6 +963,10 @@ if (Test-Path -LiteralPath $labwcRcPath) {
 
 if (Test-Path -LiteralPath $securityCenterStylesPath) {
     $securityCenterStyles = Get-Content -Raw -LiteralPath $securityCenterStylesPath
+    $securityCenterMaterialsPath = Join-Path $repo 'security-center\tauri\frontend\materials.css'
+    if (Test-Path -LiteralPath $securityCenterMaterialsPath) {
+        $securityCenterStyles += Get-Content -Raw -LiteralPath $securityCenterMaterialsPath
+    }
     if ($securityCenterStyles -notmatch '--frost:\s*rgba\(' -or $securityCenterStyles -notmatch 'backdrop-filter:\s*blur\(') {
         $errors.Add('Security Center must retain the frosted material tokens and blur enhancement.')
     }

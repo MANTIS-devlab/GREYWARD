@@ -5,7 +5,7 @@ disposable `GREYWARD-DEV` VM. It is not part of the installed GREYWARD system.
 
 The overlay may contain:
 
-- the temporary `stendev` SSH bootstrap account;
+- the temporary `development-user` SSH bootstrap account;
 - passwordless sudo for the controlled development VM;
 - SSH and Hyper-V guest services;
 - compiler, packaging, debugging, and graphics-gate tools;

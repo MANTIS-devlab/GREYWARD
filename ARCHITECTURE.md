@@ -1,5 +1,17 @@
 # GREYWARD architecture
 
+## Application Security source versus installed system
+
+Functional Guard/Protected Data source uses the existing root broker, typed
+Context/facade, fixed isolated-account policy/worker and existing telemetry.
+Shared Safe Open, scripts/AppImages, private graphical ISOLATED and reviewed
+READ grant/revocation are scoped development implementations. The installed
+unconfined account and public read coverage have no new protection guarantee.
+See [current source and evidence](docs/security-center/APPLICATION_SECURITY_PLAN.md).
+[Production enrollment](docs/security-center/APPLICATION_SECURITY_ENROLLMENT.md)
+is PLANNED; native DMS lock, Fedora authentication and existing security owners
+remain canonical. No enrollment/PAM/VM mutation was performed by this audit.
+
 ## System boundary
 
 GREYWARD composes a Fedora 44 system rather than replacing Fedora's core

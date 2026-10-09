@@ -1,5 +1,16 @@
 # GREYWARD architecture
 
+## Application Security session scope
+
+The [Application Security plan](../security-center/APPLICATION_SECURITY_PLAN.md)
+is current source/validation authority. Its isolated test account proves bounded
+kernel denial/grants and private session workflows; it does not validate the
+production greetd login or protect the existing unconfined session.
+[Production enrollment](../security-center/APPLICATION_SECURITY_ENROLLMENT.md)
+is a PLANNED design using explicit mappings and existing Fedora PAM → UWSM →
+Labwc/DMS. It requires first-session admission, actual user-manager/session
+coverage and independent recovery; no login policy has been changed.
+
 ## Boundaries
 
 GREYWARD owns shell presentation, product branding, and the Security Center product surface. DMS Settings owns general desktop/system settings; there is no separate GREYWARD Settings application. Fedora, Labwc, DMS, systemd, NetworkManager, PipeWire, BlueZ, UPower, Polkit, Plymouth, dracut, and cryptsetup remain standard upstream backends. Hyprland remains installed only as the explicit fallback compositor. No upstream fork or compositor plugin is part of H0-H2.

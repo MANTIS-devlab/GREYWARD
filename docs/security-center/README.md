@@ -21,7 +21,27 @@ Fedora desktop before it attempts narrowly scoped remediation.
 The current performance audit and its measured limits are recorded in
 [PERFORMANCE.md](PERFORMANCE.md).
 
+Current Application Guard/Protected Data source and scoped evidence are in
+[APPLICATION_SECURITY_PLAN.md](APPLICATION_SECURITY_PLAN.md). Its dated audit
+supersedes earlier prototype descriptions. [Production enrollment](APPLICATION_SECURITY_ENROLLMENT.md)
+has an active, confined normal development session on `.149`. Center 89 /
+Context 81 / runtime 32 and session package 8 have actual normal-seat
+Administration, native lock, portal, Flatpak and reviewed grant/revocation
+evidence in the [9 October compatibility receipt](../history/security-center/2026-10-09-desktop-compatibility.md).
+Automatic production enrollment, clean-image and authenticated offline recovery
+acceptance remain unpassed; ordinary screen sharing remains unavailable.
+The earlier runtime 20 unenrolled and Center 64 / Context 67 observations are
+historical, recorded in the
+[live integration receipt](../history/security-center/2026-10-07-application-security-live-integration.md).
+Historical experiment/package receipts are explicitly archived under
+`docs/history/security-center/` rather than treated as current architecture.
+
 ## Reading order
+
+The approved [Application Security platform plan](APPLICATION_SECURITY_PLAN.md)
+owns the new Guard/Protected Data delivery and its release gates. Its phase
+table records implementation evidence; existing product contracts remain
+current until their replacement passes validation.
 
 1. [PRODUCT.md](PRODUCT.md) defines the product promise, audience, principles,
    scope, and non-goals.

@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" fill="none">
+  <title>GREYWARD Security Center</title>
+  <desc>Silver and graphite folded G integrated into a protective shield.</desc>
+  <path d="M512 64 144 272 272 344 512 208Z" fill="#edf1f3"/>
+  <path d="m512 64 368 208-128 72-240-136Z" fill="#a4b1ba"/>
+  <path d="M144 272v256c0 132 42 204 128 276V344Z" fill="#a4b1ba"/>
+  <path d="m752 344 128-72v256c0 16-2 32-5 48l-123-70Z" fill="#a4b1ba"/>
+  <path d="m272 580 414 238-174 142-240-156Z" fill="#14232e"/>
+  <path d="m664 488 202 116c-30 94-86 166-168 224l-186-108 152-88Z" fill="#a4b1ba"/>
+  <path d="m352 428 256-148 124 72-256 148Z" fill="#a4b1ba"/>
+  <path d="m352 428 124 72v156l-124-72Z" fill="#a4b1ba"/>
+  <path d="m476 500 256-148v44L620 460v112l-144 84Z" fill="#14232e"/>
+  <path d="m352 428 124 72 256-148v16L476 516l-124-72Z" fill="#edf1f3"/>
+  <path d="m752 344 128-72v16l-128 72Z" fill="#edf1f3"/>
+</svg>

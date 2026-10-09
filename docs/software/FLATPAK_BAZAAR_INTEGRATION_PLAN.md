@@ -56,7 +56,17 @@ The wrapper at environment/flatpak/greyward-software is the only GREYWARD launch
 4. passes Bazaar the sandbox-visible xdg-config/bazaar path with its supported extra-curated-config argument;
 5. falls back to an uncurated Bazaar launch if the template is unavailable.
 
-The system Flatpak override exposes only xdg-config/bazaar read-only. Provisioning and upgrade deployment reset the old GREYWARD Bazaar override before adding this single permission, so the legacy /etc/bazaar path is removed rather than left as a negative override. This keeps the official Flatpak sandbox narrow and avoids granting the application broad host /etc access.
+Fresh installations seed only the read-only `xdg-config/bazaar` access for
+Software and network-off default for Haruna, through the shared
+`environment/flatpak/seed-system-permissions.py` entrypoint. Production and
+development deployment both use it. Any existing system global/app override
+is preserved; user overrides are never reset. Failed reads stop seeding rather
+than masquerading as absent policy. Readback verifies the default record,
+not Protected Data enforcement. Earlier reset-based deployment is historical;
+legacy `/etc/bazaar` or broader permissions require explicit review rather than
+silent removal. The selected Application Security rollout preserves existing
+permissions until that review. The new seeding behavior is source-tested;
+fresh-image/package acceptance remains separate.
 
 ## GREYWARD visual customization
 

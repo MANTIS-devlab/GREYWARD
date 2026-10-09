@@ -28,6 +28,8 @@ class Session10SecurityContext(SecurityContext):
   return json.dumps(result,separators=(",",":"))
 
 def main():
+ # Required before observers/collectors create threads using GLib D-Bus.
+ dbus.mainloop.glib.threads_init()
  dbus.mainloop.glib.DBusGMainLoop(set_as_default=True)
  bus=dbus.SessionBus(); name=dbus.service.BusName(BUS_NAME,bus=bus)
  service=Session10SecurityContext(bus,UsbContext(),SensorContext()); service.start_shell_runtime(bus); GLib.MainLoop().run()

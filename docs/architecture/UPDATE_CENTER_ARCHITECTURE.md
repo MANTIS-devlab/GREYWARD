@@ -18,6 +18,22 @@ GREYWARD does not:
 
 Native provider tools remain responsible for all update and rollback operations.
 
+### Selected desktop compatibility holds
+
+The selected root-owned DMS manifest supplies the tested Quickshell, Labwc, UWSM
+and greeter constraints through `dms_compatibility.py`. Update inventory explains
+held desktop versions; transaction resolution must enforce the same hold as the
+fixed privileged helper. DNF daemon sessions receive a typed `config` dictionary
+with `excludepkgs`; the CLI resolver and helper pass the shared exclusion options.
+An invalid compatibility receipt blocks resolution rather than ignoring the hold.
+The daemon configuration contract is documented by
+[DNF5](https://dnf5.readthedocs.io/en/latest/dnf_daemon/dnf5daemon_dbus_api.8.html).
+
+On service startup, an inherited RESOLVING phase becomes an explicit interrupted
+check failure: its previous worker no longer belongs to the new service process.
+This permits another check without claiming a transaction completed. Prepared
+offline transactions retain their separate restart/history reconciliation.
+
 Recovery V1 adds one narrow pre-update safety step to the existing DNF5
 workflow: immediately before an offline transaction is scheduled, the fixed
 GREYWARD update transaction helper creates a local Btrfs recovery point. The
@@ -233,7 +249,15 @@ Result: SUCCESS
   Flatpak, and fwupd plan. One `auth_self` Polkit decision covers that closed
   transaction, including the required recovery point; authorization is neither
   passwordless nor cached across actions. User Flatpak updates remain
-  unprivileged. While the same helper is still authorized, it asks DNF5 to
+  unprivileged. The authenticated helper transfers only the validated provider
+  plan through `/run/greyward-update-worker.sock` (root-owned, mode 0600).
+  `greyward-update-worker.socket` starts a one-shot root system-service worker;
+  it verifies the socket peer UID before reading the bounded request and runs
+  the same fixed helper with isolated Python imports. This permits recovery
+  snapshot creation without granting administrative capabilities or systemd
+  service control to ordinary confined applications. Completion requires an
+  explicit worker exit result; a lost handoff cannot report success.
+  While the same helper is still authorized, it asks DNF5 to
   create `/system-update` with `DNF_SYSTEM_UPGRADE_NO_REBOOT=1` and verifies
   that the link targets the stored offline transaction. The later visible
   Restart action therefore uses logind's native active-session policy without

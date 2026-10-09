@@ -1,0 +1,18 @@
+[Unit]
+Description=GREYWARD public Flatpak service metadata reconciliation
+ConditionPathExists=/var/lib/flatpak/.changed
+
+[Service]
+Type=oneshot
+User=root
+UMask=0077
+StateDirectory=greyward/application-metadata
+StateDirectoryMode=0700
+ExecStart=/usr/bin/python3 -I /usr/share/greyward-application-security/administration/flatpak-metadata.py --journal /var/lib/greyward/application-metadata/labels.json
+TimeoutStartSec=10
+MemoryMax=64M
+NoNewPrivileges=yes
+ProtectHome=yes
+ProtectSystem=strict
+ReadWritePaths=/var/lib/flatpak /var/lib/greyward/application-metadata
+PrivateTmp=yes

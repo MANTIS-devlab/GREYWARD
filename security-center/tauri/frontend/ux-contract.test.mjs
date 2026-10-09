@@ -4,10 +4,205 @@ import test from "node:test";
 import vm from "node:vm";
 
 const source = readFileSync(new URL("./app.js", import.meta.url), "utf8");
-const styles = readFileSync(new URL("./styles.css", import.meta.url), "utf8");
+const styles = ["styles.css", "materials.css"].map(file => readFileSync(new URL(file, import.meta.url), "utf8")).join("\n");
+const workspaceStyles = readFileSync(new URL("./workspace.css", import.meta.url), "utf8");
 const index = readFileSync(new URL("./index.html", import.meta.url), "utf8");
 const i18nSource = readFileSync(new URL("./i18n.js", import.meta.url), "utf8");
 const iconCatalog = readFileSync(new URL("./assets/network-icons/catalog.js", import.meta.url), "utf8");
+
+test("navigation symbols resolve intentionally and unrelated destinations stay distinct", () => {
+  const context = {};
+  const start = source.indexOf("function icon(name)");
+  const end = source.indexOf("function identitySeed", start);
+  vm.runInNewContext(source.slice(start, end), context);
+  const nav = source.slice(source.indexOf("const primaryNav"), source.indexOf("const pageNameKeys"));
+  const glyphs = [...nav.matchAll(/\["[^"]+", "[^"]+", "([^"]+)"/g)].map(match => match[1]);
+  assert.equal(glyphs.length, 11);
+  const rendered = glyphs.map(glyph => context.icon(glyph));
+  assert.equal(new Set(rendered).size, glyphs.length);
+  for (const glyph of glyphs.filter(glyph => glyph !== "overview")) {
+    assert.notEqual(context.icon(glyph), context.icon("unknown"), glyph);
+  }
+  assert.notEqual(context.icon("pause"), context.icon("activity"));
+  assert.notEqual(context.icon("cancel"), context.icon("clean"));
+  assert.notEqual(context.icon("isolation"), context.icon("shield"));
+});
+
+function guardFixture(request) {
+  const context={window:{}};
+  vm.runInNewContext(readFileSync(new URL("./application-security.js",import.meta.url),"utf8"),context);
+  return context.window.GREYWARD_APPLICATION_SECURITY.create({request,now:()=>10000});
+}
+function guardEnvelope(projection) {
+  return {schema:"greyward.application-security/v1",source_state:{state:"AVAILABLE"},
+    observed_at:new Date(10000).toISOString(),fresh_until:new Date(15000).toISOString(),projection};
+}
+
+test("semantic tones survive already evaluated labels and keep uncertainty separate", () => {
+  const context = {};
+  vm.createContext(context);
+  vm.runInContext(source.slice(source.indexOf("function tone("), source.indexOf("function status(")), context);
+  for (const value of ["positive", "review", "critical", "uncertain", "muted"]) {
+    assert.equal(context.tone(value), value);
+  }
+  assert.equal(context.tone("UNKNOWN"), "uncertain");
+  assert.equal(context.tone("UNAVAILABLE"), "muted");
+  assert.equal(context.tone("FAILED"), "critical");
+});
+test("resource controller requests only typed owner-scoped reads and preserves unavailable state", async()=>{
+  const calls=[];
+  const controller=guardFixture(async(command,args)=>{
+    calls.push([command,args]);
+    if(command==="get_application_security_coverage")throw new Error("absent");
+    return guardEnvelope({resources:[],policy_revision:1,next_cursor:null});
+  });
+  const value=await controller.load("resources");
+  assert.equal(value.coverage.source_state.state,"UNAVAILABLE");
+  assert.deepEqual(JSON.parse(JSON.stringify(calls)),[
+    ["get_application_security_coverage",null],
+    ["list_application_security_resources",{query:{limit:100,revision:null,after:null}}],
+    ["list_application_security_grants",null],
+  ]);
+  assert.equal(controller.live(value.envelope).policy_revision,1);
+  const expired=guardEnvelope({resources:[]});expired.fresh_until=new Date(9999).toISOString();
+  assert.equal(controller.live(expired),null);
+});
+test("pagination refuses policy changes and never returns an old detail after navigation",async()=>{
+  let complete;
+  const controller=guardFixture(async(command)=>command.startsWith("get_application_security_resource")
+    ? new Promise(resolve=>{complete=resolve;}) : guardEnvelope({resources:[],policy_revision:2,next_cursor:null}));
+  const current={envelope:guardEnvelope({resources:[],policy_revision:1,next_cursor:"resource_"+"a".repeat(64)})};
+  await assert.rejects(controller.more("resources",current),/Refresh required/);
+  const pending=controller.detail("resources","resource_"+"a".repeat(64));
+  controller.cancelDetail(); complete(guardEnvelope({resource:{}}));
+  assert.equal(await pending,null);
+  await assert.rejects(controller.detail("resources","/home/user/.ssh"),/Invalid/);
+});
+test("empty registration metadata cannot produce a Protected badge",()=>{
+  const context={applicationSecurity:guardFixture(async()=>{}),esc:String,copy:key=>key,
+    emptyState:(title,body)=>`${title} ${body}`,icon:()=>""};
+  const viewContext={window:{}};
+  vm.runInNewContext(readFileSync(new URL("./application-view.js",import.meta.url),"utf8"),viewContext);
+  context.applicationView=viewContext.window.GREYWARD_APPLICATION_VIEW.create({...context,
+    live:context.applicationSecurity.live,time:String});
+  context.guardQueries={applications:"",resources:""};
+  context.guardResourceLabel="";context.guardResourceCategory="CUSTOM";
+  const start=source.indexOf("function guardSummary(");
+  const end=source.indexOf("function protectedDataMarkup(",start);
+  vm.runInNewContext(source.slice(start,end),context);
+  const value={coverage:guardEnvelope({protection:{health:"UNKNOWN",effective_profile:null}}),
+    envelope:guardEnvelope({resources:[],policy_revision:1})};
+  const rendered=context.guardInventoryMarkup(value,"resources");
+  assert.match(rendered,/guard\.health\.UNKNOWN/);assert.match(rendered,/guard\.empty\.copy/);
+  assert.doesNotMatch(rendered,/PROTECTED|data-.*allow/);
+});
+
+test("missing local history remains unavailable instead of reporting zero records", () => {
+  const start = source.indexOf("function privacyHistoryLabel(");
+  const end = source.indexOf("function privacyMarkup(", start);
+  const context = {copy: (key, values) => ({key, values})};
+  vm.runInNewContext(source.slice(start, end), context);
+  assert.equal(context.privacyHistoryLabel({activity_state: "UNAVAILABLE", activity: []}).key, "privacy.history.unavailable");
+  assert.equal(context.privacyHistoryLabel({activity: []}).key, "privacy.history.unavailable");
+  const empty = context.privacyHistoryLabel({activity_state: "AVAILABLE", activity: [], max_activity_items: 64, retention_days: 30});
+  assert.equal(empty.key, "privacy.history.summary");
+  assert.equal(empty.values.count, 0);
+  assert.equal(empty.values.max, 64);
+});
+
+test("bundled startup marks remain ordered and event marks occur once", () => {
+  const documentEvents = new Map(), windowEvents = new Map();
+  const context = {
+    window: {addEventListener: (name, callback) => windowEvents.set(name, callback)},
+    document: {addEventListener: (name, callback) => documentEvents.set(name, callback)},
+    performance: {now: () => 1.234},
+  };
+  vm.runInNewContext(readFileSync(new URL("./startup.js", import.meta.url), "utf8"), context);
+  context.window.__greywardStartupMark("app_script_start");
+  documentEvents.get("DOMContentLoaded")(); documentEvents.get("DOMContentLoaded")();
+  windowEvents.get("load")(); windowEvents.get("load")();
+  assert.deepEqual(Array.from(context.window.__greywardStartupMarks, (mark) => mark.name),
+    ["document_script_start", "app_script_start", "dom_content_loaded", "window_load"]);
+  assert.equal(context.window.__greywardStartupMarks[0].ms, 1.23);
+});
+
+test("bundled document scripting has no inline exception in the CSP", () => {
+  assert.doesNotMatch(index, /<script(?:\s[^>]*)?>\s*[^<]/);
+  assert.match(index, /<script src="\.\/startup\.js"><\/script>/);
+  const configuration = JSON.parse(readFileSync(new URL("../src-tauri/tauri.conf.json", import.meta.url), "utf8"));
+  const scripts = configuration.app.security.csp.split(";").map((directive) => directive.trim()).find((directive) => directive.startsWith("script-src "));
+  assert.equal(scripts, "script-src 'self'");
+});
+
+function requestFixture(invoke) {
+  const context = {window: {}};
+  vm.runInNewContext(readFileSync(new URL("./request-adapter.js", import.meta.url), "utf8"), context);
+  const timers = new Map();
+  let sequence = 0;
+  const calls = [];
+  const request = context.window.GREYWARD_REQUESTS.create({
+    invoke, setTimer: (callback) => { timers.set(++sequence, callback); return sequence; },
+    clearTimer: (id) => timers.delete(id), timeoutMessage: () => "Still running is possible",
+    observe: (command) => calls.push(command),
+  });
+  return {request, timers, calls};
+}
+
+test("request adapter clears success, asynchronous failure and synchronous throw timers", async () => {
+  for (const invoke of [() => Promise.resolve(42), () => Promise.reject(new Error("Provider failed")), () => { throw new Error("Transport failed"); }]) {
+    const fixture = requestFixture(invoke);
+    try { assert.equal(await fixture.request("get_overview"), 42); }
+    catch (error) { assert.match(error.message, /failed/); }
+    assert.equal(fixture.timers.size, 0);
+    assert.deepEqual(fixture.calls, ["get_overview"]);
+  }
+});
+
+test("presentation expiry does not claim cancellation or retry still-running work", async () => {
+  let complete;
+  const backend = new Promise((resolve) => { complete = resolve; });
+  const fixture = requestFixture(() => backend);
+  const pending = fixture.request("set_privacy_profile", {profile: "PRIVATE"}, 10);
+  await Promise.resolve();
+  fixture.timers.values().next().value();
+  await assert.rejects(pending, (error) => error.code === "PRESENTATION_WAIT_TIMEOUT" && error.backendCancelled === false);
+  assert.equal(fixture.timers.size, 0);
+  complete({ok: true});
+  await backend; await Promise.resolve();
+  assert.deepEqual(fixture.calls, ["set_privacy_profile"]);
+});
+
+test("invalid presentation deadlines do not dispatch backend work", async () => {
+  const fixture = requestFixture(() => Promise.resolve());
+  for (const timeout of [0, -1, NaN, Infinity, 300001]) await assert.rejects(fixture.request("get_overview", undefined, timeout));
+  assert.equal(fixture.calls.length, 0);
+  assert.equal(fixture.timers.size, 0);
+});
+
+test("an old Updates read cannot replace a later visit to the same route", async () => {
+  let complete;
+  const frames = [];
+  const context = {
+    currentPage: "updates", requestSequence: 1, updateRequestBusy: false,
+    document: {hidden: false}, pageCache: new Map(),
+    invokeBounded: () => new Promise((resolve) => { complete = resolve; }),
+    app: {querySelector: () => ({set innerHTML(value) { frames.push(value); }})},
+    captureViewState: () => ({}), restoreViewState() {}, bindContent() {},
+    renderContent: () => "STALE", updatePresentation: () => ({busy: false}), stopUpdatePolling() {},
+  };
+  const start = source.indexOf("async function refreshUpdates(");
+  vm.runInNewContext(source.slice(start, source.indexOf("function startUpdatePolling(", start)), context);
+  const pending = context.refreshUpdates();
+  context.currentPage = "network";
+  context.requestSequence = 2;
+  context.currentPage = "updates";
+  context.requestSequence = 3;
+  complete({state: "OLDER"});
+  await pending;
+  assert.equal(context.pageCache.size, 0);
+  assert.equal(frames.length, 0);
+  assert.equal(context.updateRequestBusy, false);
+});
 
 function i18nFor(language) {
   const context = {navigator: {language}};
@@ -16,8 +211,8 @@ function i18nFor(language) {
   return context.GREYWARD_I18N;
 }
 
-test("keeps five task-oriented primary destinations without menu numbering", () => {
-  assert.match(source, /\["overview", "nav\.overview".*\["system", "nav\.system".*\["network", "nav\.network".*\["privacy", "nav\.privacy".*\["updates", "nav\.updates"/s);
+test("keeps approved application and resource destinations without menu numbering", () => {
+  assert.match(source, /\["overview", "nav\.overview".*\["applications", "route\.apps".*\["protected-data", "guard\.resources\.title".*\["activity", "network\.activity\.title".*\["history", "history\.title".*\["recovery", "workspace\.recovery"/s);
   assert.doesNotMatch(source, /\["protection", "Protection"/);
   assert.doesNotMatch(source, /\["files", "File Security"/);
   assert.doesNotMatch(source, /nav-number/);
@@ -26,11 +221,13 @@ test("keeps five task-oriented primary destinations without menu numbering", () 
 test("normalizes legacy protection navigation and keeps contextual tools discoverable", () => {
   assert.match(source, /pageAliases = Object\.freeze\(\{protection: "evidence", system: "evidence"\}\)/);
   assert.match(source, /const normalizePage/);
-  assert.match(source, /const pageParents = Object\.freeze\(\{files: "system"/);
+  assert.match(source, /const pageParents = Object\.freeze\(\{devices: "system"/);
   assert.match(source, /function contextNavigation/);
-  assert.match(source, /\["network", "network\.protection"\], \["activity", "network\.activity"\]/);
+  assert.match(source, /\["network", "network\.protection"\], \["threats", "network\.threats"\]/);
   assert.doesNotMatch(source, /function systemSecurityMarkup/);
-  assert.match(source, /\["evidence", "route\.evidence"\], \["files", "system\.files"\], \["applications", "system\.apps"\], \["devices", "system\.devices"\]/);
+  assert.match(source, /\["evidence", "route\.evidence"\], \["devices", "workspace\.devices"\]/);
+  assert.match(source, /\["applications", "route\.apps", "applications", "workspace\.protection"\]/);
+  assert.match(source, /\["protected-data", "guard\.resources\.title", "lock", "workspace\.protection"\]/);
   assert.equal(i18nFor("en").t("route.evidence"), "System checks");
   assert.equal(i18nFor("fr").t("route.evidence"), "Contrôles système");
 });
@@ -85,13 +282,13 @@ test("keeps semantic French and English catalogs complete without literal text r
   assert.doesNotMatch(i18nSource, /frenchLiterals|localizeMarkup|localizeText|createTreeWalker/);
 });
 
-test("keeps accepted findings presented as the plain protected posture", () => {
+test("keeps accepted limitations visible without implying active protection", () => {
   const english = i18nFor("en-US");
   const french = i18nFor("fr-FR");
   assert.equal(english.t("design.posture.protected"), "Protected");
   assert.equal(french.t("design.posture.protected"), "Protégé");
-  assert.equal(english.t("overview.posture.protected.message"), "All required protections are active.");
-  assert.equal(french.t("overview.posture.protected.message"), "Toutes les protections requises sont actives.");
+  assert.equal(english.t("overview.posture.protected.message"), "Verified protections are active. Accepted limitations remain in System security.");
+  assert.equal(french.t("overview.posture.protected.message"), "Les protections vérifiées sont actives. Les limites acceptées restent visibles dans Sécurité système.");
   assert.doesNotMatch(english.t("overview.posture.protected.message"), /ignored|exception|deviation/i);
   assert.doesNotMatch(french.t("overview.posture.protected.message"), /ignor|exception|déviation/i);
 });
@@ -142,7 +339,7 @@ test("keeps network identity enrichment local and deterministic", () => {
   assert.match(source, /function identityColor/);
   assert.match(source, /function identityInitial/);
 assert.match(source, /function networkIdentityMark/);
-assert.match(source, /palette = kind === "application"/);
+assert.match(source, /const glyph = kind === "application" \? serviceGlyph \|\| "applications" : "globe"/);
 assert.match(source, /icon\(glyph\)/);
 assert.match(source, /assets\/network-icons\/\$\{localIcon\}\.svg/);
 assert.match(source, /function localNetworkIcon/);
@@ -373,7 +570,7 @@ test("uses typed D-Bus values for Security Context JSON instead of gdbus display
 test("packages deliberate Security Center deep-link destinations", () => {
   const route = readFileSync(new URL("../../data/greyward-security-center-route", import.meta.url), "utf8");
   const rust = readFileSync(new URL("../src-tauri/src/lib.rs", import.meta.url), "utf8");
-  assert.match(route, /overview\|system\|network\|privacy\|updates\|files\|applications\|devices\|evidence\|activity/);
+  assert.match(route, /overview\|system\|network\|privacy\|updates\|files\|applications\|protected-data\|devices\|evidence\|activity/);
   assert.match(route, /threats\)/);
   assert.match(route, /\[\[ -n "\$event_id" && ! "\$event_id"/);
   assert.match(route, /\[\[ "\$page" == "threats" && -n "\$event_id" \]\]/);
@@ -391,17 +588,37 @@ test("keeps live and historical observations dense while retaining identity cues
   assert.match(styles, /\.network-activity-row strong \{ font-size: 14px; \}/);
 });
 
-test("keeps primary navigation labels on one line with readable sizing", () => {
-  assert.match(styles, /\.nav-item \{ min-height: 46px; grid-template-columns: 24px minmax\(0, 1fr\);/);
-  assert.match(styles, /\.nav-item > span:last-child \{ min-width: 0; white-space: nowrap; font-size: 15\.5px; \}/);
+test("keeps labeled grouped navigation scrollable at the actual minimum window height", () => {
+  assert.match(workspaceStyles, /\.nav-list[^}]*min-height: 0[^}]*overflow-y: auto/);
+  assert.match(workspaceStyles, /\.nav-item[^}]*grid-template-columns: 20px minmax\(0, 1fr\)/);
+  assert.match(workspaceStyles, /\.nav-item > span:last-child[^}]*font-size: 15px/);
+  assert.match(workspaceStyles, /@media \(max-height: 760px\)/);
+  assert.match(index, /workspace\.css/);
 });
 
-test("keeps device history behind backend projections and keeps overview on its fast local path", () => {
+test("keeps device history behind backend projections", () => {
   assert.match(source, /device_history/);
   assert.match(source, /devices\.history\.newUnknown/);
   assert.match(source, /network\.activity\.historyUnavailable/);
   assert.match(source, /page === "overview"[\s\S]*invokeBounded\("get_overview"/);
-  assert.doesNotMatch(source, /Promise\.all\(\[\s*invokeBounded\("get_overview"/);
+});
+
+test("Overview waits for real coverage before its initial protection projection", async () => {
+  let finishCoverage;
+  const envelope = guardEnvelope({protection: {health: "AVAILABLE", effective_profile: "PROTECTED"}});
+  const coverage = new Promise(resolve => { finishCoverage = resolve; });
+  const context = {pageDataRequests: new Map(), window: {__greywardStartupOverviewRequested: true},
+    startupMarkOnce: () => {}, invokeBounded: async () => ({state: "PROTECTED"}),
+    applicationSecurity: {coverage: () => coverage}};
+  vm.createContext(context);
+  vm.runInContext(source.slice(source.indexOf("function getPageData("), source.indexOf("async function refreshUpdates(")), context);
+  let complete = false;
+  const request = context.getPageData("overview").then(value => { complete = true; return value; });
+  await Promise.resolve();
+  assert.equal(complete, false);
+  finishCoverage(envelope);
+  const result = await request;
+  assert.equal(result.guard.coverage, envelope);
 });
 
 test("shares a short-lived authoritative core snapshot across read-only pages", () => {
@@ -411,7 +628,7 @@ test("shares a short-lived authoritative core snapshot across read-only pages", 
   assert.match(rust, /fn invalidate_core_snapshot_cache\(\)/);
   assert.match(rust, /fn get_overview\(\)[\s\S]*core_collection_for_read\(\)/);
   assert.match(rust, /fn get_evidence\(\)[\s\S]*core_collection_for_read\(\)/);
-  assert.match(rust, /fn get_devices\(\)[\s\S]*collect_device_snapshot\(\)/);
+  assert.match(rust, /fn get_devices\([^)]*\)[\s\S]*collect_device_snapshot\(\)/);
   assert.match(rust, /fn emit_state_changed\([\s\S]*invalidate_core_snapshot_cache\(\)/);
 });
 
@@ -430,8 +647,8 @@ test("keeps cold provider reads page-specific and Flatpak inspection bounded", (
   assert.match(adapters, /pub fn collect_device_facts\(\)/);
   assert.match(adapters, /pub fn collect_flatpak_facts\(\)[\s\S]*thread::scope/);
   assert.match(adapters, /descriptors\.chunks\(4\)/);
-  assert.match(adapters, /flatpak_permissions\(&app_id, scope_flag\.as_str\(\)\)/);
-  assert.match(adapters, /flatpak_overrides\(&app_id, scope_flag\.as_str\(\)\)/);
+  assert.match(adapters, /flatpak_permissions\(&reference, scope_flag\.as_str\(\), deadline\)/);
+  assert.match(adapters, /flatpak_overrides\(&descriptor\.application_id, &scope_flag, deadline\)/);
   assert.match(adapters, /pub fn collect_portal_facts\(\)[\s\S]*thread::scope/);
 });
 
@@ -441,10 +658,10 @@ test("reuses fresh page data for navigation while refreshes still query the curr
   assert.match(source, /const pageDataRequests = new Map\(\)/);
   assert.match(source, /const existing = pageDataRequests\.get\(key\)/);
   assert.match(source, /request\.finally\(\(\) =>/);
-  assert.match(source, /const initialCachedData = cachedData/);
+  assert.match(source, /const initialCachedData = currentPage === "overview" && !applicationSecurity.live/);
   assert.doesNotMatch(source, /relatedCachedData/);
   assert.match(source, /const canReuseCachedPage = options\.force !== true && PAGE_CACHE_REUSE_ROUTES\.has\(currentPage\)/);
-  assert.match(source, /if \(canReuseCachedPage\) return/);
+  assert.match(source, /if \(canReuseCachedPage\) \{[\s\S]*?return;/);
   assert.match(source, /pageCache\.set\(currentPage, \{data, loadedAt: Date\.now\(\)\}\)/);
   assert.match(source, /if \(canReuseCachedPage && preserveScroll\)/);
 });
@@ -737,6 +954,29 @@ test("uses typed effective application access and keeps raw grants behind disclo
   assert.doesNotMatch(source, /access_summary|broad_access|home_filesystem/);
 });
 
+test("failed application reads stay unavailable and override disclosure cannot replace effective permissions", () => {
+  const functions = source.slice(source.indexOf("function applicationAccessLabel("), source.indexOf("function recoveryTime("));
+  for (const language of ["en", "fr"]) {
+    const translations = i18nFor(language);
+    const context = {
+      copy: (key, values) => translations.t(key, values), esc: String,
+      pageHeader: () => "", actionButton: () => "", plainSection: () => "",
+      emptyState: () => "", technicalDisclosure: (title, count, body) => `<details>${body}</details>`,
+    };
+    vm.runInNewContext(functions, context);
+    const application = {name: "Synthetic application", access_state: "UNAVAILABLE", access_categories: [], review_reasons: [], technical: {app_id: "org.example.App", effective_permissions: [], local_overrides: ["UNAPPLIED_OVERRIDE"]}};
+    const payload = {inventory_state: "PARTIAL", apps: [application]};
+    const unavailable = context.applicationsMarkup(payload);
+    assert.ok(unavailable.includes(translations.t("applications.access.unavailableCopy")));
+    assert.ok(unavailable.includes(translations.t("state.unavailable")));
+    assert.ok(!unavailable.includes(translations.t("applications.scoped.copy")));
+    assert.ok(!unavailable.includes("UNAPPLIED_OVERRIDE"));
+    const exposed = context.applicationsMarkup({...payload, apps: [{...application, access_state: "REVIEW_NEEDED", access_categories: ["ADDITIONAL_FILES"], review_reasons: ["ADDITIONAL_FILES"]}]});
+    assert.ok(exposed.includes(translations.t("applications.access.additionalFiles")));
+    assert.ok(exposed.includes(translations.t("state.reviewNeeded")));
+  }
+});
+
 test("keeps evidence product-first and moves implementation references into a technical record", () => {
   const rust = readFileSync(new URL("../src-tauri/src/lib.rs", import.meta.url), "utf8");
   assert.match(rust, /pub struct EvidenceTechnicalDetails/);
@@ -782,13 +1022,15 @@ test("keeps Privacy export destination feedback visible and failure-safe", () =>
   assert.match(rust, /path: Some\(path\.to_string_lossy\(\)\.into_owned\(\)\)/);
 });
 
-test("keeps a confirmed DMS snapshot visible only while its replacement read is in flight", () => {
+test("separates confirmed DMS display freshness from evidence and action authority", () => {
   const widget = readFileSync(new URL("../../../environment/session/dankmaterialshell/plugins/greywardSecure/SecureWidget.qml", import.meta.url), "utf8");
   assert.match(widget, /items: showingSnapshot \? presentation.items/);
   assert.match(widget, /activities: showingSnapshot \? presentation.activity/);
   assert.match(widget, /readonly property bool fresh: freshnessLeaseValid/);
-  assert.match(widget, /readonly property bool showingSnapshot: fresh \|\| requestPending/);
+  assert.match(widget, /readonly property bool showingSnapshot: displayFresh \|\| requestPending/);
   assert.match(widget, /Date.parse\(presentation.fresh_until/);
+  assert.match(widget, /Date.parse\(presentation.display_fresh_until \|\| presentation.fresh_until/);
+  assert.match(widget, /if \(!freshnessLeaseValid \|\| actionPending\) return;/);
   assert.match(widget, /Current security status cannot be confirmed/);
   assert.match(widget, /const nextFreshUntil = Date.parse\(next\.fresh_until \|\| ""\)/);
   assert.match(widget, /initialized = Number\.isFinite\(nextFreshUntil\)/);
@@ -806,17 +1048,17 @@ test("uses the native DMS subscription for live privacy capsule changes", () => 
   assert.match(widget, /greyward-security-status/);
   assert.match(widget, /liveIcons.slice\(0,2\)/);
   assert.match(widget, /Layout.minimumHeight: 34/);
-  assert.match(widget, /capsuleWatchdogIntervalMs: 15000/);
+  assert.match(widget, /capsuleWatchdogIntervalMs: 5000/);
   assert.match(widget, /readonly property bool freshnessLeaseValid/);
   assert.match(widget, /readonly property bool fresh: freshnessLeaseValid/);
-  assert.match(widget, /readonly property bool showingSnapshot: fresh \|\| requestPending/);
+  assert.match(widget, /readonly property bool showingSnapshot: displayFresh \|\| requestPending/);
   assert.match(widget, /if \(!freshnessLeaseValid \|\| actionPending\) return;/);
   assert.doesNotMatch(widget, /gdbus monitor|notify-send/);
 });
 
 test("cleans up local request timers and bounds Security Context D-Bus calls", () => {
   assert.match(source, /function invokeBounded/);
-  assert.match(source, /window\.clearTimeout\(timeout\)/);
+  assert.match(source, /clearTimer: \(timer\) => window\.clearTimeout\(timer\)/);
   assert.doesNotMatch(source, /Promise\.race\(\[/);
   const rust = readFileSync(new URL("../src-tauri/src/lib.rs", import.meta.url), "utf8");
   assert.match(rust, /fn update_center_dbus_method\(method: &str\)/);
@@ -879,7 +1121,7 @@ test("recovery queue shows real pending work without inventing an idle checklist
   }
 });
 
-test("file review preserves unresolved actions while collapsing deleted history", () => {
+test("file review keeps actionable detections separate from contained and missing-source history", () => {
   const context = {copy: String, esc: String, icon: () => "", status: String, localizedTime: String, pageHeader: () => "", actionButton: (a,b,c,attrs) => `<button ${attrs}>${a}</button>`, emptyState: (a) => a, technicalDisclosure: (title,count,body) => `<details><summary>${title}</summary>${body}</details>`, fileSecurityState: {feedback: ""}, fileSecurityOperationMarkup: () => "ACTIVE_SCAN", activityMarkup: () => ""};
   vm.runInNewContext(source.slice(source.indexOf("function filesMarkup("), source.indexOf("function privacyMarkup(")), context);
   const data = {state: "AVAILABLE", clamav: {status: "CURRENT", engine_version: "1"}, detections: [{state: "DELETED", detection_name: "Old deleted", detection_id: "old"}, {state: "DETECTED", detection_name: "Unresolved", detection_id: "pending"}, {state: "QUARANTINED", detection_name: "Contained", detection_id: "contained"}]};
@@ -889,6 +1131,16 @@ test("file review preserves unresolved actions while collapsing deleted history"
   assert.match(html, /data-file-quarantine="pending"/);
   assert.match(html, /data-file-restore="contained"/);
   assert.match(html, /data-file-delete="contained"/);
+  const historyStart = html.indexOf('<details><summary>design.files.resolved');
+  assert.ok(html.indexOf('Contained') > historyStart);
+  const handled = context.filesMarkup({...data, detections: [data.detections[0], data.detections[2], {state: 'DETECTED', source_status: 'MISSING', detection_name: 'Missing source', detection_id: 'missing'}]});
+  assert.doesNotMatch(handled, /file.protection.review|data-file-quarantine="missing"/);
+  assert.match(handled, /SOURCE_MISSING/);
+  for (const item of [{state: 'DETECTED', source_status: 'UNKNOWN'}, {state: 'QUARANTINE_FAILED', source_status: 'MISSING'}, {state: 'RESTORED'}, {state: 'RESTORE_FAILED'}, {state: 'DELETE_FAILED'}]) {
+    const unresolved = context.filesMarkup({...data, detections: [{...item, detection_name: 'Needs action', detection_id: 'retry'}]});
+    assert.match(unresolved, /file.protection.review/);
+    assert.doesNotMatch(unresolved, /design.files.resolved/);
+  }
   const active = context.filesMarkup({...data, active_scan: {state: "RUNNING"}});
   assert.ok(active.indexOf("ACTIVE_SCAN") < active.indexOf("Unresolved"));
   assert.equal((active.match(/id="file-security-action-status"/g) || []).length, 1);
@@ -949,4 +1201,43 @@ test("page collection is dispatched off the window thread", () => {
   for (const name of ["get_overview", "get_evidence", "get_filesecurity", "get_devices", "get_applications", "get_updates", "get_network_protection", "get_network_activity", "get_threat_protection", "get_secure_dns", "get_security_center_digest"]) {
     assert.ok(rust.replace(/\r\n/g, "\n").includes(`#[tauri::command(async)]\nfn ${name}(`), name);
   }
+});
+
+ test("functional service marks never invent brands or grant identity to unknown processes", () => {
+  const context = {localNetworkIcon: () => "", icon: name => `<svg data-kind="${name}"></svg>`,
+    esc: String, identityInitial: () => "", identityColor: () => 0};
+  vm.runInNewContext(source.slice(source.indexOf("function networkIdentityMark"), source.indexOf("function stateLabel")), context);
+  assert.match(context.networkIdentityMark("application", "/usr/lib/systemd/systemd-resolved"), /data-kind="resolver"/);
+  assert.match(context.networkIdentityMark("application", "chronyd"), /data-kind="clock"/);
+  assert.match(context.networkIdentityMark("application", "unknown-resolver-tool"), /data-kind="applications"/);
+  assert.match(context.networkIdentityMark("destination", "systemd-resolved"), /data-kind="globe"/);
+});
+
+test("accepted limitation rows preserve their measured status and explain acceptance", () => {
+  const english=i18nFor("en-US");
+  const context={tone:()=>"neutral", esc:String, copy:english.t,
+    status:value=>`<span>${value}</span>`, evidenceCopy:(row,key)=>row[key]||"Evidence",
+    evidenceNextStep:()=>"", deviationAction:()=>""};
+  const start=source.indexOf("function evidenceResolutionMarkup(row)");
+  const end=source.indexOf("function evidenceTechnicalMarkup",start);
+  vm.runInNewContext(source.slice(start,end),context);
+  const row={state:"ACTION REQUIRED",accepted_deviation:true};
+  const accepted=context.evidenceResolutionMarkup(row);
+  assert.match(accepted,/ACTION REQUIRED/);
+  assert.match(accepted,/Accepted limitation/);
+  assert.doesNotMatch(accepted,/PROTECTED/);
+  assert.doesNotMatch(context.evidenceResolutionMarkup({...row,accepted_deviation:false}),/Accepted limitation/);
+});
+
+test("VPN ownership UI describes observations without a verified security tone", () => {
+  const english=i18nFor("en-US");
+  const context={esc:String,copy:english.t,icon:()=>"",technicalDisclosure:(_title,_count,body)=>body};
+  const start=source.indexOf("function secureDnsMarkup(dns)");
+  const end=source.indexOf("\nfunction ",start+1);
+  vm.runInNewContext(source.slice(start,end),context);
+  const html=context.secureDnsMarkup({effective_policy:"VPNOwned",effective_owner:"VPN",effective_transport:"VPNTunnel",validation:"Unknown"});
+  assert.match(html,/VPN tunnel detected/);
+  assert.match(html,/have not been verified/);
+  assert.match(html,/tone-neutral/);
+  assert.doesNotMatch(html,/tone-positive|VPNProtected|Measured by VPN/);
 });

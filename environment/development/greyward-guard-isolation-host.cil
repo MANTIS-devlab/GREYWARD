@@ -1,0 +1,24 @@
+; Live development managed workers only; no login/account mapping.
+; Unenrolled host applications must not inspect or inject into managed workers.
+; Keep compositor SCM_RIGHTS frame transport separate from /proc inspection.
+(deny unconfined_t greyward_guard_t (file (read write append)))
+(deny unconfined_t greyward_guard_t (process (ptrace signal sigkill sigstop dyntransition)))
+; The compositor receives an explicit read-only listener-lifetime pipe through
+; security-context-v1. Deny path opens/writes, but preserve that selected FD read.
+; The file:read denial above separately blocks PTRACE_MODE_READ /proc aliases.
+(deny unconfined_t greyward_guard_t (fifo_file (open write append)))
+(deny unconfined_t greyward_guard_t (unix_stream_socket (connectto)))
+; PID 1 receives the root broker's new stdin pipe when creating a fixed managed
+; unit. Fedora already allows fd use and pipe writes here, but omits pipe read.
+; This does not grant ordinary callers access to a workload or protected data.
+(allow init_t unconfined_service_t (fifo_file (read)))
+; systemd-run uses the system bus transport. The bus must receive only the
+; root service's standard-stream pipes before forwarding the fixed unit request.
+(allow system_dbusd_t unconfined_service_t (fifo_file (read write)))
+; Managed workers inherit only the broker-created standard streams. This grants
+; no root service socket, process, policy file or Protected Data access.
+(allow greyward_guard_t unconfined_service_t (fifo_file (getattr read write)))
+; PID 1 mounts the fixed, disposable /work tmpfs with ordinary home-content
+; labels. This is not relabel permission on any existing host resource.
+(allow init_t tmpfs_t (filesystem (relabelfrom)))
+(allow init_t user_home_t (filesystem (mount relabelfrom relabelto)))

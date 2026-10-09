@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from greyward_security_context.telemetry import TelemetryStore, derive_device_identity, event, import_root_spool, spool_event
+from greyward_security_context.telemetry import TelemetryError, TelemetryStore, derive_device_identity, event, import_root_spool, spool_event
 
 
 def make_event(index, *, retention="investigation", occurred=None, details=None):
@@ -28,6 +28,22 @@ def make_event(index, *, retention="investigation", occurred=None, details=None)
 
 
 class TelemetryStoreTests(unittest.TestCase):
+    def test_security_scope_filters_network_before_limit_and_preserves_pagination(self):
+        with tempfile.TemporaryDirectory() as directory:
+            store = TelemetryStore(Path(directory) / "events.sqlite3")
+            for index in range(8):
+                value = make_event(index, occurred=f"2099-01-01T10:00:0{index}Z")
+                value["category"] = "NETWORK" if index >= 4 else "RECOVERY"
+                store.record(value)
+            first = store.query({"scope": "SECURITY", "limit": 2})
+            second = store.query({"scope": "SECURITY", "limit": 2, "cursor": first["next_cursor"]})
+            self.assertEqual([item["event_id"] for item in first["events"]], ["event-3", "event-2"])
+            self.assertEqual([item["event_id"] for item in second["events"]], ["event-1", "event-0"])
+            self.assertIsNone(second["next_cursor"])
+            self.assertEqual(len(store.query({"category": "NETWORK"})["events"]), 4)
+            with self.assertRaises(TelemetryError):
+                store.query({"scope": "arbitrary SQL"})
+
     def test_device_identity_is_keyed_and_uncertain_without_stable_material(self):
         with tempfile.TemporaryDirectory() as directory:
             key = Path(directory) / "identity.key"

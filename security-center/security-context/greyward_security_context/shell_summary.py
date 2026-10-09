@@ -238,6 +238,7 @@ def build_shell_summary(summary, network=None, clamav=None, profile=None, transa
         "fresh_until": _text(fresh_until or _stamp(current), 40),
         "freshness": freshness,
         "cached": {"posture": cached_posture, "security": cached_security},
+        "evaluated_checks": value.get("evaluated_checks"),
         "posture": {
             "state": state,
             "review_count": attention_count if provider_fresh else None,

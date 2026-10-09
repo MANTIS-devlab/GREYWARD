@@ -13,20 +13,28 @@ window.addEventListener("unhandledrejection", (event) => renderStartupFailure(ev
 const i18n = window.GREYWARD_I18N;
 const t = (key, values) => i18n?.t(key, values) ?? key;
 const copy = (key, values) => t(key, values);
+const applicationSecurity = window.GREYWARD_APPLICATION_SECURITY.create({request: invokeBounded});
+const guardQueries = {applications: "", resources: ""};
 
-const pages = ["overview", "system", "network", "privacy", "updates", "files", "applications", "devices", "evidence", "activity", "threats"];
+const pages = ["overview", "system", "network", "privacy", "updates", "files", "applications", "protected-data", "devices", "evidence", "activity", "threats", "history", "recovery"];
 const pageAliases = Object.freeze({protection: "evidence", system: "evidence"});
-const pageParents = Object.freeze({files: "system", applications: "system", devices: "system", evidence: "system", activity: "network", threats: "network"});
+const pageParents = Object.freeze({devices: "system", evidence: "system", threats: "network"});
 const primaryNav = [
-  ["overview", "nav.overview", "overview"],
-  ["system", "nav.system", "shield"],
-  ["network", "nav.network", "network"],
-  ["privacy", "nav.privacy", "privacy"],
-  ["updates", "nav.updates", "updates"],
+  ["overview", "nav.overview", "overview", ""],
+  ["applications", "route.apps", "applications", "workspace.protection"],
+  ["protected-data", "guard.resources.title", "lock", "workspace.protection"],
+  ["files", "workspace.files", "files", "workspace.protection"],
+  ["network", "nav.network", "network", "workspace.protection"],
+  ["system", "workspace.system", "system", "workspace.protection"],
+  ["activity", "network.activity.title", "activity", "workspace.monitor"],
+  ["history", "history.title", "history", "workspace.monitor"],
+  ["updates", "nav.updates", "updates", "workspace.maintain"],
+  ["recovery", "workspace.recovery", "recovery", "workspace.maintain"],
+  ["privacy", "workspace.privacy", "privacy", "workspace.preferences"],
 ];
 const pageNameKeys = Object.freeze({
-  overview: "nav.overview", system: "nav.system", network: "nav.network", privacy: "nav.privacy", updates: "nav.updates",
-  files: "route.files", activity: "route.activity", threats: "network.threats", applications: "route.apps", devices: "route.devices", evidence: "route.evidence",
+  overview: "nav.overview", system: "workspace.system", network: "nav.network", privacy: "workspace.privacy", updates: "nav.updates",
+  files: "workspace.files", activity: "network.activity.title", threats: "network.threats", applications: "route.apps", "protected-data": "guard.resources.title", devices: "route.devices", evidence: "system.checks.title", history: "history.title", recovery: "workspace.recovery",
 });
 const normalizePage = (page) => pageAliases[String(page || "").trim().toLowerCase()] || String(page || "").trim().toLowerCase();
 const pageName = (page) => t(pageNameKeys[page] || pageNameKeys[normalizePage(page)] || "nav.overview");
@@ -34,6 +42,8 @@ const pageName = (page) => t(pageNameKeys[page] || pageNameKeys[normalizePage(pa
 let currentPage = "overview";
 let requestSequence = 0;
 let updatePoll = null;
+let guardExpiryTimer = null;
+let stopGuardWatch = null;
 let updateRequestBusy = false;
 let updatePhase = "IDLE";
 let eventsBound = false;
@@ -118,26 +128,40 @@ const invoke = (command, args) => {
   const api = window.__TAURI_INTERNALS__;
   return api?.invoke ? api.invoke(command, args) : Promise.reject(new Error(copy("feedback.ipcUnavailable")));
 };
+let requestAdapter;
 function invokeBounded(command, args, timeoutMs = 10000) {
-  if (Array.isArray(window.__greywardPerformanceCalls)) window.__greywardPerformanceCalls.push(String(command));
-  return new Promise((resolve, reject) => {
-    const timeout = window.setTimeout(() => reject(new Error("The request timed out.")), timeoutMs);
-    invoke(command, args).then(
-      (value) => { window.clearTimeout(timeout); resolve(value); },
-      (error) => { window.clearTimeout(timeout); reject(error); },
-    );
+  requestAdapter ||= window.GREYWARD_REQUESTS.create({
+    invoke, setTimer: (callback, delay) => window.setTimeout(callback, delay),
+    clearTimer: (timer) => window.clearTimeout(timer),
+    timeoutMessage: () => copy("feedback.requestTimeout"),
+    observe: (name) => { if (Array.isArray(window.__greywardPerformanceCalls)) window.__greywardPerformanceCalls.push(String(name)); },
   });
+  return requestAdapter(command, args, timeoutMs);
 }
 
 function icon(name) {
   const paths = {
     overview: '<path d="M4 12.2 12 5l8 7.2v7.3H4z"/><path d="M9.3 19.5v-5h5.4v5"/>',
     network: '<circle cx="5" cy="12" r="1.8"/><circle cx="19" cy="6" r="1.8"/><circle cx="19" cy="18" r="1.8"/><path d="m6.7 11.3 10.5-4.6M6.7 12.8l10.5 4.5"/>',
-    applications: '<rect x="4" y="4" width="6.2" height="6.2" rx="1"/><rect x="13.8" y="4" width="6.2" height="6.2" rx="1"/><rect x="4" y="13.8" width="6.2" height="6.2" rx="1"/><rect x="13.8" y="13.8" width="6.2" height="6.2" rx="1"/>',
-    devices: '<rect x="3.5" y="5.2" width="17" height="11.4" rx="1.8"/><path d="M8.5 20h7M12 16.8V20"/>',
+    applications: '<rect x="4" y="4" width="6" height="6" rx="1.25"/><rect x="14" y="4" width="6" height="6" rx="1.25"/><rect x="4" y="14" width="6" height="6" rx="1.25"/><rect x="14" y="14" width="6" height="6" rx="1.25"/>',
+    devices: '<path d="M12 20V4m-2.5 2.5L12 4l2.5 2.5M12 15l-5-4V8m5 4 5-3V6"/><circle cx="7" cy="6" r="1.5"/><rect x="15.5" y="3" width="3" height="3" rx=".5"/><circle cx="12" cy="19" r="2"/>',
     evidence: '<path d="M6.2 3.5h8.2l3.4 3.5v13.5H6.2z"/><path d="M14.2 3.5v4h3.6M9 12h6M9 15.5h6"/>',
-    updates: '<path d="M4 7h16M4 12h16M4 17h10"/><path d="m16 15 2 2 3-3"/>',
-    privacy: '<path d="M12 3.3 19 6v5c0 4.6-2.7 8-7 9.9C7.7 19 5 15.6 5 11V6z"/><path d="m9 12 2.1 2.1L15.5 9.6"/>',
+    system: '<rect x="6" y="6" width="12" height="12" rx="2"/><rect x="9" y="9" width="6" height="6" rx="1"/><path d="M9 3v3m6-3v3M9 18v3m6-3v3M3 9h3m-3 6h3m12-6h3m-3 6h3"/>',
+    files: '<path d="M6 3h8l4 4v14H6zM14 3v5h4"/><circle cx="11" cy="13" r="2.5"/><path d="m13 15 2 2"/>',
+    updates: '<path d="M12 15V4m-4 4 4-4 4 4M5 14v5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-5"/>',
+    privacy: '<path d="M3 12s3.5-6 9-6 9 6 9 6-3.5 6-9 6-9-6-9-6z"/><circle cx="12" cy="12" r="2.5"/>',
+    history: '<path d="M5 6.5A8 8 0 1 1 4 14M4 3v4h4M12 7v5l3 2"/>',
+    isolation: '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 7h18"/><rect x="8" y="11" width="8" height="6" rx="1"/>',
+    script: '<path d="m8 7-5 5 5 5m8-10 5 5-5 5M14 4l-4 16"/>',
+    package: '<path d="m12 3 8 4.5v9L12 21l-8-4.5v-9zM4 7.5l8 4.5 8-4.5M12 12v9M8 5.25l8 4.5"/>',
+    cloud: '<path d="M6 18a4 4 0 0 1-.5-8A6.5 6.5 0 0 1 18 9a4.5 4.5 0 0 1 0 9z"/>',
+    browser: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M6 6.5h.01M9 6.5h.01"/>',
+    terminal: '<rect x="3.5" y="4.5" width="17" height="15" rx="2"/><path d="m7 9 3 3-3 3M13 15h4"/>',
+    resolver: '<rect x="4" y="3" width="16" height="7" rx="1.5"/><rect x="4" y="14" width="16" height="7" rx="1.5"/><path d="M12 10v4M8 6.5h.01M8 17.5h.01M12 6.5h4M12 17.5h4"/>',
+    clock: '<circle cx="12" cy="12" r="8"/><path d="M12 7v5l3 2"/>',
+    pause: '<path d="M8 5v14M16 5v14"/>',
+    play: '<path d="m8 4 12 8-12 8z"/>',
+    cancel: '<path d="m6 6 12 12M18 6 6 18"/>',
     arrow: '<path d="M5 12h13M13 6.5 18.5 12 13 17.5"/>',
     chevron: '<path d="m9 6 6 6-6 6"/>',
     shield: '<path d="M12 3.1 19.2 6v5.1c0 4.7-2.9 8.1-7.2 10-4.3-1.9-7.2-5.3-7.2-10V6z"/><path d="m9.1 12 2 2 4-4"/>',
@@ -146,12 +170,14 @@ function icon(name) {
     clean: '<path d="M5.5 7.5h13M9.5 7.5V5h5v2.5M8 10.5v7M12 10.5v7M16 10.5v7M7 7.5l.8 12h8.4l.8-12"/>',
     lock: '<rect x="5.5" y="10.4" width="13" height="9" rx="1.6"/><path d="M8.5 10.4V7.5a3.5 3.5 0 0 1 7 0v2.9"/>',
     file: '<path d="M6.5 3.5h7.6l3.4 3.4v13.6h-11z"/><path d="M14 3.7v4h3.7M9 12h6M9 15.5h4"/>',
-    folder: '<path d="M3.5 7.5h6l1.7 2h9.3v9.5h-17z"/><path d="M3.5 7.5v-1h6l1.7 2"/>',
+    folder: '<path d="M3 7V5.5A1.5 1.5 0 0 1 4.5 4H9l2 3h8.5A1.5 1.5 0 0 1 21 8.5v10a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18.5z"/>',
     travel: '<path d="M5 7.5h14v12H5z"/><path d="M8 7.5V5h8v2.5M8.5 12h7M12 9.5v5"/>',
     refresh: '<path d="M19 8.5A7.5 7.5 0 1 0 20 13"/><path d="M19 4.5v4h-4"/>',
     warning: '<path d="m12 4 8 15H4z"/><path d="M12 9v4M12 16.5h.01"/>',
     check: '<path d="m5 12 4.2 4.2L19 6.5"/>',
-    recovery: '<path d="M12 4.2 19 7v4.8c0 4.1-2.6 7.3-7 8.9-4.4-1.6-7-4.8-7-8.9V7z"/><path d="M9 12.2h6M12 9.2v6"/>',
+    recovery: '<rect x="4" y="5" width="16" height="14" rx="2"/><path d="M4 10h16M9 14h6M9 3h6"/>',
+    key: '<circle cx="8" cy="9" r="4"/><path d="m11 12 8 8m-4-4 2-2m-5-1 2-2"/>',
+    search: '<circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.5 15.5 5 5"/>',
     globe: '<circle cx="12" cy="12" r="8.5"/><path d="M3.8 12h16.4M12 3.5c2.1 2.3 3.2 5.1 3.2 8.5s-1.1 6.2-3.2 8.5c-2.1-2.3-3.2-5.1-3.2-8.5S9.9 5.8 12 3.5z"/>',
   };
   return `<svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.55" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths[name] || paths.overview}</svg>`;
@@ -205,10 +231,11 @@ function localNetworkIcon(kind, values) {
 function networkIdentityMark(kind, values) {
   const candidate = Array.isArray(values) ? values.find(Boolean) : values;
   const className = "network-identity-logo network-identity-logo-" + kind;
-  const palette = kind === "application"
-    ? ["applications", "file", "folder", "shield", "activity", "lock"]
-    : ["network", "globe", "shield", "lock", "folder", "activity"];
-  const glyph = palette[identityColor(candidate)];
+  // Colour gives stable recognition; the symbol describes the kind of object.
+  // Hashing must never turn an IP address into a folder or a process into a lock.
+  const basename = String(candidate || "").split("/").pop();
+  const serviceGlyph = {"systemd-resolved": "resolver", "chronyd": "clock"}[basename];
+  const glyph = kind === "application" ? serviceGlyph || "applications" : "globe";
   const localIcon = localNetworkIcon(kind, values);
   const visual = localIcon
     ? `<img src="./assets/network-icons/${localIcon}.svg" alt="" draggable="false">`
@@ -228,7 +255,7 @@ function stateLabel(value) {
     CURRENT: "state.current", OUTDATED: "state.outdated", DEGRADED: "state.degraded", OPERATING: "state.active",
     ACTIVE: "state.active", INACTIVE: "state.inactive", DISABLED: "state.inactive", ERROR: "state.unavailable",
     DETECTED: "file.state.detected", QUARANTINED: "file.state.quarantined", RESTORED: "file.state.restored",
-    DELETED: "file.state.deleted", QUARANTINE_FAILED: "file.state.quarantineFailed", RESTORE_FAILED: "file.state.restoreFailed",
+    SOURCE_MISSING: "file.state.sourceMissing", DELETED: "file.state.deleted", QUARANTINE_FAILED: "file.state.quarantineFailed", RESTORE_FAILED: "file.state.restoreFailed",
     DELETE_FAILED: "file.state.deleteFailed", SCANNING: "file.state.scanning", FINALIZING: "file.state.finalizing", QUEUED: "file.state.queued",
   };
   if (labels[normalized]) return copy(labels[normalized]);
@@ -236,6 +263,7 @@ function stateLabel(value) {
 }
 function tone(value) {
   const normalized = String(value || "unknown").toLowerCase();
+  if (["positive", "review", "critical", "uncertain", "muted"].includes(normalized)) return normalized;
   if (["secure", "protected", "current", "healthy", "complete", "success", "operating", "allowed"].includes(normalized)) return "positive";
   if (["review", "review needed", "needs attention", "attention", "action_required", "outdated", "degraded", "available"].includes(normalized)) return "review";
   if (["action", "threat", "failed", "error", "denied"].includes(normalized)) return "critical";
@@ -247,17 +275,33 @@ function status(value, valueTone = value, options = {}) {
   return `<span class="status status-${tone(valueTone)}"${options.markerOnly ? ` aria-label="${esc(label)}" title="${esc(label)}"` : ""}><i aria-hidden="true"></i>${options.markerOnly ? "" : `<span>${esc(label)}</span>`}</span>`;
 }
 function primaryNavMarkup() {
-  return primaryNav.map(([id, labelKey, glyph]) => {
+  let group;
+  return primaryNav.map(([id, labelKey, glyph, section]) => {
     const active = currentPage === normalizePage(id) || pageParents[currentPage] === id;
-    return `<button class="nav-item ${active ? "active" : ""}" data-page="${id}" aria-label="${esc(t(labelKey))}" title="${esc(t(labelKey))}" aria-current="${active ? "page" : "false"}"><span class="nav-icon">${icon(glyph)}</span><span>${esc(t(labelKey))}</span></button>`;
+    const heading = section && section !== group ? `<div class="nav-group-label">${esc(t(section))}</div>` : "";
+    group = section;
+    return `${heading}<button class="nav-item ${active ? "active" : ""}" data-page="${id}" aria-label="${esc(t(labelKey))}" title="${esc(t(labelKey))}" aria-current="${active ? "page" : "false"}"><span class="nav-icon">${icon(glyph)}</span><span>${esc(t(labelKey))}</span></button>`;
   }).join("");
 }
 function shell(content, options = {}) {
-  const label = pageName(currentPage);
-  const parent = pageParents[currentPage];
-  const path = parent ? `<span>${esc(t("app.name"))}</span><b aria-hidden="true">/</b><button class="breadcrumb-link" data-page="${esc(parent)}">${esc(pageName(parent))}</button><b aria-hidden="true">/</b><strong>${esc(label)}</strong>` : `<span>${esc(t("app.name"))}</span><b aria-hidden="true">/</b><strong>${esc(label)}</strong>`;
-  return `<div class="app-shell" aria-busy="${options.busy ? "true" : "false"}"><aside class="security-index"><div class="index-brand"><img src="./greyward-symbol.svg" alt="GREYWARD"><div><strong>GREYWARD</strong><span>${esc(t("app.name"))}</span></div></div><nav class="nav-list" aria-label="${esc(t("app.sections"))}">${primaryNavMarkup()}</nav><div class="index-foot"><span class="status-mark" aria-hidden="true"></span><div><strong>${esc(t("app.localSecurity"))}</strong><small>${esc(t("app.measured"))}</small></div></div></aside><main class="workspace"><header class="context-strip"><div class="context-path">${path}</div></header><div class="content-frame">${content}</div><div class="action-status app-action-status" data-live-status role="status" aria-live="polite" aria-atomic="true">${esc(deviationState.feedback)}</div></main></div>`;
-}function pageHeader(eyebrow, title, copy, action = "") {
+  return `<div class="app-shell" aria-busy="${options.busy ? "true" : "false"}"><aside class="security-index"><div class="index-brand"><img src="./greyward-security-center.svg" alt=""><div><strong>GREYWARD</strong><span>${esc(t("app.name"))}</span></div></div><nav class="nav-list" aria-label="${esc(t("app.sections"))}">${primaryNavMarkup()}</nav></aside><main class="workspace"><div class="content-frame">${content}</div><div class="action-status app-action-status" data-live-status role="status" aria-live="polite" aria-atomic="true">${esc(deviationState.feedback)}</div></main></div>`;
+}
+// Keep the desktop chrome and navigation mounted. Provider reads replace only
+// their route content; listeners, focus and sidebar paint survive navigation.
+function mountPage(content, options = {}) {
+  const root = app.querySelector(".app-shell"), frame = app.querySelector(".content-frame");
+  if (!root || !frame) { app.innerHTML = shell(content, options); return; }
+  frame.innerHTML = content;
+  root.setAttribute("aria-busy", options.busy ? "true" : "false");
+  app.querySelectorAll(".nav-item").forEach(button => {
+    const active = currentPage === normalizePage(button.dataset.page) || pageParents[currentPage] === button.dataset.page;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-current", active ? "page" : "false");
+  });
+  const status = app.querySelector("[data-live-status]");
+  if (status) status.textContent = deviationState.feedback;
+}
+function pageHeader(eyebrow, title, copy, action = "") {
   return `<header class="page-header"><div class="page-heading"><div class="page-heading-row"><h1>${esc(title)}</h1></div>${copy ? `<p>${esc(copy)}</p>` : ""}</div>${action ? `<div class="page-header-action">${action}</div>` : ""}</header>`;
 }function actionButton(label, detail, kind = "secondary", attrs = "", glyph = "arrow") {
   return `<button class="action-button ${kind}" ${attrs} title="${esc(detail || label)}"><span class="action-icon">${icon(glyph)}</span><span class="action-label">${esc(label)}</span>${kind === "primary" && glyph !== "arrow" ? `<span class="action-arrow">${icon("arrow")}</span>` : ""}</button>`;
@@ -293,7 +337,7 @@ function findingMarkup(finding, index) {
 function domainMarkup(domain) {
   const destination = domain.destination || "protection";
   const nameKey = domain.name_key || "";
-  const glyph = nameKey === "evidence.domain.network" ? "network" : nameKey === "evidence.domain.applications" ? "applications" : nameKey === "evidence.domain.devices" ? "devices" : nameKey === "evidence.domain.privacy" ? "privacy" : "shield";
+  const glyph = nameKey === "evidence.domain.network" ? "network" : nameKey === "evidence.domain.applications" ? "applications" : nameKey === "evidence.domain.devices" ? "devices" : nameKey === "evidence.domain.privacy" ? "privacy" : nameKey === "evidence.domain.system" ? "system" : "lock";
   const values = domain.copy_values || {};
   const name = copy(nameKey, values) || domain.name || copy("overview.domain.unnamed");
   const context = copy(domain.context_key || "", values) || domain.context || copy("overview.domain.noContext");
@@ -315,7 +359,7 @@ function deviationAction(row) {
 }
 function recoveryDeviationAction(row) {
   const value = String(row?.value || "").toUpperCase();
-  const accepted = value === "PROTECTED";
+  const accepted = row?.value_key === "evidence.limitation.accepted" || value === "PROTECTED";
   return ["REVIEW NEEDED", "ACTION REQUIRED", "UNAVAILABLE", "PROTECTED"].includes(value)
     ? `<button class="text-button evidence-deviation" data-deviation-id="recovery.readiness" data-deviation-accepted="${accepted ? "false" : "true"}">${esc(copy(accepted ? "evidence.deviation.restore" : "evidence.deviation.ignore"))} ${icon("arrow")}</button>`
     : "";
@@ -335,43 +379,43 @@ function evidenceNextStep(row) {
     : `<span class="evidence-next-copy">${esc(evidenceCopy(row, "no_remediation_key", "evidence.remediation.noDirect"))}</span>`;
 }
 function evidenceResolutionMarkup(row) {
-  return `<article class="evidence-resolution-card tone-${tone(row.tone)}"><div class="evidence-resolution-top"><div class="evidence-resolution-title"><strong>${esc(evidenceCopy(row, "title_key", "system.checks.unnamed"))}</strong></div>${status(row.state, row.tone, {canonical:true})}</div><div class="evidence-resolution-summary"><p>${esc(evidenceCopy(row, "summary_key", "system.checks.noSummary"))}</p></div><div class="evidence-next-step"><p>${esc(evidenceCopy(row, "recommendation_key", "system.checks.noAction"))}</p><div class="evidence-next-actions">${evidenceNextStep(row)}${deviationAction(row)}</div></div></article>`;
+  return `<article class="evidence-resolution-card tone-${tone(row.tone)}"><div class="evidence-resolution-top"><div class="evidence-resolution-title"><strong>${esc(evidenceCopy(row, "title_key", "system.checks.unnamed"))}</strong></div>${status(row.state, row.tone, {canonical:true})}${row.accepted_deviation ? `<span class="section-meta">${esc(copy("evidence.limitation.accepted"))}</span>` : ""}</div><div class="evidence-resolution-summary"><p>${esc(evidenceCopy(row, "summary_key", "system.checks.noSummary"))}</p></div><div class="evidence-next-step"><p>${esc(evidenceCopy(row, "recommendation_key", "system.checks.noAction"))}</p><div class="evidence-next-actions">${evidenceNextStep(row)}${deviationAction(row)}</div></div></article>`;
 }
 function evidenceTechnicalMarkup(row) {
   const technical = row.technical || {};
   const technicalRecord = `<dl><div><dt>${esc(copy("system.checks.reference"))}</dt><dd><code>${esc(technical.reference || row.check_id || copy("ui.unavailable"))}</code></dd></div><div><dt>${esc(copy("system.checks.technicalReason"))}</dt><dd><code>${esc(technical.reason_code || copy("ui.unavailable"))}</code></dd></div><div><dt>${esc(copy("system.checks.observed"))}</dt><dd>${esc(localizedTime(technical.observed_at))}</dd></div><div><dt>${esc(copy("system.checks.freshUntil"))}</dt><dd>${esc(localizedTime(technical.fresh_until))}</dd></div></dl>`;
-  return `<article class="evidence-row tone-${tone(row.tone)}"><div class="evidence-row-top"><strong>${esc(evidenceCopy(row, "title_key", "system.checks.unnamed"))}</strong>${status(row.state, row.tone, {canonical:true})}</div><p>${esc(evidenceCopy(row, "summary_key", "system.checks.noSummary"))}</p><small>${esc(evidenceCopy(row, "recorded_result_key", "system.checks.notRecorded"))} · ${esc(t("system.checks.evidenceCount", {count: row.evidence_count ?? 0}))}</small><p>${esc(evidenceCopy(row, "recommendation_key", "system.checks.noAction"))}</p>${technicalDisclosure(copy("system.checks.technicalRecord"), "", technicalRecord)}${deviationAction(row)}</article>`;
+  return `<article class="evidence-row tone-${tone(row.tone)}"><div class="evidence-row-top"><strong>${esc(evidenceCopy(row, "title_key", "system.checks.unnamed"))}</strong>${status(row.state, row.tone, {canonical:true})}${row.accepted_deviation ? `<span class="section-meta">${esc(copy("evidence.limitation.accepted"))}</span>` : ""}</div><p>${esc(evidenceCopy(row, "summary_key", "system.checks.noSummary"))}</p><small>${esc(evidenceCopy(row, "recorded_result_key", "system.checks.notRecorded"))} Ã‚Â· ${esc(t("system.checks.evidenceCount", {count: row.evidence_count ?? 0}))}</small><p>${esc(evidenceCopy(row, "recommendation_key", "system.checks.noAction"))}</p>${technicalDisclosure(copy("system.checks.technicalRecord"), "", technicalRecord)}${deviationAction(row)}</article>`;
 }
 
-function overviewMarkup(data, digest = {}) {
+function overviewMarkup(data, digest = {}, guard = {}) {
   const overview = data.overview || data;
-  const posture = overview.posture || {state:"UNAVAILABLE", tone:"unavailable", message_key:"overview.posture.unavailable.message", care_key:"overview.posture.unavailable.care", evaluated_at:copy("ui.unknown")};
+  const systemPosture = overview.posture || {state:"UNAVAILABLE", tone:"unavailable", message_key:"overview.posture.unavailable.message", care_key:"overview.posture.unavailable.care", evaluated_at:copy("ui.unknown")};
+  const posture = applicationView.overviewPosture(systemPosture, guard);
   const digestFindings = Array.isArray(digest.unresolved_findings) ? digest.unresolved_findings.map((item) => ({...item, state:"REVIEW NEEDED", tone:"review", summary:item.summary, context:copy("overview.digest.context"), destination:item.destination || "overview"})) : [];
-  const findings = (overview.priority_findings || []).length ? overview.priority_findings : digestFindings;
-  const domains = overview.domains || [];
-  const activity = overviewActivity(overview, digest);
+  const existingFindings = (overview.priority_findings || []).length ? overview.priority_findings : digestFindings;
+  const findings = posture !== systemPosture ? [{title_key: "guard.overview.title", summary_key: "guard.overview.incomplete", destination: "protected-data"}, ...existingFindings] : existingFindings;
+  const domains = applicationView.overviewDomains(overview.domains || [], guard);
   const next = findings[0];
   const remainingFindings = findings.slice(1);
   const postureValues = posture.copy_values || {};
-  const postureMessage = posture.state === "REVIEW NEEDED" ? copy("overview.posture.review.next") : copy(posture.message_key || "", postureValues) || posture.message || copy("overview.posture.unavailable.message");
+  const postureMessage = posture !== systemPosture ? copy("guard.overview.incomplete") : posture.state === "REVIEW NEEDED" ? copy("overview.posture.review.next") : copy(posture.message_key || "", postureValues) || posture.message || copy("overview.posture.unavailable.message");
   const nextValues = next?.copy_values || {};
   const nextTitle = next ? (copy(next.title_key || "", nextValues) || next.title || copy("overview.finding.unnamed")) : "";
   const nextSummary = next ? (copy(next.summary_key || "", nextValues) || next.summary || copy("overview.finding.noSummary")) : "";
   const limited = Number(overview.metrics?.unavailable || 0) > 0 && ["PROTECTED", "SECURE"].includes(posture.state);
   const decision = next ? `<div class="brief-decision"><div class="eyebrow">${esc(t("overview.next"))}</div><h2>${esc(nextTitle)}</h2><p>${esc(nextSummary)}</p>${actionButton(copy("overview.reviewAction", {name: nextTitle}), copy("overview.reviewAction.detail"), "primary", `data-page="${esc(normalizePage(next.destination || "system"))}"`, "arrow")}</div>` : `<div class="brief-decision ${posture.state === "UNAVAILABLE" || limited ? "review" : "calm"}"><div class="eyebrow">${esc(t("overview.next"))}</div><h2>${esc(copy(posture.state === "UNAVAILABLE" ? "overview.unavailable.title" : limited ? "overview.limited.title" : "overview.noAction.title"))}</h2>${actionButton(t("overview.viewSystem"), copy("overview.viewSystem.detail"), "secondary", 'data-page="system"', "shield")}</div>`;
   const findingsSection = remainingFindings.length ? `<section class="overview-section priority-section"><div class="section-heading"><div><div class="eyebrow">${esc(copy("overview.more.eyebrow"))}</div><h2>${esc(copy("overview.more.count", {count: remainingFindings.length}))}</h2></div></div><div class="finding-list">${remainingFindings.map((finding, index) => findingMarkup(finding, index + 2)).join("")}</div></section>` : "";
-  const digestState = digest.source_state?.state || "AVAILABLE";
-  const digestActivity = digestState === "AVAILABLE" ? activity : [];
-  return `${pageHeader(copy("overview.eyebrow"), t("nav.overview"), "", actionButton(t("ui.refresh"), copy("overview.refresh.detail"), "secondary", "data-refresh", "refresh"))}<section class="overview-brief tone-${tone(posture.tone)}"><div class="brief-index"><div class="eyebrow">${esc(copy("overview.posture.eyebrow"))}</div></div><div class="brief-main"><div class="brief-state"><div class="eyebrow">${esc(copy("design.overview.scope"))}</div><h2>${esc(copy(`design.posture.${posture.state === "SECURE" ? "secure" : posture.state === "PROTECTED" ? "protected" : posture.state === "REVIEW NEEDED" ? "review" : "unavailable"}`))}</h2></div>${posture.state === "REVIEW NEEDED" ? "" : `<p>${esc(postureMessage)}</p>`}<div class="brief-context"><span>${esc(copy(posture.care_key || "", postureValues) || posture.care || copy("overview.posture.unavailable.care"))}</span><time>${esc(t("ui.checked", {time: localizedTime(posture.evaluated_at, copy("ui.unknown"))}))}</time></div></div>${decision}</section>${findingsSection}<div class="overview-lower product-overview"><section class="overview-section domain-section"><div class="section-heading"><div><div class="eyebrow">${esc(copy("overview.domains.eyebrow"))}</div><h2>${esc(copy("overview.domains.title"))}</h2></div><button class="text-button" data-page="system">${esc(copy("overview.domains.action"))} ${icon("arrow")}</button></div><div class="domain-list">${domains.map(domainMarkup).join("")}</div></section><details class="technical-disclosure overview-section activity-section"><summary><span>${esc(copy("overview.activity.title"))}</span></summary>${digestState !== "AVAILABLE" ? emptyState(copy("overview.activity.unavailable.title"), copy("overview.activity.unavailable.copy"), "activity") : digestActivity.length ? `<div class="activity-list">${digestActivity.slice(0, 5).map(activityMarkup).join("")}</div>` : emptyState(copy("overview.activity.empty.title"), copy("overview.activity.empty.copy"), "activity")}</details></div>`;
+  const administration = `<section class="overview-protection"><span class="guard-item-icon" aria-hidden="true">${icon("terminal")}</span><div><strong>${esc(copy("administration.title"))}</strong><p>${esc(copy("administration.copy"))}</p><p id="administration-status" role="status"></p></div><button class="secondary" data-administration-open disabled>${esc(copy("administration.open"))}</button></section>`;
+  return `${pageHeader(copy("overview.eyebrow"), t("nav.overview"), "", actionButton(t("ui.refresh"), copy("overview.refresh.detail"), "secondary", "data-refresh", "refresh"))}<section class="overview-brief tone-${tone(posture.tone)}"><div class="brief-index"><div class="eyebrow">${esc(copy("overview.posture.eyebrow"))}</div></div><div class="brief-main"><div class="brief-state"><div class="eyebrow">${esc(copy("design.overview.scope"))}</div><h2>${esc(copy(`design.posture.${posture.state === "SECURE" ? "secure" : posture.state === "PROTECTED" ? "protected" : posture.state === "REVIEW NEEDED" ? "review" : "unavailable"}`))}</h2></div>${posture.state === "REVIEW NEEDED" ? "" : `<p>${esc(postureMessage)}</p>`}<div class="brief-context"><span>${esc(copy(posture.care_key || "", postureValues) || posture.care || copy("overview.posture.unavailable.care"))}</span><time>${esc(t("ui.checked", {time: localizedTime(posture.evaluated_at, copy("ui.unknown"))}))}</time></div></div>${decision}</section>${findingsSection}<section id="guard-overview" aria-live="polite">${applicationView.overviewSummary(guard)}</section><div class="overview-lower product-overview"><section class="overview-section domain-section"><div class="section-heading"><div><div class="eyebrow">${esc(copy("overview.domains.eyebrow"))}</div><h2>${esc(copy("overview.domains.title"))}</h2></div><button class="text-button" data-page="system">${esc(copy("overview.domains.action"))} ${icon("arrow")}</button></div><div class="domain-list">${domains.map(domainMarkup).join("")}</div></section>${administration}${overviewActivitySection(overview, digest)}</div>`;
 }function plainSection(eyebrow, title, rows, glyph) { return `<section class="plain-section"><div class="section-heading"><div><div class="eyebrow">${esc(eyebrow)}</div><h2>${esc(title)}</h2></div></div>${rows.length ? rows.map((row) => statusRow(row, true)).join("") : emptyState(copy("ui.unavailable"), copy("ui.unavailableCopy"), glyph)}</section>`; }
 
 function secureDnsMarkup(dns) {
   const state = String(dns.effective_policy || "UNAVAILABLE");
   const transport = String(dns.effective_transport || "UNKNOWN");
   const mode = String(dns.desired_policy || "Automatic");
-  const toneName = state === "SecureProvider" || state === "VPNOwned" ? "positive" : state === "CompatibilityFallback" ? "review" : "unavailable";
+  const toneName = state === "SecureProvider" ? "positive" : state === "VPNOwned" ? "neutral" : state === "CompatibilityFallback" ? "review" : "unavailable";
   const options = [["Automatic", "network.dns.mode.automatic"], ["Privacy", "network.dns.mode.privacy"], ["NetworkDefault", "network.dns.mode.networkDefault"]].map(([value, labelKey]) => `<option value="${value}"${value === mode ? " selected" : ""}>${esc(copy(labelKey))}</option>`).join("");
-  const chain = (dns.provider_order || ["quad9", "controld", "adguard"]).map((value) => ({quad9:"Quad9", controld:"Control D", adguard:"AdGuard"}[value] || value)).join(" → ");
+  const chain = (dns.provider_order || ["quad9", "controld", "adguard"]).map((value) => ({quad9:"Quad9", controld:"Control D", adguard:"AdGuard"}[value] || value)).join(" Ã¢â€ â€™ ");
   const stateKey = {SecureProvider:"network.dns.state.secure", VPNOwned:"network.dns.state.vpn", CompatibilityFallback:"network.dns.state.fallback"}[state] || "network.dns.state.unavailable";
   const detail = dns.degradation_reason ? copy("network.dns.detail.degraded") : (dns.effective_owner === "VPN" ? copy("network.dns.detail.vpn") : copy(dns.public_scope === "system" && state === "SecureProvider" ? "network.dns.detail.split" : "network.dns.detail.measured"));
   const facts = `<p>${esc(copy("network.dns.facts", {transport, validation:dns.validation || copy("network.dns.unknown"), provider:dns.provider || copy("network.dns.unknown")}))}</p>`;
@@ -411,7 +455,7 @@ function networkProtectionMarkup(data) {
     linkState === "UNAVAILABLE" ? copy("network.protection.detail.unavailable") : copy("network.protection.noActivityCopy"),
     "applications",
   );
-  const ruleRows = rules.length ? rules.map((rule) => `<article class="network-rule-row"><div><strong>${esc(rule.name || copy("network.protection.connectionRule"))}</strong><p class="network-rule-scope"><span class="network-activity-identity">${networkIdentityMark("application", rule.scope?.application)}<span>${esc(rule.scope?.application || copy("network.protection.allApplications"))}</span></span>${rule.scope?.destination ? ` · <span class="network-activity-identity">${networkDestinationIdentity(rule.scope.destination.host || rule.scope.destination.ip || copy("network.protection.noDestination"))}<span>${esc(rule.scope.destination.host || rule.scope.destination.ip || copy("network.protection.noDestination"))}${rule.scope.destination.port ? `:${esc(rule.scope.destination.port)}` : ""}</span></span>` : ""}</p></div>${status(rule.action || "UNKNOWN", rule.action === "ALLOW" ? "allowed" : "review")}${rule.mutable ? `<button class="text-button" data-network-remove data-rule-id="${esc(rule.id)}" title="${esc(copy("network.protection.removeRuleDetail"))}">${esc(copy("network.protection.removeRule"))} ${icon("clean")}</button>` : `<span class="network-readonly">${esc(copy("network.protection.managedElsewhere"))}</span>`}</article>`).join("") : emptyState(copy("network.protection.noRules"), linkState === "UNAVAILABLE" ? copy("network.protection.noRulesUnavailable") : copy("network.protection.noRulesCopy"), "shield");
+  const ruleRows = rules.length ? rules.map((rule) => `<article class="network-rule-row"><div><strong>${esc(rule.name || copy("network.protection.connectionRule"))}</strong><p class="network-rule-scope"><span class="network-activity-identity">${networkIdentityMark("application", rule.scope?.application)}<span>${esc(rule.scope?.application || copy("network.protection.allApplications"))}</span></span>${rule.scope?.destination ? ` Ã‚Â· <span class="network-activity-identity">${networkDestinationIdentity(rule.scope.destination.host || rule.scope.destination.ip || copy("network.protection.noDestination"))}<span>${esc(rule.scope.destination.host || rule.scope.destination.ip || copy("network.protection.noDestination"))}${rule.scope.destination.port ? `:${esc(rule.scope.destination.port)}` : ""}</span></span>` : ""}</p></div>${status(rule.action || "UNKNOWN", rule.action === "ALLOW" ? "allowed" : "review")}${rule.mutable ? `<button class="text-button" data-network-remove data-rule-id="${esc(rule.id)}" title="${esc(copy("network.protection.removeRuleDetail"))}">${esc(copy("network.protection.removeRule"))} ${icon("clean")}</button>` : `<span class="network-readonly">${esc(copy("network.protection.managedElsewhere"))}</span>`}</article>`).join("") : emptyState(copy("network.protection.noRules"), linkState === "UNAVAILABLE" ? copy("network.protection.noRulesUnavailable") : copy("network.protection.noRulesCopy"), "shield");
   const capabilityDetails = `${statusRow({label:copy("network.protection.capability.installed"),value:opensnitch.capabilities?.installed ? "INSTALLED" : "UNAVAILABLE",tone:opensnitch.capabilities?.installed ? "positive" : "unavailable",detail:copy("network.protection.capability.installedDetail")}, true)}${statusRow({label:copy("network.protection.capability.activity"),value:opensnitch.capabilities?.activity && linkState === "OPERATING" ? "AVAILABLE" : "UNAVAILABLE",tone:opensnitch.capabilities?.activity && linkState === "OPERATING" ? "positive" : "unavailable",detail:copy("network.protection.capability.activityDetail")}, true)}${statusRow({label:copy("network.protection.capability.rules"),value:mutationAvailable ? "AVAILABLE" : "UNAVAILABLE",tone:mutationAvailable ? "positive" : "unavailable",detail:mutationAvailable ? copy("network.protection.capability.rulesAvailable") : copy("network.protection.capability.rulesUnavailable")}, true)}`;
   const actionStatus = data.probe_feedback || networkActionState.feedback || (opensnitch.capabilities?.interactive_prompts === "DEFERRED" ? copy("network.protection.interactiveDeferred") : statusMessage);
   return `${pageHeader(copy("network.protection.eyebrow"), copy("network.protection"), copy("network.protection.copy"), actionButton(copy("ui.refresh"), copy("network.protection.refresh"), "secondary", "data-refresh", "refresh") + actionButton(copy("network.protection.test"), copy("network.protection.testDetail"), "secondary", "data-network-probe", "network"))}<section class="network-protection-hero tone-${tone(overallState)}"><div><h2>${esc(connectionHeadline)}</h2><p>${esc(overallState === "PROTECTED" ? copy("network.protection.detail.protected") : overallState === "UNAVAILABLE" ? copy("design.network.unavailable") : copy("design.network.attention"))}</p></div></section><section class="network-protection-grid"><article class="network-capability-card"><div class="eyebrow">${esc(copy("network.protection.appControl"))}</div><h3>${esc(healthLabel)}</h3>${technicalDisclosure(copy("ui.technical"), "", `<p>${esc(statusMessage)}</p>`)}<button class="text-button" data-page="activity">${esc(copy("network.protection.viewActivity"))} ${icon("arrow")}</button></article><article class="network-capability-card"><div class="eyebrow">${esc(copy("network.protection.firewallControl"))}</div><h3>${esc(firewalld.zone || copy("network.protection.noZone"))}</h3><p>${esc(copy("network.protection.firewallBoundary"))}</p><div class="network-card-actions">${controls}</div></article></section>${secureDnsMarkup(dns)}<div class="network-action-status" id="network-action-status" role="status" aria-live="polite">${esc(actionStatus)}</div><section class="plain-section network-applications-section"><div class="section-heading"><div><div class="eyebrow">${esc(copy("network.protection.appControl"))}</div><h2>${esc(copy("network.protection.observedApplications"))}</h2></div><span class="section-meta">${esc(applications.length)}</span></div><div class="network-app-list">${appRows}</div></section>${technicalDisclosure(copy("network.protection.savedRules"), rules.length, `<div class="network-rule-list">${ruleRows}</div>`)}${technicalDisclosure(copy("network.protection.capability"), "", capabilityDetails)}`;
@@ -423,14 +467,14 @@ function threatEventMarkup(item, focused = false) {
   const exception = item.executable && destination.ip && destination.port
     ? `<button class="text-button" data-threat-exception data-application="${esc(item.executable)}" data-threat-ip="${esc(destination.ip)}" data-threat-port="${esc(destination.port)}">${esc(copy("network.threats.allow"))} ${icon("arrow")}</button>`
     : "";
-  return `<article class="network-threat-event${focused ? " is-focused" : ""}" data-threat-event="${esc(eventId)}"><div><strong>${esc(item.application || copy("network.protection.unknownApplication"))}</strong><p>${esc(destination.ip || copy("network.protection.noDestination"))}:${esc(destination.port || "")}</p><small>${esc(copy("network.threats.time"))} · ${esc(localizedTime(item.occurred_at, copy("network.activity.unknownTime")))}</small>${threat.malware ? `<small>${esc(copy("network.threats.malware"))}: ${esc(threat.malware)}</small>` : ""}</div>${exception}</article>`;
+  return `<article class="network-threat-event${focused ? " is-focused" : ""}" data-threat-event="${esc(eventId)}"><div><strong>${esc(item.application || copy("network.protection.unknownApplication"))}</strong><p>${esc(destination.ip || copy("network.protection.noDestination"))}:${esc(destination.port || "")}</p><small>${esc(copy("network.threats.time"))} Ã‚Â· ${esc(localizedTime(item.occurred_at, copy("network.activity.unknownTime")))}</small>${threat.malware ? `<small>${esc(copy("network.threats.malware"))}: ${esc(threat.malware)}</small>` : ""}</div>${exception}</article>`;
 }
 function threatProtectionMarkup(data) {
   const threat = data || {};
   const state = String(threat.state || "ERROR").toUpperCase();
   const recent = Array.isArray(threat.recent_blocked_connections) ? threat.recent_blocked_connections : [];
   const exceptions = Array.isArray(threat.exceptions) ? threat.exceptions : [];
-  const exceptionRows = exceptions.length ? exceptions.map((rule) => `<article class="network-rule-row"><div><strong>${esc(rule.name || copy("network.threats.exceptions"))}</strong><p>${esc(rule.scope?.application || copy("network.protection.unknownApplication"))} · ${esc(rule.scope?.destination?.ip || "")}:${esc(rule.scope?.destination?.port || "")}</p></div><button class="text-button" data-network-remove data-rule-id="${esc(rule.id)}">${esc(copy("network.threats.revoke"))} ${icon("clean")}</button></article>`).join("") : emptyState(copy("network.threats.noExceptions"), copy("network.threats.noExceptionsCopy"), "shield");
+  const exceptionRows = exceptions.length ? exceptions.map((rule) => `<article class="network-rule-row"><div><strong>${esc(rule.name || copy("network.threats.exceptions"))}</strong><p>${esc(rule.scope?.application || copy("network.protection.unknownApplication"))} Ã‚Â· ${esc(rule.scope?.destination?.ip || "")}:${esc(rule.scope?.destination?.port || "")}</p></div><button class="text-button" data-network-remove data-rule-id="${esc(rule.id)}">${esc(copy("network.threats.revoke"))} ${icon("clean")}</button></article>`).join("") : emptyState(copy("network.threats.noExceptions"), copy("network.threats.noExceptionsCopy"), "shield");
   const recentRows = recent.length ? recent.map((item) => threatEventMarkup(item, String(item.event_id) === focusedThreatEventId)).join("") : emptyState(copy("network.threats.empty"), copy("network.threats.emptyCopy"), "network");
   const statusText = state === "DISABLED" ? copy("network.threats.disabled") : state === "READY" || state === "EMPTY" ? copy("network.threats.enabled") : copy("network.threats.unavailable");
   const toggle = actionButton(state === "DISABLED" ? copy("network.threats.enable") : copy("network.threats.disable"), copy("network.threats.action"), state === "DISABLED" ? "primary" : "secondary", "data-threat-toggle", state === "DISABLED" ? "shield" : "clean");
@@ -500,22 +544,22 @@ function networkCountryFlag(destination) {
   if (signal.code) {
     const confidence = copy(`network.activity.country.confidence.${signal.confidence.toLowerCase()}`);
     if (signal.source === "DOMAIN_SUFFIX") {
-      label = copy("network.activity.country.domainHint", {country: signal.label}) + ` · ${confidence}`;
+      label = copy("network.activity.country.domainHint", {country: signal.label}) + ` Ã‚Â· ${confidence}`;
     } else {
       const base = copy("network.activity.country.inferred", {country: signal.label});
       label = signal.converged || signal.confidence !== "LOW"
-        ? `${base} · ${confidence}`
+        ? `${base} Ã‚Â· ${confidence}`
         : copy("network.activity.country.conflict", {country: signal.label, confidence});
     }
   }
   const visual = signal.code ? networkCountryFlagSvg(signal.code) : networkCountryFlagSvg("UN");
   const sources = Array.isArray(destination?.country_sources) ? destination.country_sources : [];
   for (const item of sources.filter((item) => item?.available)) {
-    label += ` · ${copy(`network.activity.country.source.${item.source}`)}`;
+    label += ` Ã‚Â· ${copy(`network.activity.country.source.${item.source}`)}`;
     const age = Number(item.age_days);
     if (item.age_days != null && Number.isFinite(age) && age >= 0)
-      label += ` · ${copy("network.activity.country.fileAge", {days: Math.floor(age)})}`;
-    if (item.freshness === "STALE") label += ` · ${copy("network.activity.country.stale")}`;
+      label += ` Ã‚Â· ${copy("network.activity.country.fileAge", {days: Math.floor(age)})}`;
+    if (item.freshness === "STALE") label += ` Ã‚Â· ${copy("network.activity.country.stale")}`;
   }
   return `<span class="network-country-flag${signal.code ? "" : " network-country-flag-unknown"}" role="img" aria-label="${esc(label)}" title="${esc(label)}">${visual}</span>`;
 }
@@ -529,7 +573,7 @@ function networkActivityMeta(item) {
   const meta = [];
   if (protocol) meta.push(protocol);
   if (destination.port) meta.push(copy("network.activity.portValue", {port: destination.port}));
-  return meta.join(" · ") || copy("network.activity.detailsUnavailable");
+  return meta.join(" Ã‚Â· ") || copy("network.activity.detailsUnavailable");
 }
 function networkActivityFiltersAreDefault() {
   const filters = networkActivityState.filters;
@@ -550,7 +594,7 @@ function networkActivityProtocols() {
 function networkActivityStatusText() {
   if (networkActivityState.mode === "history") return copy("network.activity.boundedHistory");
   const status = networkActivityState.paused ? copy("network.activity.updatesPaused") : copy("network.activity.updating");
-  return networkActivityState.pending ? `${status} · ${copy("network.activity.newEvents", {count: networkActivityState.pending})}` : status;
+  return networkActivityState.pending ? `${status} Ã‚Â· ${copy("network.activity.newEvents", {count: networkActivityState.pending})}` : status;
 }
 function networkActivityProtocolOptionsMarkup(protocols) {
   return `<option value="ALL">${esc(copy("network.activity.protocol.all"))}</option>${protocols.map((protocol) => `<option value="${esc(protocol)}"${networkActivityState.filters.protocol === protocol ? " selected" : ""}>${esc(protocol)}</option>`).join("")}`;
@@ -568,7 +612,7 @@ function syncNetworkActivityControls() {
     const label = copy(networkActivityState.paused ? "network.activity.resume" : "network.activity.pause");
     const iconSlot = pauseButton.querySelector(".action-icon");
     const labelSlot = pauseButton.querySelector(".action-label");
-    if (iconSlot) iconSlot.innerHTML = icon(networkActivityState.paused ? "arrow" : "activity");
+    if (iconSlot) iconSlot.innerHTML = icon(networkActivityState.paused ? "play" : "pause");
     if (labelSlot) labelSlot.textContent = label;
     pauseButton.title = copy("network.activity.pauseDetail");
     pauseButton.setAttribute("aria-pressed", String(networkActivityState.paused));
@@ -634,7 +678,7 @@ function networkActivityRowMarkup(item) {
   const dnsBypass = mutationAvailable && [53, 853].includes(Number(destination.port));
   const actions = mutationAvailable && (destination.host || destination.ip) ? `<div class="network-activity-actions"><button class="text-button" data-network-set data-application="${esc(item.executable)}" data-network-host="${esc(destination.host || "")}" data-network-ip="${esc(destination.ip || "")}" data-network-port="${esc(destination.port || "")}" data-network-action="allow">${esc(copy("network.protection.alwaysAllow"))} ${icon("arrow")}</button>${dnsBypass ? `<button class="text-button" data-network-set data-network-dns-bypass="true" data-application="${esc(item.executable)}" data-network-port="${esc(destination.port || "")}" data-network-action="allow">${esc(copy("network.protection.allowDnsBypass"))} ${icon("arrow")}</button>` : ""}<button class="text-button" data-network-set data-application="${esc(item.executable)}" data-network-host="${esc(destination.host || "")}" data-network-ip="${esc(destination.ip || "")}" data-network-port="${esc(destination.port || "")}" data-network-action="deny">${esc(copy("network.protection.alwaysBlock"))} ${icon("arrow")}</button></div>` : "";
   const occurredAt = localizedTime(item.occurred_at, copy("network.activity.unknownTime"));
-  const destinationDetail = `<span class="network-activity-destination-detail">${networkCountryFlag(destination)}<span>${esc(destination.host)}${destination.ip && destination.host !== destination.ip ? ` · ${esc(destination.ip)}` : ""}</span></span>`;
+  const destinationDetail = `<span class="network-activity-destination-detail">${networkCountryFlag(destination)}<span>${esc(destination.host)}${destination.ip && destination.host !== destination.ip ? ` Ã‚Â· ${esc(destination.ip)}` : ""}</span></span>`;
   const details = `<div class="network-activity-details"${expanded ? "" : " hidden"}><div><span>${esc(copy("network.activity.detail.destination"))}</span><strong>${destinationDetail}</strong></div><div><span>${esc(copy("network.activity.detail.protocol"))}</span><strong>${esc(String(item.protocol || copy("network.activity.unknown")).toUpperCase())}</strong></div><div><span>${esc(copy("network.activity.detail.port"))}</span><strong>${esc(destination.port || copy("network.activity.unknown"))}</strong></div><div><span>${esc(copy("network.activity.detail.rule"))}</span><strong>${esc(item.rule_name || copy("network.activity.noMatchedRule"))}</strong></div><div><span>${esc(copy("network.activity.detail.source"))}</span><strong>${esc(item.source || copy("network.activity.unknown"))}</strong></div><div><span>${esc(copy("network.activity.detail.observed"))}</span><strong>${esc(occurredAt)}</strong></div>${actions}</div>`;
   return `<article class="network-activity-row${expanded ? " is-expanded" : ""}" data-activity-event="${esc(eventId)}"><button class="network-activity-row-main" type="button" data-activity-toggle="${esc(eventId)}" aria-expanded="${expanded ? "true" : "false"}"><span class="network-activity-identity network-activity-application">${networkIdentityMark("application", [item.application, item.executable])}<strong>${esc(item.application || copy("network.protection.unknownApplication"))}</strong></span><span class="network-activity-identity network-activity-destination">${networkDestinationIdentity(destination)}<strong>${esc(destination.host)}</strong></span><span class="network-decision ${activityDecisionClass(decision)}">${esc(networkActivityDecisionLabel(decision))}</span><span class="network-activity-meta">${esc(networkActivityMeta(item))}</span><time>${esc(occurredAt)}</time><span class="network-activity-expand" aria-hidden="true">${icon("chevron")}</span></button>${details}</article>`;
 }
@@ -658,7 +702,7 @@ function networkActivitySummaryMarkup() {
   const state = String(networkActivityState.state || "UNAVAILABLE").toUpperCase();
   const headline = state === "OPERATING" ? copy("network.activity.state.active") : state === "DEGRADED" ? copy("network.activity.state.delayed") : copy("network.activity.state.unavailable");
   const detail = state === "OPERATING" ? copy("network.activity.detail.operating") : networkActivityState.detail || copy("network.activity.detail.unavailable");
-  return `<section class="network-activity-summary"><article class="network-activity-health"><div class="eyebrow">${esc(copy("network.activity.observation"))}</div><h2>${esc(headline)}</h2><p>${esc(detail)}</p>${status(headline, state === "OPERATING" ? "positive" : state === "DEGRADED" ? "review" : "unknown")}</article><article class="network-summary-card"><span>${esc(copy("network.activity.observed"))}</span><strong>${esc(summary.total || 0)}</strong><small>${esc(copy("network.activity.lastThirtyMinutes"))}</small></article><article class="network-summary-card"><span>${esc(copy("network.activity.decision.allowed"))}</span><strong>${esc(summary.allowed || 0)}</strong><small>${esc(copy("network.activity.observedDecisions"))}</small></article><article class="network-summary-card"><span>${esc(copy("network.activity.decision.blocked"))}</span><strong>${esc(summary.blocked || 0)}</strong><small>${esc(copy("network.activity.observedDecisions"))}</small></article><article class="network-activity-chart"><div><span>${esc(copy("network.activity.rhythm"))}</span><small>${esc(copy("network.activity.boundedWindow"))}</small></div><div class="network-activity-sparkline" aria-label="${esc(copy("network.activity.chartLabel"))}">${bars || "<span style=\"height:8%\"></span>"}</div></article></section>`;
+  return `<section class="network-activity-summary" data-state="${esc(state)}"><article class="network-activity-health"><div class="eyebrow">${esc(copy("network.activity.observation"))}</div><h2>${esc(headline)}</h2><p>${esc(detail)}</p>${status(headline, state === "OPERATING" ? "positive" : state === "DEGRADED" ? "review" : "unknown")}</article><article class="network-summary-card"><span>${esc(copy("network.activity.observed"))}</span><strong>${esc(summary.total || 0)}</strong><small>${esc(copy("network.activity.lastThirtyMinutes"))}</small></article><article class="network-summary-card is-allowed"><span>${esc(copy("network.activity.decision.allowed"))}</span><strong>${esc(summary.allowed || 0)}</strong><small>${esc(copy("network.activity.observedDecisions"))}</small></article><article class="network-summary-card${Number(summary.blocked) > 0 ? " is-blocked" : ""}"><span>${esc(copy("network.activity.decision.blocked"))}</span><strong>${esc(summary.blocked || 0)}</strong><small>${esc(copy("network.activity.observedDecisions"))}</small></article><article class="network-activity-chart"><div><span>${esc(copy("network.activity.rhythm"))}</span><small>${esc(copy("network.activity.boundedWindow"))}</small></div><div class="network-activity-sparkline" aria-label="${esc(copy("network.activity.chartLabel"))}">${bars || "<span style=\"height:8%\"></span>"}</div></article></section>`;
 }
 function networkActivityLegendMarkup() {
   return `<div class="network-activity-legend" aria-label="${esc(copy("network.activity.legend"))}"><span class="network-activity-legend-key"><span class="network-activity-identity">${networkIdentityMark("application", "Application")}<span>${esc(copy("network.activity.legend.application"))}</span></span></span><span class="network-activity-legend-key"><span class="network-activity-identity">${networkDestinationIdentity({host: copy("network.activity.legend.destination"), country_code: ""})}<span>${esc(copy("network.activity.legend.destination"))}</span></span></span><span class="network-activity-legend-note">${esc(copy("network.activity.locationNote"))}</span></div>`;
@@ -716,11 +760,15 @@ function renderNetworkActivityView({renderRows = true} = {}) {
 async function refreshNetworkActivity() {
   if (networkActivityState.mode !== "live" || networkActivityState.requestBusy || currentPage !== "activity" || document.hidden) return;
   networkActivityState.requestBusy = true;
+  const visit = requestSequence;
+  const isCurrent = () => currentPage === "activity" && requestSequence === visit && networkActivityState.mode === "live" && !document.hidden;
   try {
     const result = await invokeBounded("get_network_activity", {sinceSequence: networkActivityState.nextSequence, limit: 256}, 10000);
+    if (!isCurrent()) return;
     syncNetworkActivityData(result, {trackPending: true});
     renderNetworkActivityView({renderRows: !networkActivityState.paused});
   } catch (error) {
+    if (!isCurrent()) return;
     networkActivityState.state = "UNAVAILABLE";
     networkActivityState.detail = actionError(error, copy("network.activity.refreshAction"));
     if (!networkActivityState.paused) renderNetworkActivityView();
@@ -805,16 +853,25 @@ function bindNetworkActivityContent() {
     renderNetworkActivityView();
   }));
 }
-function networkActivityMarkup(data) {
+function networkActivityMarkup(data, embedded = false) {
   syncNetworkActivityData(data);
   const pauseLabel = networkActivityState.paused ? copy("network.activity.resume") : copy("network.activity.pause");
-  return `${pageHeader(copy("network.activity.eyebrow"), copy("network.activity.title"), copy("network.activity.copy"), actionButton(pauseLabel, copy("network.activity.pauseDetail"), "secondary", `data-activity-pause aria-pressed="${networkActivityState.paused ? "true" : "false"}"`, networkActivityState.paused ? "arrow" : "activity") + actionButton(copy("ui.refresh"), copy("network.activity.refreshDetail"), "secondary", "data-refresh", "refresh"))}${networkActivitySummaryMarkup()}<section class="plain-section network-activity-workspace">${networkActivityToolbarMarkup()}${networkActivityLegendMarkup()}<div class="network-activity-list" data-network-activity-list>${networkActivityRowsMarkup()}</div></section><div class="network-action-status" id="network-action-status" role="status" aria-live="polite">${esc(networkActionState.feedback || "")}</div>`;
+  const pause = actionButton(pauseLabel, copy("network.activity.pauseDetail"), "secondary", `data-activity-pause aria-pressed="${networkActivityState.paused ? "true" : "false"}"`, networkActivityState.paused ? "play" : "pause");
+  const header = embedded ? `<div class="section-heading"><div><h2>${esc(copy("network.activity.title"))}</h2><p>${esc(copy("network.activity.copy"))}</p></div>${pause}</div>`
+    : pageHeader(copy("network.activity.eyebrow"), copy("network.activity.title"), copy("network.activity.copy"), pause + actionButton(copy("ui.refresh"), copy("network.activity.refreshDetail"), "secondary", "data-refresh", "refresh"));
+  return `${header}${networkActivitySummaryMarkup()}<section class="plain-section network-activity-workspace">${networkActivityToolbarMarkup()}${networkActivityLegendMarkup()}<div class="network-activity-list" data-network-activity-list>${networkActivityRowsMarkup()}</div></section><div class="network-action-status" id="network-action-status" role="status" aria-live="polite">${esc(networkActionState.feedback || "")}</div>`;
+}
+function securityHistoryMarkup(data) {
+  return `${pageHeader(copy("workspace.monitor"), copy("history.title"), copy("history.copy"), actionButton(copy("ui.refresh"), copy("guard.activity.refresh"), "secondary", "data-refresh", "refresh"))}${securityHistory.markup(data)}`;
+}
+function recoveryProductMarkup(data) {
+  return `${pageHeader(copy("workspace.maintain"), copy("workspace.recovery"), copy("workspace.recovery.copy"), actionButton(copy("ui.refresh"), copy("ui.refresh"), "secondary", "data-refresh", "refresh"))}${recoveryMarkup(data)}`;
 }
 function applicationAccessLabel(value) {
   const labels = {
     SCOPED: "applications.access.scoped", NETWORK: "applications.access.network", PERSONAL_FILES: "applications.access.personalFiles",
     HOST_FILES: "applications.access.hostFiles", DEVICES: "applications.access.devices", ALL_DEVICES: "applications.access.allDevices",
-    DESKTOP_SERVICES: "applications.access.desktopServices",
+    DESKTOP_SERVICES: "applications.access.desktopServices", ADDITIONAL_FILES: "applications.access.additionalFiles",
   };
   return copy(labels[String(value || "SCOPED").toUpperCase()] || "applications.access.scoped");
 }
@@ -826,11 +883,11 @@ function applicationsMarkup(data) {
   const inventoryState = String(data.inventory_state || (rows.length ? "AVAILABLE" : "UNAVAILABLE")).toUpperCase();
   const inventory = rows.length ? `<div class="inventory-list">${rows.map((item) => {
     const reportedCategories = Array.isArray(item.access_categories) && item.access_categories.length ? item.access_categories : null;
-    const access = reportedCategories ? reportedCategories.map(applicationAccessLabel).join(" · ") : copy("applications.access.unavailable");
+    const access = reportedCategories ? reportedCategories.map(applicationAccessLabel).join(" Ã‚Â· ") : copy("applications.access.unavailable");
     const review = Array.isArray(item.review_reasons) ? item.review_reasons.map(applicationAccessLabel) : [];
     const technical = item.technical || {};
-    const rawPermissions = [...(technical.manifest_permissions || []), ...(technical.local_overrides || [])];
-    const detail = `<p>${esc(copy("applications.technical.identifier"))}: <code>${esc(technical.app_id || copy("ui.unavailable"))}</code></p><p>${esc(copy("applications.technical.scope"))}: ${esc(technical.scope || copy("ui.unavailable"))}</p><p>${esc(copy("applications.technical.source"))}: ${esc(technical.origin || copy("ui.unavailable"))} · ${esc(technical.version || copy("ui.unavailable"))}</p><p>${esc(copy("applications.technical.runtime"))}: ${esc(technical.runtime || copy("ui.unavailable"))}</p><p>${esc(copy("applications.technical.permissions"))}: ${rawPermissions.length ? rawPermissions.map(esc).join(" · ") : esc(copy("applications.technical.none"))}</p>`;
+    const rawPermissions = technical.effective_permissions || technical.manifest_permissions || [];
+    const detail = `<p>${esc(copy("applications.technical.identifier"))}: <code>${esc(technical.app_id || copy("ui.unavailable"))}</code></p><p>${esc(copy("applications.technical.scope"))}: ${esc(technical.scope || copy("ui.unavailable"))}</p><p>${esc(copy("applications.technical.source"))}: ${esc(technical.origin || copy("ui.unavailable"))} Ã‚Â· ${esc(technical.version || copy("ui.unavailable"))}</p><p>${esc(copy("applications.technical.runtime"))}: ${esc(technical.runtime || copy("ui.unavailable"))}</p><p>${esc(copy("applications.technical.permissions"))}: ${rawPermissions.length ? rawPermissions.map(esc).join(" Ã‚Â· ") : esc(copy("applications.technical.none"))}</p>`;
     const reviewCopy = review.length ? copy("applications.review.copy", {access: review.join(", ")}) : reportedCategories ? copy("applications.scoped.copy") : copy("applications.access.unavailableCopy");
     const needsReview = item.access_state === "REVIEW_NEEDED";
     const stateCopy = needsReview ? copy("state.reviewNeeded") : reportedCategories ? copy("state.scoped") : copy("state.unavailable");
@@ -840,14 +897,171 @@ function applicationsMarkup(data) {
     inventoryState === "PARTIAL" ? copy("applications.partial.copy") : inventoryState === "UNAVAILABLE" ? copy("applications.unavailable.copy") : copy("applications.empty.copy"),
     "applications",
   );
-  const softwareAction = actionButton(copy("applications.openSoftware"), copy("applications.openSoftware.detail"), "primary", "data-open-software", "applications");
   const countLabel = inventoryState === "PARTIAL" ? copy("applications.inventory.partialCount", {shown}) : copy("applications.inventory.count", {shown, total});
   const reviewCopy = inventoryState === "PARTIAL" ? copy("applications.inventory.partialReview", {count: reviewNeeded}) : copy("applications.inventory.review", {count: reviewNeeded});
-  return `${pageHeader(copy("applications.eyebrow"), copy("applications.title"), copy("applications.copy"), actionButton(copy("ui.refresh"), copy("applications.refresh.detail"), "secondary", "data-refresh", "refresh") + softwareAction)}<div id="applications-action-status" class="action-status" role="status" aria-live="polite"></div><section class="plain-section inventory-section"><div class="section-heading"><div><div class="eyebrow">${esc(copy("applications.inventory.eyebrow"))}</div><h2>${esc(countLabel)}</h2><p>${esc(reviewCopy)}</p></div></div>${inventory}</section>${technicalDisclosure(copy("design.applications.runtime"), "", `<div class="two-column">${plainSection(copy("applications.isolation.eyebrow"), copy("applications.isolation.title"), data.overview || [], "applications")}${plainSection(copy("applications.integration.eyebrow"), copy("applications.integration.title"), data.portal || [], "shield")}</div>`)}`;
+  return `<section class="plain-section inventory-section"><div class="section-heading"><div><h3>${esc(countLabel)}</h3><p>${esc(reviewCopy)}</p></div></div>${inventory}</section>${technicalDisclosure(copy("design.applications.runtime"), "", `<div class="two-column">${plainSection(copy("applications.isolation.eyebrow"), copy("applications.isolation.title"), data.overview || [], "applications")}${plainSection(copy("applications.integration.eyebrow"), copy("applications.integration.title"), data.portal || [], "shield")}</div>`)}`;
 }function recoveryTime(value) {
   if (!value) return copy("backup.time.notRecorded");
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleString([], {dateStyle: "medium", timeStyle: "short"});
+}
+
+let guardResourceLabel = "";
+let guardResourceCategory = "CUSTOM";
+function guardSummary(data) { return applicationView.summary(data); }
+function guardInventoryMarkup(data, kind = "applications") {
+  return applicationView.inventory(data, kind, {resourceLabel: guardResourceLabel,
+    resourceCategory: guardResourceCategory, query: guardQueries[kind]});
+}
+function filterGuardInventory() {
+  const kind = currentPage === "protected-data" ? "resources" : "applications";
+  const input = app.querySelector("[data-guard-search-input]");
+  if (input) guardQueries[kind] = input.value;
+  const query = guardQueries[kind].trim().toLocaleLowerCase();
+  const rows = [...app.querySelectorAll("[data-guard-search]")];
+  rows.forEach(row => { row.hidden = !row.dataset.guardSearch.includes(query); });
+  app.querySelectorAll(".guard-category").forEach(group => {
+    group.hidden = ![...group.querySelectorAll("[data-guard-search]")].some(row => !row.hidden);
+  });
+  const empty = app.querySelector(".guard-no-results");
+  if (empty) empty.hidden = !rows.length || rows.some(row => !row.hidden);
+}
+function applicationProductMarkup(data) {
+  // Provider permissions keep their own evidence and semantics. Do not merge
+  // installations by a display name or invent enforcement for a Flatpak row.
+  const permissions = data.providerPending ? loadingState(copy("loading.status")) : applicationsMarkup(data);
+  return `${pageHeader(copy("guard.protection"), copy("route.apps"), copy("guard.applications.copy"), actionButton(copy("applications.openSoftware"), copy("applications.openSoftware.detail"), "secondary", "data-open-software", "applications") + actionButton(copy("ui.refresh"), copy("applications.refresh.detail"), "secondary", "data-refresh", "refresh"))}${guardInventoryMarkup(data.guard)}<section class="guard-provider-permissions"><div class="section-heading"><div><h2>${esc(copy("guard.flatpak.title"))}</h2><p>${esc(copy("guard.flatpak.copy"))}</p></div><span class="ui-icon">${icon("applications")}</span></div>${permissions}</section>`;
+}
+function protectedDataMarkup(data) {
+  return `${pageHeader(copy("guard.protection"), copy("guard.resources.title"), copy("guard.resources.copy"), actionButton(copy("ui.refresh"), copy("guard.resources.refresh"), "secondary", "data-refresh", "refresh"))}${guardInventoryMarkup(data, "resources")}`;
+}
+
+async function showGuardDetail(button) {
+  const request = requestSequence, route = currentPage;
+  beginButton(button, copy("loading.status"));
+  try {
+    const result = await applicationSecurity.detail(button.dataset.guardKind, button.dataset.guardDetail);
+    if (!result || request !== requestSequence || route !== currentPage) return;
+    const item = result.projection?.resource || result.projection?.application;
+    const guardData = pageCache.get(route)?.data;
+    const workflows = (guardData?.guard || guardData)?.grants;
+    const identity = item?.record?.identity;
+    const grants = (workflows?.grants || []).filter(grant => identity ? grant.installation_ref === identity.installation_ref : grant.resources.includes(item?.resource_ref));
+    const panel = app.querySelector("#guard-detail");
+    if (!panel) return;
+    panel.hidden = false;
+    panel.dataset.reference = result.reference;
+    panel.innerHTML = item ? applicationView.detail(item, button.dataset.guardKind, grants, workflows?.capabilities?.policy_changes === true)
+      : `<article class="guard-detail" tabindex="-1"><h2>${esc(copy("guard.unavailable"))}</h2><p>${esc(copy("guard.unavailable.copy"))}</p><button class="text-button" data-guard-close>${esc(copy("guard.close"))}</button></article>`;
+    const close = () => { applicationSecurity.cancelDetail(); panel.hidden = true; panel.innerHTML = ""; if (button.isConnected) button.focus({preventScroll: true}); };
+    panel.querySelector("[data-guard-close]")?.addEventListener("click", close);
+    panel.onkeydown = event => { if (event.key === "Escape") { event.preventDefault(); close(); } };
+    panel.querySelector("article").focus({preventScroll: true});
+    panel.scrollIntoView({block: "nearest", behavior: "instant"});
+    panel.querySelector("[data-page]")?.addEventListener("click", () => loadPage("network"));
+    panel.querySelector("[data-guard-grant]")?.addEventListener("click", event => runGuardReview("grant", event.currentTarget));
+    panel.querySelectorAll("[data-guard-revoke]").forEach(control => control.addEventListener("click", event => runGuardReview("revocation", event.currentTarget)));
+    if (item) {
+      const history = await applicationSecurity.events(item.record?.identity?.installation_ref);
+      if (request !== requestSequence || route !== currentPage || app.querySelector("#guard-detail")?.dataset.reference !== result.reference || !app.querySelector("#guard-detail-events")) return;
+      const relevant = item.resource_ref && history ? {...history, events: (history.events || []).filter(event => event.details?.resource_refs?.includes(item.resource_ref))} : history;
+      if (relevant) relevant.presentation_context = {links: false,
+        resources: item.resource_ref ? {[item.resource_ref]: item.label} : {},
+        applications: item.record?.identity ? {[item.record.identity.installation_ref]: item.record.identity.display_name} : {}};
+      app.querySelector("#guard-detail-events").innerHTML = guardEventsMarkup(relevant);
+    }
+  } finally { endButton(button); }
+}
+function guardEventsMarkup(history) { return applicationView.events(history); }
+
+async function runGuardReview(kind, button) {
+  const route = currentPage, sequence = requestSequence;
+  const value = pageCache.get(route)?.data;
+  let data = value?.guard || value;
+  let live = applicationSecurity.live(data?.envelope);
+  if (!live || !data?.grants) {
+    try { data = await applicationSecurity.load(route === "protected-data" ? "resources" : "applications"); }
+    catch (_) { setStatus("#guard-action-status", copy("guard.refreshRequired")); return; }
+    if (route !== currentPage || sequence !== requestSequence) return;
+    live = applicationSecurity.live(data?.envelope);
+  }
+  if (!live || !data?.grants || data.grants.policy_revision !== (live.policy_revision || data.grants.policy_revision)) {
+    setStatus("#guard-action-status", copy("guard.refreshRequired")); return;
+  }
+  const revision = data.grants.policy_revision;
+  const args = kind === "registration" ? {revision, label: app.querySelector("#guard-resource-label")?.value.trim(), category: guardResourceCategory}
+    : kind === "grant" ? {revision, resourceRefs: [button.dataset.guardGrant]}
+      : {revision, grantRef: button.dataset.guardRevoke};
+  beginButton(button, copy("guard.reviewing"));
+  let ticket, consumed = false;
+  try {
+    ticket = await applicationSecurity.review(kind, args);
+    if (!ticket) return;
+    if (route !== currentPage || sequence !== requestSequence) { await applicationSecurity.cancel(ticket); return; }
+    const summary = ticket.value.kind === "GRANT" ? ticket.value.preview.review : ticket.value.preview;
+    let tool = "";
+    if (kind !== "registration") {
+      const detail = await applicationSecurity.detail("applications", summary.installation_ref);
+      const identity = detail?.projection?.application?.record?.identity;
+      if (kind === "grant" && (!identity || identity.installation_ref !== summary.installation_ref || identity.generation !== summary.generation)) throw new Error("Review identity unavailable");
+      tool = identity?.display_name || copy("guard.reviewedTool");
+      if (route !== currentPage || sequence !== requestSequence) return;
+    }
+    const labels = summary.resource_refs?.map(ref => (live.resources || []).find(item => item.resource_ref === ref)?.label || ref.slice(-12)).join(", ") || summary.resource?.label || "";
+    const description = `${tool ? tool + ". " : ""}${labels}. ${copy(kind === "grant" ? "guard.grantWarning" : kind === "revocation" ? "guard.revokeWarning" : "guard.registrationWarning")}`;
+    const accepted = await confirmAction(copy(`guard.review.${kind}`), description,
+      copy(kind === "revocation" ? "guard.revoke" : "guard.confirm"), kind === "revocation", [
+        ...(tool ? [[copy("guard.review.tool"), tool]] : []),
+        [copy("guard.review.resources"), labels || copy("guard.selectedResources")],
+        [copy("guard.review.effect"), copy(`guard.review.effect.${kind}`)],
+        ...(kind === "grant" ? [[copy("guard.review.profile"), copy(`guard.toolProfile.${ticket.value.preview.tool_profile}`)]] : []),
+        [copy("guard.review.authorization"), copy("guard.review.authorization.copy")],
+      ]);
+    if (!accepted || route !== currentPage || sequence !== requestSequence) { await applicationSecurity.cancel(ticket); return; }
+    consumed = true;
+    const result = await applicationSecurity.apply(ticket, result => {
+      if (route === currentPage) setStatus("#guard-action-status", copy(`guard.operation.${result.outcome}`));
+    });
+    if (result.outcome !== "COMPLETED") throw new Error(copy("guard.operationFailure"));
+    ["applications", "protected-data", "overview", "activity"].forEach(page => pageCache.delete(page));
+    if (route === currentPage) { await loadPage(route, {force: true}); setStatus("#guard-action-status", copy("guard.operation.COMPLETED")); }
+  } catch (_) { if (route === currentPage) setStatus("#guard-action-status", copy(kind === "grant" && !ticket ? "guard.grantUnavailable" : "guard.operationFailure")); }
+  finally {
+    if (ticket && !consumed) await applicationSecurity.cancel(ticket).catch(() => {});
+    endButton(button);
+  }
+}
+async function runGuardLaunch(button) {
+  const route = currentPage, sequence = requestSequence;
+  beginButton(button, copy("guard.reviewing"));
+  let ticket;
+  try {
+    ticket = await applicationSecurity.prepareLaunch();
+    if (!ticket) return;
+    if (route !== currentPage || sequence !== requestSequence) return;
+    const accepted = await confirmAction(copy("guard.run"), copy("guard.run.copy"), copy("guard.run.confirm"));
+    if (!accepted || route !== currentPage || sequence !== requestSequence) return;
+    await applicationSecurity.startLaunch(ticket);
+    ["applications", "activity"].forEach(page => pageCache.delete(page));
+    if (route === currentPage) setStatus("#guard-action-status", copy("guard.run.started"));
+  } catch (_) { if (route === currentPage) setStatus("#guard-action-status", copy("guard.run.failed")); }
+  finally { if (ticket) applicationSecurity.discardLaunch(ticket); endButton(button); }
+}
+
+async function loadMoreGuard(button) {
+  const route = currentPage, request = requestSequence;
+  const before = pageCache.get(route)?.data;
+  beginButton(button, copy("loading.status"));
+  try {
+    const next = await applicationSecurity.more(button.dataset.guardMore, before.guard || before);
+    if (route !== currentPage || request !== requestSequence) return;
+    const data = route === "applications" ? {...before, guard: next} : next;
+    const view = captureViewState();
+    pageCache.set(route, {data, loadedAt: Date.now()});
+    app.querySelector(".content-frame").innerHTML = renderContent(route, data);
+    bindContent(); restoreViewState(view);
+  } catch (_) { setStatus("#guard-action-status", copy("guard.refreshRequired")); }
+  finally { endButton(button); }
 }
 function backupProblemCopy(problem) {
   const labels = {
@@ -930,7 +1144,7 @@ function recoveryMarkup(data) {
   const backupReady = !backupUnavailable && backup.configured === true && backup.destination_available === true;
   const latest = points[0];
   const pointRows = points.length
-    ? points.map((point) => `<article class="recovery-point-row"><div><strong>${esc(point.reason === "pre-update" ? copy("backup.recovery.point.preUpdate") : copy("backup.recovery.point.manual"))}</strong><p>${esc(recoveryTime(point.created_at))} · ${esc(copy("backup.recovery.point.snapshots", {count: (point.snapshots || []).length}))}</p></div>${status(point.status === "valid" ? "AVAILABLE" : "INCOMPLETE", point.status === "valid" ? "positive" : "review")}</article>`).join("")
+    ? points.map((point) => `<article class="recovery-point-row"><div><strong>${esc(point.reason === "pre-update" ? copy("backup.recovery.point.preUpdate") : copy("backup.recovery.point.manual"))}</strong><p>${esc(recoveryTime(point.created_at))} Ã‚Â· ${esc(copy("backup.recovery.point.snapshots", {count: (point.snapshots || []).length}))}</p></div>${status(point.status === "valid" ? "AVAILABLE" : "INCOMPLETE", point.status === "valid" ? "positive" : "review")}</article>`).join("")
     : emptyState(recoveryUnavailable ? copy("backup.recovery.pointsUnavailable") : copy("backup.recovery.noPoints"), recoveryUnavailable ? copy("backup.recovery.unavailable") : copy("backup.recovery.createPrompt"), "recovery");
   const backupState = backupUnavailable ? "UNAVAILABLE" : !backup.configured ? "NOT CONFIGURED" : backupDestinationUnavailable ? "DESTINATION UNAVAILABLE" : backup.last_backup_status === "SUCCESSFUL" ? "SUCCESSFUL" : backup.last_backup_status === "FAILED" ? "FAILED" : "NOT RUN YET";
   const backupTone = backupUnavailable || !backup.configured || backupDestinationUnavailable ? "unknown" : backup.last_backup_status === "SUCCESSFUL" ? "positive" : backup.last_backup_status === "FAILED" ? "critical" : "review";
@@ -948,21 +1162,21 @@ function recoveryMarkup(data) {
   const integrityLabel = backupUnavailable ? copy("backup.verify.unavailable") : backup.last_check_status === "VERIFIED" ? copy("backup.verify.verifiedAt", {time: recoveryTime(backup.last_check_at)}) : backup.last_check_status === "FAILED" ? copy("backup.verify.failed") : copy("backup.verify.notVerified");
   const backupDestination = backupUnavailable ? copy("backup.verify.unavailable") : backup.destination || copy("backup.panel.notConfigured");
   const backupActionStatus = backupUnavailable ? copy("backup.configure.unavailable") : !backup.configured ? copy("backup.status.choose") : backupDestinationUnavailable ? backupProblemCopy(backup.destination_problem) : backup.last_backup_status === "SUCCESSFUL" ? backup.last_retention_status === "FAILED" ? copy("backup.status.retentionRetry") : copy("backup.status.completed") : backup.last_backup_status === "FAILED" ? copy("backup.status.failed") : copy("backup.status.notRun");
-  const scope = Array.isArray(backup.sources) && backup.sources.length ? backup.sources.map((source) => esc(source)).join(" · ") : copy("backup.panel.noScope");
+  const scope = Array.isArray(backup.sources) && backup.sources.length ? backup.sources.map((source) => esc(source)).join(" Ã‚Â· ") : copy("backup.panel.noScope");
   const retention = backup.retention ? copy("backup.panel.retention", {daily: backup.retention.daily || 0, weekly: backup.retention.weekly || 0}) : copy("backup.panel.retentionUnavailable");
   const cleanupAvailable = !recoveryUnavailable && points.length > 3;
   const cleanupControl = cleanupAvailable ? `<button class="text-button" data-recovery-cleanup>${esc(copy("backup.recovery.cleanup"))} ${icon("clean")}</button>` : "";
-  return `${recoveryQueueMarkup(data)}<div class="recovery-workspaces"><section class="recovery-v1-panel"><div class="recovery-v1-heading"><div><div class="eyebrow">${esc(copy("backup.recovery.localEyebrow"))}</div><h2>${esc(copy("backup.recovery.title"))}</h2><p>${esc(copy("backup.recovery.copy"))}</p></div>${recoveryUnavailable ? status("UNAVAILABLE", "unknown") : latest ? status("AVAILABLE", "positive") : status("NOT CREATED", "review")}</div><div class="recovery-facts"><div><span>${esc(copy("backup.recovery.latest"))}</span><strong>${esc(recoveryUnavailable ? copy("backup.verify.unavailable") : latest ? recoveryTime(latest.created_at) : copy("backup.recovery.notCreated"))}</strong></div><div><span>${esc(copy("backup.recovery.retention"))}</span><strong>${esc(recoveryUnavailable ? copy("backup.verify.unavailable") : copy("backup.recovery.retentionValue"))}</strong></div><div><span>${esc(copy("backup.recovery.home"))}</span><strong>${esc(recoveryUnavailable ? copy("backup.verify.unavailable") : copy("backup.recovery.homeExcluded"))}</strong></div></div><div class="recovery-actions">${actionButton(copy("backup.recovery.create"), copy("backup.recovery.createDetail"), "primary", recoveryActionAttrs, "recovery")}${cleanupControl}</div><div id="recovery-point-status" class="action-status" role="status" aria-live="polite"></div><details class="technical-disclosure"><summary><span>${esc(copy("backup.recovery.availablePoints"))}</span><span class="section-meta">${esc(points.length)}</span></summary><div class="recovery-point-list">${pointRows}</div></details></section><section class="recovery-v1-panel"><div class="recovery-v1-heading"><div><div class="eyebrow">${esc(copy("backup.panel.eyebrow"))}</div><h2>${esc(copy("backup.panel.title"))}</h2><p>${esc(copy("backup.panel.copy"))}</p></div>${status(backupState, backupTone)}</div><div class="recovery-facts"><div><span>${esc(copy("backup.panel.destination"))}</span><strong>${esc(backupDestination)}</strong></div><div><span>${esc(copy("backup.panel.lastBackup"))}</span><strong>${esc(backupUnavailable ? copy("backup.verify.unavailable") : recoveryTime(backup.last_backup_at))}</strong></div><div><span>${esc(copy("backup.panel.integrity"))}</span><strong>${esc(integrityLabel)}</strong></div></div><div class="recovery-actions">${actionButton(backupConfigureLabel, backupConfigureDetail, backupReady ? "secondary" : "primary", backupConfigureAttrs, "folder")}${actionButton(backupNowLabel, backupNowDetail, backupReady ? "primary" : "secondary", backupNowAttrs, "export")}${actionButton(copy("backup.verify"), copy("backup.panel.verifyDetail"), "secondary", backupVerifyAttrs, "check")}${actionButton(copy("backup.restore"), copy("backup.panel.restoreDetail"), "secondary", backupRestoreAttrs, "file")}</div><div id="backup-action-status" class="action-status" role="status" aria-live="polite">${backupActionStatus}</div>${restorePanel}<details class="technical-disclosure"><summary><span>${esc(copy("backup.panel.scope"))}</span></summary><div class="technical-disclosure-content"><p>${scope} · ${esc(retention)} · ${esc(copy("backup.panel.noSystemFiles"))}</p></div></details></section></div>`;
+  return `${recoveryQueueMarkup(data)}<div class="recovery-workspaces"><section class="recovery-v1-panel"><div class="recovery-v1-heading"><div><div class="eyebrow">${esc(copy("backup.recovery.localEyebrow"))}</div><h2>${esc(copy("backup.recovery.title"))}</h2><p>${esc(copy("backup.recovery.copy"))}</p></div>${recoveryUnavailable ? status("UNAVAILABLE", "unknown") : latest ? status("AVAILABLE", "positive") : status("NOT CREATED", "review")}</div><div class="recovery-facts"><div><span>${esc(copy("backup.recovery.latest"))}</span><strong>${esc(recoveryUnavailable ? copy("backup.verify.unavailable") : latest ? recoveryTime(latest.created_at) : copy("backup.recovery.notCreated"))}</strong></div><div><span>${esc(copy("backup.recovery.retention"))}</span><strong>${esc(recoveryUnavailable ? copy("backup.verify.unavailable") : copy("backup.recovery.retentionValue"))}</strong></div><div><span>${esc(copy("backup.recovery.home"))}</span><strong>${esc(recoveryUnavailable ? copy("backup.verify.unavailable") : copy("backup.recovery.homeExcluded"))}</strong></div></div><div class="recovery-actions">${actionButton(copy("backup.recovery.create"), copy("backup.recovery.createDetail"), "primary", recoveryActionAttrs, "recovery")}${cleanupControl}</div><div id="recovery-point-status" class="action-status" role="status" aria-live="polite"></div><details class="technical-disclosure"><summary><span>${esc(copy("backup.recovery.availablePoints"))}</span><span class="section-meta">${esc(points.length)}</span></summary><div class="recovery-point-list">${pointRows}</div></details></section><section class="recovery-v1-panel"><div class="recovery-v1-heading"><div><div class="eyebrow">${esc(copy("backup.panel.eyebrow"))}</div><h2>${esc(copy("backup.panel.title"))}</h2><p>${esc(copy("backup.panel.copy"))}</p></div>${status(backupState, backupTone)}</div><div class="recovery-facts"><div><span>${esc(copy("backup.panel.destination"))}</span><strong>${esc(backupDestination)}</strong></div><div><span>${esc(copy("backup.panel.lastBackup"))}</span><strong>${esc(backupUnavailable ? copy("backup.verify.unavailable") : recoveryTime(backup.last_backup_at))}</strong></div><div><span>${esc(copy("backup.panel.integrity"))}</span><strong>${esc(integrityLabel)}</strong></div></div><div class="recovery-actions">${actionButton(backupConfigureLabel, backupConfigureDetail, backupReady ? "secondary" : "primary", backupConfigureAttrs, "folder")}${actionButton(backupNowLabel, backupNowDetail, backupReady ? "primary" : "secondary", backupNowAttrs, "export")}${actionButton(copy("backup.verify"), copy("backup.panel.verifyDetail"), "secondary", backupVerifyAttrs, "check")}${actionButton(copy("backup.restore"), copy("backup.panel.restoreDetail"), "secondary", backupRestoreAttrs, "file")}</div><div id="backup-action-status" class="action-status" role="status" aria-live="polite">${backupActionStatus}</div>${restorePanel}<details class="technical-disclosure"><summary><span>${esc(copy("backup.panel.scope"))}</span></summary><div class="technical-disclosure-content"><p>${scope} Ã‚Â· ${esc(retention)} Ã‚Â· ${esc(copy("backup.panel.noSystemFiles"))}</p></div></details></section></div>`;
 }
 function devicesMarkup(data) {
   const history = data.device_history || {};
   const summary = history.summary || {};
   const records = Array.isArray(summary.new_unknown) ? summary.new_unknown : [];
   const connected = Array.isArray(history.devices) ? history.devices.filter((item) => item.connected) : [];
-  const deviceRows = connected.length ? connected.map((item) => `<article class="activity-row device-history-row"><span class="activity-icon">${icon("devices")}</span><div><strong>${esc(item.name || copy("devices.history.externalDevice"))}</strong><p>${esc(item.device_class || copy("devices.history.externalDevice"))} · ${esc(item.trusted ? copy("devices.history.known") : copy("devices.history.unknown"))}</p></div><time>${esc(item.last_seen || copy("ui.unknown"))}</time></article>`).join("") : emptyState(summary.source_state === "UNAVAILABLE" ? copy("devices.history.unavailable") : copy("devices.history.empty"), summary.source_state === "UNAVAILABLE" ? copy("devices.history.unavailableCopy") : copy("devices.history.emptyCopy"), "devices");
-  const unknownRows = records.length ? records.map((item) => `<article class="activity-row device-history-row"><span class="activity-icon">${icon("warning")}</span><div><strong>${esc(item.name || copy("devices.history.unknownDevice"))}</strong><p>${esc(item.connected ? copy("devices.history.firstSeenCurrent", {time: item.first_seen || copy("ui.unknown")}) : copy("devices.history.firstSeenLast", {first: item.first_seen || copy("ui.unknown"), last: item.last_seen || copy("ui.unknown")}))}</p></div>${status(item.connected ? "REVIEW NEEDED" : copy("devices.history.recorded"), item.connected ? "review" : "muted", {canonical: item.connected})}</article>`).join("") : emptyState(copy("devices.history.noNew"), copy("devices.history.noNewCopy"), "devices");
+  const deviceRows = connected.length ? connected.map((item) => `<article class="activity-row device-history-row"><span class="activity-icon">${icon("devices")}</span><div><strong>${esc(item.name || copy("devices.history.externalDevice"))}</strong><p>${esc(item.device_class || copy("devices.history.externalDevice"))} Ã‚Â· ${esc(item.trusted ? copy("devices.history.known") : copy("devices.history.unknown"))}</p></div><time>${esc(item.last_seen || copy("ui.unknown"))}</time></article>`).join("") : emptyState(summary.source_state === "UNAVAILABLE" ? copy("devices.history.unavailable") : copy("devices.history.empty"), summary.source_state === "UNAVAILABLE" ? copy("devices.history.unavailableCopy") : copy("devices.history.emptyCopy"), "devices");
+  const unknownRows = records.length ? records.map((item) => `<article class="activity-row device-history-row"><span class="activity-icon">${icon("warning")}</span><div><strong>${esc(item.name || copy("devices.history.unknownDevice"))}</strong><p>${esc(item.connected ? copy("devices.history.firstSeenCurrent", {time: item.first_seen || copy("ui.unknown")}) : copy("devices.history.firstSeenLast", {first: item.first_seen || copy("ui.unknown"), last: item.last_seen || copy("ui.unknown")}))}</p></div>${status(item.connected ? "REVIEW NEEDED" : copy("devices.history.recorded"), item.connected ? "review" : "muted", {canonical: item.connected})}</article>`).join("") : emptyState(copy(summary.source_state === "UNAVAILABLE" ? "devices.history.unavailable" : "devices.history.noNew"), copy(summary.source_state === "UNAVAILABLE" ? "devices.history.unavailableCopy" : "devices.history.noNewCopy"), "devices");
   const usbRows = (data.usb || []).length ? data.usb.map((row) => statusRow(row)).join("") : emptyState(copy("devices.usb.unavailable"), copy("devices.usb.unavailableCopy"), "devices");
-  return `${pageHeader(copy("devices.eyebrow"), copy("route.devices"), copy("devices.copy"), actionButton(copy("ui.refresh"), copy("devices.refresh.detail"), "secondary", "data-refresh", "refresh"))}<div class="action-status deviation-action-status" role="status" aria-live="polite"></div>${recoveryMarkup(data)}<div class="device-inventory"><section class="device-history-section"><div class="section-heading"><div><div class="eyebrow">${esc(copy("devices.history.connectedEyebrow"))}</div><h2>${esc(summary.source_state === "UNAVAILABLE" ? copy("state.unavailable") : copy("devices.history.connected", {count: summary.connected_external ?? 0}))}</h2></div></div>${deviceRows}</section><section class="device-history-section"><div class="section-heading"><div><div class="eyebrow">${esc(copy("devices.history.weekEyebrow"))}</div><h2>${esc(copy("devices.history.newUnknown"))}</h2></div><span class="section-meta">${esc(summary.source_state === "UNAVAILABLE" ? copy("state.unavailable") : summary.new_unknown_count ?? 0)}</span></div>${unknownRows}</section></div><div class="two-column"><section class="plain-section feature-section"><div class="feature-heading"><span class="feature-icon">${icon("devices")}</span><div><div class="eyebrow">${esc(copy("devices.usb.eyebrow"))}</div><h2>${esc(copy("devices.usb.title"))}</h2></div></div>${usbRows}</section><section class="plain-section feature-section"><div class="feature-heading"><span class="feature-icon">${icon("recovery")}</span><div><div class="eyebrow">${esc(copy("devices.recovery.eyebrow"))}</div><h2>${esc(copy("devices.recovery.title"))}</h2></div></div>${(data.recovery || []).length ? data.recovery.map((row) => statusRow(row, false, recoveryDeviationAction(row))).join("") : emptyState(copy("devices.recovery.unavailable"), copy("devices.recovery.unavailableCopy"), "recovery")}</section></div>`;
+  return `${pageHeader(copy("devices.eyebrow"), copy("route.devices"), copy("devices.copy"), actionButton(copy("ui.refresh"), copy("devices.refresh.detail"), "secondary", "data-refresh", "refresh"))}<div class="action-status deviation-action-status" role="status" aria-live="polite"></div><div class="device-inventory"><section class="device-history-section"><div class="section-heading"><div><div class="eyebrow">${esc(copy("devices.history.connectedEyebrow"))}</div><h2>${esc(summary.source_state === "UNAVAILABLE" ? copy("state.unavailable") : copy("devices.history.connected", {count: summary.connected_external ?? 0}))}</h2></div></div>${deviceRows}</section><section class="device-history-section"><div class="section-heading"><div><div class="eyebrow">${esc(copy("devices.history.weekEyebrow"))}</div><h2>${esc(copy("devices.history.newUnknown"))}</h2></div><span class="section-meta">${esc(summary.source_state === "UNAVAILABLE" ? copy("state.unavailable") : summary.new_unknown_count ?? 0)}</span></div>${unknownRows}</section></div><div class="two-column"><section class="plain-section feature-section"><div class="feature-heading"><span class="feature-icon">${icon("devices")}</span><div><div class="eyebrow">${esc(copy("devices.usb.eyebrow"))}</div><h2>${esc(copy("devices.usb.title"))}</h2></div></div>${usbRows}</section><section class="plain-section feature-section"><div class="feature-heading"><span class="feature-icon">${icon("recovery")}</span><div><div class="eyebrow">${esc(copy("devices.recovery.eyebrow"))}</div><h2>${esc(copy("devices.recovery.title"))}</h2></div></div>${(data.recovery || []).length ? data.recovery.map((row) => statusRow(row, false, recoveryDeviationAction(row))).join("") : emptyState(copy("devices.recovery.unavailable"), copy("devices.recovery.unavailableCopy"), "recovery")}</section></div>`;
 }
 function evidenceMarkup(data) {
   const sections = data.sections || [];
@@ -988,14 +1202,14 @@ function fileSecurityOperationMarkup(operation) {
           : state === "INTERRUPTED" ? copy("file.operation.interruptedCopy")
             : state === "FAILED" || state === "UNAVAILABLE" ? copy("file.operation.failedCopy")
               : copy("file.scan.reviewCopy");
-  const cancel = active ? `<button class="text-button" data-file-scan-cancel="${esc(operation.operation_id)}">${esc(copy("file.operation.cancel"))} ${icon("clean")}</button>` : "";
+  const cancel = active ? `<button class="text-button" data-file-scan-cancel="${esc(operation.operation_id)}">${esc(copy("file.operation.cancel"))} ${icon("cancel")}</button>` : "";
   const scanKind = operation.mode === "SYSTEM" ? copy("file.operation.systemEyebrow") : operation.mode === "FOLDER" ? copy("file.operation.folderEyebrow") : copy("file.operation.fileEyebrow");
   const scope = operation.scope?.label || scanKind;
   const timestamp = active ? operation.started_at : operation.ended_at || operation.started_at;
   const whenLabel = active ? copy("file.operation.started") : copy("file.operation.completed");
   const operationTone = active ? "review" : state === "COMPLETED" ? "positive" : state === "PARTIAL" ? "review" : state === "CANCELLED" ? "muted" : "critical";
   const skipped = Number(operation.skipped_count || 0) > 0 ? `<span>${esc(copy("file.operation.skipped", {count: operation.skipped_count}))}</span>` : "";
-  return `<article class="file-security-operation ${active ? "is-active" : ""}" data-file-operation="${esc(operation.operation_id || "")}"><div class="operation-heading"><div><div class="eyebrow">${esc(active ? copy("file.operation.currentEyebrow") : copy("file.operation.lastEyebrow"))}</div><h3>${esc(label)}</h3><p>${esc(detail)}</p><p class="section-meta"><b>${esc(copy("file.operation.scope"))}</b> ${esc(scope)} · <b>${esc(whenLabel)}</b> ${esc(recoveryTime(timestamp))}</p></div>${status(state, operationTone, {canonical:true})}</div>${active ? `<div class="progress-block indeterminate" role="progressbar" aria-label="${esc(label)}"><div class="progress-track"><span></span></div></div>` : ""}<div class="file-operation-counts"><span>${esc(copy("file.operation.inspected", {count: operation.files_inspected || 0}))}</span><span>${esc(copy("file.operation.detections", {count: operation.detection_count || 0}))}</span><span>${esc(copy("file.operation.errors", {count: operation.error_count || 0}))}</span>${skipped}</div>${cancel}</article>`;
+  return `<article class="file-security-operation ${active ? "is-active" : ""}" data-file-operation="${esc(operation.operation_id || "")}"><div class="operation-heading"><div><div class="eyebrow">${esc(active ? copy("file.operation.currentEyebrow") : copy("file.operation.lastEyebrow"))}</div><h3>${esc(label)}</h3><p>${esc(detail)}</p><p class="section-meta"><b>${esc(copy("file.operation.scope"))}</b> ${esc(scope)} Ã‚Â· <b>${esc(whenLabel)}</b> ${esc(recoveryTime(timestamp))}</p></div>${status(state, operationTone, {canonical:true})}</div>${active ? `<div class="progress-block indeterminate" role="progressbar" aria-label="${esc(label)}"><div class="progress-track"><span></span></div></div>` : ""}<div class="file-operation-counts"><span>${esc(copy("file.operation.inspected", {count: operation.files_inspected || 0}))}</span><span>${esc(copy("file.operation.detections", {count: operation.detection_count || 0}))}</span><span>${esc(copy("file.operation.errors", {count: operation.error_count || 0}))}</span>${skipped}</div>${cancel}</article>`;
 }
 
 function filesMarkup(data) {
@@ -1003,14 +1217,14 @@ function filesMarkup(data) {
   const detections = Array.isArray(data.detections) ? data.detections : (data.quarantine || []);
   const clamavState = String(data.clamav?.status || "UNAVAILABLE").toUpperCase();
   const scanAvailable = !loading && data.state === "AVAILABLE" && clamavState === "CURRENT" && Boolean(data.clamav?.engine_version);
-  const definitionAge = Number.isFinite(Number(data.clamav?.database_age_seconds)) ? `${Math.max(0, Math.floor(Number(data.clamav.database_age_seconds) / 86400))}d` : copy("ui.unavailable");
+  const definitionAge = Number.isSafeInteger(data.clamav?.database_age_seconds) && data.clamav.database_age_seconds >= 0 ? `${Math.max(0, Math.floor(Number(data.clamav.database_age_seconds) / 86400))}d` : copy("ui.unavailable");
   const clamav = loading
     ? `<div class="fact-line"><div><span>${esc(copy("file.definitions"))}</span><strong>${esc(copy("file.reading"))}</strong></div><div><span>${esc(copy("file.lastUpdate"))}</span><strong>${esc(copy("file.checkingStatus"))}</strong></div></div>`
     : data.clamav
-    ? `<div class="fact-line"><div><span>${esc(copy("file.definitions"))}</span><strong>${esc(data.clamav.status || copy("ui.unavailable"))}</strong></div><div><span>${esc(copy("file.lastUpdate"))}</span><strong>${esc(localizedTime(data.clamav.last_successful_update))}</strong></div></div>${technicalDisclosure(copy("file.scannerDetails"), "", `<p>${esc(copy("file.engineDatabase", {engine: data.clamav.engine_version || copy("ui.unavailable"), database: data.clamav.database_version || copy("ui.unavailable")}))}</p><p>${esc(copy("file.definitionAge", {age: definitionAge}))}</p><p>${esc(data.clamav.detail || "")}</p>`)}`
+    ? `<div class="fact-line"><div><span>${esc(copy("file.definitions"))}</span><strong>${esc(data.clamav.status || copy("ui.unavailable"))}</strong></div><div><span>${esc(copy("file.lastUpdate"))}</span><strong>${esc(localizedTime(data.clamav.database_timestamp))}</strong></div></div>${technicalDisclosure(copy("file.scannerDetails"), "", `<p>${esc(copy("file.engineDatabase", {engine: data.clamav.engine_version || copy("ui.unavailable"), database: data.clamav.database_version || copy("ui.unavailable")}))}</p><p>${esc(copy("file.definitionAge", {age: definitionAge}))}</p><p>${esc(data.clamav.detail || "")}</p>`)}`
     : emptyState(copy("file.scannerUnavailable"), copy("file.scannerUnavailableCopy"), "shield");
   const renderDetection = (item) => {
-    const state = String(item.state || "DETECTED").toUpperCase();
+    const state = item.state === "DETECTED" && item.source_status === "MISSING" ? "SOURCE_MISSING" : String(item.state || "DETECTED").toUpperCase();
     const action = ["DETECTED", "QUARANTINE_FAILED"].includes(state)
       ? `<button class="text-button" data-file-quarantine="${esc(item.detection_id)}">${esc(copy("file.action.quarantine"))} ${icon("arrow")}</button>`
       : ["QUARANTINED", "RESTORE_FAILED"].includes(state)
@@ -1021,32 +1235,38 @@ function filesMarkup(data) {
           ? `<button class="text-button danger-text" data-file-delete="${esc(item.detection_id)}">${esc(copy("file.action.retryDelete"))} ${icon("clean")}</button>`
         : "";
     const durableDetail = state === "RESTORED" && item.restore_staging_path
-      ? ` · ${copy("file.restore.stagedAt", {path: item.restore_staging_path})}`
-      : state.endsWith("FAILED") ? ` · ${copy("file.action.notCompleted")}` : "";
-    return `<article class="quarantine-row file-detection-row"><div><strong>${esc(item.detection_name || copy("file.detection.unnamed"))}</strong><p>${esc(item.original_path || copy("file.detection.pathUnavailable"))}</p><small>${esc(copy("file.detection.detectedAt", {time: localizedTime(item.detected_at)}))} · ${esc(item.scanner_version || "ClamAV")}${esc(durableDetail)}</small></div>${status(state, state === "DETECTED" || state === "QUARANTINED" ? "review" : state.endsWith("FAILED") ? "critical" : "muted", {canonical:true})}<div class="file-detection-actions">${action}</div></article>`;
+      ? ` Ã‚Â· ${copy("file.restore.stagedAt", {path: item.restore_staging_path})}`
+      : state.endsWith("FAILED") ? ` Ã‚Â· ${copy("file.action.notCompleted")}` : "";
+    return `<article class="quarantine-row file-detection-row"><div><strong>${esc(item.detection_name || copy("file.detection.unnamed"))}</strong><p>${esc(item.original_path || copy("file.detection.pathUnavailable"))}</p><small>${esc(copy("file.detection.detectedAt", {time: localizedTime(item.detected_at)}))} Ã‚Â· ${esc(item.scanner_version || "ClamAV")}${esc(durableDetail)}</small></div>${status(state, state === "DETECTED" || state === "QUARANTINED" ? "review" : state.endsWith("FAILED") ? "critical" : "muted", {canonical:true})}<div class="file-detection-actions">${action}</div></article>`;
   };
-  const pendingDetections = detections.filter((item) => String(item.state || "DETECTED").toUpperCase() !== "DELETED");
-  const resolvedDetections = detections.filter((item) => String(item.state || "").toUpperCase() === "DELETED");
+  const handled = (item) => ["QUARANTINED", "DELETED"].includes(String(item.state || "").toUpperCase()) || (item.state === "DETECTED" && item.source_status === "MISSING");
+  const pendingDetections = detections.filter((item) => !handled(item));
+  const resolvedDetections = detections.filter(handled);
   const detectionRows = pendingDetections.length ? pendingDetections.map(renderDetection).join("") : emptyState(copy("file.detections.none"), copy("file.detections.noneCopy"), "file");
   const active = data.active_scan || null;
   const latest = data.latest_scan || null;
   const operation = active || latest ? fileSecurityOperationMarkup(active || latest) : emptyState(copy("file.scan.none"), copy("file.scan.noneCopy"), "activity");
   const activity = (data.activity || []).filter((item) => /threat|scan|quarantine|restore|delete|safe open|sanit/i.test(`${item.title || ""} ${item.detail || ""}`));
   const safeOpen = `<div class="safe-open-controls"><input id="safe-open-path" type="text" placeholder="${esc(copy("file.safeOpen.placeholder"))}" aria-label="${esc(copy("file.safeOpen.pathLabel"))}">${actionButton(copy("file.safeOpen.choose"), copy("file.safeOpen.chooseDetail"), "secondary", "data-safe-open-pick", "folder")}${actionButton(copy("file.safeOpen.open"), copy("file.safeOpen.openDetail"), "primary", "data-safe-open", "lock")}</div><div class="workflow-feedback"><div id="safe-open-status" class="action-status" role="status" aria-live="polite">${esc(copy("file.safeOpen.noneSelected"))}</div><div class="inline-actions"><button class="text-button" data-provenance>${esc(copy("file.safeOpen.details"))} ${icon("arrow")}</button><button class="text-button" data-sanitize>${esc(copy("file.safeOpen.sanitize"))} ${icon("arrow")}</button></div><div id="provenance-status" class="action-status" role="status" aria-live="polite"></div></div>`;
-  const protectionState = loading ? copy("file.protection.checking") : detections.some((item) => item.state === "DETECTED") ? copy("file.protection.review") : clamavState === "INITIALIZING" ? copy("file.protection.initializing") : clamavState === "UPDATING" ? copy("file.protection.updating") : !scanAvailable ? copy("file.protection.unavailable") : copy("file.protection.ready");
-  const protectionCopy = loading ? copy("file.protection.checkingCopy") : detections.some((item) => item.state === "DETECTED") ? copy("file.protection.reviewCopy") : clamavState === "INITIALIZING" ? copy("file.protection.initializingCopy") : clamavState === "UPDATING" ? copy("file.protection.updatingCopy") : !scanAvailable ? (data.state === "UNAVAILABLE" ? copy("file.protection.unavailableState") : copy("file.protection.updateRequired")) : copy("file.protection.readyCopy");
+  const protectionState = loading ? copy("file.protection.checking") : pendingDetections.length ? copy("file.protection.review") : clamavState === "INITIALIZING" ? copy("file.protection.initializing") : clamavState === "UPDATING" ? copy("file.protection.updating") : !scanAvailable ? copy("file.protection.unavailable") : copy("file.protection.ready");
+  const protectionCopy = loading ? copy("file.protection.checkingCopy") : pendingDetections.length ? copy("file.protection.reviewCopy") : clamavState === "INITIALIZING" ? copy("file.protection.initializingCopy") : clamavState === "UPDATING" ? copy("file.protection.updatingCopy") : !scanAvailable ? (data.state === "UNAVAILABLE" ? copy("file.protection.unavailableState") : copy("file.protection.updateRequired")) : copy("file.protection.readyCopy");
   const scanAttrs = scanAvailable ? "" : 'disabled aria-disabled="true"';
   const unavailableHint = scanAvailable ? "" : `<p class="action-status" role="status">${esc(copy("file.protection.disabledHint"))}</p>`;
   const scanSurface = `<section class="plain-section file-scan-surface"><div class="section-heading"><div><div class="eyebrow">${esc(copy("file.scan.eyebrow"))}</div><h2>${esc(copy("file.scan.title"))}</h2></div></div><div class="file-scan-actions">${actionButton(copy("files.scanFile"), copy("file.scan.fileDetail"), "primary", `${scanAttrs} data-file-scan-file`, "file")}${actionButton(copy("files.scanFolder"), copy("file.scan.folderDetail"), "secondary", `${scanAttrs} data-file-scan-folder`, "folder")}${actionButton(copy("files.scanSystem"), copy("file.scan.systemDetail"), "secondary", `${scanAttrs} data-file-scan-system`, "shield")}</div><div id="file-security-action-status" class="action-status" role="status" aria-live="polite">${esc(fileSecurityState.feedback)}</div>${unavailableHint}<div id="file-security-operation">${operation}</div></section>`;
   return `${pageHeader(copy("file.eyebrow"), copy("file.title"), copy("file.copy"), actionButton(copy("ui.refresh"), copy("file.refresh.detail"), "secondary", "data-refresh", "refresh"))}<section class="file-security-hero"><div><div class="eyebrow">${esc(copy("file.protection.eyebrow"))}</div><h2>${esc(protectionState)}</h2><p>${esc(protectionCopy)}</p></div><div class="file-security-definitions">${clamav}</div></section>${active ? scanSurface : ""}<section class="plain-section"><div class="section-heading"><div><div class="eyebrow">${esc(copy("file.detections.eyebrow"))}</div><h2>${esc(copy("file.detections.title"))}</h2></div><span class="section-meta">${esc(pendingDetections.length)}</span></div><div class="file-detection-list">${detectionRows}</div>${resolvedDetections.length ? technicalDisclosure(copy("design.files.resolved"), resolvedDetections.length, resolvedDetections.map(renderDetection).join("")) : ""}</section>${active ? "" : scanSurface}${technicalDisclosure(copy("file.tools.title"), "", `<div class="workflow-step"><div><div class="eyebrow">${esc(copy("file.tools.eyebrow"))}</div><h2>${esc(copy("file.tools.heading"))}</h2><p>${esc(copy("file.tools.copy"))}</p></div>${safeOpen}</div>`)}${technicalDisclosure(copy("file.activity.title"), activity.length, activity.length ? `<div class="activity-list">${activity.map(activityMarkup).join("")}</div>` : emptyState(copy("file.activity.none"), copy("file.activity.noneCopy"), "activity"))}`;
 }
 
+function privacyHistoryLabel(data) {
+  return data.activity_state !== "AVAILABLE"
+    ? copy("privacy.history.unavailable")
+    : copy("privacy.history.summary", {count: (data.activity || []).length, max: data.max_activity_items || 0, days: data.retention_days || 0});
+}
+
 function privacyMarkup(data) {
-  const activity = data.activity || [];
   const local = (data.local || []).map((row) => statusRow(row, true)).join("") || emptyState(copy("privacy.local.unavailable"), copy("privacy.local.unavailableCopy"), "privacy");
   const profileFacts = [data.identity, data.firewall, data.vpn, data.public_ip].filter(Boolean).map((row) => statusRow(row, true)).join("");
   const disclosures = (data.disclosures || []).map((item) => technicalDisclosure(item.component || copy("privacy.disclosure.service"), item.state || "", `<dl><div><dt>${esc(copy("privacy.disclosure.purpose"))}</dt><dd>${esc(item.purpose || copy("privacy.disclosure.notSupplied"))}</dd></div><div><dt>${esc(copy("privacy.disclosure.endpoints"))}</dt><dd>${esc(item.endpoints || copy("privacy.disclosure.none"))}</dd></div><div><dt>${esc(copy("privacy.disclosure.trigger"))}</dt><dd>${esc(item.trigger || copy("privacy.disclosure.notSupplied"))}</dd></div><div><dt>${esc(copy("privacy.disclosure.data"))}</dt><dd>${esc(item.data_disclosed || copy("privacy.disclosure.notSupplied"))}</dd></div><div><dt>${esc(copy("privacy.disclosure.retention"))}</dt><dd>${esc(item.retention || copy("privacy.disclosure.notSupplied"))}</dd></div>${item.disable_route ? `<div><dt>${esc(copy("privacy.disclosure.disable"))}</dt><dd>${esc(item.disable_route)}</dd></div>` : ""}</dl>`)).join("");
-  const historyLabel = copy("privacy.history.summary", {count: activity.length, max: data.max_activity_items || 0, days: data.retention_days || 0});
+  const historyLabel = privacyHistoryLabel(data);
   const profile = String(data.profile?.value || "UNKNOWN").toLowerCase();
   const profileKey = `privacy.profile.${profile}`;
   const profileLabel = copy(profileKey) === profileKey ? copy("state.unknown") : copy(profileKey);
@@ -1120,6 +1340,30 @@ function updatePresentation(data) {
   };
 }
 
+function overviewActivitySection(overview, digest = {}) {
+  const digestState = digest.source_state?.state;
+  const state = digestState && digestState !== "AVAILABLE" ? digestState
+    : Array.isArray(digest.recent_activity) ? "AVAILABLE" : overview.activity_state || "UNAVAILABLE";
+  const activity = state === "AVAILABLE" ? overviewActivity(overview, digest) : [];
+  const body = state === "LOADING" ? `<div role="status">${emptyState(copy("loading.status"), copy("ui.readingEvidence"), "activity")}</div>`
+    : state !== "AVAILABLE" ? emptyState(copy("overview.activity.unavailable.title"), copy("overview.activity.unavailable.copy"), "activity")
+    : activity.length ? `<div class="activity-list">${activity.slice(0, 5).map(activityMarkup).join("")}</div>`
+    : emptyState(copy("overview.activity.empty.title"), copy("overview.activity.empty.copy"), "activity");
+  return `<details class="technical-disclosure overview-section activity-section"><summary><span>${esc(copy("overview.activity.title"))}</span></summary>${body}</details>`;
+}
+function updateOverviewActivity(value, sequence) {
+  if (currentPage !== "overview" || requestSequence !== sequence) return;
+  const cached = pageCache.get("overview"), target = app.querySelector(".activity-section");
+  if (!cached || !target) return;
+  cached.data = {...cached.data, ...value};
+  // Retain the disclosure itself so its focus/open state survives this read.
+  const template = document.createElement("template");
+  template.innerHTML = overviewActivitySection(cached.data, cached.data.security_digest || {});
+  const next = template.content.querySelector(".activity-section");
+  target.querySelectorAll(":scope > :not(summary)").forEach(node => node.remove());
+  [...next.children].filter(node => node.tagName !== "SUMMARY").forEach(node => target.append(node));
+}
+
 function overviewActivity(overview, digest) {
   // An empty authoritative digest is a valid result, not a request for old history.
   return Array.isArray(digest.recent_activity)
@@ -1129,7 +1373,7 @@ function overviewActivity(overview, digest) {
 
 function updateHistoryMarkup(items) {
   const ordered = [...items].sort((a, b) => (Date.parse(b.timestamp) || 0) - (Date.parse(a.timestamp) || 0));
-  const row = (item) => `<article class="activity-row update-history-row" data-update-history-row><span class="activity-icon">${icon("updates")}</span><div><strong>${esc(item.name || item.identity || copy("updates.history.unnamed"))}</strong><p>${esc(updateHistoryVersionLine(item))} · ${esc(copy(updateHistoryResultKey(item.result)))}</p><small>${esc(item.provider || copy("updates.item.system"))}${item.source ? ` · ${esc(item.source)}` : ""}</small></div><time>${esc(localizedTime(item.timestamp, copy("ui.unknown")))}</time></article>`;
+  const row = (item) => `<article class="activity-row update-history-row" data-update-history-row><span class="activity-icon">${icon("updates")}</span><div><strong>${esc(item.name || item.identity || copy("updates.history.unnamed"))}</strong><p>${esc(updateHistoryVersionLine(item))} Ã‚Â· ${esc(copy(updateHistoryResultKey(item.result)))}</p><small>${esc(item.provider || copy("updates.item.system"))}${item.source ? ` Ã‚Â· ${esc(item.source)}` : ""}</small></div><time>${esc(localizedTime(item.timestamp, copy("ui.unknown")))}</time></article>`;
   return ordered.slice(0, 5).map(row).join("")
     + (ordered.length > 5 ? technicalDisclosure(copy("updates.history.older"), ordered.length - 5, ordered.slice(5).map(row).join("")) : "");
 }
@@ -1175,7 +1419,7 @@ function updatesMarkup(data) {
   const providerResultRows = Array.isArray(transaction.provider_results) ? transaction.provider_results.map((item) => {
     const state = String(item?.state || "UNKNOWN").toUpperCase();
     const detail = [item?.reason, item?.detail].filter(Boolean).join(" ") || copy("updates.provider.noDetails");
-    return statusRow({label:`${item?.provider || copy("updates.item.system")} · last operation`, value:state, tone:state === "SUCCESS" ? "positive" : state === "DEGRADED" || state === "UNAVAILABLE" ? "review" : "muted", detail}, true);
+    return statusRow({label:`${item?.provider || copy("updates.item.system")} Ã‚Â· last operation`, value:state, tone:state === "SUCCESS" ? "positive" : state === "DEGRADED" || state === "UNAVAILABLE" ? "review" : "muted", detail}, true);
   }).join("") : "";
   const updateRows = visibleAvailable.map((item) => {
     const driver = item?.metadata?.driver_support === true;
@@ -1183,7 +1427,7 @@ function updatesMarkup(data) {
     const body = driver
       ? copy("updates.driver.required", {package: packageName})
       : copy("updates.item.versions", {current: item.current_version || copy("ui.unknown"), available: item.available_version || copy("ui.unknown"), restart: item.reboot_required === true ? copy("updates.item.restart") : ""});
-    return `<article class="update-row"><div><span class="eyebrow">${esc(driver ? copy("updates.driver.eyebrow") : `${item.category || copy("updates.item.unnamed")} · ${item.provider || copy("updates.item.system")}`)}</span><h3>${esc(item.name || copy("updates.item.unnamed"))}</h3></div>${status("AVAILABLE", "review", {canonical:true})}<p>${esc(body)}</p></article>`;
+    return `<article class="update-row"><div><span class="eyebrow">${esc(driver ? copy("updates.driver.eyebrow") : `${item.category || copy("updates.item.unnamed")} Ã‚Â· ${item.provider || copy("updates.item.system")}`)}</span><h3>${esc(item.name || copy("updates.item.unnamed"))}</h3></div>${status("AVAILABLE", "review", {canonical:true})}<p>${esc(body)}</p></article>`;
   }).join("");
   const driverIssueRows = driverIssues.map((item) => `<article class="update-row"><div><span class="eyebrow">${esc(copy("updates.driver.reviewEyebrow"))}</span><h3>${esc(item.name || copy("updates.item.unnamed"))}</h3></div>${status("REVIEW", "review", {canonical:true})}<p>${esc(copy("updates.driver.unresolved"))}</p></article>`).join("");
   const history = updateHistoryMarkup(data.history || []);
@@ -1201,13 +1445,13 @@ function updatesMarkup(data) {
 }
 
 function contextNavigation(page) {
-  const systemPages = ["system", "files", "applications", "devices", "evidence"];
+  const systemPages = ["system", "devices", "evidence"];
   if (systemPages.includes(page)) {
-    const items = [["evidence", "route.evidence"], ["files", "system.files"], ["applications", "system.apps"], ["devices", "system.devices"]];
+    const items = [["evidence", "route.evidence"], ["devices", "workspace.devices"]];
     return `<nav class="context-navigation" aria-label="${esc(t("system.title"))}">${items.map(([id, key]) => `<button class="${page === id ? "active" : ""}" data-page="${id}" aria-current="${page === id ? "page" : "false"}">${esc(t(key))}</button>`).join("")}</nav>`;
   }
-  if (["network", "activity", "threats"].includes(page)) {
-    const items = [["network", "network.protection"], ["activity", "network.activity"], ["threats", "network.threats"]];
+  if (["network", "threats"].includes(page)) {
+    const items = [["network", "network.protection"], ["threats", "network.threats"]];
     return `<nav class="context-navigation" aria-label="${esc(t("nav.network"))}">${items.map(([id, key]) => `<button class="${page === id ? "active" : ""}" data-page="${id}" aria-current="${page === id ? "page" : "false"}">${esc(t(key))}</button>`).join("")}</nav>`;
   }
   return "";
@@ -1215,22 +1459,127 @@ function contextNavigation(page) {
 function renderContent(page, data) {
   const route = normalizePage(page);
   let content;
-  if (route === "overview") content = overviewMarkup(data.overview || data, data.security_digest || {});
+  if (route === "overview") content = overviewMarkup(data.overview || data, data.security_digest || {}, data.guard);
   else if (route === "network") content = networkProtectionMarkup(data);
-  else if (route === "applications") content = applicationsMarkup(data);
+  else if (route === "applications") content = applicationProductMarkup(data);
+  else if (route === "protected-data") content = protectedDataMarkup(data);
   else if (route === "devices") content = devicesMarkup(data);
   else if (route === "evidence") content = evidenceMarkup(data);
   else if (route === "files") content = filesMarkup(data);
   else if (route === "privacy") content = privacyMarkup(data);
   else if (route === "updates") content = updatesMarkup(data);
   else if (route === "activity") content = networkActivityMarkup(data);
+  else if (route === "history") content = securityHistoryMarkup(data);
+  else if (route === "recovery") content = recoveryProductMarkup(data);
   else if (route === "threats") content = threatProtectionMarkup(data);
   else content = overviewMarkup(data);
+  if (["applications", "protected-data"].includes(route)) armGuardExpiry(route, data);
   return `${contextNavigation(route)}${content}`;
 }
 
+function armGuardExpiry(route, data) {
+  if (guardExpiryTimer) window.clearTimeout(guardExpiryTimer);
+  guardExpiryTimer = null;
+  const value = data.guard || data;
+  const leases = [value.coverage, value.envelope].filter(item => item?.source_state?.state === "AVAILABLE");
+  const expires = Math.min(...leases.map(item => Date.parse(item.fresh_until)));
+  const remaining = expires - Date.now();
+  if (!Number.isFinite(remaining) || remaining <= 0) return;
+  const sequence = requestSequence;
+  guardExpiryTimer = window.setTimeout(() => {
+    guardExpiryTimer = null;
+    if (currentPage !== route || requestSequence !== sequence) return;
+    const frame = app.querySelector(".content-frame");
+    if (!frame) return;
+    const view = captureViewState();
+    // A pending/failed provider refresh cannot extend cached evidence. Lose
+    // expired authority; the visible-route watcher will request a fresh read.
+    frame.innerHTML = renderContent(route, data);
+    bindContent(); restoreViewState(view);
+    setStatus("#guard-action-status", copy("guard.refreshRequired"));
+  }, remaining + 2);
+}
+
+function updateGuardWorkspace(route, sequence, data) {
+  if (currentPage !== route || requestSequence !== sequence || document.hidden) return;
+  const previous = pageCache.get(route)?.data;
+  pageCache.set(route, {data, loadedAt: Date.now()});
+  const frame = app.querySelector(".content-frame");
+  if (!frame) return;
+  const before = previous?.guard || previous, after = data.guard || data;
+  // Unchanged fresh evidence keeps search, open detail, focus and forms intact.
+  // A changed or previously expired projection must repaint its actual state.
+  if (previous && previous.providerPending === data.providerPending
+      && applicationSecurity.live(before?.coverage) && applicationSecurity.live(before?.envelope)
+      && applicationSecurity.presentationKey(before) === applicationSecurity.presentationKey(after)) {
+    armGuardExpiry(route, data);
+    return;
+  }
+  const state = captureViewState(), scroll = readPageScrollPosition();
+  frame.innerHTML = renderContent(route, data);
+  bindContent(); restoreViewState(state); applyPageScroll(scroll);
+}
+
+function updateGuardOverview(value, sequence) {
+  if (currentPage !== "overview" || requestSequence !== sequence) return;
+  const target = app.querySelector("#guard-overview");
+  if (!target) return;
+  const cached = pageCache.get("overview");
+  const previous = cached?.data?.guard;
+  const unchanged = previous && applicationSecurity.live(previous.coverage)
+    && applicationSecurity.live(value?.coverage)
+    && applicationSecurity.presentationKey(previous) === applicationSecurity.presentationKey(value);
+  if (cached) cached.data = {...cached.data, guard: value};
+  if (cached && !unchanged) {
+    const template = document.createElement("template");
+    template.innerHTML = overviewMarkup(cached.data.overview || cached.data, cached.data.security_digest || {}, value);
+    const brief = app.querySelector(".overview-brief"), next = template.content.querySelector(".overview-brief");
+    if (brief && next && brief.innerHTML !== next.innerHTML) {
+      const viewState = captureViewState();
+      brief.replaceWith(next);
+      next.querySelectorAll("[data-page]").forEach(button => button.addEventListener("click", () => loadPage(button.dataset.page)));
+      restoreViewState(viewState);
+    }
+    const domains = app.querySelector(".domain-list"), nextDomains = template.content.querySelector(".domain-list");
+    if (domains && nextDomains && domains.innerHTML !== nextDomains.innerHTML) {
+      const viewState = captureViewState();
+      domains.replaceWith(nextDomains);
+      nextDomains.querySelectorAll("[data-page]").forEach(button => button.addEventListener("click", () => loadPage(button.dataset.page)));
+      restoreViewState(viewState);
+    }
+  }
+  if (guardExpiryTimer) window.clearTimeout(guardExpiryTimer);
+  guardExpiryTimer = null;
+  const summary = document.createElement("template");
+  summary.innerHTML = applicationView.overviewSummary(value);
+  // Compare parsed markup on both sides: SVG self-closing tags are normalized
+  // by the DOM and must not cause a replacement on every fresh read.
+  if (target.innerHTML !== summary.innerHTML) {
+    target.innerHTML = summary.innerHTML;
+    target.querySelector("button").addEventListener("click", () => loadPage("protected-data"));
+  }
+  const remaining = Date.parse(value?.coverage?.fresh_until) - Date.now();
+  if (remaining > 0 && remaining <= 5000) guardExpiryTimer = window.setTimeout(() => {
+    guardExpiryTimer = null;
+    updateGuardOverview({coverage: {source_state: {state: "UNAVAILABLE"}}}, sequence);
+  }, remaining + 2);
+}
+
+function watchGuardWorkspace(route, sequence) {
+  if (stopGuardWatch) stopGuardWatch();
+  stopGuardWatch = applicationSecurity.watch(route === "overview" ? "coverage" : route === "protected-data" ? "resources" : "applications", value => {
+    if (currentPage !== route || requestSequence !== sequence) return;
+    if (route === "overview") {
+      updateGuardOverview(value, sequence);
+    } else {
+      const existing = pageCache.get(route)?.data;
+      if (existing) updateGuardWorkspace(route, sequence, route === "applications" ? {...existing, guard: value} : value);
+    }
+  }, () => !document.hidden && currentPage === route && requestSequence === sequence);
+}
+
 function getPageData(page) {
-  const key = page;
+  const key = page === "history" ? `history:${JSON.stringify(securityHistory.filters())}` : page;
   const existing = pageDataRequests.get(key);
   if (existing) return existing;
   const initialOverview = page === "overview" && !window.__greywardStartupOverviewRequested;
@@ -1238,10 +1587,15 @@ function getPageData(page) {
     window.__greywardStartupOverviewRequested = true;
     startupMarkOnce("initial_overview_request_start");
   }
-  const request = page === "activity"
-    ? invokeBounded("get_network_activity", {sinceSequence: 0, limit: 256}, 12000)
+  const request = page === "protected-data" ? applicationSecurity.load("resources")
+    : page === "applications" ? applicationSecurity.load("applications").then(guard => ({guard, providerPending: true}))
+    : page === "history" ? securityHistory.read()
+    : page === "recovery" ? invokeBounded("get_devices", {includeHistory: false}, 12000)
+    : page === "activity" ? invokeBounded("get_network_activity", {sinceSequence: 0, limit: 256}, 12000)
+        .catch(() => ({state: "UNAVAILABLE", reset: true, session_id: null, events: [], summary: {}}))
     : page === "overview"
-      ? invokeBounded("get_overview", undefined, 9000)
+      ? Promise.all([invokeBounded("get_overview", undefined, 9000), applicationSecurity.coverage()])
+        .then(([overview, coverage]) => ({...overview, guard: {coverage}}))
       : invokeBounded(page === "files" ? "get_filesecurity" : page === "network" ? "get_network_protection" : page === "threats" ? "get_threat_protection" : `get_${page}`, undefined, 12000);
   pageDataRequests.set(key, request);
   if (initialOverview) {
@@ -1257,10 +1611,11 @@ function getPageData(page) {
 }
 async function refreshUpdates() {
   if (currentPage !== "updates" || document.hidden || updateRequestBusy) return;
+  const request = requestSequence;
   updateRequestBusy = true;
   try {
     const data = await invokeBounded("get_updates", undefined, 12000);
-    if (currentPage !== "updates" || document.hidden) return;
+    if (currentPage !== "updates" || document.hidden || request !== requestSequence) return;
     pageCache.set("updates", {data, loadedAt: Date.now()});
     const frame = app.querySelector(".content-frame");
     if (frame) {
@@ -1285,8 +1640,8 @@ function stopUpdatePolling() {
   if (updatePoll) window.clearInterval(updatePoll);
   updatePoll = null;
 }
-function pageLoading(page) { const labels = {overview:"loading.overview", system:"loading.system", network:"loading.system", privacy:"loading.privacy", updates:"loading.updates", files:"loading.status", applications:"loading.status", devices:"loading.status", evidence:"loading.status", activity:"loading.status", threats:"network.threats"}; return shell(loadingState(copy(labels[page] || "loading.status")), {busy:true}); }
-function pageFailure(error) { return shell(pageHeader(copy("error.eyebrow"), t("ui.unavailable"), t("ui.stillWorks")) + errorState(t("ui.retry"), actionError(error, copy("error.view"))), {live:copy("state.unavailable")}); }
+function pageLoading(page) { const labels = {overview:"loading.overview", system:"loading.system", network:"loading.system", privacy:"loading.privacy", updates:"loading.updates", files:"loading.status", applications:"loading.status", devices:"loading.status", evidence:"loading.status", activity:"loading.status", threats:"network.threats"}; return loadingState(copy(labels[page] || "loading.status")); }
+function pageFailure(error) { return pageHeader(copy("error.eyebrow"), t("ui.unavailable"), t("ui.stillWorks")) + errorState(t("ui.retry"), actionError(error, copy("error.view"))); }
 
 function provenanceSummary(value) {
   if (!value || typeof value !== "object") return String(value || copy("file.context.unavailable"));
@@ -1300,6 +1655,11 @@ function contextMarkup(data) {
 }
 
 async function loadPage(page = currentPage, options = {}) {
+  applicationSecurity.cancelDetail();
+  if (stopGuardWatch) stopGuardWatch();
+  stopGuardWatch = null;
+  if (guardExpiryTimer) window.clearTimeout(guardExpiryTimer);
+  guardExpiryTimer = null;
   const destination = normalizePage(page);
   if (destination !== currentPage) deviationState.feedback = "";
   if (!["network", "threats"].includes(destination)) networkActionState.feedback = "";
@@ -1317,10 +1677,12 @@ async function loadPage(page = currentPage, options = {}) {
   }
   const cached = pageCache.get(currentPage);
   const cachedData = cached?.data;
-  const initialCachedData = cachedData;
-  const canReuseCachedPage = options.force !== true && PAGE_CACHE_REUSE_ROUTES.has(currentPage) && Boolean(cachedData) && (Date.now() - cached.loadedAt) < PAGE_CACHE_TTL_MS;
+  const initialCachedData = currentPage === "overview" && !applicationSecurity.live(cachedData?.guard?.coverage)
+    ? null : cachedData;
+  const canReuseCachedPage = options.force !== true && PAGE_CACHE_REUSE_ROUTES.has(currentPage) && Boolean(initialCachedData) && (Date.now() - cached.loadedAt) < PAGE_CACHE_TTL_MS;
   const refreshInPlace = preserveScroll && Boolean(app.querySelector(".app-shell .content-frame")) && !canReuseCachedPage;
   if (canReuseCachedPage && preserveScroll) {
+    if (currentPage === "overview") watchGuardWorkspace(currentPage, request);
     const activeFileOperation = app.querySelector("[data-file-operation]");
     if (currentPage === "files" && activeFileOperation?.classList.contains("is-active")) startFileSecurityPolling();
     return;
@@ -1334,7 +1696,7 @@ async function loadPage(page = currentPage, options = {}) {
       : currentPage === "files"
         ? filesMarkup({loading: true, state: "LOADING", detections: [], activity: []})
         : null;
-    app.innerHTML = initialContent ? shell(initialContent, {busy: !canReuseCachedPage}) : pageLoading(currentPage);
+    mountPage(initialContent || pageLoading(currentPage), {busy: !canReuseCachedPage});
     if (!window.__greywardStartupShellRendered) {
       window.__greywardStartupShellRendered = true;
       startupMarkOnce("first_shell_dom");
@@ -1343,8 +1705,15 @@ async function loadPage(page = currentPage, options = {}) {
     applyPageScroll(scrollPosition);
     bind();
   }
-  if (canReuseCachedPage) return;
+  if (canReuseCachedPage) {
+    if (currentPage === "overview") watchGuardWorkspace(currentPage, request);
+    return;
+  }
   if (initialCachedData && !refreshInPlace) setRefreshBusy(true);
+  // Flatpak's independent native provider runs while Guard performs its live
+  // reads. Neither provider supplies the other's security or permission truth.
+  const permissionsRequest = currentPage === "applications"
+    ? invokeBounded("get_applications", undefined, 12000).catch(() => ({inventory_state: "UNAVAILABLE"})) : null;
   try {
     const data = await getPageData(currentPage);
     if (request !== requestSequence) return;
@@ -1357,7 +1726,7 @@ async function loadPage(page = currentPage, options = {}) {
       restoreViewState(viewState);
       setRefreshBusy(false);
     } else {
-      app.innerHTML = shell(renderContent(currentPage, data));
+      mountPage(renderContent(currentPage, data));
       if (currentPage === "overview") {
         startupMarkOnce("first_authoritative_overview_dom");
         requestAnimationFrame(() => startupMarkOnce("first_authoritative_overview_frame"));
@@ -1366,13 +1735,29 @@ async function loadPage(page = currentPage, options = {}) {
     applyPageScroll(scrollPosition);
     if (refreshInPlace) bindContent();
     else bind();
+    if (["applications", "protected-data", "overview"].includes(currentPage)) watchGuardWorkspace(currentPage, request);
+    if (currentPage === "applications") {
+      // Flatpak collection has its own latency and evidence. It must never
+      // hold Guard's short-lived state or available actions behind a slow read.
+      permissionsRequest.then(permissions => {
+        if (request !== requestSequence || currentPage !== "applications") return;
+        const current = pageCache.get("applications")?.data;
+        if (current) updateGuardWorkspace("applications", request, {...permissions, guard: current.guard, providerPending: false});
+      });
+    }
+    if (currentPage === "overview") {
+      updateGuardOverview(data.guard, request);
+      invokeBounded("get_overview_activity", undefined, 5000)
+        .then(value => updateOverviewActivity(value, request))
+        .catch(() => updateOverviewActivity({activity: [], activity_state: "UNAVAILABLE"}, request));
+    }
     if (currentPage === "overview" && !fileContextDismissed) {
         invokeBounded("get_file_context", undefined, 5000).then((context) => {
         if (request !== requestSequence || !context) return;
         if (refreshInPlace) {
           app.querySelector(".content-frame").innerHTML = contextMarkup(context);
         } else {
-          app.innerHTML = shell(contextMarkup(context));
+          mountPage(contextMarkup(context));
         }
         applyPageScroll(scrollPosition);
         if (refreshInPlace) bindContent();
@@ -1387,7 +1772,7 @@ async function loadPage(page = currentPage, options = {}) {
       setRefreshBusy(false);
       setStatus("[data-live-status]", actionError(error, copy("feedback.refresh")));
     } else {
-      app.innerHTML = pageFailure(error);
+      mountPage(pageFailure(error));
       applyPageScroll(scrollPosition);
       bind();
     }
@@ -1404,10 +1789,10 @@ function setRefreshBusy(busy) {
 }
 
 function readPageScrollPosition() {
-  const scrollingElement = document.scrollingElement || document.documentElement;
+  const scrollingElement = app;
   return {
-    left: window.scrollX || scrollingElement.scrollLeft || 0,
-    top: window.scrollY || scrollingElement.scrollTop || 0,
+    left: scrollingElement.scrollLeft || 0,
+    top: scrollingElement.scrollTop || 0,
   };
 }
 
@@ -1417,8 +1802,7 @@ function applyPageScroll(position) {
     return;
   }
   window.requestAnimationFrame(() => {
-    window.scrollTo({ left: position.left, top: position.top, behavior: "auto" });
-    const scrollingElement = document.scrollingElement || document.documentElement;
+    const scrollingElement = app;
     scrollingElement.scrollLeft = position.left;
     scrollingElement.scrollTop = position.top;
   });
@@ -1426,15 +1810,18 @@ function applyPageScroll(position) {
 
 function resetPageScroll() {
   window.requestAnimationFrame(() => {
-    window.scrollTo({ top: 0, behavior: "auto" });
-    document.documentElement.scrollTop = 0;
-    document.body.scrollTop = 0;
+    app.scrollTop = 0;
+    app.scrollLeft = 0;
   });
 }
 
 function bind() {
   try {
-    app.querySelectorAll(".nav-item").forEach((element) => element.addEventListener("click", () => loadPage(element.dataset.page)));
+    app.querySelectorAll(".nav-item").forEach(element => {
+      if (element.dataset.navigationBound === "true") return;
+      element.dataset.navigationBound = "true";
+      element.addEventListener("click", () => loadPage(element.dataset.page));
+    });
     bindContent();
     if (!window.__greywardStartupInteractive) {
       window.__greywardStartupInteractive = true;
@@ -1448,6 +1835,34 @@ function bind() {
   }
 }
 function bindContent() {
+  const administrationButton = app.querySelector('[data-administration-open]');
+  if (administrationButton) {
+    const route = currentPage, sequence = requestSequence;
+    invokeBounded('get_administration_state', {}, 9000).then(value => {
+      if (route !== currentPage || sequence !== requestSequence || !administrationButton.isConnected) return;
+      administrationButton.disabled = value.available !== true || value.active === true;
+      setStatus('#administration-status', value.active ? copy('administration.active') : value.available ? '' : copy('administration.unavailable'));
+    }).catch(() => { if (administrationButton.isConnected) setStatus('#administration-status', copy('administration.unavailable')); });
+    administrationButton.addEventListener('click', async () => {
+      beginButton(administrationButton, copy('administration.opening'));
+      try { await invokeBounded('open_administration', {}, 10000); }
+      catch (_) { if (route === currentPage) setStatus('#administration-status', copy('administration.failed')); }
+      finally { endButton(administrationButton); }
+    });
+  }
+  app.querySelector("[data-history-category]")?.addEventListener("change", event => { securityHistory.select(event.currentTarget.value); loadPage("history", {force: true}); });
+  app.querySelector("[data-history-older]")?.addEventListener("click", event => { securityHistory.older(event.currentTarget.dataset.historyOlder); loadPage("history", {force: true}); });
+  app.querySelector("[data-history-latest]")?.addEventListener("click", () => { securityHistory.reset(); loadPage("history", {force: true}); });
+
+  app.querySelector("[data-guard-search-input]")?.addEventListener("input", filterGuardInventory);
+  filterGuardInventory();
+  app.querySelectorAll("[data-guard-detail]").forEach((button) => button.addEventListener("click", () => showGuardDetail(button)));
+  app.querySelector("#guard-register-form")?.addEventListener("submit", event => { event.preventDefault(); runGuardReview("registration", event.currentTarget.querySelector("button")); });
+  app.querySelector("#guard-resource-label")?.addEventListener("input", event => { guardResourceLabel = event.currentTarget.value; });
+  app.querySelector("#guard-resource-category")?.addEventListener("change", event => { guardResourceCategory = event.currentTarget.value; });
+  app.querySelector("[data-guard-run]")?.addEventListener("click", event => runGuardLaunch(event.currentTarget));
+  app.querySelectorAll("[data-guard-revoke]").forEach(button => button.addEventListener("click", () => runGuardReview("revocation", button)));
+  app.querySelector("[data-guard-more]")?.addEventListener("click", (event) => loadMoreGuard(event.currentTarget));
   app.querySelectorAll("[data-page]:not(.nav-item)").forEach((element) => element.addEventListener("click", () => loadPage(element.dataset.page)));
   app.querySelector("[data-file-context-back]")?.addEventListener("click", () => { fileContextDismissed = true; loadPage("overview"); });
   app.querySelector("[data-retry]")?.addEventListener("click", () => loadPage(currentPage, {force: true}));
@@ -1516,7 +1931,7 @@ async function runRecoveryAction(command, button, label, selector, name, timeout
       throw error;
     }
     setStatus(selector, result?.cancelled ? copy("feedback.cancelled") : copy("feedback.completed", {name}));
-    if (currentPage === "devices") window.setTimeout(() => { if (currentPage === "devices") loadPage("devices", {force: true}); }, 300);
+    if (["devices", "recovery"].includes(currentPage)) { const route = currentPage; window.setTimeout(() => { if (currentPage === route) loadPage(route, {force: true}); }, 300); }
   } catch (error) {
     setStatus(selector, error.problem ? backupProblemCopy(error.problem) : actionError(error, name));
   } finally { endButton(button); }
@@ -1719,16 +2134,19 @@ async function pickAndStartFileSecurityScan(mode, directory) {
   }
 }
 async function refreshFileSecurityOperation() {
-  if (!fileSecurityState.operationId || fileSecurityState.requestBusy) return;
+  if (currentPage !== "files" || !fileSecurityState.operationId || fileSecurityState.requestBusy || document.hidden) return;
   fileSecurityState.requestBusy = true;
+  const operationId = fileSecurityState.operationId, visit = requestSequence;
+  const isCurrent = () => currentPage === "files" && requestSequence === visit && fileSecurityState.operationId === operationId && !document.hidden;
   try {
-    const result = await invokeBounded("get_file_security_scan_status", {operationId: fileSecurityState.operationId}, 10000);
+    const result = await invokeBounded("get_file_security_scan_status", {operationId}, 10000);
+    if (!isCurrent()) return;
     const operation = app.querySelector("#file-security-operation");
     if (operation) { operation.innerHTML = fileSecurityOperationMarkup(result); bindFileSecurityOperation(); }
     const state = String(result?.state || "").toUpperCase();
     if (!["QUEUED", "SCANNING", "FINALIZING"].includes(state)) {
       stopFileSecurityPolling();
-      window.setTimeout(() => { if (currentPage === "files") loadPage("files", {force: true}); }, 250);
+      window.setTimeout(() => { if (isCurrent()) loadPage("files", {force: true}); }, 250);
     } else {
       // Scan progress is asynchronous and can be slow. Back off while it is
       // active so the status D-Bus call does not compete with the scan itself.
@@ -1736,12 +2154,16 @@ async function refreshFileSecurityOperation() {
       scheduleFileSecurityPolling();
     }
   } catch (error) {
+    if (!isCurrent()) return;
     const operation = app.querySelector("#file-security-operation");
     stopFileSecurityPolling();
     setFileSecurityFeedback(copy("file.scan.statusUnavailableCopy"));
     if (operation) { operation.innerHTML = `${emptyState(copy("file.scan.statusUnavailable"), copy("file.scan.statusUnavailableCopy"), "warning")}${actionButton(copy("file.scan.retryStatus"), copy("file.scan.retryStatusDetail"), "secondary", "data-file-scan-status-retry", "refresh")}`; bindFileSecurityOperation(); }
   } finally {
     fileSecurityState.requestBusy = false;
+    // A newer Files visit may have encountered this busy slot. Resume its
+    // active operation without letting the old response update the new view.
+    if (!isCurrent() && currentPage === "files" && app.querySelector("[data-file-operation].is-active")) scheduleFileSecurityPolling();
   }
 }
 function startFileSecurityPolling() {
@@ -1813,17 +2235,33 @@ async function deleteFileSecurityDetection(button) {
 
 let navigationRequestBusy = false;
 let navigationPoll = null;
+let navigationInFlight = null;
+function followSecurityNavigation(raw) {
+  if (!raw) return Promise.resolve();
+  if (navigationInFlight?.raw === raw) return navigationInFlight.promise;
+  const work = (async () => {
+    const [requestedPage, reference] = String(raw).split("|", 2);
+    const page = normalizePage(requestedPage);
+    if (!pages.includes(page)) return;
+    if (page === "protected-data" && reference && !/^resource_[0-9a-f]{64}$/.test(reference)) return;
+    focusedThreatEventId = page === "threats" ? String(reference || "") : "";
+    await loadPage(page, {force: ["threats", "protected-data"].includes(page)});
+    if (page === "protected-data" && reference && currentPage === page) {
+      const button = [...app.querySelectorAll("[data-guard-detail]")]
+        .find(control => control.dataset.guardDetail === reference);
+      if (button) await showGuardDetail(button);
+      else setStatus("#guard-action-status", copy("guard.block.resourceMissing"));
+    }
+  })();
+  navigationInFlight = {raw, promise: work};
+  return work.finally(() => { if (navigationInFlight?.promise === work) navigationInFlight = null; });
+}
 async function consumeNavigationRequest() {
   if (document.hidden || navigationRequestBusy || !window.__TAURI_INTERNALS__?.invoke) return;
   navigationRequestBusy = true;
   try {
     const raw = await invokeBounded("consume_navigation_request", undefined, 2500);
-    const [requestedPage, eventId] = String(raw || "").split("|", 2);
-    const page = normalizePage(requestedPage);
-    if (page && pages.includes(page)) {
-      focusedThreatEventId = page === "threats" ? String(eventId || "") : "";
-      await loadPage(page, {force: page === "threats"});
-    }
+    await followSecurityNavigation(raw);
   } catch (_) {
     // Navigation is an optional shell affordance; the current page remains usable.
   } finally {
@@ -1842,6 +2280,8 @@ function startNavigationPolling() {
 }
 function handleVisibilityChange() {
   if (document.hidden) {
+    if (stopGuardWatch) stopGuardWatch();
+    stopGuardWatch = null;
     stopNavigationPolling();
     if (updatePoll) { window.clearInterval(updatePoll); updatePoll = null; }
     stopFileSecurityPolling();
@@ -1860,14 +2300,23 @@ function bindStateEvents() {
   eventsBound = true;
   window.__TAURI__.event.listen("security-state-changed", () => { if (!document.hidden && currentPage !== "updates") { if (currentPage === "privacy" && (privacyState.profilePending || privacyState.localActionPending)) return; currentPage === "activity" ? refreshNetworkActivity() : loadPage(currentPage, {force: true}); } });
   window.__TAURI__.event.listen("security-navigation", ({payload}) => {
-    const [requestedPage, eventId] = String(payload || "").split("|", 2);
-    const page = normalizePage(requestedPage);
-    if (pages.includes(page)) {
-      focusedThreatEventId = page === "threats" ? String(eventId || "") : "";
-      loadPage(page, {force: page === "threats"});
-    }
+    followSecurityNavigation(payload).catch(() => {});
   });
 }
+const securityHistory = window.GREYWARD_SECURITY_HISTORY.create({request: invokeBounded, copy, esc, icon, time: localizedTime,
+  identityMark: networkIdentityMark,
+  context: async () => {
+    const query = {limit: 100, revision: null, after: null};
+    const [apps, resources] = await Promise.allSettled([
+      invokeBounded("list_application_security_applications", {query}, 8000),
+      invokeBounded("list_application_security_resources", {query}, 8000),
+    ]);
+    const liveApps = apps.status === "fulfilled" ? applicationSecurity.live(apps.value) : null;
+    const liveResources = resources.status === "fulfilled" ? applicationSecurity.live(resources.value) : null;
+    return {applications: Object.fromEntries((liveApps?.applications || []).map(item => [item.record.identity.installation_ref, item.record.identity.display_name])),
+      resources: Object.fromEntries((liveResources?.resources || []).map(item => [item.resource_ref, item.label]))};
+  }});
+const applicationView = window.GREYWARD_APPLICATION_VIEW.create({esc, copy, icon, live: applicationSecurity.live, time: localizedTime, eventRow: securityHistory.row});
 bindStateEvents();
 document.addEventListener("visibilitychange", handleVisibilityChange);
 startupMarkOnce("frontend_bootstrap_complete");
@@ -1880,14 +2329,14 @@ startNavigationPolling();
 
 // Native dialog top-layer provides modal focus containment and Escape handling.
 // Kept outside #app so background reads cannot discard a pending decision.
-function confirmAction(title, description, confirmLabel, destructive = false) {
+function confirmAction(title, description, confirmLabel, destructive = false, facts = []) {
   if (document.querySelector(".confirmation-dialog")) return Promise.resolve(false);
   const trigger = document.activeElement;
   const dialog = document.createElement("dialog");
   dialog.className = "confirmation-dialog";
   dialog.setAttribute("aria-labelledby", "confirmation-title");
   dialog.setAttribute("aria-describedby", "confirmation-description");
-  dialog.innerHTML = `<form method="dialog"><div class="dialog-symbol ${destructive ? "is-destructive" : ""}">${icon(destructive ? "clean" : "file")}</div><h2 id="confirmation-title">${esc(title)}</h2><p id="confirmation-description">${esc(description)}</p><div class="dialog-actions"><button class="action-button secondary" value="cancel" autofocus>${esc(copy("ui.cancel"))}</button><button class="action-button ${destructive ? "destructive" : "primary"}" value="confirm">${esc(confirmLabel)}</button></div></form>`;
+  dialog.innerHTML = `<form method="dialog"><div class="dialog-symbol ${destructive ? "is-destructive" : ""}">${icon(destructive ? "clean" : "file")}</div><h2 id="confirmation-title">${esc(title)}</h2><p id="confirmation-description">${esc(description)}</p>${facts.length ? `<dl class="guard-review-facts">${facts.map(([label, value]) => `<div><dt>${esc(label)}</dt><dd>${esc(value)}</dd></div>`).join("")}</dl>` : ""}<div class="dialog-actions"><button class="action-button secondary" value="cancel" autofocus>${esc(copy("ui.cancel"))}</button><button class="action-button ${destructive ? "destructive" : "primary"}" value="confirm">${esc(confirmLabel)}</button></div></form>`;
   document.body.append(dialog);
   return new Promise((resolve) => {
     dialog.addEventListener("close", () => {

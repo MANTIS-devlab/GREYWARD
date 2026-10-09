@@ -1,0 +1,9 @@
+; Explicit development prerequisite only; not production enrollment policy.
+; Reversible module: greyward_session_bus_boundary. No new allow rules.
+; The existing ordinary role closure includes the session/a11y bus domains.
+; Deny attach-mode inspection (mem, ptrace, process_vm_* and pidfd_getfd),
+; preserving process metadata, dbus send_msg, sockets and client FD passing.
+; This does not attest startup, revoke held descriptors, protect portal/proxy
+; processes, or authenticate a request forwarded through the session bus.
+(deny greyward_as_ordinary greyward_guard_dbusd_t (process (ptrace)))
+(neverallow greyward_as_ordinary greyward_guard_dbusd_t (process (ptrace)))

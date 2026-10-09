@@ -1,0 +1,210 @@
+policy_module(greyward_guard_probe, 0.1.0)
+
+# Development-only feasibility policy. Never included by production provisioning.
+# Ordinary desktop subject; grant-bearing subjects must not use this template.
+role greyward_guard_r;
+userdom_unpriv_user_template(greyward_guard)
+
+# selinux_file_receive(file_to_av) maps an O_PATH handle with neither READ nor
+# WRITE mode to ioctl. The system bus needs that metadata-only directory handoff
+# for descriptor registration. Do not grant dir read/open or any file permission;
+# readable/writable SCM_RIGHTS descriptors still require those separate rights.
+# Actual ioctl commands remain unavailable (extended permission 0 only).
+# Primary contract: Linux security/selinux/hooks.c, selinux_file_receive.
+gen_require(`
+    type system_dbusd_t;
+    type user_home_t;
+')
+allow system_dbusd_t user_home_t:dir ioctl;
+allowxperm system_dbusd_t user_home_t:dir ioctl { 0x0000 };
+allow system_dbusd_t user_home_t:file ioctl;
+allowxperm system_dbusd_t user_home_t:file ioctl { 0x0000 };
+
+# Flatpak 1.18.4's ldconfig helper always creates a private network namespace;
+# bubblewrap 0.12.0 configures its loopback there. Permit only the descendant
+# user-namespace capability needed for that setup, not host CAP_NET_ADMIN.
+# No credential, label, host route or owner-domain permission is added.
+# Primary implementation: common/flatpak-run.c / network.c at these exact tags.
+allow greyward_guard_t self:cap_userns net_admin;
+# Bubblewrap v0.12.0 drops the new user namespace's capability bounding set
+# with PR_CAPBSET_DROP. This permits that local setup operation, not host
+# CAP_SETPCAP or a Protected Data exception. The worker requires all capability
+# sets, including CapBnd, to be zero before Landlock/seccomp and application exec.
+allow greyward_guard_t self:cap_userns setpcap;
+# Bubblewrap --disable-userns lowers the current descendant namespace's limit,
+# then enters another namespace so the workload cannot undo it. Linux ucount
+# sysctl permissions require namespace CAP_SYS_RESOURCE. No host capability,
+# DAC override or ability to change the host limit is granted. The parent
+# O_WRONLY-open denial is a mandatory test; no host sysctl is written.
+allow greyward_guard_t self:cap_userns sys_resource;
+gen_require(`
+    type sysctl_t;
+')
+allow greyward_guard_t sysctl_t:file { open write };
+# Netlink message permission is separate from capability checks. A host route
+# still requires host CAP_NET_ADMIN, which this ordinary subject never gets.
+allow greyward_guard_t self:netlink_route_socket nlmsg_write;
+# Bubblewrap makes the cloned root mount slave before constructing its private
+# filesystem. Host mount authority is still absent; this adds no root file read,
+# write, relabel or initial-user-namespace CAP_SYS_ADMIN permission.
+gen_require(`
+    type root_t;
+    type tmp_t;
+')
+allow greyward_guard_t { root_t tmp_t }:dir mounton;
+# Fresh namespace scratch filesystem, not remount/relabel of a host filesystem.
+fs_mount_tmpfs(greyward_guard_t)
+# Flatpak bind-remounts its deployment and the bus proxy's cloned root read-only.
+# The proxy recursively visits existing mounts, so a host-specific filesystem
+# list would make this depend on incidental mount types (EFI/autofs/sysfs etc.).
+# Permit remount only, not mounting arbitrary filesystem types, relabel, device
+# I/O or file access. Kernel may_mount still requires CAP_SYS_ADMIN in the mount
+# namespace's owning user namespace; this subject lacks that capability in its
+# parent/host namespace. Both parent remount failure and protected-file/alias
+# denials are mandatory fixture gates. No production policy uses this prototype.
+fs_remount_all_fs(greyward_guard_t)
+# Drop the old root after pivot_root in that same descendant mount namespace.
+fs_unmount_xattr_fs(greyward_guard_t)
+fs_unmount_tmpfs(greyward_guard_t)
+# The pinned system Flatpak deployment inherits var_lib_t. Its GL directory is
+# a mount destination inside the new sandbox. No access to var_lib file content
+# or host CAP_SYS_ADMIN is granted; this is not a writable deployment exception.
+gen_require(`
+    type var_lib_t;
+')
+allow greyward_guard_t var_lib_t:dir mounton;
+# Runtime /etc/ld.so.conf is likewise a deployment file overlaid by generated
+# scratch configuration; protected credential types are not mount targets.
+allow greyward_guard_t var_lib_t:file mounton;
+# Unmanaged Flatpak runtime code is var_lib_t in this observed installation.
+# Execute it only as the same ordinary subject: this is not an entrypoint or
+# transition to a grant holder, nor evidence of signed/approved application ID.
+allow greyward_guard_t var_lib_t:file { execute execute_no_trans map };
+# Flatpak overlays ordinary XDG application metadata in a broad-home sandbox.
+# Protected trees are separately typed; no credential mount target is allowed.
+gen_require(`
+    type data_home_t;
+    type flatpak_home_t;
+    type config_home_t;
+')
+allow greyward_guard_t { data_home_t flatpak_home_t }:dir mounton;
+# A real graphical session supplies dconf runtime metadata. Flatpak binds it
+# onto its private tmpfs destination, which inherits config_home_t. This adds
+# no protected-resource read, label transition or parent mount capability.
+allow greyward_guard_t config_home_t:dir mounton;
+# The generated user-dirs metadata target inside ~/.var/app is ordinary content.
+gen_require(`
+    type user_home_t;
+')
+allow greyward_guard_t user_home_t:file mounton;
+# Fixed ldconfig helper bind-mounts generated configuration over a scratch file
+# in its private /run/flatpak tree. Protected resources have a different type.
+gen_require(`
+    type user_tmp_t;
+')
+allow greyward_guard_t user_tmp_t:file mounton;
+# Flatpak mounts proc for its private PID namespace. Object/process access
+# checks still apply; this does not permit ptrace or reads of owner processes.
+kernel_mount_proc(greyward_guard_t)
+# Bubblewrap's private devpts instance, not access to another session's PTY.
+term_mount_pty_fs(greyward_guard_t)
+
+role greyward_guard_owner_r;
+type greyward_guard_owner_t;
+domain_type(greyward_guard_owner_t)
+domain_user_exemption_target(greyward_guard_owner_t)
+ubac_constrained(greyward_guard_owner_t)
+role greyward_guard_owner_r types greyward_guard_owner_t;
+allow system_r greyward_guard_owner_r;
+# A generic userdomain inherits NSS socket-deputy access from other desktop
+# subjects. Keep the synthetic grant holder outside userdomain and expose only
+# its fixed Python fixture, ordinary output metadata and synthetic resources.
+corecmd_bin_entry_type(greyward_guard_owner_t)
+corecmd_exec_bin(greyward_guard_owner_t)
+libs_use_ld_so(greyward_guard_owner_t)
+libs_use_shared_libs(greyward_guard_owner_t)
+files_read_usr_files(greyward_guard_owner_t)
+files_read_etc_files(greyward_guard_owner_t)
+dev_read_urand(greyward_guard_owner_t)
+dev_rw_null(greyward_guard_owner_t)
+kernel_read_system_state(greyward_guard_owner_t)
+init_use_fds(greyward_guard_owner_t)
+init_rw_stream_sockets(greyward_guard_owner_t)
+userdom_search_user_home_dirs(greyward_guard_owner_t)
+userdom_manage_user_home_content_sockets(greyward_guard_owner_t)
+allow greyward_guard_owner_t self:unix_stream_socket { create_stream_socket_perms connectto };
+allow greyward_guard_owner_t self:process { getcap getsched signal sigkill sigchld signull };
+gen_require(`
+    type user_home_dir_t;
+    type user_home_t;
+    type ssh_agent_exec_t;
+')
+# Actual synthetic SSH-agent deputy, kept in the dedicated owner domain. This
+# gives neither an automatic transition nor an ordinary-user agent exception.
+allow greyward_guard_owner_t ssh_agent_exec_t:file { entrypoint execute execute_no_trans open read getattr map };
+# Only ordinary fixture metadata/socket entries; Unix ownership still applies.
+allow greyward_guard_owner_t user_home_dir_t:dir { write add_name remove_name };
+type_transition greyward_guard_owner_t user_home_dir_t:{ file sock_file } user_home_t;
+# A rename does not run a create-type transition. This fixture may write its
+# ordinary metadata but cannot rename/link an ordinary inode into the protected
+# tree. Compatible production tools/imports need separate reviewed profiles.
+allow greyward_guard_owner_t user_home_t:file { create open read write getattr setattr unlink };
+
+type greyward_guard_secret_t;
+# Treat credentials as authentication data. non_auth_file_type would also
+# permit generic restorecond relabeling and broad rsync export rules.
+files_auth_file(greyward_guard_secret_t)
+
+# Permit metadata lookup, not listing or content. This makes the meaningful
+# open/read denial auditable rather than failing at a suppressed getattr check.
+allow greyward_guard_t greyward_guard_secret_t:dir { getattr search };
+allow greyward_guard_t greyward_guard_secret_t:file getattr;
+
+# Only the independently selected grant-bearing context receives resource access.
+allow greyward_guard_owner_t greyward_guard_secret_t:dir manage_dir_perms;
+allow greyward_guard_owner_t greyward_guard_secret_t:file manage_file_perms;
+allow greyward_guard_owner_t greyward_guard_secret_t:lnk_file read_lnk_file_perms;
+type_transition greyward_guard_owner_t greyward_guard_secret_t:dir greyward_guard_secret_t;
+type_transition greyward_guard_owner_t greyward_guard_secret_t:file greyward_guard_secret_t;
+
+# The existing recovery account remains unconfined. This permits its explicit
+# probe setup to enter these contexts; ordinary probe subjects cannot do so.
+gen_require(`
+    role unconfined_r;
+    type init_t;
+')
+allow unconfined_r greyward_guard_r;
+allow unconfined_r greyward_guard_owner_r;
+# Explicit root-managed fixture launch; no automatic executable transition.
+allow init_t greyward_guard_owner_t:process transition;
+allow greyward_guard_owner_t init_t:process sigchld;
+
+# UWSM reads manager/unit state, including generated per-user unit metadata.
+# These status permissions grant neither system-service control nor data access.
+init_status(greyward_guard_t)
+# UWSM execs systemd-notify to signal readiness to its own user manager. Keep
+# that executable in the confined subject; do not transition to a system role.
+systemd_exec_notify(greyward_guard_t)
+gen_require(`
+    type user_tmp_t;
+    type mount_t;
+')
+allow greyward_guard_t user_tmp_t:service status;
+# The confined user manager must reap its own FUSE helpers. Unix UID checks
+# still apply; this does not permit signalling the separate grant-owner domain.
+allow greyward_guard_t mount_t:process { signull signal sigkill };
+
+# Accessibility activation remains in the confined user context. No data grant.
+optional_policy(`
+    gen_require(`
+        type greyward_guard_dbusd_t;
+    ')
+    # Linux maps receipt of an O_PATH FD (no READ/WRITE mode) to the base
+    # ioctl permission. Permit metadata-only descriptor transfer so a portal
+    # can reject the selection normally. Real readable/writable FDs remain
+    # denied, and extended permissions permit no useful ioctl command.
+    allow { greyward_guard_t greyward_guard_dbusd_t } greyward_guard_secret_t:{ file dir } ioctl;
+    allowxperm { greyward_guard_t greyward_guard_dbusd_t } greyward_guard_secret_t:{ file dir } ioctl { 0x0000 };
+    gnome_exec_atspi(greyward_guard_t)
+    gnome_exec_atspi(greyward_guard_dbusd_t)
+')

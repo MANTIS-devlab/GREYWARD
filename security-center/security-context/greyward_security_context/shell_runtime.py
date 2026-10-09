@@ -64,6 +64,10 @@ class ShellRuntime:
                 # wait for them in a D-Bus action or provider-signal callback.
                 self.service._invalidate_caches()
             if full:
+                workflows = getattr(self.service, 'application_workflows', None)
+                if workflows is not None:
+                    workflows.reconcile_access_events()
+                self.service.reconcile_history()
                 self.shell = json.loads(self.service.GetShellSummary())
                 self.files = json.loads(self.service.GetFileSecuritySummary())
                 from .user_bus import network_summary
@@ -82,7 +86,9 @@ class ShellRuntime:
                     if device.get('authorized') and (op.get('mode') == 'once' or device.get('trusted')):
                         op.update(state='COMPLETE', detail='Device permission confirmed.', expires_at=time.monotonic() + 5)
             previous = self.read().get('items', []) or [record.get('item', {}) for record in self.router.records.values()]
-            value = build_experience(self.shell, capsule, devices, error, self.files, self.network, self.operations, previous)
+            workflows = getattr(self.service, 'application_workflows', None)
+            blocks = workflows.recent_access_blocks() if workflows is not None else []
+            value = build_experience(self.shell, capsule, devices, error, self.files, self.network, self.operations, previous, blocks)
             value['operations'] = [{k: v for k, v in op.items() if k != 'expires_at'} for op in self.operations.values()]
             GLib.idle_add(self._publish, value, full)
         except Exception:
@@ -98,8 +104,8 @@ class ShellRuntime:
 
     def _publish(self, value, heartbeat, release_collector=True):
         with self.lock:
-            old = {k: v for k, v in self.snapshot.items() if k not in {'revision', 'fresh_until'}}
-            shape = {k: v for k, v in value.items() if k != 'fresh_until'}
+            old = {k: v for k, v in self.snapshot.items() if k not in {'revision', 'fresh_until', 'display_fresh_until'}}
+            shape = {k: v for k, v in value.items() if k not in {'revision', 'fresh_until', 'display_fresh_until'}}
             changed = old != shape
             value['revision'] = self.snapshot.get('revision', 0) + int(changed)
             self.snapshot = value
@@ -178,4 +184,4 @@ class ShellRuntime:
             self.service.ClearClipboard(current['id'])
             self.invalidate()
         elif selected == 'open':
-            open_route(current.get('route', 'overview'))
+            open_route(current.get('route', 'overview'), current.get('resource_ref'))

@@ -23,6 +23,14 @@ those services are endorsed or harmless.
 | Undo state | Revert a confirmed action | Memory-only short window | Exact affected setting, no secrets |
 | User preferences | Presentation and consent | Until user resets/removes app | Local only |
 
+The source local-activity replacement uses the existing telemetry database,
+not a parallel JSON writer. Its bounded presentation collection is unverified
+and does not supply security evidence. `Clear local history` removes that
+collection only, preserving other security history and the historical JSON
+rollback input. Missing Context support displays Unavailable, not zero events.
+See [storage and migration semantics](../telemetry/PRIVACY_STORAGE.md).
+Matched package promotion and installed-system validation remain pending.
+
 Security Center must not retain full DNS histories, browsing histories, process
 command lines, environment variables, complete journal records, device serials,
 device public-IP history, credentials, access tokens, encryption keys, recovery

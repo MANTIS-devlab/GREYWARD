@@ -342,7 +342,7 @@ test("real Tauri Network Activity workflow is interactive through WebDriver", as
   console.log(`RUNTIME_EVIDENCE updates=pass busy=${busyObserved} terminal=${terminalUpdate.state} available=${terminalUpdate.available} progress_reset=${terminalUpdate.progress === 0} history_rows=${historyRows.length}`);
 
   await clickSelector(browser, 'button[data-page="network"]');
-  await clickSelector(browser, '.context-navigation button[data-page="activity"]');
+  await clickSelector(browser, '.nav-item[data-page="activity"]');
   await waitFor(browser, 'h1');
   await waitFor(browser, '[data-activity-pause]');
 
@@ -426,7 +426,7 @@ test("real Tauri Network Activity workflow is interactive through WebDriver", as
   await waitForNoPolicyRule(browser);
   await browser.pause(1200);
 
-  await clickSelector(browser, '.context-navigation button[data-page="activity"]');
+  await clickSelector(browser, '.nav-item[data-page="activity"]');
   await waitFor(browser, "[data-activity-pause]");
   await generateTraffic();
   await browser.pause(3000);

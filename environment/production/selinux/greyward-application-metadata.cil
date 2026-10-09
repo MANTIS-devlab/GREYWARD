@@ -1,0 +1,5 @@
+; Public activation metadata is read-only across the ordinary-role closure.
+; Remove generic Fedora helper writes inherited through files_type.
+(deny greyward_as_ordinary greyward_flatpak_service_t (file (write append unlink link setattr relabelfrom relabelto)))
+(deny greyward_as_ordinary greyward_flatpak_service_t (dir (write add_name remove_name setattr relabelfrom relabelto)))
+(deny greyward_as_ordinary greyward_flatpak_service_t (lnk_file (write unlink link setattr relabelfrom relabelto)))

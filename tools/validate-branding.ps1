@@ -7,7 +7,7 @@ $identityPath = Join-Path $repo 'branding\identity.json'
 $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
 $identity = Get-Content -LiteralPath $identityPath -Raw | ConvertFrom-Json
 $errors = [Collections.Generic.List[string]]::new()
-foreach ($name in 'symbol','wordmark','lockup') {
+foreach ($name in 'symbol','wordmark','lockup','securityCenter') {
     $relative = $manifest.canonical.$name
     if (-not $relative -or -not (Test-Path (Join-Path $repo $relative))) { $errors.Add("Missing canonical $name.") }
 }
@@ -72,6 +72,10 @@ $visualFiles = @(
 $securitySource = (Get-Content (Join-Path $repo 'branding/source/greyward-security-status.svg') -Raw).Replace("`r`n","`n").TrimEnd()
 $securityConsumer = (Get-Content (Join-Path $repo 'security-center/data/greyward-security-status.svg') -Raw).Replace("`r`n","`n").TrimEnd()
 if ($securitySource -cne $securityConsumer) { $errors.Add('Security status emblem drifted; run tools/generate-branding.ps1 -SkipRaster.') }
+$securityLauncher = (Get-Content (Join-Path $repo 'security-center/data/greyward-security-center.svg') -Raw).Replace("`r`n","`n").TrimEnd()
+if ($securitySource -cne $securityLauncher) { $errors.Add('Security launcher emblem drifted; run tools/generate-branding.ps1 -SkipRaster.') }
+$securitySidebar = (Get-Content (Join-Path $repo 'security-center/tauri/frontend/greyward-security-center.svg') -Raw).Replace("`r`n","`n").TrimEnd()
+if ($securitySource -cne $securitySidebar) { $errors.Add('Security sidebar emblem drifted; run tools/generate-branding.ps1 -SkipRaster.') }
 foreach ($file in $visualFiles) {
     if (Select-String -LiteralPath $file.FullName -Pattern 'STENOS|Fedora.logo|GNOME.logo|Hyprland.logo|Quickshell.logo' -Quiet) { $errors.Add("Obsolete owned visual identity in $($file.FullName)") }
     if ($file.Extension -eq '.svg' -and (Select-String -LiteralPath $file.FullName -Pattern '(href|src)\s*=\s*["''](?:https?://|data:)' -Quiet)) { $errors.Add("External resource embedded in $($file.FullName)") }

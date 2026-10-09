@@ -1,0 +1,62 @@
+#!/usr/bin/python3 -I
+"""Non-setuid graphical request adapter; it never executes a privileged command."""
+import os
+import sys
+import ctypes
+import pwd
+
+def main():
+    with open('/proc/self/attr/current',encoding='ascii') as source:
+        context=source.read().strip('\0\n')
+    if os.getuid()==0 or context=='greyward_admin_u:greyward_admin_r:greyward_admin_t:s0':
+        os.execv('/usr/bin/sudo',['sudo',*sys.argv[1:]])
+    if not context.startswith('greyward_guard_u:'):
+        # Compatibility for unenrolled accounts; a grant/helper of an enrolled
+        # account must never use this branch to obtain an administrator role.
+        seuser,level=ctypes.c_char_p(),ctypes.c_char_p()
+        library=ctypes.CDLL('libselinux.so.1')
+        if library.getseuserbyname(pwd.getpwuid(os.getuid()).pw_name.encode(),ctypes.byref(seuser),ctypes.byref(level)):
+            raise RuntimeError('Account protection mapping is unavailable.')
+        enrolled=seuser.value==b'greyward_guard_u'
+        ctypes.CDLL(None).free(seuser);ctypes.CDLL(None).free(level)
+        if enrolled:
+            raise RuntimeError('This workload cannot enter Administration; use an ordinary graphical terminal.')
+        os.execv('/usr/bin/sudo',['sudo',*sys.argv[1:]])
+    if not os.isatty(0) or not os.isatty(1):
+        raise RuntimeError('Open Administration from the desktop; noninteractive sudo handoff is unavailable.')
+    arguments = sys.argv[1:]
+    if not arguments or len(arguments) > 128 or sum(len(a.encode()) for a in arguments) > 16384:
+        raise RuntimeError('Use sudo COMMAND or sudo -i; request is missing or too large.')
+    if any(any(ord(c) < 32 or ord(c) == 127 for c in a) for a in arguments):
+        raise RuntimeError('Control characters are unavailable in administration requests.')
+    options=[];consume=False
+    for value in arguments:
+        if consume:consume=False;continue
+        if value=='--' or not value.startswith('-'):break
+        options.append(value)
+        consume=value in {'-u','-g','-h','-p','-C','-T','-r','-t','-D','-R','--user','--group','--host','--prompt','--chdir','--chroot','--role','--type','--close-from','--command-timeout'}
+    def forbidden(option):
+        if option in {'--stdin','--askpass','--non-interactive'}:return True
+        if option.startswith('--'):return False
+        for letter in option[1:]:
+            if letter in 'SAn':return True
+            if letter in 'ughpCTrtDR':break
+        return False
+    if any(forbidden(a) for a in options):
+        raise RuntimeError('Authentication belongs to the protected terminal; stdin/askpass/noninteractive handoff is unavailable.')
+    import dbus
+    proxy = dbus.SystemBus().get_object('systems.mantis.greyward.ApplicationSecurity1',
+                                     '/systems/mantis/greyward/ApplicationSecurity1', introspect=False)
+    result = proxy.get_dbus_method('RequestAdministration',
+             'systems.mantis.greyward.ApplicationSecurity1')(dbus.Array(arguments, signature='s'), timeout=6)
+    if not result:
+        raise RuntimeError('Protected administration is unavailable; no command was executed.')
+    print('Review and authenticate in Administration. Input and output stay there.\n'
+          'Run complete pipelines and redirections inside Administration.')
+
+if __name__ == '__main__':
+    try:
+        main()
+    except Exception as error:
+        print('GREYWARD: ' + str(error), file=sys.stderr)
+        sys.exit(1)

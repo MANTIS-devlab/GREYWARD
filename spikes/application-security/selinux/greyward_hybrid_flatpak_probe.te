@@ -1,0 +1,90 @@
+policy_module(greyward_hybrid_flatpak_probe, 0.1.0)
+
+# Bounded launch bootstrap only. Not a grant provider or production policy.
+# No protected-resource access, userdomain membership, bus connection or
+# ordinary-to-workload transition. The harness removes this module afterward.
+type greyward_hybrid_flatpak_probe_t;
+domain_type(greyward_hybrid_flatpak_probe_t)
+domain_user_exemption_target(greyward_hybrid_flatpak_probe_t)
+ubac_constrained(greyward_hybrid_flatpak_probe_t)
+role system_r types greyward_hybrid_flatpak_probe_t;
+init_nnp_daemon_domain(greyward_hybrid_flatpak_probe_t)
+corecmd_bin_entry_type(greyward_hybrid_flatpak_probe_t)
+corecmd_exec_bin(greyward_hybrid_flatpak_probe_t)
+libs_use_ld_so(greyward_hybrid_flatpak_probe_t)
+libs_use_shared_libs(greyward_hybrid_flatpak_probe_t)
+files_read_usr_files(greyward_hybrid_flatpak_probe_t)
+files_read_etc_files(greyward_hybrid_flatpak_probe_t)
+files_search_var_lib(greyward_hybrid_flatpak_probe_t)
+auth_read_passwd(greyward_hybrid_flatpak_probe_t)
+miscfiles_read_generic_certs(greyward_hybrid_flatpak_probe_t)
+kernel_read_system_state(greyward_hybrid_flatpak_probe_t)
+fs_getattr_all_fs(greyward_hybrid_flatpak_probe_t)
+dev_rw_null(greyward_hybrid_flatpak_probe_t)
+dev_read_urand(greyward_hybrid_flatpak_probe_t)
+init_use_fds(greyward_hybrid_flatpak_probe_t)
+dbus_read_config(greyward_hybrid_flatpak_probe_t)
+sysnet_read_config(greyward_hybrid_flatpak_probe_t)
+
+# Reflinked, root-owned system deployment inputs. Never label the installed
+# deployment, an ordinary writable app profile, or original protected files.
+type greyward_hybrid_flatpak_code_t;
+files_auth_file(greyward_hybrid_flatpak_code_t)
+allow greyward_hybrid_flatpak_probe_t greyward_hybrid_flatpak_code_t:dir { open read search getattr mounton };
+allow greyward_hybrid_flatpak_probe_t greyward_hybrid_flatpak_code_t:file { open read getattr lock execute execute_no_trans map mounton };
+allow greyward_hybrid_flatpak_probe_t greyward_hybrid_flatpak_code_t:lnk_file { read getattr };
+
+type greyward_hybrid_flatpak_state_t;
+files_auth_file(greyward_hybrid_flatpak_state_t)
+fs_tmpfs_filetrans(greyward_hybrid_flatpak_probe_t, greyward_hybrid_flatpak_state_t, { dir file lnk_file })
+files_search_tmp(greyward_hybrid_flatpak_probe_t)
+files_tmp_filetrans(greyward_hybrid_flatpak_probe_t, greyward_hybrid_flatpak_state_t, { dir file lnk_file })
+manage_dirs_pattern(greyward_hybrid_flatpak_probe_t, greyward_hybrid_flatpak_state_t, greyward_hybrid_flatpak_state_t)
+manage_files_pattern(greyward_hybrid_flatpak_probe_t, greyward_hybrid_flatpak_state_t, greyward_hybrid_flatpak_state_t)
+allow greyward_hybrid_flatpak_probe_t greyward_hybrid_flatpak_state_t:file map;
+manage_lnk_files_pattern(greyward_hybrid_flatpak_probe_t, greyward_hybrid_flatpak_state_t, greyward_hybrid_flatpak_state_t)
+type_transition greyward_hybrid_flatpak_probe_t greyward_hybrid_flatpak_state_t:{ dir file lnk_file } greyward_hybrid_flatpak_state_t;
+
+gen_require(`
+    type init_t;
+    type greyward_guard_t;
+    type var_lib_t;
+')
+allow init_t greyward_hybrid_flatpak_probe_t:process { transition signull signal sigkill };
+allow greyward_hybrid_flatpak_probe_t init_t:process sigchld;
+allow greyward_hybrid_flatpak_probe_t self:process { getcap setcap getsched sigchld signal sigkill signull setrlimit setpgid getpgid getsession setsched };
+allow greyward_hybrid_flatpak_probe_t self:user_namespace create;
+allow greyward_hybrid_flatpak_probe_t self:dir { open read search getattr };
+allow greyward_hybrid_flatpak_probe_t self:file { open read write getattr };
+allow greyward_hybrid_flatpak_probe_t self:lnk_file { read getattr };
+allow greyward_hybrid_flatpak_probe_t self:unix_stream_socket create_stream_socket_perms;
+# bubblewrap uses a datagram ioctl socket to configure loopback in its private
+# network namespace. The harness provides no connected host network namespace.
+allow greyward_hybrid_flatpak_probe_t self:unix_dgram_socket create_socket_perms;
+allow greyward_hybrid_flatpak_probe_t self:udp_socket create_socket_perms;
+allow greyward_hybrid_flatpak_probe_t self:cap_userns { sys_admin net_admin setpcap sys_resource sys_ptrace dac_override };
+allow greyward_hybrid_flatpak_probe_t var_lib_t:dir { open read search getattr mounton };
+# Flatpak holds an advisory .ref lock on the immutable deployment while used.
+allow greyward_hybrid_flatpak_probe_t var_lib_t:file { open read getattr lock execute execute_no_trans map mounton };
+allow greyward_hybrid_flatpak_probe_t var_lib_t:lnk_file { read getattr };
+
+# Reuse the ordinary Flatpak descendant-namespace requirements. None grants
+# host CAP_SYS_ADMIN, Protected Data or a shared desktop service connection.
+fs_mount_tmpfs(greyward_hybrid_flatpak_probe_t)
+fs_remount_all_fs(greyward_hybrid_flatpak_probe_t)
+fs_unmount_xattr_fs(greyward_hybrid_flatpak_probe_t)
+fs_unmount_tmpfs(greyward_hybrid_flatpak_probe_t)
+kernel_mount_proc(greyward_hybrid_flatpak_probe_t)
+term_mount_pty_fs(greyward_hybrid_flatpak_probe_t)
+gen_require(` type root_t; type tmp_t; type tmpfs_t; type sysctl_t; type nsfs_t; ')
+allow greyward_hybrid_flatpak_probe_t nsfs_t:file { open read getattr };
+allow greyward_hybrid_flatpak_probe_t { root_t tmp_t tmpfs_t greyward_hybrid_flatpak_state_t }:dir mounton;
+allow greyward_hybrid_flatpak_probe_t greyward_hybrid_flatpak_state_t:file mounton;
+allow greyward_hybrid_flatpak_probe_t sysctl_t:file { open write };
+allow greyward_hybrid_flatpak_probe_t self:netlink_route_socket { create_socket_perms nlmsg_read nlmsg_write };
+
+# Check the installed ordinary subject rather than assuming distinct type
+# names alone provide isolation. Compilation must refuse an inherited allow.
+neverallow greyward_guard_t greyward_hybrid_flatpak_state_t:file { open read write execute };
+neverallow greyward_guard_t greyward_hybrid_flatpak_probe_t:process { ptrace signal sigkill };
+neverallow greyward_guard_t greyward_hybrid_flatpak_probe_t:fd use;

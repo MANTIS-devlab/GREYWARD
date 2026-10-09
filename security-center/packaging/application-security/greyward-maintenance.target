@@ -1,0 +1,10 @@
+[Unit]
+DefaultDependencies=no
+Description=GREYWARD authenticated offline maintenance
+Documentation=file:/usr/share/doc/greyward-application-security/APPLICATION_SECURITY_ENROLLMENT.md
+Requires=sysinit.target greyward-maintenance-console.service
+After=sysinit.target
+Conflicts=multi-user.target graphical.target getty.target
+AllowIsolate=yes
+
+# No Install section or preset. Select this target explicitly at boot.

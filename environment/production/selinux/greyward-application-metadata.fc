@@ -1,0 +1,4 @@
+/var/lib/flatpak/exports/share/dbus-1/services(/.*)? gen_context(system_u:object_r:greyward_flatpak_service_t,s0)
+/var/lib/flatpak/app/[^/]+/current -l gen_context(system_u:object_r:greyward_flatpak_service_t,s0)
+/var/lib/flatpak/app/[^/]+/[^/]+/[^/]+/active -l gen_context(system_u:object_r:greyward_flatpak_service_t,s0)
+/var/lib/flatpak/app/[^/]+/[^/]+/[^/]+/[0-9a-f]+/export/share/dbus-1/services(/.*)? gen_context(system_u:object_r:greyward_flatpak_service_t,s0)

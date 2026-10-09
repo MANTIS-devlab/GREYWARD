@@ -104,7 +104,7 @@ installed into the target user's system:
 - `environment/greyward.pkr.hcl`, the development Kickstart bootstrap, and
   Packer cache/state: disposable factory inputs, not runtime applications.
 - `.secrets/`, repository SSH configuration, host identities, VM endpoints,
-  `stendev`, and development-only passphrases. These must never be copied into
+  `development-user`, and development-only passphrases. These must never be copied into
   a public ISO or production account policy.
 - `GREYWARD-DEV`, `GREYWARD-BOOTTEST`, Hyper-V helpers, `output/`,
   `build/`, `state/`, screenshots, and generated capture artifacts.

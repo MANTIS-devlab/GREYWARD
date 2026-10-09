@@ -2,6 +2,7 @@
 import html
 import json
 import os
+import re
 import subprocess
 from pathlib import Path
 from .clamav import MEDIA_ROOTS
@@ -57,6 +58,14 @@ class NotificationRouter:
         for key, record in tuple(self.records.items()):
             if record.get('notification_id') != int(notification_id): continue
             current = record.get('item', {})
+            if str(action_id) == 'dismiss' and current.get('kind') == 'application-security':
+                record['acknowledged'] = True
+                if self.proxy is not None:
+                    try: self.proxy.CloseNotification(notification_id, timeout=3)
+                    except Exception: pass
+                record['notification_id'] = 0
+                self._save()
+                break
             allowed = {x['id'] for x in current.get('actions', [])} | {'open', 'default'}
             if str(action_id) in allowed:
                 self.dispatch(current, 'open' if str(action_id) == 'default' else str(action_id))
@@ -113,6 +122,10 @@ class NotificationRouter:
         self._save()
 
 
-def open_route(route):
-    if route not in {'overview', 'devices', 'privacy', 'network', 'threats', 'files', 'updates'}: return
-    subprocess.Popen(['/usr/bin/greyward-security-center-route', route], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+def open_route(route, resource_ref=None):
+    if route not in {'overview', 'devices', 'privacy', 'network', 'threats', 'files', 'updates', 'evidence', 'activity', 'history', 'protected-data'}: return
+    command = ['/usr/bin/greyward-security-center-route', route]
+    if resource_ref is not None:
+        if route != 'protected-data' or not re.fullmatch(r'resource_[0-9a-f]{64}', str(resource_ref)): return
+        command.append(resource_ref)
+    subprocess.Popen(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)

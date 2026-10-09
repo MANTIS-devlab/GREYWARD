@@ -33,6 +33,12 @@ from Windows checkouts, and creates one new root commit. Ignored
 credentials, build outputs, VM disks, caches, and the private `.git` directory
 are not copied.
 
+For an update to the existing public checkout, preserve its configured commit
+signing. If the signing key cannot unlock, stop with the reviewed index intact;
+do not disable signing or rewrite configuration merely to complete publication.
+The [10 October consolidation receipt](history/migrations/2026-10-10-release-preparation.md)
+records such a signing-authentication block: no commit or push was created.
+
 Before adding a remote, review the resulting one-commit repository with a
 secret scanner appropriate to the hosting organization and inspect its staged
 file inventory. Publish only the new repository. Keep this private engineering

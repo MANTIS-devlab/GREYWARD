@@ -78,6 +78,22 @@ pub struct ClamAvStatus {
     pub update_failure_state: Option<String>,
     pub database_version: Option<String>,
     pub status: String,
+    #[serde(default)]
+    pub observed_at: Option<DateTime<Utc>>,
+    #[serde(default)]
+    pub engine_state: Option<String>,
+    #[serde(default)]
+    pub definitions_state: Option<String>,
+    #[serde(default)]
+    pub scanner_state: Option<String>,
+    #[serde(default)]
+    pub scan_activity: Option<String>,
+    #[serde(default)]
+    pub realtime_protection: Option<String>,
+    #[serde(default)]
+    pub update_service_state: Option<String>,
+    #[serde(default)]
+    pub detail: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]

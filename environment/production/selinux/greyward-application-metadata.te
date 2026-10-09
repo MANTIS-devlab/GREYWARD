@@ -1,0 +1,17 @@
+policy_module(greyward_application_metadata, 0.1.0)
+
+# Public installed Flatpak activation metadata only. Never deployment payload,
+# arbitrary var_lib_t content, home data or permissions/portal grant storage.
+type greyward_flatpak_service_t;
+files_type(greyward_flatpak_service_t)
+gen_require(` attribute greyward_as_ordinary; ')
+allow greyward_as_ordinary greyward_flatpak_service_t:dir { getattr search open read watch };
+allow greyward_as_ordinary greyward_flatpak_service_t:file { getattr open read map };
+allow greyward_as_ordinary greyward_flatpak_service_t:lnk_file { getattr read };
+# The login compositor also enumerates public desktop activation metadata.
+# Preserve that metadata read after relabeling, without privileged IPC, writes
+# or reads of application payloads/protected resources.
+gen_require(` type xdm_t; ')
+allow xdm_t greyward_flatpak_service_t:dir { getattr search open read };
+allow xdm_t greyward_flatpak_service_t:file { getattr open read map };
+allow xdm_t greyward_flatpak_service_t:lnk_file { getattr read };

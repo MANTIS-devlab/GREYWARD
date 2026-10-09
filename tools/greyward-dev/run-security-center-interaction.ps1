@@ -4,15 +4,17 @@ param()
 . (Join-Path $PSScriptRoot 'common.ps1')
 Repair-GreywardSsh | Out-Null
 
-$devRoot = '/home/stendev/.local/share/greyward/dev'
+$remoteHome = (Invoke-GreywardSsh -Command 'getent passwd "$(id -u)" | cut -d: -f6').Trim()
+if ($remoteHome -notmatch '^/home/[a-zA-Z0-9_.-]+$') { throw 'Unexpected development home; interaction test refused.' }
+$devRoot = "$remoteHome/.local/share/greyward/dev"
 $securityRoot = "$devRoot/security-center"
-$cargoTarget = '/home/stendev/.cache/greyward/cargo-target'
+$cargoTarget = "$remoteHome/.cache/greyward/cargo-target"
 $applicationPath = "$cargoTarget/debug/greyward-security-center"
 $sourceRoot = Join-Path $script:RepoRoot 'security-center'
 $tauriRoot = Join-Path $sourceRoot 'tauri'
 
 Invoke-GreywardSsh "mkdir -p '$securityRoot/tauri/frontend' '$securityRoot/crates' '$cargoTarget'"
-foreach ($frontendFile in @('app.js', 'i18n.js', 'index.html', 'styles.css', 'greyward-symbol.svg', 'interaction.test.mjs')) {
+foreach ($frontendFile in @('app.js', 'i18n.js', 'startup.js', 'request-adapter.js', 'index.html', 'styles.css', 'greyward-symbol.svg', 'interaction.test.mjs')) {
     Invoke-GreywardScp -Source (Join-Path $tauriRoot "frontend\$frontendFile") -Destination "$($script:SshAlias):$securityRoot/tauri/frontend/$frontendFile"
 }
 foreach ($toolingFile in @('package.json', 'package-lock.json')) {
@@ -38,7 +40,7 @@ for pid in $(pgrep -u "$USER" -f '^__APPLICATION_PATH__( |$)' || true); do kill 
 cargo build --locked -p greyward-security-center --features custom-protocol
 test -x __APPLICATION_PATH__
 '@
-$buildCommand = $buildCommand.Replace('__SECURITY_ROOT__', $securityRoot).Replace('__CARGO_TARGET__', $cargoTarget).Replace('__APPLICATION_PATH__', $applicationPath)
+$buildCommand = $buildCommand.Replace('__SECURITY_ROOT__', $securityRoot).Replace('__CARGO_TARGET__', $cargoTarget).Replace('__APPLICATION_PATH__', $applicationPath).Replace('__REMOTE_HOME__', $remoteHome)
 Invoke-GreywardSessionSsh $buildCommand.Trim()
 
 $watchdogPath = "$securityRoot/tauri/dev/privacy-network-watchdog.sh"
@@ -81,7 +83,7 @@ code=$?
 set -e
 printf '%s\n' "$code" > '__EXIT_PATH__'
 '@
-$testCommand = $testCommand.Replace('__APPLICATION_PATH__', $applicationPath).Replace('__WATCHDOG_PATH__', $watchdogPath).Replace('__EXIT_PATH__', $testExitPath).Replace('__TAURI_ROOT__', "$securityRoot/tauri")
+$testCommand = $testCommand.Replace('__APPLICATION_PATH__', $applicationPath).Replace('__REMOTE_HOME__', $remoteHome).Replace('__WATCHDOG_PATH__', $watchdogPath).Replace('__EXIT_PATH__', $testExitPath).Replace('__TAURI_ROOT__', "$securityRoot/tauri")
 $launchScript = ConvertTo-BashBase64Command -Script $testCommand.Trim()
 $launchCommand = "nohup bash -c '$launchScript' >'$testLogPath' 2>&1 < /dev/null &"
 
@@ -101,7 +103,7 @@ try {
     Write-GreywardResult -Data @{component='tauri-webdriver'; application=$applicationPath; driver='guest-local tauri-driver 2 + WebKitWebDriver'; endpoint='127.0.0.1:4444 inside GREYWARD-DEV'; scenarios='SC-PRV-001,SC-PRV-002,SC-ACT-001,SC-ACT-002,SC-ACT-003,SC-NET-003'} -Message 'SECURITY CENTER REAL TAURI INTERACTION OK'
 } finally {
     try {
-        $cleanupCommand = 'for pid in $(pgrep -u "$USER" -f "^/home/stendev/.cargo/bin/tauri-driver" || true); do kill "$pid" || true; done; for pid in $(pgrep -u "$USER" -f "^/usr/bin/WebKitWebDriver" || true); do kill "$pid" || true; done; for pid in $(pgrep -u "$USER" -f "^/usr/bin/greyward-security-center( |$)" || true); do kill "$pid" || true; done; for pid in $(pgrep -u "$USER" -f "^__APPLICATION_PATH__( |$)" || true); do kill "$pid" || true; done'.Replace('__APPLICATION_PATH__', $applicationPath)
+        $cleanupCommand = 'for pid in $(pgrep -u "$USER" -f "^__REMOTE_HOME__/.cargo/bin/tauri-driver" || true); do kill "$pid" || true; done; for pid in $(pgrep -u "$USER" -f "^/usr/bin/WebKitWebDriver" || true); do kill "$pid" || true; done; for pid in $(pgrep -u "$USER" -f "^/usr/bin/greyward-security-center( |$)" || true); do kill "$pid" || true; done; for pid in $(pgrep -u "$USER" -f "^__APPLICATION_PATH__( |$)" || true); do kill "$pid" || true; done'.Replace('__APPLICATION_PATH__', $applicationPath).Replace('__REMOTE_HOME__', $remoteHome)
         if (Test-GreywardSshKeyAccess) { Invoke-GreywardSsh $cleanupCommand }
     } catch { Write-Warning "Unable to clean up the Fedora interaction processes: $($_.Exception.Message)" }
 }
