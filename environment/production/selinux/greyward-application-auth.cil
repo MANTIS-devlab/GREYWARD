@@ -1,0 +1,12 @@
+; Matched ordinary-domain template currently used by the enrolled provider.
+; No blanket ordinary->ordinary file deny: /proc/self/attr/current stays usable.
+(deny greyward_guard_t greyward_as_auth_t (file (read write append)))
+(deny greyward_guard_t greyward_as_auth_t (process (ptrace signal sigkill sigstop dyntransition)))
+(deny greyward_guard_t greyward_as_auth_t (fd (use)))
+(deny greyward_guard_t greyward_as_auth_t (fifo_file (open read write append)))
+(deny greyward_guard_t greyward_as_auth_t (unix_stream_socket (connectto)))
+(deny greyward_guard_t greyward_as_auth_runtime_t (dir (open read write add_name remove_name)))
+(deny greyward_guard_t greyward_as_auth_runtime_t (file (open read write append execute)))
+(deny greyward_guard_t greyward_as_auth_runtime_t (sock_file (open read write)))
+(deny greyward_guard_t greyward_as_auth_exec_t (file (execute entrypoint)))
+(deny greyward_guard_t greyward_as_auth_t (process (transition)))

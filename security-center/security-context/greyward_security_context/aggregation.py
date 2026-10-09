@@ -8,6 +8,7 @@ from greyward_security_context.telemetry import TelemetryError, TelemetryStore, 
 
 
 IMPORTANT_TYPES = {
+    "SENSITIVE_ACCESS_BLOCKED",
     "CONTROL_STATE_CHANGE", "CONFIGURATION_CHANGE", "UPDATE_PHASE",
     "RECOVERY_POINT_CREATED", "RECOVERY_POINT_ASSOCIATED", "BACKUP_COMPLETED",
     "BACKUP_VERIFICATION", "SERVICE_FAILURE", "SERVICE_RESTART", "DEVICE_CONNECTED",
@@ -45,29 +46,6 @@ def _event_summary(item: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
-def _finding_from_event(store: TelemetryStore, item: Mapping[str, Any]) -> None:
-    outcome = _text(item.get("outcome") or item.get("state"), 32).upper()
-    category = _text(item.get("category"), 48).upper()
-    event_type = _text(item.get("event_type") or item.get("kind"), 96).upper()
-    if outcome not in {"FAILURE", "FAILED", "ERROR"}:
-        return
-    if category == "NETWORK":
-        # A blocked connection is noteworthy evidence, not an automatic finding.
-        return
-    if category not in {"SERVICE", "UPDATE", "RECOVERY", "CAPABILITY", "CONFIGURATION"}:
-        return
-    correlation = item.get("correlation") if isinstance(item.get("correlation"), Mapping) else {}
-    subject = _text(correlation.get("unit") or correlation.get("operation_id") or correlation.get("transaction_id") or item.get("component"), 160) or "unknown"
-    kind = "UPDATE_FAILURE" if category == "UPDATE" else "RECOVERY_FAILURE" if category == "RECOVERY" else "SERVICE_FAILURE" if category == "SERVICE" else "CAPABILITY_FAILURE"
-    store.upsert_finding({
-        "finding_id": f"{kind.lower()}:{subject}", "kind": kind, "subject_key": subject,
-        "state": "UNRESOLVED", "severity": "ERROR", "title": event_type.replace("_", " ").title(),
-        "summary": _text(item.get("details", {}).get("error") if isinstance(item.get("details"), Mapping) else None) or "A security operation failed.",
-        "destination": "updates" if category == "UPDATE" else "devices" if category == "RECOVERY" else "overview",
-        "last_seen": _text(item.get("occurred_at"), 64), "evidence": [_text(item.get("event_id"), 96)],
-    })
-
-
 def _devices(device_state: Mapping[str, Any] | None, current: dt.datetime) -> dict[str, Any]:
     value = device_state if isinstance(device_state, Mapping) else {}
     source_state = _text(value.get("source_state"), 32).upper() or "UNAVAILABLE"
@@ -84,27 +62,6 @@ def _devices(device_state: Mapping[str, Any] | None, current: dt.datetime) -> di
     }
 
 
-def _sync_device_findings(telemetry: TelemetryStore, device_state: Mapping[str, Any] | None) -> None:
-    if not isinstance(device_state, Mapping) or _text(device_state.get("source_state"), 32).upper() != "AVAILABLE":
-        return
-    for item in device_state.get("devices", []):
-        if not isinstance(item, Mapping) or not _text(item.get("device_class"), 48).upper().startswith("EXTERNAL_"):
-            continue
-        identity = _text(item.get("identity_id"), 96)
-        if not identity:
-            continue
-        trusted = bool(item.get("trusted") or item.get("reviewed"))
-        connected = bool(item.get("connected"))
-        state = "RESOLVED" if trusted else "UNRESOLVED" if connected else "HISTORY_ONLY"
-        telemetry.upsert_finding({
-            "finding_id": "device-unknown:" + identity, "kind": "UNKNOWN_EXTERNAL_DEVICE", "subject_key": identity,
-            "state": state, "severity": "WARNING", "title": "Unknown external device",
-            "summary": "Review this connected external device." if connected and not trusted else "The device is retained as recent history.",
-            "destination": "devices", "first_seen": _text(item.get("first_seen"), 64), "last_seen": _text(item.get("last_seen"), 64),
-            "resolved_at": _text(item.get("last_seen"), 64) if trusted else None, "evidence": [_text(item.get("last_event_id"), 96)] if item.get("last_event_id") else [],
-        })
-
-
 def build_security_digest(summary: Mapping[str, Any] | None = None, *, network: Mapping[str, Any] | None = None,
                           device_state: Mapping[str, Any] | None = None, store: TelemetryStore | None = None,
                           now_value: dt.datetime | None = None) -> dict[str, Any]:
@@ -114,10 +71,8 @@ def build_security_digest(summary: Mapping[str, Any] | None = None, *, network: 
     source_state = {"state": "AVAILABLE", "reason": None}
     events: list[dict[str, Any]] = []
     try:
-        result = telemetry.query({"from": stamp(current - dt.timedelta(hours=24)), "limit": 512})
+        result = telemetry.query({"from": stamp(current - dt.timedelta(hours=24)), "limit": 512}, read_only=True)
         events.extend(result.get("events", []))
-        for item in events:
-            _finding_from_event(telemetry, item)
     except (TelemetryError, OSError):
         source_state = {"state": "UNAVAILABLE", "reason": "Telemetry history is unavailable."}
     for item in (summary or {}).get("recent_events", []) if isinstance(summary, Mapping) else []:
@@ -129,11 +84,9 @@ def build_security_digest(summary: Mapping[str, Any] | None = None, *, network: 
         or _text(item.get("assessment"), 32).upper() in {"DEGRADED", "FAILED", "POTENTIALLY_SUSPICIOUS"}
         or _text(item.get("outcome") or item.get("state"), 32).upper() in {"FAILURE", "FAILED", "ERROR"}
     ][:16]
-    findings = telemetry.list_findings(unresolved_only=True) if source_state["state"] == "AVAILABLE" else []
     device = _devices(device_state, current)
     try:
-        _sync_device_findings(telemetry, device_state)
-        findings = telemetry.list_findings(unresolved_only=True) if source_state["state"] == "AVAILABLE" else []
+        findings = telemetry.list_findings(unresolved_only=True, read_only=True) if source_state["state"] == "AVAILABLE" else []
     except (TelemetryError, OSError):
         source_state = {"state": "UNAVAILABLE", "reason": "Telemetry history is unavailable."}
         findings = []

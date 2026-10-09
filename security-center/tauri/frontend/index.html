@@ -5,27 +5,24 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>GREYWARD Security Center</title>
     <link rel="stylesheet" href="./styles.css" />
-    <script>
-      (() => {
-        const marks = window.__greywardStartupMarks = [];
-        const mark = (name) => marks.push({name, ms: Math.round(performance.now() * 100) / 100});
-        const markOnce = (name) => {
-          if (!marks.some((entry) => entry.name === name)) mark(name);
-        };
-        window.__greywardStartupMark = mark;
-        window.__greywardStartupMarkOnce = markOnce;
-        mark("document_script_start");
-        document.addEventListener("DOMContentLoaded", () => markOnce("dom_content_loaded"), {once: true});
-        window.addEventListener("load", () => markOnce("window_load"), {once: true});
-      })();
-    </script>
+    <link rel="stylesheet" href="./workspace.css" />
+    <link rel="stylesheet" href="./materials.css" />
+    <link rel="stylesheet" href="./window-chrome.css" />
+    <script src="./startup.js"></script>
   </head>
   <body>
+    <header id="window-titlebar"></header>
+    <div id="window-resize-edges" aria-hidden="true"></div>
     <div id="app">
       <div class="loading">Preparing GREYWARD Security Center…</div>
     </div>
     <script src="./assets/network-icons/catalog.js"></script>
     <script src="./i18n.js"></script>
+    <script src="./window-chrome.js"></script>
+    <script src="./request-adapter.js"></script>
+    <script src="./application-security.js"></script>
+    <script src="./application-view.js"></script>
+    <script src="./security-history.js"></script>
     <script src="./app.js"></script>
   </body>
 </html>

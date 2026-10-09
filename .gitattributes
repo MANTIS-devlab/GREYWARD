@@ -16,10 +16,14 @@
 *.timer text eol=lf
 *.conf text eol=lf
 environment/patches/dms/*.patch text eol=lf whitespace=-blank-at-eol,-blank-at-eof
+spikes/application-security/portal/*.patch text eol=lf whitespace=-blank-at-eol,-blank-at-eof
+# Unified diff context columns preserve upstream tabs and empty lines verbatim.
+security-center/packaging/application-security/desktop/*.patch text eol=lf whitespace=-blank-at-eol,-blank-at-eof,-space-before-tab
 environment/session/greyward-* text eol=lf
 environment/session/labwc/autostart text eol=lf
 environment/production/labwc-autostart text eol=lf
 packaging/greyward-dms/*.spec text eol=lf
+packaging/greyward-session/*.spec text eol=lf
 *.png binary
 *.jpg binary
 *.jpeg binary

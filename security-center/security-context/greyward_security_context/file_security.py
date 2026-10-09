@@ -389,7 +389,32 @@ class FileSecurityManager:
         return value
 
     def detections(self, *, state: str | None = None, limit: int = 128) -> list[dict[str, Any]]:
-        return self.store.list_file_detections(state=state, limit=limit)
+        records = self.store.list_file_detections(state=state, limit=limit)
+        for record in records:
+            if record.get("state") != "DETECTED":
+                continue
+            # Fresh existence metadata is not a successful remediation. Keep
+            # the original detection and action history; permission failures
+            # and aliases must never be interpreted as removal.
+            record["source_status"] = "UNKNOWN"
+            path = Path(str(record.get("original_path") or ""))
+            if not path.is_absolute() or not path.name:
+                continue
+            try:
+                current = Path(path.anchor)
+                for part in path.parts[1:]:
+                    current /= part
+                    metadata = current.lstat()
+                    if stat.S_ISLNK(metadata.st_mode):
+                        break
+                else:
+                    if stat.S_ISREG(metadata.st_mode):
+                        record["source_status"] = "PRESENT"
+            except FileNotFoundError:
+                record["source_status"] = "MISSING"
+            except OSError:
+                pass
+        return records
 
     def activity(self, limit: int = 64) -> list[dict[str, Any]]:
         try:

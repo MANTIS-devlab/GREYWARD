@@ -35,6 +35,11 @@
   <windowRules>
     <windowRule identifier="com.brave.Browser" serverDecoration="yes" />
     <windowRule identifier="brave" serverDecoration="yes" />
+    <!-- Security Center owns its main-window chrome. Match the observed GTK
+         app_id and canonical application ID; leave other applications and
+         auxiliary dialogs under the compositor's normal decoration policy. -->
+    <windowRule identifier="greyward-security-center" title="GREYWARD Security Center" serverDecoration="no" />
+    <windowRule identifier="systems.mantis.greyward.securitycenter" title="GREYWARD Security Center" serverDecoration="no" />
   </windowRules>
   <!-- GREYWARD-OWNED: brave-decorations:end -->
 

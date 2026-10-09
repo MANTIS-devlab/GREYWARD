@@ -1,0 +1,14 @@
+[Unit]
+Description=GREYWARD authenticated update worker handoff
+
+[Socket]
+ListenStream=/run/greyward-update-worker.sock
+SocketUser=root
+SocketGroup=root
+SocketMode=0600
+Accept=yes
+MaxConnections=1
+RemoveOnStop=yes
+
+[Install]
+WantedBy=sockets.target

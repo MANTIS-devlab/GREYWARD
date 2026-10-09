@@ -2,8 +2,13 @@
 set -euo pipefail
 
 readonly page="${1:-}"
+readonly resource_ref="${2:-}"
+if [[ "$page" == "protected-data" && -n "$resource_ref" && ! "$resource_ref" =~ ^resource_[0-9a-f]{64}$ ]]; then
+    printf '%s\n' 'A valid protected resource reference is required.' >&2
+    exit 64
+fi
 case "$page" in
-    overview|system|network|privacy|updates|files|applications|devices|evidence|activity) ;;
+    overview|system|network|privacy|updates|files|applications|protected-data|devices|evidence|activity|history|recovery) ;;
     threats)
     event_id="${2:-}"
     if [[ -n "$event_id" && ! "$event_id" =~ ^[A-Za-z0-9._:-]{1,128}$ ]]; then
@@ -24,6 +29,8 @@ tmp=$(mktemp "$request.XXXXXX")
 trap 'rm -f "$tmp"' EXIT
 if [[ "$page" == "threats" && -n "$event_id" ]]; then
     printf '%s\n%s\n' "$page" "$event_id" > "$tmp"
+elif [[ "$page" == "protected-data" && -n "$resource_ref" ]]; then
+    printf '%s\n%s\n' "$page" "$resource_ref" > "$tmp"
 else
     printf '%s\n' "$page" > "$tmp"
 fi

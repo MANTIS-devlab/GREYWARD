@@ -4,6 +4,14 @@ This directory documents the GREYWARD Security Context services and their
 implementation status. It is the bridge between Security Center and typed
 user-bus/system-service boundaries; it is not a generic command executor.
 
+The Application Security source adapter adds typed registration/grant/revoke,
+prepared-launch and event workflows to the existing Context authority. It uses
+the isolated development provider; installed Context 64 is unchanged. Current
+scope: [application-security audit](../security-center/APPLICATION_SECURITY_PLAN.md).
+[Production enrollment](../security-center/APPLICATION_SECURITY_ENROLLMENT.md)
+has approved decisions and initial source; activation is BLOCKED by the
+authentication/process boundary. It is not a Context service-start side effect.
+
 ## Current authorities
 
 - [ARCHITECTURE.md](ARCHITECTURE.md) — service ownership and boundary.

@@ -1,6 +1,45 @@
 # GREYWARD identity system
 
-The symbol, wordmark and lockup in `source/` are canonical identity artwork. `source/greyward-security-status.svg` is the small protective emblem for Security Center shell surfaces; its package copy is generated without changing the geometry. The wallpaper source is canonical environmental artwork. Everything under `generated/` is derived; DMS and Plymouth consume the generated/installed assets directly. Designated GREYWARD identity assets are reserved branding under `LICENSE`; `PROVENANCE.md` records their repository origins and immutable hashes.
+The symbol, wordmark and lockup in `source/` are canonical identity artwork. `source/greyward-security-status.svg` is the shared Security Center emblem; its package copies are generated without changing the geometry. The wallpaper source is canonical environmental artwork. Everything under `generated/` is derived; DMS and Plymouth consume the generated/installed assets directly. Designated GREYWARD identity assets are reserved branding under `LICENSE`; `PROVENANCE.md` records their repository origins and immutable hashes.
+
+Protected Administration embeds the unchanged `source/greyward-symbol.svg`
+through `security-center/packaging/application-security/administration/embed-logo.py`
+at build time. The verified native binary renders it with librsvg; no runtime
+artwork path, external asset or user font dependency is introduced by the logo.
+
+## Security Center application identity
+
+The approved 8 October 2026 design combines GREYWARD's folded geometric G with
+a protective shield, using silver, slate and graphite on a transparent background.
+The canonical SVG is a clean polygonal refinement of the generated candidate;
+it avoids raster artifacts and fine details at taskbar sizes.
+
+`source/greyward-security-status.svg` is the sole source for these consumers:
+
+- System notifications and the Security Center plugin resolve
+  `greyward-security-status`, packaged by Security Context as a scalable SVG.
+- The application launcher and running-app taskbar resolve
+  `greyward-security-center`, packaged by Security Center as the same scalable
+  SVG and a derived 64-pixel PNG fallback.
+
+The application sidebar uses the same emblem, centered above its branding.
+`tools/generate-branding.ps1 -SkipRaster` refreshes both SVG copies in
+`security-center/data/` and the embedded frontend copy; the full generator also renders the PNG on GREYWARD-DEV.
+`tools/validate-branding.ps1` checks both SVGs against the canonical source.
+Icon names and existing activity/warning badges retain their current behavior.
+This application emblem does not replace the distribution's boot or wallpaper
+identity. The former small shield and launcher distribution-logo artwork are
+historical designs.
+
+Development installation on 8 October used an icon-only overlay: both installed
+SVGs match the canonical SHA-256, the launcher PNG was rendered from that SVG,
+and desktop-entry validation and DMS reload passed. Originals are retained at
+`/var/lib/greyward-development/security-icon-backups/20261008T103945Z` on
+GREYWARD-DEV. Installed packages remain Center 76 / Context 72; the updated
+specs reserve Center 77 / Context 73 for the next package build. The installed
+asset overlay is intentionally distinct from a rebuilt RPM verification.
+Three-surface live visual review remains unvalidated because the normal capture
+path cannot capture the confined compositor. No security policy was changed.
 
 ## Replace the logo everywhere
 

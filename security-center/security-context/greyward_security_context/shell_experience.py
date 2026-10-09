@@ -20,9 +20,19 @@ def action(key, label):
     return {"id": key, "label": label}
 
 
-def build_experience(shell, capsule, devices, usb_error, files, network, operations=None, previous_items=()):
+def build_experience(shell, capsule, devices, usb_error, files, network, operations=None, previous_items=(), access_blocks=(), now_value=None):
     operations = operations or {}
     pending, activity, details = [], [], []
+    for block in access_blocks[:64]:
+        # Root-confirmed denials are context, not malware or protection coverage.
+        reference = str(block.get('resource_ref') or '')
+        if not reference.startswith('resource_') or not isinstance(block.get('count'), int): continue
+        pending.append(item('application-block:' + reference, 'application-security', 'INFO',
+                            'Sensitive access blocked',
+                            'Protected Data denied access. Application identity is unknown. '
+                            + str(block['count']) + ' recorded attempt(s).', 'protected-data',
+                            [action('open', 'Review'), action('dismiss', 'Dismiss')],
+                            resource_ref=reference, timeout_ms=8000))
     for signal in capsule.get("signals", []):
         category, state = signal.get("category"), signal.get("state")
         if category == "ACTIVE_SENSOR" and state == "ACTIVE":
@@ -40,7 +50,8 @@ def build_experience(shell, capsule, devices, usb_error, files, network, operati
                                 [action("clear_clipboard", "Clear clipboard")] if "clear_clipboard" in signal.get("actions", []) else []))
 
     if usb_error:
-        pending.append(item("usb-unavailable", "provider", "WARNING", "Device protection unavailable", "Connected device permissions cannot be confirmed.", "devices"))
+        if shell.get("evaluated_checks") is None:
+            pending.append(item("usb-unavailable", "provider", "WARNING", "Device protection unavailable", "Connected device permissions cannot be confirmed.", "devices"))
         for ref, op in operations.items():
             if op.get('state') in {'PENDING', 'VERIFYING', 'INDETERMINATE'}:
                 pending.append(item('usb:' + ref, 'usb', 'ACTION', 'Device approval', op.get('detail') or 'Waiting for authorization…', 'devices',
@@ -64,8 +75,23 @@ def build_experience(shell, capsule, devices, usb_error, files, network, operati
                 activity.append({"id": "usb:" + ref, "kind": "usb", "icon": "usb", "title": device.get("name") or "USB device",
                                  "detail": "Trusted device connected" if device.get("trusted") else "Allowed for this connection", "route": "devices"})
 
+    # Shared evaluator results include the existing accepted-deviation decision.
+    # Raw detail-provider failures remain details, not invented protection checks.
+    checks = shell.get("evaluated_checks")
+    if isinstance(checks, list):
+        by_id = {check.get("check_id"): check for check in checks if isinstance(check, dict)}
+        for check_id, reference, title in (
+            ("network.active-connection", "firewall-unavailable", "Firewall needs attention"),
+            ("devices.usbguard.posture", "usb-unavailable", "Device protection needs attention"),
+        ):
+            check = by_id.get(check_id, {})
+            state = check.get("state", "UNAVAILABLE")
+            if state in {"REVIEW_NEEDED", "ACTION_REQUIRED", "UNKNOWN", "UNAVAILABLE"}:
+                pending.append(item(reference, "provider", "WARNING", title,
+                                    "Review this protection check in System checks.", "evidence", check_id=check_id))
+
     opensnitch = network.get("opensnitch", {})
-    if shell.get('firewall', {}).get('state') in {'UNAVAILABLE', 'DISABLED', 'INACTIVE'}:
+    if shell.get('evaluated_checks') is None and shell.get('firewall', {}).get('state') in {'UNAVAILABLE', 'DISABLED', 'INACTIVE'}:
         pending.append(item('firewall-unavailable', 'provider', 'WARNING', 'Firewall needs attention', 'Firewall protection cannot be confirmed.', 'network'))
     if opensnitch.get("state") in {"DEGRADED", "UNAVAILABLE"}:
         pending.append(item("network-protection", "provider", "WARNING", "Network protection needs attention", opensnitch.get("detail") or "Application protection cannot be confirmed.", "network"))
@@ -86,7 +112,7 @@ def build_experience(shell, capsule, devices, usb_error, files, network, operati
             pending.append(item("network:" + key, "network", "INFO", "Malicious connection blocked", app + " was prevented from reaching a known threat.", "threats", timeout_ms=8000))
 
     for detection in files.get("detections", [])[:64]:
-        if detection.get("state") not in {"DETECTED", "QUARANTINE_FAILED", "QUARANTINE_PENDING"}: continue
+        if detection.get("state") not in {"DETECTED", "QUARANTINE_FAILED", "QUARANTINE_PENDING"} or detection.get("source_status") == "MISSING": continue
         reference = str(detection.get("detection_id") or detection.get("id") or "")
         name = Path(str(detection.get("original_path") or detection.get("path") or "A file")).name[:100]
         pending.append(item("detection:" + reference, "malware", "CRITICAL", "Threat detected", name + " needs review in File Security.", "files"))
@@ -107,13 +133,16 @@ def build_experience(shell, capsule, devices, usb_error, files, network, operati
             title = 'Scan finished' if state == 'COMPLETED' else 'Scan cancelled' if state == 'CANCELLED' else 'Scan could not finish'
             pending.append(item('scan-result:' + str(latest.get('operation_id')), 'operation', 'INFO' if state in {'COMPLETED', 'CANCELLED'} else 'WARNING', title,
                                 'No known threats found.' if state == 'COMPLETED' else latest.get('detail') or 'Review the result in File Security.', 'files', timeout_ms=4000))
-    malware_initializing = shell.get("malware", {}).get("state") == "INITIALIZING"
+    # File Security owns scanner readiness in both Center and the shell.
+    malware = files.get("clamav")
+    malware_state = malware.get("status", "UNAVAILABLE") if isinstance(malware, dict) else shell.get("malware", {}).get("state")
+    malware_initializing = malware_state == "INITIALIZING"
     if malware_initializing:
         activity.append({"id": "definitions-initializing", "kind": "malware", "icon": "shield",
                          "title": "Preparing malware protection", "route": "files",
                          "detail": "Threat definitions are being initialized. Scanning readiness is not yet confirmed."})
-    if shell.get("malware", {}).get("state") in {"OUTDATED", "UNAVAILABLE", "UPDATING"}:
-        pending.append(item("definitions", "provider", "WARNING", "Malware protection needs attention", "Check the scanning engine and threat definitions.", "files"))
+    if malware_state in {"OUTDATED", "UNAVAILABLE", "UPDATING"}:
+        pending.append(item("definitions", "provider", "WARNING", "Malware protection needs attention", (malware or {}).get("detail") or "Check the scanning engine and threat definitions.", "files"))
     for event in shell.get("notification_events", []):
         if str(event.get("event_id", "")).startswith("usbguard-"): continue
         observed_change = str(event.get("event_id", "")).startswith("persistence-")
@@ -128,6 +157,14 @@ def build_experience(shell, capsule, devices, usb_error, files, network, operati
     for label, value in (("Network protection", opensnitch.get("state")), ("Firewall", shell.get("firewall", {}).get("state")), ("Secure DNS", shell.get("secure_dns", {}).get("state")), ("Privacy profile", shell.get("privacy", {}).get("profile"))):
         copy = {'SECUREPROVIDER': 'Encrypted', 'SECURE_PROVIDER': 'Encrypted', 'SYSTEM': 'System default'}
         details.append({"label": label, "value": copy.get(str(value).upper(), str(value or "UNAVAILABLE").replace("_", " ").capitalize())})
+    if isinstance(checks, list):
+        for label, check_id in (("Firewall", "network.active-connection"), ("Device protection", "devices.usbguard.posture")):
+            check = by_id.get(check_id, {})
+            entry = next((row for row in details if row["label"] == label), None)
+            value = "Reviewed exception" if check.get("accepted_deviation") else str(check.get("state", "UNAVAILABLE")).replace("_", " ").capitalize()
+            if entry: entry["value"] = value
+            else: details.append({"label": label, "value": value})
+
     # Delivery's last confirmed presentation is evidence of an earlier warning,
     # never evidence of current permission or resolution. Provider loss cannot
     # erase it or leave mutation actions enabled.
@@ -154,7 +191,16 @@ def build_experience(shell, capsule, devices, usb_error, files, network, operati
     if malware_initializing and severity == "INFO" and posture in {"SECURE", "PROTECTED"}:
         label = "Preparing protection"
         reason = "Malware scanning readiness is not yet confirmed"
+
+    # A fresh negative observation is useful presentation, not positive evidence.
+    # Its display lease must not extend the evidence/action lease: unavailable
+    # providers continue to disable controls and can never become Protected.
+    display_until = shell.get("fresh_until")
+    if posture == "UNAVAILABLE":
+        current = now_value or dt.datetime.now(dt.timezone.utc)
+        display_until = (current + dt.timedelta(seconds=30)).isoformat().replace("+00:00", "Z")
     return {"schema": "greyward.security.experience/v1", "fresh_until": shell.get("fresh_until"),
+            "display_fresh_until": display_until,
             "posture": posture, "label": label, "reason": reason, "severity": severity,
             "items": pending, "activity": activity[:32], "details": details,
             "capabilities": shell.get("capabilities", {}), "privacy": shell.get("privacy", {})}

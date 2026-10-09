@@ -1,0 +1,85 @@
+policy_module(greyward_resource_grant_probe, 0.1.0)
+
+# Separate-account, synthetic per-resource proof only. No enrollment/production
+# policy, executable-based exemption or public grant mechanism is provided.
+gen_require(`
+    role greyward_guard_r;
+    role greyward_guard_owner_r;
+    type greyward_guard_t;
+    type init_t;
+    type bin_t;
+    type user_home_t;
+')
+
+type greyward_probe_tool_t;
+type greyward_probe_browser_t;
+domain_type(greyward_probe_tool_t)
+domain_type(greyward_probe_browser_t)
+init_nnp_daemon_domain(greyward_probe_tool_t)
+init_nnp_daemon_domain(greyward_probe_browser_t)
+domain_user_exemption_target(greyward_probe_tool_t)
+domain_user_exemption_target(greyward_probe_browser_t)
+ubac_constrained(greyward_probe_tool_t)
+ubac_constrained(greyward_probe_browser_t)
+role greyward_guard_owner_r types { greyward_probe_tool_t greyward_probe_browser_t };
+
+corecmd_bin_entry_type(greyward_probe_tool_t)
+corecmd_bin_entry_type(greyward_probe_browser_t)
+corecmd_exec_bin(greyward_probe_tool_t)
+corecmd_exec_bin(greyward_probe_browser_t)
+libs_use_ld_so(greyward_probe_tool_t)
+libs_use_ld_so(greyward_probe_browser_t)
+libs_use_shared_libs(greyward_probe_tool_t)
+libs_use_shared_libs(greyward_probe_browser_t)
+files_read_usr_files(greyward_probe_tool_t)
+files_read_usr_files(greyward_probe_browser_t)
+files_read_etc_files(greyward_probe_tool_t)
+files_read_etc_files(greyward_probe_browser_t)
+kernel_read_system_state(greyward_probe_tool_t)
+kernel_read_system_state(greyward_probe_browser_t)
+dev_rw_null(greyward_probe_tool_t)
+dev_rw_null(greyward_probe_browser_t)
+dev_read_urand(greyward_probe_tool_t)
+dev_read_urand(greyward_probe_browser_t)
+init_use_fds(greyward_probe_tool_t)
+init_use_fds(greyward_probe_browser_t)
+init_rw_stream_sockets(greyward_probe_tool_t)
+init_rw_stream_sockets(greyward_probe_browser_t)
+userdom_search_user_home_dirs(greyward_probe_tool_t)
+userdom_search_user_home_dirs(greyward_probe_browser_t)
+allow { greyward_probe_tool_t greyward_probe_browser_t } user_home_t:dir { search getattr };
+allow { greyward_probe_tool_t greyward_probe_browser_t } user_home_t:file { open read getattr };
+allow { greyward_probe_tool_t greyward_probe_browser_t } self:process { getcap getsched sigchld };
+allow init_t { greyward_probe_tool_t greyward_probe_browser_t }:process transition;
+allow { greyward_probe_tool_t greyward_probe_browser_t } init_t:process sigchld;
+
+type greyward_probe_ssh_t;
+type greyward_probe_browser_data_t;
+type greyward_probe_other_data_t;
+files_auth_file(greyward_probe_ssh_t)
+files_auth_file(greyward_probe_browser_data_t)
+files_auth_file(greyward_probe_other_data_t)
+allow { greyward_guard_t greyward_probe_tool_t greyward_probe_browser_t }
+    { greyward_probe_ssh_t greyward_probe_browser_data_t greyward_probe_other_data_t }:dir { search getattr };
+allow { greyward_guard_t greyward_probe_tool_t greyward_probe_browser_t }
+    { greyward_probe_ssh_t greyward_probe_browser_data_t greyward_probe_other_data_t }:file getattr;
+# Deliberately disjoint grants: neither a general tool nor browser can read all
+# credential types, including the separate synthetic other-user resource.
+allow greyward_probe_tool_t greyward_probe_ssh_t:file { open read getattr };
+allow greyward_probe_browser_t greyward_probe_browser_data_t:file { open read getattr };
+
+# Every bin_t child in this narrow fixture loses the parent's raw grant. Real
+# helper/application profiles need reviewed distinct executable types; there is
+# no claim this policy is compatible with browsers/IDEs/SSH workflows.
+# Keep the role while dropping the resource-bearing process type. Changing
+# role requires Fedora's role-change exemption; this fixture grants no such
+# exemption. A role alone confers no resource read permission.
+role greyward_guard_owner_r types greyward_guard_t;
+type_transition { greyward_probe_tool_t greyward_probe_browser_t } bin_t:process greyward_guard_t;
+allow { greyward_probe_tool_t greyward_probe_browser_t } greyward_guard_t:process transition;
+# Without this explicit NNP transition permission, this kernel can retain the
+# source domain during an automatic exec transition. The destination is only
+# the ordinary no-credential baseline; verify it before claiming child coverage.
+allow { greyward_probe_tool_t greyward_probe_browser_t } greyward_guard_t:process2 nnp_transition;
+allow greyward_guard_t { greyward_probe_tool_t greyward_probe_browser_t }:process sigchld;
+allow greyward_guard_t { greyward_probe_tool_t greyward_probe_browser_t }:fd use;

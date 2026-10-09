@@ -103,6 +103,16 @@ class SecureDnsOwnershipTests(unittest.TestCase):
         self.assertEqual(PROVIDERS["adguard"]["sni"], "dns.adguard-dns.com")
         self.assertTrue(all(len(PROVIDERS[key]["addresses"]) >= 2 for key in PROVIDERS))
 
+    def test_vpn_ownership_does_not_claim_unmeasured_guarantees(self):
+        value, _, _, _ = self.state_fixture([], devices=[{'interface':'tun0', 'ifindex':4, 'vpn':True}])
+        self.assertEqual(value['effective_owner'], 'VPN')
+        self.assertEqual(value['effective_transport'], 'VPNTunnel')
+        self.assertTrue(value['tunnel_detected'])
+        self.assertEqual(value['encryption'], 'Unknown')
+        self.assertEqual(value['validation'], 'Unknown')
+        for key in ('encryption_verification', 'kill_switch_verification', 'leak_protection_verification'):
+            self.assertEqual(value[key], 'UNKNOWN')
+
     def test_resolve1_zero_port_does_not_hide_greyward_ownership(self):
         provider = PROVIDERS["quad9"]
         props = {

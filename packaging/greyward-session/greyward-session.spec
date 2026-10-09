@@ -1,6 +1,6 @@
 Name: greyward-session
 Version: 0.1.0
-Release: 7%{?dist}
+Release: 8%{?dist}
 Summary: GREYWARD static desktop session policy and factory defaults
 License: GPL-3.0-only
 BuildArch: noarch
@@ -11,6 +11,8 @@ Requires: labwc
 Requires: wlopm
 Requires: python3
 Requires: pam
+Requires: xdg-desktop-portal-gtk
+Requires: xdg-desktop-portal-wlr
 
 %description
 Package-owned routing, lock/idle policy, user units and immutable factory
@@ -43,6 +45,11 @@ install -m0644 environment/session/labwc/themerc %{buildroot}/usr/share/greyward
 mkdir -p %{buildroot}/usr/lib/systemd/user/hyprpolkitagent.service.d %{buildroot}/usr/lib/systemd/user/xdg-desktop-portal-gnome.service.d
 printf '[Unit]\nConditionEnvironment=HYPRLAND_INSTANCE_SIGNATURE\n' > %{buildroot}/usr/lib/systemd/user/hyprpolkitagent.service.d/greyward-session-owner.conf
 printf '[Unit]\nConditionEnvironment=XDG_CURRENT_DESKTOP=GNOME\n' > %{buildroot}/usr/lib/systemd/user/xdg-desktop-portal-gnome.service.d/greyward-session-owner.conf
+install -Dm0644 environment/flatpak/greyward-portal-backends.conf %{buildroot}/usr/lib/systemd/user/xdg-desktop-portal.service.d/greyward-backends.conf
+install -Dm0644 environment/flatpak/labwc-portals.conf %{buildroot}/etc/xdg-desktop-portal/greyward/labwc-portals.conf
+for backend in gtk wlr; do
+ ln -s /usr/share/xdg-desktop-portal/portals/$backend.portal %{buildroot}/etc/xdg-desktop-portal/greyward/$backend.portal
+done
 
 %files
 %config(noreplace) /etc/pam.d/greyward-dms-lock
@@ -51,5 +58,7 @@ printf '[Unit]\nConditionEnvironment=XDG_CURRENT_DESKTOP=GNOME\n' > %{buildroot}
 /usr/lib/systemd/user/greyward-*.service
 /usr/lib/systemd/user/hyprpolkitagent.service.d/greyward-session-owner.conf
 /usr/lib/systemd/user/xdg-desktop-portal-gnome.service.d/greyward-session-owner.conf
+/usr/lib/systemd/user/xdg-desktop-portal.service.d/greyward-backends.conf
+/etc/xdg-desktop-portal/greyward
 /usr/share/wayland-sessions/greyward-labwc.desktop
 /usr/share/greyward/defaults

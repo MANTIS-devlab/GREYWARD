@@ -1,0 +1,1 @@
+/run/greyward-update-worker\.sock -s gen_context(system_u:object_r:greyward_update_runtime_t,s0)

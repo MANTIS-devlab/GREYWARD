@@ -1,0 +1,15 @@
+{
+  "status": "EXPERIMENTAL",
+  "upstream_version": "1.22.1",
+  "source_url": "https://github.com/flatpak/xdg-desktop-portal/releases/download/1.22.1/xdg-desktop-portal-1.22.1.tar.xz",
+  "source_sha256": "d4879ddb3d65ff1a8f19187497e6f13dc5d267bcac404a5d501218be355753d3",
+  "input_file": "document-portal/document-portal.c",
+  "input_file_sha256": "2092ac28b4dd3b2d7990cf14769f145b039f49bdf7d9a06ccb8fcff7e2119b8d",
+  "patch_sha256": "db4465c3d32068cbb834cf69327b645d891c6b2ad4167b78e48ae6972444daf2",
+  "output_file_sha256": "c628b1113759a59d8feeb12349e6985a1c44db1012149c722d6c6a9a11fae410",
+  "scope": "Separate confined development account only; no production provider replacement",
+  "limitations": [
+    "Named exports remain pathname-based; replacement races require separate MAC/FUSE tests",
+    "Existing named symlinks and nonregular files are rejected by this experimental guard"
+  ]
+}

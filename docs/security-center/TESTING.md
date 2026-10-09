@@ -68,7 +68,7 @@ fallback.
   restore. The UI must show the durable helper operation state rather than a
   frontend-invented result.
 - In Application Access, compare each displayed access category and review
-  count against Flatpak manifest permissions plus local overrides. Verify raw
+  count against Flatpak info --show-permissions for the exact installation/architecture/branch. Verify global/app override precedence, failed reads, explicit paths and bus denials, and ensure local override disclosure cannot undo the effective context. Verify raw
   grants only appear in the technical disclosure.
 - In Technical Details, verify the first-level content is title, result,
   recorded outcome, and recommendation. Check IDs, reason codes, and timestamps
@@ -179,6 +179,18 @@ representative hardware, then recorded in acceptance evidence. A test may not
 hide poor behavior by increasing timeouts without justification.
 
 ## Runtime environments
+
+Production enrollment remains blocked as recorded in its
+[authority](APPLICATION_SECURITY_ENROLLMENT.md). Focused source checks:
+`python -m unittest discover -s tests -p test_application_enrollment.py` from
+the repository root, plus the runtime Rust tests/Clippy. Explicit Fedora/root
+`GREYWARD_LUKS_FIXTURE=1` selects a synthetic file-container test; it never uses
+the installed root's credentials. The isolated UID-1002
+`application-security-enrollment-boundary.py` probe demonstrates inherited
+memory/pipe access or the incompatible blanket-denial fixture, not coverage.
+Do not select an active user's domain or run its policy fixtures as production
+enrollment. Real boot/admission/label/schema/rollback gates remain mandatory;
+optional exhaustive matrices remain DEFERRED HARDENING.
 
 1. Unit/fixture environment with no privileges.
 2. Canonical GREYWARD Fedora 44 Hyper-V VM.

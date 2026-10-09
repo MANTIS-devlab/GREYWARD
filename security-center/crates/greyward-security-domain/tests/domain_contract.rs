@@ -319,3 +319,22 @@ fn snapshot_applies_the_explicit_v1_check_id_alias() {
             .all(|check_id| check_id.as_str() == "system.selinux.mode")
     );
 }
+
+#[test]
+fn scanner_metadata_is_additive_and_never_implies_realtime_protection() {
+    let mut legacy = serde_json::json!({
+        "engine_version": "1.4.6", "database_timestamp": null,
+        "database_age_seconds": null, "last_successful_update": null,
+        "update_failure_state": null, "database_version": null, "status": "UNAVAILABLE"
+    });
+    let old: greyward_security_domain::ClamAvStatus =
+        serde_json::from_value(legacy.clone()).unwrap();
+    assert!(old.realtime_protection.is_none());
+    legacy["definitions_state"] = serde_json::json!("CURRENT");
+    legacy["realtime_protection"] = serde_json::json!("NOT_PROVIDED");
+    legacy["scan_activity"] = serde_json::json!("UNKNOWN");
+    let current: greyward_security_domain::ClamAvStatus = serde_json::from_value(legacy).unwrap();
+    assert_eq!(current.realtime_protection.as_deref(), Some("NOT_PROVIDED"));
+    assert_eq!(current.scan_activity.as_deref(), Some("UNKNOWN"));
+    assert_eq!(current.status, "UNAVAILABLE");
+}

@@ -131,7 +131,7 @@ def _server(props):
 
 def _transport(props, vpn):
     if vpn:
-        return "VPNProtected"
+        return "VPNTunnel"
     value = str(props.get("DNSOverTLS", "")).lower()
     return "DoT" if value in {"yes", "true"} else "Plain"
 
@@ -273,7 +273,20 @@ def _state():
     base["route_domains"] = _domains(props)
     base["resolver"] = _server(props)
     if vpn:
-        base.update({"effective_policy": "VPNOwned", "effective_owner": "VPN", "effective_transport": "VPNProtected", "encryption": "Enabled", "validation": "Measured by VPN/provider", "degradation_reason": None, "last_successful_reconciliation": _stamp()})
+        # Interface/DNS ownership observations are not cryptographic proof.
+        base.update({
+            "effective_policy": "VPNOwned", "effective_owner": "VPN",
+            "effective_transport": "VPNTunnel", "encryption": "Unknown",
+            "validation": "Unknown", "tunnel_detected": True,
+            "configured_provider": policy["provider"], "provider": None,
+            "dns_owner_observed": "VPN" if base["resolver"] else "UNKNOWN",
+            "routing_observed": {"link": primary["interface"],
+                                 "route_domains": base["route_domains"],
+                                 "default_route": bool(props.get("DefaultRoute", False))},
+            "encryption_verification": "UNKNOWN", "kill_switch_verification": "UNKNOWN",
+            "leak_protection_verification": "UNKNOWN", "degradation_reason": None,
+            "last_successful_reconciliation": _stamp(),
+        })
         return base
     if _mutation_enabled() and desired in {"Automatic", "Privacy"} and split_eligible:
         return split.reconcile(bus, primary, props, base, policy)

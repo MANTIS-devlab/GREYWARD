@@ -65,6 +65,7 @@ def scan(path, timeout=60, uid=None):
 def _version(binary):
     try: result=subprocess.run([binary,'--version'],capture_output=True,text=True,timeout=3,check=False)
     except (OSError,subprocess.SubprocessError): return None
+    if result.returncode != 0: return None
     match=re.search(r'ClamAV\s+([0-9][^\s/]*)',(result.stdout or '')+(result.stderr or ''))
     return match.group(1) if match else None
 
@@ -72,7 +73,7 @@ def _database_files():
     files=[]
     for directory in DATABASE_DIRS:
         try: files.extend(item for item in directory.iterdir() if item.is_file() and item.suffix in {'.cvd','.cld','.cud'})
-        except OSError: pass
+        except FileNotFoundError: pass
     return files
 
 def _freshclam_service_state():
@@ -91,31 +92,94 @@ def _update_failure(lines):
     """Only report failures since the last successful freshclam run."""
     latest_success=-1
     for index,line in enumerate(lines):
-        if re.search(r'\b(updated|database updated|daily\.cvd updated|freshclam daemon started)\b',line,re.I):
+        if re.search(r'\b(updated|database updated|daily\.cvd updated)\b',line,re.I):
             latest_success=index
     recent=lines[latest_success+1:]
     return next((line.strip()[-240:] for line in reversed(recent) if re.search(r'\b(ERROR|WARNING|FAILED)\b',line,re.I)),None)
 
 
+def unavailable_status(detail="The system scanner status could not be verified."):
+    return {'engine_version': None, 'database_timestamp': None,
+            'database_age_seconds': None, 'last_successful_update': None,
+            'update_failure_state': None, 'database_version': None,
+            'observed_at': dt.datetime.now(dt.timezone.utc).isoformat(),
+            'update_service_state': 'UNKNOWN', 'status': 'UNAVAILABLE',
+            'engine_state': 'UNKNOWN', 'definitions_state': 'UNKNOWN',
+            'scanner_state': 'UNKNOWN', 'scan_activity': 'UNKNOWN',
+            'realtime_protection': 'NOT_PROVIDED', 'detail': detail}
+
+
 def status():
-    """Report the packaged ClamAV engine/update lifecycle; never update here."""
-    files=_database_files(); newest=max((item.stat().st_mtime for item in files),default=None)
-    now=dt.datetime.now(dt.timezone.utc); timestamp=dt.datetime.fromtimestamp(newest,dt.timezone.utc).replace(microsecond=0) if newest else None
-    age=int(max(0,now.timestamp()-newest)) if newest else None; latest=max(files,key=lambda item:item.stat().st_mtime) if files else None
-    try: lines=Path('/var/log/freshclam.log').read_text(encoding='utf-8',errors='replace').splitlines()
-    except OSError: lines=[]
-    failure=_update_failure(lines); updater=_freshclam_service_state(); engine=_version('clamscan')
-    if age is None:
-        state='INITIALIZING' if updater == 'ACTIVE' else 'UNAVAILABLE'
-        detail='ClamAV definitions are initializing through the packaged freshclam service.' if state == 'INITIALIZING' else 'ClamAV definitions are unavailable; enable clamav-freshclam.service and wait for its first update.'
+    """System-side metadata only. Availability does not imply real-time scanning."""
+    now = dt.datetime.now(dt.timezone.utc)
+    try:
+        files = _database_files()
+        stamps = [(item, item.stat().st_mtime) for item in files]
+    except OSError:
+        return unavailable_status("ClamAV definition metadata could not be inspected.")
+    latest, newest = max(stamps, key=lambda item: item[1], default=(None, None))
+    timestamp = dt.datetime.fromtimestamp(newest, dt.timezone.utc).replace(microsecond=0) if newest is not None else None
+    age = int(max(0, now.timestamp() - newest)) if newest is not None else None
+    engine = _version('clamscan')
+    updater = _freshclam_service_state()
+    try:
+        with Path('/var/log/freshclam.log').open('rb') as log:
+            log.seek(0, 2)
+            log.seek(max(0, log.tell() - 65536))
+            lines = log.read(65536).decode('utf-8', errors='replace').splitlines()[-2048:]
+    except OSError:
+        lines = []
+    failure = _update_failure(lines)
+    state, detail = 'CURRENT', 'Definitions are current. Scans run on demand; real-time protection is not provided.'
+    definitions = 'CURRENT'
+    if newest is None:
+        state, definitions = 'UNAVAILABLE', 'MISSING'
+        detail = 'ClamAV definitions are missing; updater activity does not establish scanner readiness.'
+    elif newest > now.timestamp() + 300:
+        state, definitions = 'ERROR', 'UNKNOWN'
+        detail = 'Definition timestamps conflict with the system clock.'
     elif age > MAX_DATABASE_AGE:
-        state='UPDATING' if updater == 'ACTIVE' else 'OUTDATED'
-        detail='ClamAV definitions are being refreshed.' if state == 'UPDATING' else 'ClamAV definitions are outdated; the packaged freshclam service is not active.'
+        state, definitions = 'OUTDATED', 'OUTDATED'
+        detail = 'ClamAV definitions are outdated; an active updater does not confirm a refresh.'
     elif failure:
-        state='UPDATING' if updater == 'ACTIVE' else 'OUTDATED'
-        detail=failure
-    elif not engine:
-        state='UNAVAILABLE'; detail='The ClamAV scanner engine is unavailable.'
-    else:
-        state='CURRENT'; detail='ClamAV definitions are current.'
-    return {'engine_version':engine,'database_timestamp':timestamp.isoformat().replace('+00:00','Z') if timestamp else None,'database_age_seconds':age,'last_successful_update':timestamp.isoformat().replace('+00:00','Z') if timestamp else None,'update_failure_state':failure,'database_version':latest.name if latest else None,'update_service_state':updater,'status':state,'detail':detail}
+        state = 'ERROR'
+        detail = 'The definition updater reported a failure; scanner readiness requires review.'
+    if not engine:
+        state = 'UNAVAILABLE'
+        detail = 'The ClamAV scanner engine could not be verified.'
+    stamp = timestamp.isoformat().replace('+00:00', 'Z') if timestamp else None
+    return {'observed_at': now.isoformat(), 'engine_version': engine, 'engine_state': 'AVAILABLE' if engine else 'UNKNOWN',
+            'database_timestamp': stamp, 'database_age_seconds': age,
+            'last_successful_update': None, 'update_failure_state': failure,
+            'database_version': latest.name if latest else None, 'definitions_state': definitions,
+            'update_service_state': updater, 'status': state, 'detail': detail,
+            'scanner_state': 'AVAILABLE' if state == 'CURRENT' else 'UNAVAILABLE',
+            'scan_activity': 'UNKNOWN', 'realtime_protection': 'NOT_PROVIDED'}
+
+
+def system_status():
+    """Fail closed when the matched system provider is absent or malformed."""
+    import json
+    try:
+        import dbus
+        proxy = dbus.Interface(dbus.SystemBus().get_object(
+            'systems.mantis.greyward.ClamAvScan1', '/systems/mantis/greyward/ClamAvScan1'),
+            'systems.mantis.greyward.ClamAvScan1')
+        raw = str(proxy.GetClamAvStatus(timeout=10))
+        if len(raw.encode('utf-8')) > 8192:
+            return unavailable_status()
+        value = json.loads(raw)
+        if (not isinstance(value, dict) or value.get('status') not in {'CURRENT', 'OUTDATED', 'UNAVAILABLE', 'ERROR'}
+                or value.get('realtime_protection') != 'NOT_PROVIDED'
+                or (value['status'] == 'CURRENT' and
+                    (not value.get('engine_version') or value.get('definitions_state') != 'CURRENT'
+                     or type(value.get('database_age_seconds')) is not int
+                     or not 0 <= value['database_age_seconds'] <= MAX_DATABASE_AGE))):
+            return unavailable_status()
+        observed = dt.datetime.fromisoformat(value.get('observed_at', '').replace('Z', '+00:00'))
+        age = (dt.datetime.now(dt.timezone.utc) - observed).total_seconds()
+        if not 0 <= age <= 30:
+            return unavailable_status()
+        return value
+    except Exception:
+        return unavailable_status()

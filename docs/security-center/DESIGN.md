@@ -15,9 +15,18 @@ solution, update this document if the decision is durable and retain the
 supporting evidence in the historical session record when appropriate.
 
 Security Center remains a native-feeling first-party GREYWARD desktop product,
-not a dark web administration dashboard. Preserve native Labwc server-side
-decorations; do not introduce a custom titlebar or a second window-chrome
-system.
+not a dark web administration dashboard. Its application-owned titlebar is part
+of the continuous graphite canvas, without a second logo, application name or
+breadcrumb strip. Use the canonical Labwc control artwork and proportions;
+Labwc/GTK still own moving, resizing, minimization and maximization. Persistent
+window controls stay outside route rendering so refresh cannot replace focus
+or interrupt dragging. Earlier server-side-decoration guidance is superseded.
+The canonical Labwc `rc.xml` exempts only the Security Center main window
+from forced server decoration, matching its observed GTK app ID
+`greyward-security-center` (and canonical application ID) plus its exact title.
+Other applications and auxiliary dialogs retain the normal decoration policy.
+Validate the complete compositor frame through VMConnect; WebKit screenshots
+contain the client surface and cannot prove absence of a second Labwc titlebar.
 
 ## Product truth and presentation boundaries
 
@@ -114,6 +123,28 @@ The reusable signature is:
 
 ### Material hierarchy
 
+`materials.css` is the current token and material authority, loaded after
+feature composition (`styles.css`) and workspace geometry (`workspace.css`).
+Tokens have one definition rather than successive competing `:root` blocks.
+Navigation remains graphite; consequential work uses an illuminated cool-silver
+plane over obsidian. Detail and confirmation surfaces share that treatment.
+The material remains readable without backdrop blur; no new remote imagery or
+decorative animation is involved.
+
+The shared semantic palette is green `#a5dbb7`, amber `#edca85`, red `#f4a59b`
+and uncertainty lavender `#bcb4df`. Labels and actions explain the state; color
+supports them. An already evaluated tone must pass through unchanged. Action
+buttons use one silver finish, with narrowly scoped amber/green/destructive
+treatments for consequential existing workflows. Text controls, form fields,
+disclosure, focus and disabled states share predictable proportions.
+
+Network Activity preserves local application logos, stable identity colors,
+country flags and its live/history instrument panel. Fallback symbols describe
+the object (application or destination); a hash never invents a folder/lock
+meaning. At the minimum window, transport metadata and time move below their
+corresponding identities instead of disappearing or squeezing the primary row.
+Filters remain separate from observations and expanded details.
+
 Use five semantic material roles:
 
 - **Canvas:** the quiet obsidian application field.
@@ -138,9 +169,18 @@ as a default organization device.
 
 ### Icons, actions, and status
 
-- Use one coherent 1.5 px rounded-stroke icon registry. Use containers only
+- Use one coherent 1.55 px rounded-stroke icon registry. Use containers only
   when they add structural meaning; never use emoji, arbitrary Unicode, or
   mixed icon styles.
+- Every navigation destination must resolve to an intentional registered
+  symbol. A missing glyph must never silently turn Files into the Overview
+  house. Privacy, system checks, USB devices, recovery, history and managed
+  isolation have distinct silhouettes. Pause, resume and cancellation use
+  operation symbols rather than an activity pulse, navigation arrow or trash.
+- Resource and application marks describe the category/provider already in
+  the record; they do not establish identity or protection. Authentic local
+  brand marks remain separate from functional service marks. Unknown processes
+  retain a neutral application mark; never invent publisher branding.
 - Primary actions are compact, explicit commands. Secondary actions are quiet
   text, trailing, inline, or contextual commands when their target is clear.
   Destructive actions remain explicit and isolated.
@@ -184,7 +224,18 @@ optional providers resolve, bound loading, clearly explain capability limits,
 and provide a relevant retry or next step. Avoid giant spinners, developer
 placeholders, raw technical status, and disproportionate warning boxes.
 
+Overview's initial posture includes real session coverage before it is painted.
+Navigation cannot reuse an expired positive coverage projection just because
+the general page-cache TTL has not elapsed. Evidence renewal preserves unchanged
+content and focus; actual expiry still withdraws protection. Unavailable device
+history explains missing observations rather than claiming no unknown devices.
+
 ## Visual quality gate
+
+Native WebKit receives the desktop's preferred languages before frontend
+startup. EN/FR selection follows that language preference; backend facts remain
+verbatim. The Linux bridge uses the already pinned WebKit dependency and does
+not add a settings, policy or authorization interface.
 
 Use the real GREYWARD-DEV loop: implement → launch/relaunch → capture at
 1440×900 and 1100×700 → inspect hierarchy, readability, density, controls, and
@@ -194,6 +245,12 @@ them.
 
 Before acceptance, apply the micro-change failure test: if altering only fonts,
 spacing, colors, borders, cards, or buttons could satisfy the result, the work
-is not a deep redesign. Finish with a simplification-only pass: add no new
+is not a deep redesign. Focused quality/regression passes deliberately refine
+those details without restructuring established navigation or workflows.
+Graphite planes use the existing local GREYWARD grain, restrained silver edges
+and inset lighting; neutral materials must not drift into uniform blue-grey.
+Focal planes and navigation lose texture in reduced-transparency mode; forced
+colour uses system colours. Keep the Network Activity ledger compact while preserving readable text and focus.
+Finish with a simplification-only pass: add no new
 visual features; remove redundant statuses, unnecessary rectangles, weak
 micro-typography, noisy icon boxes, awkward empty space, and generic controls.

@@ -1,5 +1,15 @@
 # GREYWARD documentation index
 
+Repository consolidation and ISO preparation, 10 October (private development evidence)
+records source/package checks, safe publication and measured build storage.
+ISO construction remains NO-GO; no deployment or release approval is implied.
+
+Source-only targeted security truthfulness fixes (private development evidence)
+correct confined ClamAV status collection and narrow portal/VPN/accepted-risk/grant
+claims. Local checks are distinct from pending installed-session validation;
+`<development-host>` remains on its existing package tuple with no deployment or service change.
+
+
 This is the starting point for contributors and repository automation. Read the current
 status first, then the repository map before editing a subsystem.
 
@@ -17,6 +27,15 @@ and the update/rollback protocol for evolving components without replacing a
 working candidate prematurely.
 
 ## Thirty-second project model
+
+Latest scoped development recovery: enrolled graphical login (private development evidence).
+Follow-up: post-reboot resources, graphical Flatpak and public-IP recovery (private development evidence).
+Permission experiment: bounded hybrid launch and shared-bus prerequisite (private development evidence)
+(BLOCKED; no Flatpak grant/bridge delivered). Current authority remains the
+[Application Security plan](security-center/APPLICATION_SECURITY_PLAN.md).
+The D-Bus boundary follow-up (private development evidence)
+validates a reversible live inspection correction and existing native preview
+ownership; portal-to-Flatpak request binding and product gates remain unpassed.
 
 GREYWARD is a Fedora-based desktop distribution plus its local Security Center.
 The repository contains two layers:
@@ -60,6 +79,73 @@ contains proposed engineering work; the audit does not change release acceptance
 or replace the executable ISO runbook.
 
 ## Task routing
+
+The first-use permission prerequisite receipt (private development evidence)
+records the stopped generic Flatpak experiment: namespace invisibility, shared
+FileChooser attribution and host FUSE alias boundaries. The
+[Application Security authority](security-center/APPLICATION_SECURITY_PLAN.md)
+marks both feature gates unpassed; no generic Flatpak grant delivery is claimed.
+
+Practical sudo administration is owned by the
+[enrollment authority](security-center/APPLICATION_SECURITY_ENROLLMENT.md), with
+scoped 9 October evidence (private development evidence).
+The normal-seat compatibility follow-up (private development evidence)
+records approved activation and real Administration/portal/Flatpak/grant checks.
+Full desktop rollback and production rescue remain unproven.
+The Administration visual follow-up (private development evidence)
+records the scoped native-console warning, materials and terminal-color repair.
+The obsidian follow-up (private development evidence)
+records embedded canonical branding, the red title, sudo explanation and real
+desktop validation of the refined finish.
+
+The approved [Application Security plan](security-center/APPLICATION_SECURITY_PLAN.md)
+tracks Application Guard and Protected Data implementation. Whole-session
+enforcement is a mandatory release gate; the plan is not a protection claim.
+Its functional continuation records typed GUI reviews/revocation, shared Safe
+Open, scripts/AppImages, private graphical isolation and shared Activity, with
+isolated-account evidence and explicitly unavailable providers. Source truth
+and historical receipts were reconciled on 7 October. The
+[production enrollment design](security-center/APPLICATION_SECURITY_ENROLLMENT.md)
+records approved decisions and initial journal/provider/maintenance source.
+Separate authentication and bounded-tool checks have scoped evidence (private development evidence).
+The normal-session receipt (private development evidence)
+records actual deliberate enrollment of the normal `<development-host>` account: protected
+native DMS authentication, confined desktop/user manager/SSH, real resources,
+tested grants and deny/allow/revoke. Installed Center 66 / Context 68 / runtime 25 pass live GUI revocation and
+package readback. Automatic production/image lifecycle remains unvalidated. The subsequent
+workspace receipt (private development evidence)
+records grouped navigation, restored dedicated Network Activity and separate
+Security History; [UX_SPEC.md](security-center/UX_SPEC.md) owns current presentation.
+The refresh/theme receipt (private development evidence)
+records Center 70 / Context 69 / runtime 26, live lease renewal and restoration
+of the root-owned GREYWARD compositor decorations.
+The normal-session recheck (private development evidence)
+confirms that exact installed tuple against real coverage, resource denial,
+Flatpak behavior and the normal desktop's stable protection presentation.
+The visual polish receipt (private development evidence)
+records the previous Center 72 / Context 69 / runtime 26 tuple, coherent materials,
+EN/FR desktop review and preserved real protection boundaries.
+The focused quality/regression receipt (private development evidence)
+records previous Center 73 / Context 69 / runtime 26, historical visual comparison,
+actual native screen/interaction review and recovery evidence.
+The earlier live development (private development evidence),
+live integration (private development evidence)
+and desktop review (private development evidence)
+receipts are historical. The enrollment design owns activation, upgrade,
+coverage and LUKS recovery; it is not an automatic install recipe.
+Historical evidence (private development evidence)
+retains older receipts without overriding current capability status.
+The user-driven [Application Guard and Protected Data acceptance guide](security-center/USER_ACCEPTANCE_APPLICATION_GUARD.md)
+records prepared `<development-host>` desktop scenarios and the current limitation: Center
+can review and revoke the tested permission, but has no visible reviewed-tool
+launch action to prove an allowed application read. The guide is not a test
+result.
+The Security Activity context receipt (private development evidence)
+records previous Center 75 / Context 71 / runtime 27, actual kernel-denial context,
+shared disclosures and normal-desktop/package validation.
+The file review lifecycle receipt (private development evidence)
+records the scoped correction for handled detections and missing-source history;
+[File Security](security-center/FILE_SECURITY.md) owns the current contract.
 
 | If the task concerns | Start with | Then inspect |
 |---|---|---|
@@ -141,6 +227,9 @@ implementation.
 
 ## Product domains
 
+- [Security Center application identity](../branding/BRANDING.md#security-center-application-identity)
+  — shared shield-G artwork for the launcher, taskbar plugin and system notifications.
+
 - [security-center/README.md](security-center/README.md) — Security Center
   documentation index and authority table.
 - [security-center/SESSION_10_REPORT.md](security-center/SESSION_10_REPORT.md)
@@ -163,3 +252,10 @@ validation limits.
 Historical migration notes, session reports, screenshots, and superseded plans
 are under [history/](history/README.md). They explain decisions or evidence but are not
 sources of current architecture.
+
+- Security Center performance development receipt (private development evidence) — measured Center 80 → 84 changes, actual desktop tests and unresolved latency.
+- Integrated window chrome development receipt (private development evidence) — installed inputs, actual visual evidence and remaining physical gesture checks.
+
+- Security plugin stability development receipt (private development evidence) — actual desktop flyout, Context threading, negative-display freshness and retained provider warnings.
+
+- Security plugin and Center state parity (private development evidence) — shared evaluated checks, accepted exceptions and scanner readiness.

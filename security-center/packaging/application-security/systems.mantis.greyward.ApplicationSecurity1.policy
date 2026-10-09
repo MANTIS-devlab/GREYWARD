@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Experimental broker actions, not installed by existing Security packages.
+     Fixed purpose authorization only; neither action executes a command. -->
+<policyconfig>
+  <vendor>MANTIS SYSTEMS</vendor>
+  <action id="systems.mantis.greyward.application-security.grant-owner">
+    <description>Review access to your protected data</description>
+    <description xml:lang="fr">Examiner l'accès à vos données protégées</description>
+    <message>Authenticate to change this application's access to your protected data.</message>
+    <message xml:lang="fr">Authentifiez-vous pour modifier l'accès de cette application à vos données protégées.</message>
+    <defaults>
+      <allow_any>auth_self</allow_any>
+      <allow_inactive>auth_self</allow_inactive>
+      <allow_active>auth_self</allow_active>
+    </defaults>
+  </action>
+  <action id="systems.mantis.greyward.application-security.system-policy">
+    <description>Change system application protection</description>
+    <description xml:lang="fr">Modifier la protection des applications du système</description>
+    <message>Administrator authentication is required to change system application protection.</message>
+    <message xml:lang="fr">Une authentification administrateur est requise pour modifier la protection des applications du système.</message>
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>auth_admin</allow_active>
+    </defaults>
+  </action>
+</policyconfig>

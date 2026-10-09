@@ -432,7 +432,6 @@ pub fn evaluate_facts_with_deviations(
             .iter()
             .any(|id| id == check.check_id.as_str())
         {
-            check.state = PostureState::Protected;
             check.reason_code = "accepted-deviation".into();
             check.explanation = LocalizedMessage {
                 key: "posture.accepted-deviation.explanation".into(),
@@ -459,6 +458,13 @@ pub fn evaluate_facts_with_deviations(
             .iter()
             .filter(|c| c.domain == domain)
             .cloned()
+            .map(|mut check| {
+                // Aggregate accepted risk quietly, keeping source checks unchanged.
+                if check.reason_code == "accepted-deviation" {
+                    check.state = PostureState::Protected;
+                }
+                check
+            })
             .collect();
         DomainResult {
             domain,

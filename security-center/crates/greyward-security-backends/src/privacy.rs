@@ -1,5 +1,6 @@
 #![allow(clippy::missing_errors_doc)]
 use chrono::{DateTime, Duration, Utc};
+use dbus::blocking::Connection;
 use greyward_security_domain::PostureSnapshot;
 use serde::{Deserialize, Serialize};
 use std::fs;
@@ -23,6 +24,7 @@ pub enum ActivitySeverity {
     Important,
 }
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct ActivityItem {
     pub event_id: String,
     pub category: ActivityCategory,
@@ -31,6 +33,88 @@ pub struct ActivityItem {
     pub title: String,
     pub detail: String,
     pub related_check_id: Option<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ActivityEnvelope {
+    schema: String,
+    state: String,
+    items: Option<Vec<ActivityItem>>,
+}
+
+fn decode_activity(payload: &str) -> Result<Vec<ActivityItem>, PrivacyError> {
+    if payload.len() > 256 * 1024 {
+        return Err(PrivacyError::Read);
+    }
+    let value: ActivityEnvelope = serde_json::from_str(payload).map_err(|_| PrivacyError::Read)?;
+    if value.schema != "greyward.local-activity/v1" || value.state != "AVAILABLE" {
+        return Err(PrivacyError::Read);
+    }
+    let items = value.items.ok_or(PrivacyError::Read)?;
+    if items.len() > MAX_ACTIVITY_ITEMS
+        || items.iter().any(|item| {
+            item.event_id.is_empty()
+                || item.event_id.len() > 64
+                || !item
+                    .event_id
+                    .bytes()
+                    .all(|b| b.is_ascii_alphanumeric() || b"._:-".contains(&b))
+                || item.title.chars().count() > 160
+                || item.detail.chars().count() > 320
+                || item
+                    .title
+                    .chars()
+                    .chain(item.detail.chars())
+                    .any(char::is_control)
+                || item.occurred_at > Utc::now() + Duration::minutes(1)
+                || item.related_check_id.as_ref().is_some_and(|reference| {
+                    reference.is_empty()
+                        || reference.len() > 96
+                        || !reference
+                            .bytes()
+                            .all(|b| b.is_ascii_alphanumeric() || b"._:-".contains(&b))
+                })
+        })
+    {
+        return Err(PrivacyError::Read);
+    }
+    Ok(retain_activity(items, Utc::now()))
+}
+
+#[derive(Clone, Copy)]
+enum LocalActivityCall<'a> {
+    Read,
+    Record(&'a str),
+    Clear,
+}
+
+fn local_activity_call(request: LocalActivityCall<'_>) -> Result<Vec<ActivityItem>, PrivacyError> {
+    let connection = Connection::new_session().map_err(|_| PrivacyError::Read)?;
+    let proxy = connection.with_proxy(
+        "systems.mantis.greyward.SecurityContext1",
+        "/systems/mantis/greyward/SecurityContext1",
+        std::time::Duration::from_secs(4),
+    );
+    let response: Result<(String,), _> = match request {
+        LocalActivityCall::Read => proxy.method_call(
+            "systems.mantis.greyward.SecurityContext1",
+            "GetLocalActivity",
+            (),
+        ),
+        LocalActivityCall::Record(payload) => proxy.method_call(
+            "systems.mantis.greyward.SecurityContext1",
+            "RecordLocalActivity",
+            (payload,),
+        ),
+        LocalActivityCall::Clear => proxy.method_call(
+            "systems.mantis.greyward.SecurityContext1",
+            "ClearLocalActivity",
+            (),
+        ),
+    };
+    let (payload,) = response.map_err(|_| PrivacyError::Read)?;
+    decode_activity(&payload)
 }
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct ExternalServiceDisclosure {
@@ -131,23 +215,8 @@ pub fn retain_activity(mut items: Vec<ActivityItem>, now: DateTime<Utc>) -> Vec<
     }
 }
 
-pub fn load_activity_from(path: &Path) -> Result<Vec<ActivityItem>, PrivacyError> {
-    if !path.exists() {
-        return Ok(Vec::new());
-    }
-    let bytes = fs::read(path).map_err(|_| PrivacyError::Read)?;
-    let items: Vec<ActivityItem> =
-        serde_json::from_slice(&bytes).map_err(|_| PrivacyError::Read)?;
-    Ok(retain_activity(items, Utc::now()))
-}
-
 pub fn record_activity(item: ActivityItem) -> Result<(), PrivacyError> {
-    let dir = state_directory()?;
-    fs::create_dir_all(&dir).map_err(|_| PrivacyError::Write)?;
-    secure_directory(&dir)?;
-    let path = dir.join("activity.json");
-    let mut items = load_activity_from(&path).unwrap_or_default();
-    items.push(ActivityItem {
+    let value = ActivityItem {
         event_id: bounded_text(&item.event_id, 64),
         category: item.category,
         severity: item.severity,
@@ -155,22 +224,22 @@ pub fn record_activity(item: ActivityItem) -> Result<(), PrivacyError> {
         title: bounded_text(&item.title, 160),
         detail: bounded_text(&item.detail, 320),
         related_check_id: item.related_check_id.map(|v| bounded_text(&v, 96)),
-    });
-    atomic_write(
-        &path,
-        &serde_json::to_vec(&retain_activity(items, Utc::now()))
-            .map_err(|_| PrivacyError::Serialize)?,
-    )
+    };
+    let payload = serde_json::to_string(&value).map_err(|_| PrivacyError::Serialize)?;
+    if payload.len() > 4096 || !local_activity_call(LocalActivityCall::Record(&payload))?.is_empty()
+    {
+        return Err(PrivacyError::Write);
+    }
+    Ok(())
 }
 
 pub fn load_activity() -> Result<Vec<ActivityItem>, PrivacyError> {
-    state_directory().and_then(|dir| load_activity_from(&dir.join("activity.json")))
+    local_activity_call(LocalActivityCall::Read)
 }
 
 pub fn clear_activity() -> Result<(), PrivacyError> {
-    let path = state_directory()?.join("activity.json");
-    if path.exists() {
-        fs::remove_file(path).map_err(|_| PrivacyError::Write)?;
+    if !local_activity_call(LocalActivityCall::Clear)?.is_empty() {
+        return Err(PrivacyError::Write);
     }
     Ok(())
 }
@@ -222,7 +291,7 @@ pub fn write_safe_export(snapshot: &PostureSnapshot) -> Result<PathBuf, PrivacyE
         fs::create_dir_all(parent).map_err(|_| PrivacyError::Write)?;
         secure_directory(parent)?;
     }
-    let count = load_activity().map_or(0, |v| v.len());
+    let count = load_activity()?.len();
     let bytes = serde_json::to_vec_pretty(&build_safe_export(snapshot, count))
         .map_err(|_| PrivacyError::Serialize)?;
     atomic_write(&path, &bytes)?;
@@ -258,6 +327,33 @@ mod tests {
         let kept = retain_activity(items, now);
         assert_eq!(kept.len(), MAX_ACTIVITY_ITEMS);
         assert!(!kept[0].title.contains('\n'));
+    }
+    #[test]
+    fn local_history_failure_and_forged_metadata_are_not_safe_emptiness() {
+        let valid = serde_json::json!({"schema":"greyward.local-activity/v1","state":"AVAILABLE","items":[{
+            "event_id":"action-1","category":"Action","severity":"Information","occurred_at":Utc::now(),
+            "title":"Local action","detail":"Presentation only","related_check_id":null
+        }]});
+        assert_eq!(decode_activity(&valid.to_string()).unwrap().len(), 1);
+        for value in [
+            serde_json::json!({"schema":"greyward.local-activity/v1","state":"UNAVAILABLE","items":null}),
+            serde_json::json!({"schema":"greyward.local-activity/v1","state":"AVAILABLE","items":null}),
+            serde_json::json!({"schema":"other","state":"AVAILABLE","items":[]}),
+        ] {
+            assert!(decode_activity(&value.to_string()).is_err());
+        }
+        let mut forged = valid.clone();
+        forged["items"][0]["decision"] = "BLOCKED".into();
+        assert!(decode_activity(&forged.to_string()).is_err());
+        forged = valid.clone();
+        forged["items"][0]["category"] = "APPLICATION_SECURITY".into();
+        assert!(decode_activity(&forged.to_string()).is_err());
+        forged = valid.clone();
+        forged["items"][0]["related_check_id"] = "/home/alice/private".into();
+        assert!(decode_activity(&forged.to_string()).is_err());
+        forged = valid.clone();
+        forged["items"] = serde_json::Value::Array(vec![valid["items"][0].clone(); 65]);
+        assert!(decode_activity(&forged.to_string()).is_err());
     }
     #[test]
     fn manifest_is_local_and_endpoint_allowlisted() {

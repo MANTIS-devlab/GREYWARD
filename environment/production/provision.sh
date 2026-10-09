@@ -72,6 +72,7 @@ test -r "$stage/selinux/greyward-dms-greeter.cil"
 test -r "$stage/greyward-sync-greeter-wallpaper"
 test -r "$stage/crypto-policy/GREYWARD.pmod"
 test -r "$stage/security-center-contract.tsv"
+test -r "$stage/flatpak/seed-system-permissions.py"
 
 if [[ "$target_install" == 1 || "${GREYWARD_LOCAL_FINALIZE:-0}" != 1 ]]; then
   phase 'Preparing the offline RPM repository'
@@ -298,6 +299,11 @@ install -d -m 0755 /etc/xdg /etc/xdg-desktop-portal /usr/share/greyward/bazaar /
   /usr/local/libexec /usr/local/share/applications
 install -D -m 0755 "$stage/production-acceptance.sh" /usr/local/libexec/greyward-production-acceptance
 install -D -m 0644 "$flatpak/labwc-portals.conf" /etc/xdg-desktop-portal/labwc-portals.conf
+install -D -m 0644 "$flatpak/labwc-portals.conf" /etc/xdg-desktop-portal/greyward/labwc-portals.conf
+install -D -m 0644 "$flatpak/greyward-portal-backends.conf" /usr/lib/systemd/user/xdg-desktop-portal.service.d/greyward-backends.conf
+for backend in gtk wlr; do
+    ln -sfn "/usr/share/xdg-desktop-portal/portals/$backend.portal" "/etc/xdg-desktop-portal/greyward/$backend.portal"
+done
 install -D -m 0644 "$flatpak/bazaar-main-runtime.yaml" /usr/share/greyward/bazaar/main.yaml
 install -D -m 0644 "$flatpak/greyward-privacy-runtime.yaml" /usr/share/greyward/bazaar/greyward-privacy.yaml
 install -D -m 0644 "$flatpak/greyward-software-banner.svg" /usr/share/greyward/bazaar/greyward-software-banner.svg
@@ -330,14 +336,9 @@ if [[ "$target_install" != 1 ]]; then
       done < "$stage/flatpak-baseline.tsv"
     fi
   fi
-  flatpak override --system --reset io.github.kolunmi.Bazaar
-  flatpak override --system --filesystem=xdg-config/bazaar:ro io.github.kolunmi.Bazaar
-
-  # Haruna is a local player by default. Its Flatpak sandbox can be given
-  # network access later by an explicit user override when online features are
-  # wanted; GREYWARD does not add any other application-specific overrides.
-  flatpak override --system --reset org.kde.haruna
-  flatpak override --system --unshare=network org.kde.haruna
+  # Seed only absent policy. Existing global/app overrides are reviewed state;
+  # provisioning must not reset or silently replace them.
+  python3 "$flatpak/seed-system-permissions.py"
 fi
 
 phase 'Applying post-Store desktop and session configuration'
@@ -674,6 +675,7 @@ else
     opensnitch
     greyward-opensnitch-policy
     greyward-clamav-scan
+    greyward-update-worker.socket
     clamav-freshclam
     greyward-secure-dns
     usbguard

@@ -28,6 +28,7 @@ PluginComponent {
     property double fallbackBackoffUntil: 0
     property bool requestInFlight: false
     property int requestGeneration: 0
+    property int transientRetryCount: 0
 
     readonly property string publicDisplay: !stateInitialized ? qsTr("Starting")
         : !publicLookupEnabled ? qsTr("Off")
@@ -90,6 +91,8 @@ PluginComponent {
         root.requestInFlight = false
         initialFetchTimer.stop()
         networkRefreshTimer.stop()
+        transientRetryTimer.stop()
+        root.transientRetryCount = 0
         root.publicIp = ""
         root.countryCode = ""
         root.publicState = enabled ? "CHECKING" : "OFF"
@@ -106,6 +109,8 @@ PluginComponent {
         root.publicIp = identity.ip
         root.countryCode = identity.countryCode
         root.publicState = "AVAILABLE"
+        root.transientRetryCount = 0
+        transientRetryTimer.stop()
         return true
     }
 
@@ -152,6 +157,14 @@ PluginComponent {
         root.requestInFlight = false
         console.info("[GREYWARD public IP] providers unavailable",
                      "primary=" + primaryStatus, "fallback=" + fallbackStatus)
+        // A startup transport failure is different from provider rate limiting.
+        // Recover with at most three bounded retries; retain the real 429 cooldown.
+        if ((fallbackStatus === "request-failed" || Number(fallbackStatus) >= 500)
+                && root.transientRetryCount < 3) {
+            root.transientRetryCount += 1
+            transientRetryTimer.interval = 35000 * Math.pow(2, root.transientRetryCount - 1)
+            transientRetryTimer.restart()
+        }
     }
 
     function fetchFallback(generation, primaryStatus) {
@@ -168,7 +181,8 @@ PluginComponent {
                 root.requestInFlight = false
                 return
             }
-            root.fallbackBackoffUntil = Date.now() + root.fallbackBackoffMs
+            root.fallbackBackoffUntil = Date.now()
+                + (result.status === 429 ? root.fallbackBackoffMs : 30000)
             root.finishFailure(generation, primaryStatus, result.status || "request-failed")
         })
     }
@@ -255,6 +269,12 @@ PluginComponent {
     Timer {
         id: initialFetchTimer
         interval: 2000
+        repeat: false
+        onTriggered: root.fetchPublicIdentity()
+    }
+
+    Timer {
+        id: transientRetryTimer
         repeat: false
         onTriggered: root.fetchPublicIdentity()
     }
