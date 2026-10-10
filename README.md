@@ -48,7 +48,7 @@
 </p>
 
 <p align="center">
-  <img src="docs/assets/screenshots/greyward-desktop-security-center.png" alt="GREYWARD desktop, Security Center and security notifications" width="960">
+  <img src="docs/assets/screenshots/greyward-desktop-overview.gif" alt="GREYWARD desktop, Security Center and security notifications" width="960">
 </p>
 
 ---
@@ -323,7 +323,7 @@ Its shell, settings, Security Center, notifications and interaction patterns sha
 
 | Desktop overview | Everyday application use |
 | :---: | :---: |
-| <img src="docs/assets/screenshots/greyward-desktop-overview.gif" alt="GREYWARD desktop overview" width="460"> | <img src="docs/assets/screenshots/greyward-desktop-browser.png" alt="Brave running in GREYWARD" width="460"> |
+| <img src="docs/assets/screenshots/greyward-desktop-security-center.png" alt="GREYWARD desktop overview" width="460"> | <img src="docs/assets/screenshots/greyward-desktop-browser.png" alt="Brave running in GREYWARD" width="460"> |
 
 | Layer | Current implementation |
 | --- | --- |
