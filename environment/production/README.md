@@ -68,10 +68,10 @@ globally disable graphics acceleration.
 
 Keyboard layout is not hard-coded to French or US in the Labwc session
 environment. Anaconda's selected XKB layout is read during provisioning and
-seeded for the account; each account can later choose a layout, variant, model
-and options in DMS Settings. That validated choice is applied at the next
-sign-in. The protected Labwc worker receives the same values through a
-fixed-file reader before its SELinux and UID transition.
+seeded into each account's Labwc `environment.d`; DMS Settings can save a
+validated layout, variant, model and options there for the next sign-in. The
+protected Labwc worker reads the same two files through a fixed-file reader
+before its SELinux and UID transition.
 
 The baseline includes Firefox as an alternate browser, Nautilus,
 `Terminal`, GNOME Screenshot, OBS Studio, Papers, Loupe, File Roller, CUPS

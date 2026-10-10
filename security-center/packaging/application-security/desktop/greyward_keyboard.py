@@ -17,8 +17,8 @@ DEFAULTS = {
     'XKB_DEFAULT_VARIANT': '',
     'XKB_DEFAULT_OPTIONS': '',
 }
-DEFAULT_NAME = 'keyboard-default.env'
-OVERRIDE_NAME = 'keyboard.env'
+DEFAULT_NAME = '50-greyward-default-keyboard.env'
+OVERRIDE_NAME = '95-greyward-user-keyboard.env'
 ALLOWED_KEYS = frozenset(DEFAULTS)
 LAYOUTS = re.compile(r'^[A-Za-z0-9_-]+(?:,[A-Za-z0-9_-]+)*$')
 VARIANTS = re.compile(r'^(?:[A-Za-z0-9_-]+)?(?:,(?:[A-Za-z0-9_-]+)?)*$')
@@ -170,7 +170,7 @@ def _read_home_file(home, uid, filename):
         fd = os.open('/', os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC)
         fds.append(fd)
         for name, owner in [('home', 0), (Path(home).name, uid),
-                            ('.config', uid), ('greyward', uid)]:
+                            ('.config', uid), ('labwc', uid), ('environment.d', uid)]:
             fd = _open_directory(fd, name, owner)
             fds.append(fd)
         file_fd = os.open(filename, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC,
@@ -309,9 +309,9 @@ def seed_user(username):
     defaults = installed_defaults()
     encoded = serialize_environment(defaults).encode('utf-8')
     _atomic_write(SYSTEM_DEFAULT, encoded, 0, 0, 0o644)
-    _atomic_write(Path('/etc/skel/.config/greyward') / DEFAULT_NAME,
+    _atomic_write(Path('/etc/skel/.config/labwc/environment.d') / DEFAULT_NAME,
                   encoded, 0, 0, 0o644)
-    _atomic_write(Path(account.pw_dir) / '.config/greyward' / DEFAULT_NAME,
+    _atomic_write(Path(account.pw_dir) / '.config/labwc/environment.d' / DEFAULT_NAME,
                   encoded, account.pw_uid, account.pw_gid, 0o600, preserve=True)
 
 
@@ -330,7 +330,7 @@ def apply_user(layout, variant, model, options):
         'XKB_DEFAULT_OPTIONS': options,
     }
     if not requested:
-        directory = home / '.config/greyward'
+        directory = home / '.config/labwc/environment.d'
         _ensure_directory(directory, uid, os.getgid())
         try:
             info = (directory / OVERRIDE_NAME).lstat()
@@ -345,7 +345,7 @@ def apply_user(layout, variant, model, options):
         supplied['XKB_DEFAULT_LAYOUT'] = defaults['XKB_DEFAULT_LAYOUT']
         supplied['XKB_DEFAULT_MODEL'] = supplied['XKB_DEFAULT_MODEL'] or defaults['XKB_DEFAULT_MODEL']
     encoded = serialize_environment(validate_keymap(supplied)).encode('utf-8')
-    _atomic_write(home / '.config/greyward' / OVERRIDE_NAME,
+    _atomic_write(home / '.config/labwc/environment.d' / OVERRIDE_NAME,
                   encoded, uid, os.getgid(), 0o600)
 
 

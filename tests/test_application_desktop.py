@@ -40,6 +40,11 @@ class DesktopLifetime(unittest.TestCase):
 
 
 class KeyboardConfiguration(unittest.TestCase):
+    def test_labwc_environment_dropins_override_the_main_user_environment(self):
+        self.assertEqual(keyboard.DEFAULT_NAME, '50-greyward-default-keyboard.env')
+        self.assertEqual(keyboard.OVERRIDE_NAME, '95-greyward-user-keyboard.env')
+        self.assertIn("('environment.d', uid)", KEYBOARD_SOURCE.read_text())
+
     def test_anaconda_localed_selection_seeds_labwc_settings(self):
         status = """VC Keymap: fr
 X11 Layout: fr,us
