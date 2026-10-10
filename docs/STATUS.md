@@ -1,5 +1,16 @@
 # GREYWARD current status
 
+10 October AZERTY follow-up: the protected Labwc worker now receives the
+canonical `pc105`/`fr` XKB defaults. On `.149`, Application Security RPM 34 is
+installed and the root-owned protected generation was updated; all 1,011
+manifested files validate, and libxkbcommon maps physical `AD01`/`AD02` to
+`a`/`z`. The user must sign in and check actual typing; no desktop session was
+started by this work. The default component builder now builds the
+source-matched Application Security RPM; ISO staging installs it as a dormant
+package and rejects scriptlets. No ISO was built or booted. The prior
+10 October preparation receipt below describes
+the earlier package-exclusion state.
+
 10 October DMS monitor configuration: the ordinary DMS service on `.149` inherited
 an absolute `WAYLAND_DISPLAY`; DMS joined it to `XDG_RUNTIME_DIR`, making a
 double-prefixed socket path. The unit now pins `wayland-0`. After installing the

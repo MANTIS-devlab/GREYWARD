@@ -10,7 +10,7 @@ set -euo pipefail
 usage() {
   cat <<'EOF'
 Usage: environment/image/build-iso.sh --base-iso FILE --output FILE \
-  --branding-rpm FILE --dms-rpm FILE --session-rpm FILE --security-rpm FILE --security-rpm FILE \
+  --branding-rpm FILE --dms-rpm FILE --session-rpm FILE --application-security-rpm FILE --security-rpm FILE --security-rpm FILE \
   --security-build-manifest FILE --production-rpm FILE... \
   --baseline FILE --base-sha256 SHA256
 
@@ -33,6 +33,7 @@ production_rpms=()
 branding_rpm=''
 dms_rpm=''
 session_rpm=''
+application_security_rpm=''
 security_build_manifest=''
 baseline=''
 base_sha256=''
@@ -67,6 +68,13 @@ while (($#)); do
       shift 2
       ;;
     --session-rpm) (($# >= 2)) || exit 2; session_rpm=$(realpath -e "$2"); test "$(rpm -qp --qf '%{NAME}' "$session_rpm")" = greyward-session; shift 2 ;;
+    --application-security-rpm)
+      (($# >= 2)) || exit 2
+      [[ -z "$application_security_rpm" ]] || { usage >&2; exit 2; }
+      application_security_rpm=$(realpath -e "$2")
+      test "$(rpm -qp --qf '%{NAME}' "$application_security_rpm")" = greyward-application-security-experimental
+      shift 2
+      ;;
     --dms-rpm)
       (($# >= 2)) || { usage >&2; exit 2; }
       [[ -z "$dms_rpm" ]] || { usage >&2; exit 2; }
@@ -101,7 +109,7 @@ while (($#)); do
   esac
 done
 
-[[ -n "$session_rpm" && -n "$dms_rpm" && -n "$base_iso" && -n "$output" && -n "$branding_rpm" && -n "$security_build_manifest" && ${#security_rpms[@]} -eq 2 && ${#production_rpms[@]} -ge 1 ]] || { usage >&2; exit 2; }
+[[ -n "$session_rpm" && -n "$application_security_rpm" && -n "$dms_rpm" && -n "$base_iso" && -n "$output" && -n "$branding_rpm" && -n "$security_build_manifest" && ${#security_rpms[@]} -eq 2 && ${#production_rpms[@]} -ge 1 ]] || { usage >&2; exit 2; }
 [[ "$(basename "$branding_rpm")" == greyward-branding-*.rpm ]] || { echo "Invalid branding RPM." >&2; exit 2; }
 [[ -f "$base_iso" ]] || { echo "Base ISO not found: $base_iso" >&2; exit 1; }
 [[ ! -e "$output" ]] || { echo "Output already exists: $output" >&2; exit 2; }
@@ -164,6 +172,7 @@ staging_args=(
   --branding-rpm "$branding_rpm"
   --dms-rpm "$dms_rpm"
   --session-rpm "$session_rpm"
+  --application-security-rpm "$application_security_rpm"
   --security-rpm "${security_rpms[0]}"
   --security-rpm "${security_rpms[1]}"
   --security-build-manifest "$security_build_manifest"

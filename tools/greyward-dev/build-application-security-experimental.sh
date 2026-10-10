@@ -6,8 +6,13 @@ umask 077
 export PATH=/usr/bin:/bin
 export CARGO=/usr/bin/cargo RUSTC=/usr/bin/rustc RUSTDOC=/usr/bin/rustdoc
 export CARGO_BUILD_JOBS=1
-source_root=/var/tmp/greyward-application-security-build/security-center
-build_parent=/var/tmp/greyward-application-security-build
+source_root=${GREYWARD_APPSEC_SOURCE:-/var/tmp/greyward-application-security-build/security-center}
+build_parent=${GREYWARD_APPSEC_BUILD_PARENT:-/var/tmp/greyward-application-security-build}
+test -d "$source_root"
+test -d "$build_parent"
+test "$(realpath -e "$source_root")" = "$source_root"
+test "$(realpath -e "$build_parent")" = "$build_parent"
+test ! -L "$build_parent"
 test "$(stat -c '%u %a' "$build_parent")" = "$(id -u) 700"
 test -f "$source_root/Cargo.lock"
 test -f "$source_root/LICENSE"

@@ -115,7 +115,14 @@ def main() -> int:
             if relative.lower() not in tree.files:
                 failures.append(f"ISO production payload is missing: {relative}")
 
-        for package in ("greyward-security-center", "greyward-security-context", "greyward-branding", "greyward-dms"):
+        for package in (
+            "greyward-security-center",
+            "greyward-security-context",
+            "greyward-branding",
+            "greyward-dms",
+            "greyward-session",
+            "greyward-application-security-experimental",
+        ):
             matches = sorted(
                 relative
                 for relative in tree.files

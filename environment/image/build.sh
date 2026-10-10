@@ -8,13 +8,13 @@ set -euo pipefail
 
 usage() {
   cat <<'EOF'
-Usage: environment/image/build.sh [--output DIRECTORY] [--security-rpm FILE]... [--security-build-manifest FILE] [--dms-rpm FILE] [--production-rpm FILE]... --branding-rpm FILE [--baseline FILE] [--require-complete]
+Usage: environment/image/build.sh [--output DIRECTORY] [--security-rpm FILE]... [--security-build-manifest FILE] [--application-security-rpm FILE] [--dms-rpm FILE] [--production-rpm FILE]... --branding-rpm FILE [--baseline FILE] [--require-complete]
 
 Without --security-rpm this prepares an incomplete development input set and
 marks the missing production RPMs in the manifest. A production image tool
-must supply exactly five GREYWARD RPMs: greyward-branding, greyward-session,
-greyward-security-center, and
-greyward-security-context, greyward-dms, plus every pinned external production RPM listed in
+must supply exactly six GREYWARD RPMs: greyward-branding, greyward-session,
+greyward-security-center, greyward-security-context,
+greyward-application-security-experimental, and greyward-dms, plus every pinned external production RPM listed in
 environment/production/external-rpms.txt. Use
   --require-complete to reject an incomplete input set instead of preparing it
   for source inspection. Complete staging also requires the manifest emitted
@@ -30,6 +30,7 @@ production_rpms=()
 branding_rpm=''
 dms_rpm=''
 session_rpm=''
+application_security_rpm=''
 security_build_manifest=''
 baseline=''
 require_complete=false
@@ -65,6 +66,13 @@ while (($#)); do
       shift 2
       ;;
     --session-rpm) (($# >= 2)) || exit 2; session_rpm=$(realpath -e "$2"); test "$(rpm -qp --qf '%{NAME}' "$session_rpm")" = greyward-session; shift 2 ;;
+    --application-security-rpm)
+      (($# >= 2)) || { usage >&2; exit 2; }
+      [[ -z "$application_security_rpm" ]] || { echo 'Duplicate Application Security RPM' >&2; exit 2; }
+      application_security_rpm=$(realpath -e "$2")
+      test "$(rpm_query -qp --qf '%{NAME}' "$application_security_rpm")" = greyward-application-security-experimental
+      shift 2
+      ;;
     --dms-rpm)
       (($# >= 2)) || { usage >&2; exit 2; }
       [[ -z "$dms_rpm" ]] || { echo 'Duplicate DMS runtime RPM' >&2; exit 2; }
@@ -191,6 +199,21 @@ if [[ -n "$session_rpm" ]]; then
   fi
 fi
 
+# The protected display worker is copied into a root-owned generation on
+# enrolled systems. Keep the shipped RPM's worker byte-identical to source and
+# reject scriptlets that could activate the experimental runtime on install.
+if [[ -n "$application_security_rpm" ]]; then
+  appsec_session_path='./usr/share/greyward-application-security/desktop/session.py'
+  if ! rpm2cpio "$application_security_rpm" | cpio -i --quiet --to-stdout "$appsec_session_path" | cmp -s - "$repo_root/security-center/packaging/application-security/desktop/session.py"; then
+    echo 'The Application Security RPM contains a stale protected session worker; rebuild it from this checkout before ISO staging.' >&2
+    exit 1
+  fi
+  if [[ -n "$(rpm_query -qp --scripts "$application_security_rpm")" ]]; then
+    echo 'The Application Security RPM must not run scriptlets during image installation.' >&2
+    exit 1
+  fi
+fi
+
 if ((${#security_rpms[@]} > 2)); then
   echo "Too many Security Center RPMs; provide exactly one center and one context RPM." >&2
   exit 2
@@ -214,6 +237,9 @@ if $require_complete && ((center_count != 1 || context_count != 1)); then
 fi
 if $require_complete && [[ -z "$session_rpm" ]]; then
   echo "Complete staging requires a greyward-session RPM" >&2; exit 2
+fi
+if $require_complete && [[ -z "$application_security_rpm" ]]; then
+  echo "Complete staging requires a greyward-application-security-experimental RPM" >&2; exit 2
 fi
 if $require_complete && [[ -z "$dms_rpm" ]]; then
   echo "Complete production staging requires a verified greyward-dms RPM." >&2
@@ -315,6 +341,7 @@ cp -a "$kickstart" "$output/installer.ks.tmpl"
 
 if [[ -n "$dms_rpm" ]]; then cp -a "$dms_rpm" "$output/rpms/"; fi
 if [[ -n "$session_rpm" ]]; then cp -a "$session_rpm" "$output/rpms/"; fi
+if [[ -n "$application_security_rpm" ]]; then cp -a "$application_security_rpm" "$output/rpms/"; fi
 if [[ -n "$branding_rpm" ]]; then cp -a "$branding_rpm" "$output/rpms/"; fi
 for rpm in "${security_rpms[@]}"; do cp -a "$rpm" "$output/rpms/"; done
 for rpm in "${production_rpms[@]}"; do cp -a "$rpm" "$output/rpms/"; done
@@ -408,6 +435,9 @@ fi
   if [[ -n "$dms_rpm" ]]; then
     printf 'rpm\t%s\t%s\tGREYWARD_PACKAGE_INPUT\n' "$(basename "$dms_rpm")" "$(basename "$dms_rpm")"
   fi
+  if [[ -n "$application_security_rpm" ]]; then
+    printf 'rpm\t%s\t%s\tGREYWARD_PACKAGE_INPUT\n' "$(basename "$application_security_rpm")" "$(basename "$application_security_rpm")"
+  fi
   for rpm in "${security_rpms[@]}"; do
     printf 'rpm\t%s\t%s\tNEVRA_REQUIRES_FEDORA_QUERY\n' "$(basename "$rpm")" "$(basename "$rpm")"
   done
@@ -461,11 +491,13 @@ cat > "$output/build-manifest.json" <<EOF
   "artifact_policy_sha256": "$(sha256 "$production/artifact-policy.json")",
   "branding_rpm": "$(basename "${branding_rpm:-MISSING}")",
   "dms_rpm": "$(basename "${dms_rpm:-MISSING}")",
+  "application_security_rpm": "$(basename "${application_security_rpm:-MISSING}")",
+  "application_security_rpm_sha256": "$(if [[ -n "$application_security_rpm" ]]; then sha256 "$application_security_rpm"; else printf '%s' MISSING; fi)",
   "dms_release_manifest_sha256": "$(sha256 "$production/dms-release.json")",
   "security_rpm_count": ${#security_rpms[@]},
   "security_build_manifest": "$(if [[ -n "$security_build_manifest" ]]; then printf '%s' artifacts/security-center-build-manifest.tsv; else printf '%s' MISSING; fi)",
   "production_dependency_rpm_count": ${#production_rpms[@]},
-  "production_inputs_complete": $([[ -n "$session_rpm" && -n "$dms_rpm" && -n "$branding_rpm" && $center_count -eq 1 && $context_count -eq 1 && ${#production_rpms[@]} -eq ${#expected_production_rpms[@]} ]] && printf true || printf false),
+  "production_inputs_complete": $([[ -n "$session_rpm" && -n "$application_security_rpm" && -n "$dms_rpm" && -n "$branding_rpm" && $center_count -eq 1 && $context_count -eq 1 && ${#production_rpms[@]} -eq ${#expected_production_rpms[@]} ]] && printf true || printf false),
   "security_rpms": [$security_rpm_json],
   "artifacts": {
     "package_inventory": "artifacts/package-inventory.txt",
@@ -478,8 +510,8 @@ cat > "$output/build-manifest.json" <<EOF
 }
 EOF
 
-if [[ -z "$branding_rpm" || -z "$dms_rpm" ]] || ((${#security_rpms[@]} != 2 || ${#production_rpms[@]} != ${#expected_production_rpms[@]})); then
-  echo "WARNING: staged inputs are incomplete; provide the GREYWARD branding and DMS RPMs, two Security Center RPMs, and every pinned external RPM for production image construction." >&2
+if [[ -z "$branding_rpm" || -z "$dms_rpm" || -z "$application_security_rpm" ]] || ((${#security_rpms[@]} != 2 || ${#production_rpms[@]} != ${#expected_production_rpms[@]})); then
+  echo "WARNING: staged inputs are incomplete; provide branding, DMS, Application Security and session RPMs, two Security Center RPMs, and every pinned external RPM for production image construction." >&2
 fi
 # cp preserves Windows checkout line endings. Normalize only the staged source
 # after provenance checks, before dependency building and payload hashing.

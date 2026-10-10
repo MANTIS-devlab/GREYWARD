@@ -3,7 +3,8 @@
 The [10 October preparation receipt](history/migrations/2026-10-10-release-preparation.md)
 records publication filtering, source candidate revisions, local policy compilation
 and the ISO storage/acceptance decision. Current build ownership remains in the
-existing image/package rows; experimental enrollment is not promoted.
+existing image/package rows; the experimental runtime is installed dormant,
+while enrollment remains unpromoted.
 
 The [source-only truthfulness receipt](history/security-center/2026-10-09-security-truthfulness.md)
 records the narrow ClamAV provider and coverage/VPN/accepted-limitation/grant
