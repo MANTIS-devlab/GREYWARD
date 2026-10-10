@@ -7,9 +7,17 @@ launcher and protected worker read the same fixed settings through one
 validator, with no static XKB layout or SELinux policy change. The pinned DMS
 candidate is now v1.6.2-14, session RPM Release 11 and Application Security RPM
 Release 36. The DMS shell assembled against the pinned upstream archives
-matches its receipt. Repository tests and Fedora RPM/image acceptance remain
-pending; no ISO was built or booted, and the change has not been deployed to
-`.149`.
+matches its receipt. On `.149`, all three RPMs were rebuilt and installed, the
+Anaconda/localed `fr/oss` selection was seeded into `/etc/skel` and the existing
+`stendev` account, and libxkbcommon compiled that keymap successfully. The
+Application Security RPM's offline Rust tests passed (47, 9, 16 and 12 tests
+across its crates; ignored/empty suites are reported separately in the build
+log); the focused desktop tests passed (11) and the real UWSM Labwc launcher
+policy test passed (1). SELinux remained Enforcing and the running DMS process
+was not restarted. Actual keyboard input after the next sign-in remains to be
+checked by the user. `tests/static.ps1` still reports five unrelated baseline
+issues (audit rules, Rygel desktop entry, zsh defaults and two Flatpak category
+entries). No ISO was built or booted.
 
 10 October keyboard check (historical): the protected Labwc worker received
 forced `pc105`/`fr` defaults. On `.149`, Application Security RPM 34 was
