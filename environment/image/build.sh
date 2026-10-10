@@ -167,6 +167,21 @@ for required in \
   test -e "$required" || { echo "Missing production input: $required" >&2; exit 1; }
 done
 
+# The ISO must install the DMS unit built from this checkout. A stale
+# greyward-session RPM silently restores the absolute Wayland socket path and
+# breaks DMS monitor configuration, even when the source unit is fixed.
+if [[ -n "$session_rpm" ]]; then
+  session_unit_path='./usr/lib/systemd/user/greyward-dms.service'
+  if ! grep -Fqx 'Environment=WAYLAND_DISPLAY=wayland-0' "$session/greyward-dms.service"; then
+    echo 'The source DMS unit must set WAYLAND_DISPLAY=wayland-0.' >&2
+    exit 1
+  fi
+  if ! rpm2cpio "$session_rpm" | cpio -i --quiet --to-stdout "$session_unit_path" | cmp -s - "$session/greyward-dms.service"; then
+    echo 'The greyward-session RPM contains a stale DMS unit; rebuild it from this checkout before ISO staging.' >&2
+    exit 1
+  fi
+fi
+
 if ((${#security_rpms[@]} > 2)); then
   echo "Too many Security Center RPMs; provide exactly one center and one context RPM." >&2
   exit 2

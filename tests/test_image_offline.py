@@ -373,5 +373,13 @@ class OfflineTests(unittest.TestCase):
         self.assertIn('rpm -Uvh --replacepkgs "$rpm_file"', source)
 
 
+    def test_iso_staging_rejects_stale_session_dms_unit(self):
+        unit = (ROOT / "environment/session/greyward-dms.service").read_text()
+        stager = (ROOT / "environment/image/build.sh").read_text()
+        self.assertEqual(unit.count("Environment=WAYLAND_DISPLAY=wayland-0"), 1)
+        self.assertIn("session_unit_path='./usr/lib/systemd/user/greyward-dms.service'", stager)
+        self.assertIn('rpm2cpio "$session_rpm" | cpio -i --quiet --to-stdout "$session_unit_path" | cmp -s - "$session/greyward-dms.service"', stager)
+        self.assertIn("rebuild it from this checkout before ISO staging", stager)
+
 if __name__ == "__main__":
     unittest.main()
