@@ -1,6 +1,6 @@
 Name: greyward-session
 Version: 0.1.0
-Release: 8%{?dist}
+Release: 9%{?dist}
 Summary: GREYWARD static desktop session policy and factory defaults
 License: GPL-3.0-only
 BuildArch: noarch

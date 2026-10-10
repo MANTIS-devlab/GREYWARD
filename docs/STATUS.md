@@ -1,5 +1,15 @@
 # GREYWARD current status
 
+10 October DMS monitor configuration: the ordinary DMS service on `.149` inherited
+an absolute `WAYLAND_DISPLAY`; DMS joined it to `XDG_RUNTIME_DIR`, making a
+double-prefixed socket path. The unit now pins `wayland-0`. After installing the
+corrected session RPM and restarting only DMS, logs confirmed WLR output-manager
+initialization and `wlr-randr` read back 2560×1440 with SELinux Enforcing. The
+next session RPM is Release 9, and ISO staging now rejects an RPM whose DMS unit
+does not byte-match source. See the
+[monitor configuration record](architecture/DMS_MONITOR_CONFIGURATION.md).
+
+
 10 October [repository consolidation and ISO preparation](history/migrations/2026-10-10-release-preparation.md):
 source candidates Center 90 / Context 82, runtime 33 and DMS 1.6.2-7 have distinct
 identities; the installed development tuple remains unchanged. Experimental runtime
