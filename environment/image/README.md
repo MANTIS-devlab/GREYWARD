@@ -32,6 +32,11 @@ consumes this staged directory and the production Kickstart, then runs the
 separate production acceptance contract; it must not call the development
 overlay.
 
+Before staging, `build.sh` checks that the source DMS unit pins
+`WAYLAND_DISPLAY=wayland-0` and byte-compares it with the unit inside the
+provided `greyward-session` RPM. A stale RPM is rejected, so a future ISO
+cannot silently restore the broken absolute Wayland socket path.
+
 The ISO composer additionally requires `--baseline FILE` captured with
 `tools/greyward-dev/capture-image-baseline.ps1` and `--base-sha256` from verified
 Fedora media. `baseline.py` applies portable preferences to staging and verifies

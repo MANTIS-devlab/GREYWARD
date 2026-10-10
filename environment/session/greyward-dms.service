@@ -16,6 +16,9 @@ RestartSec=2
 SuccessExitStatus=143 SIGTERM
 Environment=QT_QPA_PLATFORM=wayland
 Environment=QT_WAYLAND_DISABLE_WINDOWDECORATION=1
+# DMS joins WAYLAND_DISPLAY to XDG_RUNTIME_DIR; UWSM may import an absolute
+# socket path, so give this service the standard relative display name.
+Environment=WAYLAND_DISPLAY=wayland-0
 # Explicit upstream geolocation requests still use cleartext ip-api.com.
 # Startup lookup is lazy in 1.6. Route all non-local plain HTTP from the DMS
 # process tree to a closed loopback port: HTTPS remains available to reviewed
