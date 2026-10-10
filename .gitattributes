@@ -25,6 +25,7 @@ environment/production/labwc-autostart text eol=lf
 packaging/greyward-dms/*.spec text eol=lf
 packaging/greyward-session/*.spec text eol=lf
 security-center/packaging/application-security/*.spec text eol=lf
+security-center/packaging/application-security/wayland/*.xml text eol=lf
 *.png binary
 *.jpg binary
 *.jpeg binary
