@@ -1,6 +1,6 @@
 Name:           greyward-application-security-experimental
 Version:        0.1.0
-Release:        33%{?dist}
+Release:        34%{?dist}
 Summary:        Experimental GREYWARD application-security runtime and Guard CLI
 License:        GPL-3.0-only AND MIT
 Source0:        %{name}-%{version}.tar.gz
@@ -129,6 +129,9 @@ install -Dm0644 packaging/application-security/systems.mantis.greyward.Applicati
 %{_datadir}/dbus-1/system.d/systems.mantis.greyward.ApplicationSecurityDevelopment1.conf
 
 %changelog
+* Sat Oct 10 2026 MANTIS SYSTEMS - 0.1.0-34
+- Pass the installed French XKB defaults into the protected Labwc worker.
+
 * Sat Oct 10 2026 MANTIS SYSTEMS - 0.1.0-33
 - Mark portal/deputy coverage unverified instead of asserting complete isolation.
 - Include Administration visual sources; explicit assembly remains development-only.

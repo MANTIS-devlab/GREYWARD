@@ -180,6 +180,15 @@ if [[ -n "$session_rpm" ]]; then
     echo 'The greyward-session RPM contains a stale DMS unit; rebuild it from this checkout before ISO staging.' >&2
     exit 1
   fi
+  session_environment_path='./usr/share/greyward/defaults/labwc/environment'
+  if ! tr -d '\r' < "$production/labwc-environment" | grep -Fqx 'XKB_DEFAULT_LAYOUT=fr'; then
+    echo 'The production Labwc environment must select the French keyboard layout.' >&2
+    exit 1
+  fi
+  if ! rpm2cpio "$session_rpm" | cpio -i --quiet --to-stdout "$session_environment_path" | tr -d '\r' | cmp -s - <(tr -d '\r' < "$production/labwc-environment"); then
+    echo 'The greyward-session RPM contains stale Labwc keyboard defaults; rebuild it from this checkout before ISO staging.' >&2
+    exit 1
+  fi
 fi
 
 if ((${#security_rpms[@]} > 2)); then

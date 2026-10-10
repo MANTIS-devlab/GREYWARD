@@ -8,6 +8,13 @@ enrollment lifecycle, not a second application-security product contract.
 
 ## Current normal-session implementation
 
+The protected Labwc worker is launched with an explicit environment allowlist.
+It therefore sets `XKB_DEFAULT_MODEL=pc105` and `XKB_DEFAULT_LAYOUT=fr` directly,
+matching the installed GREYWARD Labwc defaults. Without these values wlroots
+falls back to US QWERTY even when `localectl` reports French AZERTY. The setting
+is part of the experimental Application Security RPM; it does not change SELinux
+policy or broaden the worker's access.
+
 ### Approved practical administration work — 9 October 2026
 
 IMPLEMENTED in Center 89 / Context 81 / experimental runtime 32 and session
