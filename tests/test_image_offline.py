@@ -381,5 +381,13 @@ class OfflineTests(unittest.TestCase):
         self.assertIn('rpm2cpio "$session_rpm" | cpio -i --quiet --to-stdout "$session_unit_path" | cmp -s - "$session/greyward-dms.service"', stager)
         self.assertIn("rebuild it from this checkout before ISO staging", stager)
 
+    def test_iso_staging_rejects_stale_session_keyboard_defaults(self):
+        stager = (ROOT / "environment/image/build.sh").read_text()
+        source = (ROOT / "environment/production/labwc-environment").read_text()
+        self.assertIn("XKB_DEFAULT_LAYOUT=fr", source)
+        self.assertIn("session_environment_path='./usr/share/greyward/defaults/labwc/environment'", stager)
+        self.assertIn('rpm2cpio "$session_rpm" | cpio -i --quiet --to-stdout "$session_environment_path"', stager)
+        self.assertIn("stale Labwc keyboard defaults", stager)
+
 if __name__ == "__main__":
     unittest.main()

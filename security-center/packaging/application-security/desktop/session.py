@@ -21,6 +21,7 @@ BASE = Path('/usr/lib/greyward/application-security/desktop')
 STATE = Path('/run/greyward-application-security')
 AUTH_CONTEXT = 'system_u:system_r:greyward_as_auth_t:s0'
 DISPLAY_CONTEXT = 'greyward_guard_u:greyward_guard_r:greyward_as_display_t:s0'
+DISPLAY_XKB_DEFAULTS = {'XKB_DEFAULT_MODEL': 'pc105', 'XKB_DEFAULT_LAYOUT': 'fr'}
 
 
 def private_file(path, maximum=65536, owner=0):
@@ -113,6 +114,9 @@ def worker(kind, uid, gid, sid):
         env.update({f'XDG_{n}_HOME': str(auth / n.lower()) for n in ['CONFIG', 'STATE', 'CACHE']})
         command = [str(BASE / 'bin/auth-python'), '-I', str(BASE / 'authentication.py')]
     elif kind == 'display':
+        # The protected compositor has a deliberately minimal environment;
+        # pass the same keyboard defaults as the installed Labwc session.
+        env.update(DISPLAY_XKB_DEFAULTS)
         env.pop('WAYLAND_DISPLAY', None)
         env['PATH'] = '/usr/bin:/usr/sbin'
         env['XDG_CONFIG_HOME'] = str(BASE / 'labwc')
