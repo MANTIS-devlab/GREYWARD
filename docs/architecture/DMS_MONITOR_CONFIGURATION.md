@@ -32,6 +32,5 @@ creation. Build the session RPM from the same checkout before staging.
 
 ## Validation
 
-Run `python3 tests/test_dms_wayland_runtime.py` and
-`python3 tests/test_image_offline.py`. A complete Fedora ISO build remains the
+Run `python3 tests/test_image_offline.py`. A complete Fedora ISO build remains the
 end-to-end release check.
