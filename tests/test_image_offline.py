@@ -196,7 +196,7 @@ class OfflineTests(unittest.TestCase):
         self.assertIn('/dev/dri/renderD*', launcher)
         self.assertIn('has_render_node=false', launcher)
         self.assertIn('export WLR_RENDERER=pixman', launcher)
-        self.assertIn('exec "$keyboard_config" exec -- /usr/bin/uwsm start -D Labwc:GREYWARD labwc', launcher)
+        self.assertIn('exec /usr/local/bin/greyward-keyboard-config exec -- /usr/bin/uwsm start -D Labwc:GREYWARD labwc', launcher)
         self.assertNotIn("/usr/libexec/greyward-dms-greeter", provision)
         self.assertNotIn('test -r "$stage/greyward-dms-greeter"', provision)
         self.assertNotIn("greetd-renderer.conf", provision)
