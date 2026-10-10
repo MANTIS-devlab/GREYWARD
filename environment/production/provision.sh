@@ -184,6 +184,9 @@ if [[ "$target_install" == 1 || "${GREYWARD_LOCAL_FINALIZE:-0}" != 1 ]]; then
   # installed and before the graphical session can start.
   # The package-owned session launcher prepares UWSM's two drop-in rungs.
   rpm -q greyward-session >/dev/null
+  # The experimental runtime is present, but its services and account
+  # enrollment remain explicit and are not activated by image provisioning.
+  rpm -q greyward-application-security-experimental >/dev/null
 
   # SSH belongs to the development overlay only. Some Fedora package groups
   # or inherited target roots can still carry openssh-server, so remove the

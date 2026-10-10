@@ -1,12 +1,26 @@
 # Production Application Security enrollment
 
-Status: normal `.149` development enrollment active, 8 October 2026. Automatic
-production installation/upgrade/rescue acceptance remains unvalidated.
+Status: normal `.149` development enrollment active. The experimental runtime
+is included as an inactive package in the internal alpha image pipeline;
+automatic production enrollment/upgrade/rescue acceptance remains unvalidated.
 Production activation remains gated by actual enforcement/admission/rollback evidence. The [delivery plan](APPLICATION_SECURITY_PLAN.md)
 records current source and scoped validation. This document owns the proposed
 enrollment lifecycle, not a second application-security product contract.
 
 ## Current normal-session implementation
+
+The protected Labwc worker is launched with an explicit environment allowlist.
+It therefore sets `XKB_DEFAULT_MODEL=pc105` and `XKB_DEFAULT_LAYOUT=fr` directly,
+matching the installed GREYWARD Labwc defaults. Without these values wlroots
+falls back to US QWERTY even when `localectl` reports French AZERTY. The setting
+is part of the experimental Application Security RPM; it does not change SELinux
+policy or broaden the worker's access.
+
+The ISO pipeline installs the runtime RPM without enrolling users or installing
+the SELinux enrollment modules. Its system services remain disabled, so package
+presence does not claim protected-session coverage on a fresh installation.
+The protected display worker uses these defaults after an explicitly enrolled
+session is prepared.
 
 ### Approved practical administration work — 9 October 2026
 

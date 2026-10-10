@@ -1,13 +1,15 @@
 # Application Security experimental package
 
-Status: real normal-session DEVELOPMENT implementation, not release acceptance. Canonical
+Status: real normal-session DEVELOPMENT implementation, not release acceptance. The
+internal alpha image includes the runtime package without enrollment or service
+activation. Canonical
 [current implementation and receipts](../../../docs/security-center/APPLICATION_SECURITY_PLAN.md);
 [production enrollment design](../../../docs/security-center/APPLICATION_SECURITY_ENROLLMENT.md)
 has approved decisions and normal `.149` enrollment using the protected native
 authentication domain and root-owned matched seat. See the
 [normal-session receipt](../../../docs/history/security-center/2026-10-08-application-security-normal-session.md)
 for real resources, tested grants, kernel outcomes and recovery. Automatic
-production installation/upgrade/rescue acceptance remains unvalidated.
+production enrollment/upgrade/rescue acceptance remains unvalidated.
 The following earlier package observations are historical:
 The initial installed development path paired Center 61 / Context 66 with the
 explicit workflow service and the real public system bus. Context 67 now adds
@@ -23,9 +25,10 @@ archived revision-13 checks do not validate this path. DMS 1.6.2-6 is retained.
 
 The package sources provide the default read broker, separate development
 broker, Guard CLI, native worker, root-owned empty 0555 immutable-entry mount
-target and pinned Wayland security-context helper. No preset, automatic D-Bus
-activation, account enrollment or current image inclusion is supplied. No
-scriptlet changes mappings/labels or starts protection.
+target and pinned Wayland security-context helper. The experimental RPM is
+installed in the internal alpha image as an inactive runtime package. It has no
+scriptlets, does not enroll accounts or install SELinux enrollment policy, and
+the production provisioner leaves its services disabled.
 
 The default `systems.mantis.greyward.ApplicationSecurity1` broker exposes
 `ListApplications`, `GetApplication`, `GetCoverage`, `ListProtectedResources`
@@ -80,8 +83,9 @@ Current new reviews/reuse additionally require the pinned nonexporting
 `openssh-key-inspection/v1` profile. Generic legacy records may be withdrawn but
 cannot activate/launch, even in development. SSH login/signing, IDE raw access
 and the restrictive temporary fallback are unavailable pending their own
-contracts. The authentication assembler and production SELinux inputs are
-source only, excluded from the experimental spec and all image inputs.
+contracts. Production SELinux enrollment modules and account-mapping inputs
+remain source only and are excluded from both the experimental RPM and image
+inputs.
 
 Development CLI forms (not an enrollment/install recipe):
 

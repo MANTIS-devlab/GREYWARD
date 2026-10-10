@@ -460,6 +460,14 @@ The output must contain exactly one current file for each of:
     greyward-security-context-*.noarch.rpm
     security-center-build-manifest.tsv
 
+Also provide one `greyward-application-security-experimental` RPM built from
+this checkout. The stager verifies its protected display worker byte-for-byte
+against the source and rejects package scriptlets. The runtime is installed
+dormant; fresh image provisioning does not enroll accounts or install its
+enrollment SELinux policy. Resolve the component cache's selected RPM into
+`$appsec_rpm` from `selected-components.json` as shown in the
+[quickstart](ISO_REBUILD_QUICKSTART.md).
+
 Do not select RPMs with a broad wildcard from several builds. Check the
 manifest's filenames, SHA-256 values, NEVRAs, and source_tree_sha256.
 
@@ -516,13 +524,16 @@ environment/production/external-rpms.txt.
       --base-sha256 "$verified_vendor_sha256" \
       --branding-rpm "$build/rpms/greyward-branding-CURRENT.noarch.rpm" \
       --dms-rpm "$build/rpms/greyward-dms-CURRENT.x86_64.rpm" \
+      --session-rpm "$build/rpms/greyward-session-CURRENT.noarch.rpm" \
+      --application-security-rpm "$appsec_rpm" \
       --security-rpm "$build/rpms/greyward-security-center-CURRENT.x86_64.rpm" \
       --security-rpm "$build/rpms/greyward-security-context-CURRENT.noarch.rpm" \
       --security-build-manifest "$build/rpms/security-center-build-manifest.tsv" \
       --production-rpm "$build/inputs/rpms/opensnitch-1.8.0-1.x86_64.rpm"
 
 The builder embeds installer.ks, GREYWARD updates.img, the production stage,
-the manifest-bound Security Center RPMs, and pinned external RPMs. The
+the manifest-bound Security Center RPMs, the source-matched inactive
+Application Security runtime RPM, and pinned external RPMs. The
 Kickstart must retain graphical, visible account creation, encrypted Btrfs
 autopartitioning, exclusion of openssh-server, and reboot --eject.
 

@@ -16,6 +16,12 @@ SESSION_SPEC.loader.exec_module(session)
 
 
 class DesktopLifetime(unittest.TestCase):
+    def test_protected_labwc_receives_the_installed_keyboard_defaults(self):
+        self.assertEqual(session.DISPLAY_XKB_DEFAULTS,
+                         {'XKB_DEFAULT_MODEL': 'pc105', 'XKB_DEFAULT_LAYOUT': 'fr'})
+        source = SOURCE.with_name('session.py').read_text()
+        self.assertIn("env.update(DISPLAY_XKB_DEFAULTS)", source)
+
     def test_admitted_scope_is_retired_even_when_logind_termination_times_out(self):
         import subprocess
         state = mock.Mock()

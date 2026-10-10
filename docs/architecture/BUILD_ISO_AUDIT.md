@@ -11,7 +11,13 @@ This snapshot predates implementation and the user's later native DMS lock-scree
 decision. See the [migration tracker](DMS_1_6_MIGRATION_PLAN.md) for current locking
 and the backlog for unfinished package/image gates.
 
-## Current pipeline, reconstructed from code
+10 October pipeline update: this dated snapshot's four-package count is no
+longer current. The active stager requires six GREYWARD RPMs, including the
+source-matched, inactive `greyward-application-security-experimental` runtime;
+use the current [ISO rebuild quickstart](ISO_REBUILD_QUICKSTART.md) and
+[creation runbook](ISO_CREATION.md) for the package list and command.
+
+## Pipeline at the 4 October assessment date
 
 GREYWARD does not currently build a live desktop ISO from `.149`. It remasters
 Fedora Everything/netinst media with Anaconda stage2 and a full offline payload.
@@ -21,7 +27,7 @@ Packer is the development factory, not the production ISO composer.
 |---|---|---|
 | 1. Component build | `environment/development/build-security-center.sh` builds center/context RPMs and a source-bound TSV manifest; `tools/build-branding-rpm.ps1` builds branding; `packaging/greyward-dms/build.sh` builds DMS RPM/source RPM | Rust/compiler work and tests; current Security builder uses persistent Cargo target. DMS uses verified source/vendor and offline distribution flags. Build tools are factory inputs. |
 | 2. External inputs | Verified F44 Everything ISO, pinned OpenSnitch RPM, DMS source/vendor, selected runtime baseline and Flatpak commits | Downloads/acquisition outside installation. Missing/current-version mismatches must fail here. No use of `latest` for DMS source. |
-| 3. Source staging | `environment/image/build.sh` accepts exactly one of each of four GREYWARD RPM types, security manifest and external RPMs; copies curated production/session/assets | Refuses existing output; verifies current security source fingerprint and selected DMS receipt; normalises only staged text. Copies build-only DMS patches/plugin inputs unnecessarily. |
+| 3. Source staging | At assessment time, `environment/image/build.sh` accepted one of each four GREYWARD RPM types, a security manifest and external RPMs; it copied curated production/session/assets | Refused existing output; verified current security source fingerprint and selected DMS receipt; normalised only staged text. This count was superseded by the 10 October pipeline update above. |
 | 4. Portable baseline | `baseline.py` binds dirty source file hashes, permitted desktop/terminal preferences, RPM floors and selected Flatpak commits | Does not copy credentials, identity or a VM filesystem. Floors are checked only for selected closure packages, so the builder does not blindly install every development RPM. |
 | 5. RPM closure | `build-offline.py` creates fresh DNF installroot/repository configuration, downloads `@core`, boot packages, policy and local RPMs, exports comps, makes local repository | Fedora/COPR metadata and keys require network. Download retries=10, timeout=120 s, parallel downloads=1. Keepcache is inside a temporary root removed afterwards. |
 | 6. Source vendors | Same helper stages pinned zsh/p10k inputs and gitstatus binary | Network at factory time; cached read-only runtime gitstatus avoids first terminal network acquisition. Vendor material is not independently package-owned. |

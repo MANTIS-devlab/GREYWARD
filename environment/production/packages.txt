@@ -59,6 +59,8 @@ clamd
 greetd
 dms-greeter
 danksearch
+# Experimental runtime is installed but remains unenrolled and inactive.
+greyward-application-security-experimental
 python3-gobject
 python3-rpm
 at-spi2-core
