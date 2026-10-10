@@ -4,12 +4,15 @@ import json
 import os
 import re
 import subprocess
+import time
 from pathlib import Path
 from .clamav import MEDIA_ROOTS
 
 APP_ID = 'systems.mantis.greyward.securitycenter'
 APP_NAME = 'GREYWARD Security Center'
 ICON = 'greyward-security-status'
+TRANSIENT_WARNING_IDS = frozenset({'secure-dns', 'firewall-unavailable'})
+WARNING_STABILITY_SECONDS = 15.0
 
 
 def scan_context(path):
@@ -24,6 +27,7 @@ class NotificationRouter:
         self.path = state_path or Path(os.environ.get('XDG_RUNTIME_DIR', '/tmp')) / 'greyward-security-notification-delivery.json'
         self.records, self.owner, self.proxy = {}, '', None
         self._closing = set()
+        self._warning_since = {}
         try:
             value = json.loads(self.path.read_text())
             self.records = value.get('records', {})
@@ -85,7 +89,29 @@ class NotificationRouter:
     def reconcile(self, items):
         import dbus
         if not self._connect(): return
-        active = {x['id']: x for x in items}
+        observed = {x['id']: x for x in items}
+        now = time.monotonic()
+        for key in set(self._warning_since) - set(observed):
+            self._warning_since.pop(key, None)
+        active = {}
+        for key, current in observed.items():
+            # Keep current conditions visible in Security Center immediately,
+            # but do not toast a short provider wobble as a user action.
+            # Critical escalation bypasses this presentation-only grace.
+            transient_warning = (key in TRANSIENT_WARNING_IDS and
+                                 current.get('severity') == 'WARNING')
+            if not transient_warning:
+                active[key] = current
+                self._warning_since.pop(key, None)
+                continue
+            record = self.records.get(key, {})
+            if record.get('notification_id'):
+                active[key] = current
+                self._warning_since.pop(key, None)
+                continue
+            since = self._warning_since.setdefault(key, now)
+            if now - since >= WARNING_STABILITY_SECONDS:
+                active[key] = current
         for key in set(self.records) - set(active):
             record = self.records.pop(key)
             notification_id = record.get('notification_id', 0)

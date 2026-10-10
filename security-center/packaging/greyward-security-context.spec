@@ -1,6 +1,6 @@
 Name:           greyward-security-context
 Version:        0.1.0
-Release:        82%{?dist}
+Release:        83%{?dist}
 Summary:        GREYWARD OpenSnitch control plane and Security Context session bus
 License:        GPL-3.0-only
 Source0:        %{name}-%{version}.tar.gz
@@ -173,6 +173,9 @@ install -Dm0644 security-context/tmpfiles.d/greyward-secure-dns.conf %{buildroot
 
 
 %changelog
+* Sun Oct 11 2026 MANTIS SYSTEMS - 0.1.0-83
+- Debounce transient DNS/firewall warning notifications until they remain stable.
+
 * Sat Oct 10 2026 MANTIS SYSTEMS - 0.1.0-82
 - Read bounded scanner metadata through the existing trusted system service.
 - Fail closed on unavailable metadata; do not infer updates from service state.

@@ -111,3 +111,34 @@ class NotificationTests(unittest.TestCase):
         self.assertEqual(self.bus.sent[-1][-1], 0)
         self.assertEqual(self.bus.sent[-1][6]['urgency'], 2)
         self.assertFalse(self.bus.sent[-1][6]['x-greyward-quiet'])
+
+    def test_transient_dns_and_firewall_warnings_do_not_toast(self):
+        for reference in ('secure-dns', 'firewall-unavailable'):
+            with self.subTest(reference=reference):
+                self.router._warning_since.clear()
+                warning = {**self.item, 'id': reference, 'kind': 'provider', 'severity': 'WARNING'}
+                with patch('greyward_security_context.notification_router.time.monotonic', side_effect=(10.0, 18.0)):
+                    self.router.reconcile([warning])
+                    self.router.reconcile([])
+                self.assertEqual(self.bus.sent, [])
+
+    def test_persistent_dns_and_firewall_warnings_toast_after_stability_window(self):
+        for reference in ('secure-dns', 'firewall-unavailable'):
+            with self.subTest(reference=reference):
+                self.router._warning_since.clear()
+                warning = {**self.item, 'id': reference, 'kind': 'provider', 'severity': 'WARNING'}
+                sent_before = len(self.bus.sent)
+                with patch('greyward_security_context.notification_router.time.monotonic',
+                           side_effect=(30.0, 44.9, 45.0)):
+                    self.router.reconcile([warning])
+                    self.router.reconcile([warning])
+                    self.assertEqual(len(self.bus.sent), sent_before)
+                    self.router.reconcile([warning])
+                self.assertEqual(len(self.bus.sent), sent_before + 1)
+
+    def test_other_and_critical_notifications_are_not_delayed(self):
+        warning = {**self.item, 'id': 'network-protection', 'severity': 'WARNING'}
+        critical = {**self.item, 'id': 'secure-dns', 'severity': 'CRITICAL'}
+        with patch('greyward_security_context.notification_router.time.monotonic', return_value=0.0):
+            self.router.reconcile([warning, critical])
+        self.assertEqual(len(self.bus.sent), 2)

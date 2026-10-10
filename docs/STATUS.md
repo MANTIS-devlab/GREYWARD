@@ -1,5 +1,17 @@
 # GREYWARD current status
 
+11 October DNS/firewall notification flapping fix: a transient provider warning
+no longer raises and clears a desktop toast from a single sample. The
+notification router now requires either `secure-dns` or `firewall-unavailable`
+to remain continuously at WARNING for 15 seconds. Security Center's live state
+remains immediate; critical notifications and other warning types are not
+delayed. The focused router tests pass. On `.149`, this exact router is active
+through a user-owned development overlay of the installed Python modules; only
+`greyward-security-context-user.service` was restarted. DMS stayed active with
+the same PID, SELinux remained Enforcing, and the RPM-owned files were left
+untouched. The ISO package contract now requires `notification_router.py`, so
+staging rejects a Context RPM that omits it. No ISO was built.
+
 11 October per-user keyboard fix (source): Anaconda's installed XKB selection
 is now seeded as the account default. DMS Settings can save a validated layout,
 variant, model and options for the signed-in account; the normal session

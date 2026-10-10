@@ -425,5 +425,16 @@ class OfflineTests(unittest.TestCase):
         self.assertIn("GREYWARD_APPSEC_SOURCE", appsec_builder)
         self.assertIn("GREYWARD_APPSEC_BUILD_PARENT", appsec_builder)
 
+    def test_iso_security_contract_requires_the_notification_router(self):
+        contract = (ROOT / "environment/production/security-center-contract.tsv").read_text()
+        spec = (ROOT / "security-center/packaging/greyward-security-context.spec").read_text()
+        stager = (ROOT / "environment/image/build.sh").read_text()
+        installed_path = "/usr/lib/greyward-security-context/greyward_security_context/notification_router.py"
+        self.assertIn(f"greyward-security-context|{installed_path}", contract)
+        self.assertIn("cp -a security-context/greyward_security_context", spec)
+        self.assertIn('rpm_query -qpl "$package_rpm"', stager)
+        self.assertIn('done < "$production/security-center-contract.tsv"', stager)
+
+
 if __name__ == "__main__":
     unittest.main()
