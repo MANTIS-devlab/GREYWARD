@@ -61,7 +61,8 @@ def main():
                   'tools/greyward-dev/build-application-security-experimental.sh'],
               'session': ['packaging/greyward-session', 'environment/session',
                           'environment/production/greyward-start-labwc',
-                          'environment/production/labwc-autostart', 'environment/production/labwc-environment'],
+                          'environment/production/labwc-autostart', 'environment/production/labwc-environment',
+                          'security-center/packaging/application-security/desktop/greyward_keyboard.py'],
               'branding': ['packaging/greyward-branding', 'branding']}
     results = json.loads((output/'selected-components.json').read_text()) if (output/'selected-components.json').exists() else {}
     for name in args.only.split(','):

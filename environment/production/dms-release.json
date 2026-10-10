@@ -1,7 +1,7 @@
 {
   "schema": "greyward.dms-release/v1",
   "status": "candidate-unpromoted",
-  "releaseId": "v1.6.2-7",
+  "releaseId": "v1.6.2-14",
   "dms": {
     "tag": "v1.6.2",
     "commit": "2db7646fe3ab47fddfdb8723f2da07d61a0d47ac",
@@ -33,7 +33,7 @@
     "fedora": 44,
     "requiredPackages": {
       "golang": "1.26.8-2.fc44.x86_64",
-      "python3": "3.14.7-1.fc44.x86_64",
+      "python3": "3.14.8-1.fc44.x86_64",
       "make": "4.4.1-12.fc44.x86_64",
       "rpm-build": "6.0.2-1.fc44.x86_64"
     }
@@ -143,11 +143,20 @@
       "preimages": {
         "Modules/Lock/Lock.qml": "82adc905f7581c8f8415fde32a23f4bacc7de2b65f789c6400f1b32176bef968"
       }
+    },
+    {
+      "file": "greyward-labwc-keyboard-settings.patch",
+      "sha256": "b82c992190efdc82377a47e7f30a511296be573f29e3a2ef67b30579295c22d7",
+      "reason": "Save validated DMS keyboard settings as per-account Labwc preferences.",
+      "preimages": {
+        "Modules/Settings/KeyboardTab.qml": "e66dcd77067a7e4efa595137778db26b79e7efa40c82c5e698710ff0c03988d1",
+        "Services/CompositorService.qml": "bbea8aff8c8a5d257153ad413b41336f1e97398b91d446acebd2f3f2572d53f0"
+      }
     }
   ],
   "shell": {
-    "sha256": "4e125c1e38bb01242994c733cc5561f03ce4e711a0d30a009d152f5c85c2dd1f",
-    "patchedFiles": 20,
+    "sha256": "b8d849ee3c35a8b7c2ec14747f07abc649cb0671cacca8658fbc19d3a6f6bcfa",
+    "patchedFiles": 22,
     "qmlFiles": 638,
     "commonQmlFiles": 74,
     "commonFiles": 111

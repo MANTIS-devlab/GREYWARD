@@ -5,11 +5,11 @@ Status: **INTERNAL ALPHA — NOT A RELEASE APPROVAL**
 The [10 October consolidation and storage assessment](history/migrations/2026-10-10-release-preparation.md)
 is **NO-GO for ISO construction** pending exact new package receipts, a separate
 adequately sized Fedora builder and the stated mandatory validation gates.
-At that assessment, the source candidates were DMS 1.6.2-7, Center 90 / Context
-82, and experimental runtime 33; that runtime was excluded from image inputs.
-The 10 October AZERTY follow-up now requires a source-matched runtime RPM in the
-alpha pipeline and installs it dormant. No ISO was built or approved; see the
-[current status](STATUS.md) for the newer scope.
+At that assessment, source candidates were DMS 1.6.2-7, Center 90 / Context 82,
+and experimental runtime 33. The 11 October keyboard change advances the DMS
+candidate to 1.6.2-14, the session RPM to Release 11 and the experimental runtime
+to Release 36; ISO construction and installed-image acceptance have not run.
+See the [current status](STATUS.md) for validation and deployment state.
 
 This document is the concise release-facing checklist for the current
 GREYWARD repository. It does not replace the architecture, domain contracts,

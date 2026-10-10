@@ -309,7 +309,7 @@ if ($productionProvision -notmatch '/usr/bin/env WLR_RENDERER=pixman' -or
     $labwcSessionLauncher -notmatch '\(0x\)\?\(15ad\|1414\)' -or
     $labwcSessionLauncher -notmatch '/dev/dri/renderD\*' -or
     $labwcSessionLauncher -notmatch 'export WLR_RENDERER=pixman' -or
-    $labwcSessionLauncher -notmatch 'exec uwsm start -D Labwc:GREYWARD labwc') {
+    $labwcSessionLauncher -notmatch 'exec /usr/local/bin/greyward-keyboard-config exec -- /usr/bin/uwsm start -D Labwc:GREYWARD labwc') {
     $errors.Add('The greeter must keep its software fallback, while the installed Labwc session must select Pixman only for unsupported virtual/no-render-node graphics and retain hardware rendering on capable bare metal.')
 }
 $greeterCheckIndex = $firstbootScript.IndexOf('if [[ "$greeter_ready" != true ]]')
@@ -340,7 +340,7 @@ $uwsmLabwcPatch = Get-Content -Raw -LiteralPath $uwsmLabwcPatchPath
 if ($uwsmLabwcPatch -notmatch 'XDG_CONFIG_HOME' -or
     $uwsmLabwcPatch -notmatch 'install -d -m\s*0755' -or
     $uwsmLabwcPatch -notmatch 'XDG_RUNTIME_DIR' -or
-    $uwsmLabwcPatch -notmatch 'exec uwsm start -D Labwc:GREYWARD labwc') {
+    $uwsmLabwcPatch -notmatch 'exec /usr/local/bin/greyward-keyboard-config exec -- /usr/bin/uwsm start -D Labwc:GREYWARD labwc') {
     $errors.Add('GREYWARD session launcher does not create the UWSM reload drop-in directory safely.')
 }
 

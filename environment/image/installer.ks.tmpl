@@ -5,7 +5,9 @@ graphical
 cdrom
 
 lang en_US.UTF-8
-keyboard --vckeymap=fr --xlayouts='fr'
+# English installer default; Anaconda's keyboard choice is carried into each
+# account's Labwc defaults during first-boot provisioning.
+keyboard --vckeymap=us --xlayouts='us'
 timezone Europe/Paris --utc
 firstboot --disable
 network --hostname=greyward

@@ -1,6 +1,6 @@
 Name: greyward-session
 Version: 0.1.0
-Release: 9%{?dist}
+Release: 11%{?dist}
 Summary: GREYWARD static desktop session policy and factory defaults
 License: GPL-3.0-only
 BuildArch: noarch
@@ -30,6 +30,8 @@ for file in greyward-dms-session-migrate greyward-dms-state-migrate greyward-dms
  install -Dm0755 environment/session/$file %{buildroot}/usr/local/libexec/$file
 done
 install -Dm0755 environment/production/greyward-start-labwc %{buildroot}/usr/local/libexec/greyward-start-labwc
+install -Dm0755 environment/session/greyward-keyboard-config %{buildroot}/usr/local/bin/greyward-keyboard-config
+install -Dm0644 security-center/packaging/application-security/desktop/greyward_keyboard.py %{buildroot}/usr/lib/greyward/greyward_keyboard.py
 for unit in greyward-dms.service; do
  install -Dm0644 environment/session/$unit %{buildroot}/usr/lib/systemd/user/$unit
 done
@@ -55,6 +57,7 @@ done
 %config(noreplace) /etc/pam.d/greyward-dms-lock
 /usr/local/bin/greyward-*
 /usr/local/libexec/greyward-*
+/usr/lib/greyward/greyward_keyboard.py
 /usr/lib/systemd/user/greyward-*.service
 /usr/lib/systemd/user/hyprpolkitagent.service.d/greyward-session-owner.conf
 /usr/lib/systemd/user/xdg-desktop-portal-gnome.service.d/greyward-session-owner.conf

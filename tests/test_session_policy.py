@@ -34,9 +34,23 @@ UWSM_WAIT_VARNAMES=''
 quirks_labwc
 ''')
                 for file in binaries.iterdir(): file.chmod(0o755)
+                keyboard_config = root/'keyboard-config'
+                keyboard_config.write_text('''#!/bin/sh
+set -e
+test "$1" = exec && test "$2" = --
+shift 2
+shift # The packaged launcher passes /usr/bin/uwsm; the fixture uses its fake.
+exec uwsm "$@"
+''')
+                keyboard_config.chmod(0o755)
+                launcher = ROOT/'environment/production/greyward-start-labwc'
+                test_launcher = root/'greyward-start-labwc'
+                test_launcher.write_text(launcher.read_text().replace(
+                    '/usr/local/bin/greyward-keyboard-config', str(keyboard_config)))
                 env = dict(os.environ, HOME=str(root/'home'), XDG_CONFIG_HOME=str(root/'config'),
-                           XDG_RUNTIME_DIR=str(runtime), PATH=str(binaries)+':'+os.environ['PATH'], UWSM_UNIT_RUNG=rung)
-                subprocess.run(['sh', str(ROOT/'environment/production/greyward-start-labwc')], env=env, check=True)
+                           XDG_RUNTIME_DIR=str(runtime), PATH=str(binaries)+':'+os.environ['PATH'],
+                           UWSM_UNIT_RUNG=rung)
+                subprocess.run(['sh', str(test_launcher)], env=env, check=True)
                 for parent in (root/'config', runtime):
                     self.assertTrue((parent/'systemd/user/wayland-wm@labwc.service.d').is_dir())
                 self.assertIn('ExecReload=kill -SIGHUP', (runtime/'systemd/user/wayland-wm@labwc.service.d/55_reload.conf').read_text())

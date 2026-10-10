@@ -506,6 +506,7 @@ if [[ "$target_install" != 1 ]]; then
       "$labwc/rc.xml" "$production_home/.config/labwc/rc.xml"
     install -o "$production_user" -g "$production_group" -m 0644 \
       "$stage/labwc-environment" "$production_home/.config/labwc/environment"
+    /usr/local/bin/greyward-keyboard-config seed "$production_user"
     install -o "$production_user" -g "$production_group" -m 0755 \
       "$stage/labwc-autostart" "$production_home/.config/labwc/autostart"
     install -o "$production_user" -g "$production_group" -m 0644 \

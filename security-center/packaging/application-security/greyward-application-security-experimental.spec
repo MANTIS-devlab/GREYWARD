@@ -1,6 +1,6 @@
 Name:           greyward-application-security-experimental
 Version:        0.1.0
-Release:        35%{?dist}
+Release:        36%{?dist}
 Summary:        Experimental GREYWARD application-security runtime and Guard CLI
 License:        GPL-3.0-only AND MIT
 Source0:        %{name}-%{version}.tar.gz
@@ -128,6 +128,9 @@ install -Dm0644 packaging/application-security/systems.mantis.greyward.Applicati
 %{_datadir}/dbus-1/system.d/systems.mantis.greyward.ApplicationSecurityDevelopment1.conf
 
 %changelog
+* Sun Oct 11 2026 MANTIS SYSTEMS - 0.1.0-36
+- Read the validated per-user keyboard layout for the protected Labwc session.
+
 * Sat Oct 10 2026 MANTIS SYSTEMS - 0.1.0-35
 - Include the dormant runtime in the alpha image package set; keep activation explicit.
 

@@ -10,11 +10,17 @@ enrollment lifecycle, not a second application-security product contract.
 ## Current normal-session implementation
 
 The protected Labwc worker is launched with an explicit environment allowlist.
-It therefore sets `XKB_DEFAULT_MODEL=pc105` and `XKB_DEFAULT_LAYOUT=fr` directly,
-matching the installed GREYWARD Labwc defaults. Without these values wlroots
-falls back to US QWERTY even when `localectl` reports French AZERTY. The setting
-is part of the experimental Application Security RPM; it does not change SELinux
-policy or broaden the worker's access.
+Its keyboard values come from the same per-account settings used by ordinary
+Labwc. Provisioning seeds the installed default from `localectl`, which carries
+the layout selected during Anaconda installation. A user can change layouts,
+variants, model or options in DMS Settings; the validated choice applies at the
+next sign-in. The normal GREYWARD session launcher reads the fixed
+`~/.config/greyward/keyboard-default.env` and optional `keyboard.env` files
+through the same validator, then passes only the XKB values through UWSM to
+Labwc and desktop applications. Before its SELinux/UID transition, the
+protected worker reads those same files with ownership, mode and no-follow
+checks. Neither path sources shell text or inherits arbitrary user settings.
+This implementation changes no SELinux policy.
 
 The ISO pipeline installs the runtime RPM without enrolling users or installing
 the SELinux enrollment modules. Its system services remain disabled, so package

@@ -37,9 +37,12 @@ Before staging, `build.sh` checks that the source DMS unit pins
 `WAYLAND_DISPLAY=wayland-0` and byte-compares it with the unit inside the
 provided `greyward-session` RPM. A stale RPM is rejected, so a future ISO
 cannot silently restore the broken absolute Wayland socket path.
-It also verifies the RPM's installed Labwc environment matches the production
-source and still selects `XKB_DEFAULT_LAYOUT=fr`, rejecting stale keyboard
-defaults before ISO construction.
+It verifies that the RPM's Labwc environment matches production source and
+contains no hard-coded XKB layout. It also byte-compares the installed keyboard
+helper and its parser with source. Provisioning seeds each account from the
+keyboard layout selected in Anaconda; the session launcher passes validated
+per-account settings through UWSM, and DMS overrides apply at the next sign-in.
+A stale session RPM is rejected before ISO construction.
 The experimental Application Security RPM is staged as an installed but
 inactive runtime. Staging verifies its protected Labwc worker matches source
 and rejects RPM scriptlets; account enrollment and policy activation remain

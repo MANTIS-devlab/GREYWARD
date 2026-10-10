@@ -196,7 +196,7 @@ class OfflineTests(unittest.TestCase):
         self.assertIn('/dev/dri/renderD*', launcher)
         self.assertIn('has_render_node=false', launcher)
         self.assertIn('export WLR_RENDERER=pixman', launcher)
-        self.assertIn('exec uwsm start -D Labwc:GREYWARD labwc', launcher)
+        self.assertIn('exec "$keyboard_config" exec -- /usr/bin/uwsm start -D Labwc:GREYWARD labwc', launcher)
         self.assertNotIn("/usr/libexec/greyward-dms-greeter", provision)
         self.assertNotIn('test -r "$stage/greyward-dms-greeter"', provision)
         self.assertNotIn("greetd-renderer.conf", provision)
@@ -380,14 +380,23 @@ class OfflineTests(unittest.TestCase):
         self.assertIn("session_unit_path='./usr/lib/systemd/user/greyward-dms.service'", stager)
         self.assertIn('rpm2cpio "$session_rpm" | cpio -i --quiet --to-stdout "$session_unit_path" | cmp -s - "$session/greyward-dms.service"', stager)
         self.assertIn("rebuild it from this checkout before ISO staging", stager)
+        self.assertIn("session_launcher_path='./usr/local/libexec/greyward-start-labwc'", stager)
+        self.assertIn('cmp -s - "$production/greyward-start-labwc"', stager)
 
-    def test_iso_staging_rejects_stale_session_keyboard_defaults(self):
+    def test_iso_staging_rejects_stale_session_keyboard_components(self):
         stager = (ROOT / "environment/image/build.sh").read_text()
         source = (ROOT / "environment/production/labwc-environment").read_text()
-        self.assertIn("XKB_DEFAULT_LAYOUT=fr", source)
+        self.assertNotRegex(source, r"(?m)^XKB_DEFAULT_(MODEL|LAYOUT|VARIANT|OPTIONS)=")
         self.assertIn("session_environment_path='./usr/share/greyward/defaults/labwc/environment'", stager)
         self.assertIn('rpm2cpio "$session_rpm" | cpio -i --quiet --to-stdout "$session_environment_path"', stager)
-        self.assertIn("stale Labwc keyboard defaults", stager)
+        self.assertIn("per-user keyboard settings", stager)
+        self.assertIn("session_keyboard_helper_path='./usr/local/bin/greyward-keyboard-config'", stager)
+        self.assertIn("session_keyboard_module_path='./usr/lib/greyward/greyward_keyboard.py'", stager)
+        self.assertIn('"$session/greyward-keyboard-config"', stager)
+        self.assertIn('greyward_keyboard.py"; then', stager)
+        self.assertIn("appsec_keyboard_module_path='./usr/share/greyward-application-security/desktop/greyward_keyboard.py'", stager)
+        launcher = (ROOT / "environment/production/greyward-start-labwc").read_text()
+        self.assertIn('exec /usr/local/bin/greyward-keyboard-config exec -- /usr/bin/uwsm start', launcher)
 
     def test_application_security_rpm_is_source_bound_and_dormant_in_the_iso(self):
         stager = (ROOT / "environment/image/build.sh").read_text()

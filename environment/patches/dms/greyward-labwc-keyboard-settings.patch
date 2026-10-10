@@ -1,0 +1,64 @@
+--- a/quickshell/dms/Modules/Settings/KeyboardTab.qml
++++ b/quickshell/dms/Modules/Settings/KeyboardTab.qml
+@@ -55,6 +55,15 @@ Item {
+                         wrapMode: Text.WordWrap
+                     }
+ 
++                    StyledText {
++                        width: parent.width
++                        visible: CompositorService.isLabwc
++                        text: I18n.tr("GREYWARD saves this layout for your account and applies it at your next sign-in. Examples: us (US QWERTY), fr (French AZERTY), de (German QWERTZ). Leave empty to use the layout selected during installation.")
++                        font.pixelSize: Theme.fontSizeSmall
++                        color: Theme.surfaceVariantText
++                        wrapMode: Text.WordWrap
++                    }
++
+                     DankTextField {
+                         width: parent.width
+                         text: SettingsData.keyboardLayouts
+@@ -178,6 +187,7 @@ Item {
+                 Column {
+                     width: parent?.width ?? 0
+                     spacing: Theme.spacingS
++                    visible: !CompositorService.isLabwc
+ 
+                     StyledText {
+                         width: parent.width
+--- a/quickshell/dms/Services/CompositorService.qml
++++ b/quickshell/dms/Services/CompositorService.qml
+@@ -1239,6 +1239,8 @@ Singleton {
+         function onCompositorInputRefreshNeeded() {
+             if (root.isNiri && typeof NiriService !== "undefined")
+                 NiriService.generateNiriInputConfig();
++            if (root.isLabwc)
++                labwcKeyboardApplyTimer.restart();
+         }
+ 
+         function onCompositorCursorRefreshNeeded() {
+@@ -1260,4 +1262,26 @@ Singleton {
+             root.applyDmsWindowFloatingRule();
+         }
+     }
++
++    Timer {
++        id: labwcKeyboardApplyTimer
++        interval: 1000
++        repeat: false
++        onTriggered: {
++            if (!root.isLabwc)
++                return;
++            Proc.runCommand("greyward-labwc-keyboard", [
++                "/usr/local/bin/greyward-keyboard-config", "apply",
++                SettingsData.keyboardLayouts,
++                SettingsData.keyboardVariants,
++                SettingsData.keyboardModel,
++                SettingsData.keyboardOptions
++            ], (output, exitCode) => {
++                if (exitCode !== 0) {
++                    root.log.warn("Failed to save the Labwc keyboard preference:", output);
++                    ToastService.showError(I18n.tr("Keyboard settings"), I18n.tr("Could not save the keyboard layout preference."));
++                }
++            }, 0, 5000);
++        }
++    }
+ }

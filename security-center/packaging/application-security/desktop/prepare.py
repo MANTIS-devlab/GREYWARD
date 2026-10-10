@@ -65,7 +65,7 @@ def prepare(source, labwc, account_name, materialize_runtime=True):
             raise RuntimeError('Root-private source snapshot required')
     BASE.mkdir(mode=0o755, parents=True)
     (BASE / 'bin').mkdir(mode=0o755)
-    for component in ['session.py', 'verify.py', 'authentication.py', 'materialize.py']:
+    for component in ['session.py', 'verify.py', 'authentication.py', 'materialize.py', 'greyward_keyboard.py']:
         shutil.copyfile(source / component, BASE / component)
         (BASE / component).chmod(0o444)
     for original, target, label in [

@@ -1,9 +1,6 @@
 XDG_CURRENT_DESKTOP=Labwc:GREYWARD
 XDG_SESSION_DESKTOP=labwc
 XDG_DATA_DIRS=/usr/local/share:/var/lib/flatpak/exports/share:/usr/share
-# Standard French AZERTY keyboard for the Labwc/wlroots session.
-XKB_DEFAULT_MODEL=pc105
-XKB_DEFAULT_LAYOUT=fr
 GDK_BACKEND=wayland,x11
 QT_QPA_PLATFORM=wayland;xcb
 # The GREYWARD VM exposes a software-only virtual GPU. Labwc otherwise refuses

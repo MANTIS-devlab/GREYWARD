@@ -1,23 +1,29 @@
 # GREYWARD current status
 
-10 October AZERTY follow-up: the protected Labwc worker now receives the
-canonical `pc105`/`fr` XKB defaults. On `.149`, Application Security RPM 34 is
+11 October per-user keyboard fix (source): Anaconda's installed XKB selection
+is now seeded as the account default. DMS Settings can save a validated layout,
+variant, model and options for the signed-in account; the normal session
+launcher and protected worker read the same fixed settings through one
+validator, with no static XKB layout or SELinux policy change. The pinned DMS
+candidate is now v1.6.2-14, session RPM Release 11 and Application Security RPM
+Release 36. The DMS shell assembled against the pinned upstream archives
+matches its receipt. Repository tests and Fedora RPM/image acceptance remain
+pending; no ISO was built or booted, and the change has not been deployed to
+`.149`.
+
+10 October keyboard check (historical): the protected Labwc worker received
+forced `pc105`/`fr` defaults. On `.149`, Application Security RPM 34 was
 installed and the root-owned protected generation was updated; all 1,011
-manifested files validate, and libxkbcommon maps physical `AD01`/`AD02` to
-`a`/`z`. The user must sign in and check actual typing; no desktop session was
-started by this work. The default component builder now builds the
-source-matched Application Security RPM; ISO staging installs it as a dormant
-package and rejects scriptlets. No ISO was built or booted. The prior
-10 October preparation receipt below describes
-the earlier package-exclusion state.
+manifested files validated, and libxkbcommon mapped physical `AD01`/`AD02` to
+`a`/`z`. That test preceded the per-user implementation above; it did not
+verify the Anaconda-to-account flow or actual next-login typing.
 
 10 October DMS monitor configuration: the ordinary DMS service on `.149` inherited
 an absolute `WAYLAND_DISPLAY`; DMS joined it to `XDG_RUNTIME_DIR`, making a
 double-prefixed socket path. The unit now pins `wayland-0`. After installing the
 corrected session RPM and restarting only DMS, logs confirmed WLR output-manager
-initialization and `wlr-randr` read back 2560×1440 with SELinux Enforcing. The
-next session RPM is Release 9, and ISO staging now rejects an RPM whose DMS unit
-does not byte-match source. See the
+initialization and `wlr-randr` read back 2560×1440 with SELinux Enforcing. At
+that time, the next session RPM was Release 9. See the
 [monitor configuration record](architecture/DMS_MONITOR_CONFIGURATION.md).
 
 

@@ -49,4 +49,6 @@ fi
 # launcher; reinstalling UWSM cannot remove this fix. No upstream file edits.
 install -d -m 0755 "${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user/wayland-wm@labwc.service.d"
 install -d -m 0755 "${XDG_RUNTIME_DIR:?Missing user runtime directory}/systemd/user/wayland-wm@labwc.service.d"
-exec uwsm start -D Labwc:GREYWARD labwc
+# Read only GREYWARD's validated per-user keyboard files and pass those values
+# through UWSM into Labwc and its normal desktop applications.
+exec /usr/local/bin/greyward-keyboard-config exec -- /usr/bin/uwsm start -D Labwc:GREYWARD labwc

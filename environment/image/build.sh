@@ -157,6 +157,7 @@ for required in \
   "$patches/dms/apps-dock-spacing.patch" \
   "$patches/dms/greyward-flatpak-icon-resolution.patch" \
   "$patches/dms/greyward-tray-icon-fallback.patch" \
+  "$patches/dms/greyward-labwc-keyboard-settings.patch" \
   "$session/dankmaterialshell/settings.json" \
   "$session/dankmaterialshell/plugin_settings.json" \
   "$session/dankmaterialshell/plugins/greywardPublicIp/plugin.json" \
@@ -188,13 +189,32 @@ if [[ -n "$session_rpm" ]]; then
     echo 'The greyward-session RPM contains a stale DMS unit; rebuild it from this checkout before ISO staging.' >&2
     exit 1
   fi
+  session_launcher_path='./usr/local/libexec/greyward-start-labwc'
+  if ! rpm2cpio "$session_rpm" | cpio -i --quiet --to-stdout "$session_launcher_path" | cmp -s - "$production/greyward-start-labwc"; then
+    echo 'The greyward-session RPM contains a stale Labwc launcher; rebuild it from this checkout before ISO staging.' >&2
+    exit 1
+  fi
   session_environment_path='./usr/share/greyward/defaults/labwc/environment'
-  if ! tr -d '\r' < "$production/labwc-environment" | grep -Fqx 'XKB_DEFAULT_LAYOUT=fr'; then
-    echo 'The production Labwc environment must select the French keyboard layout.' >&2
+  if tr -d '\r' < "$production/labwc-environment" | grep -Eq '^XKB_DEFAULT_(MODEL|LAYOUT|VARIANT|OPTIONS)='; then
+    echo 'The production Labwc environment must not override per-user keyboard settings.' >&2
     exit 1
   fi
   if ! rpm2cpio "$session_rpm" | cpio -i --quiet --to-stdout "$session_environment_path" | tr -d '\r' | cmp -s - <(tr -d '\r' < "$production/labwc-environment"); then
-    echo 'The greyward-session RPM contains stale Labwc keyboard defaults; rebuild it from this checkout before ISO staging.' >&2
+    echo 'The greyward-session RPM contains a stale Labwc environment; rebuild it from this checkout before ISO staging.' >&2
+    exit 1
+  fi
+  if ! rpm -qpl "$session_rpm" | grep -Fqx '/usr/local/bin/greyward-keyboard-config' || ! rpm -qpl "$session_rpm" | grep -Fqx '/usr/lib/greyward/greyward_keyboard.py'; then
+    echo 'The greyward-session RPM is missing the per-user keyboard settings helper; rebuild it from this checkout.' >&2
+    exit 1
+  fi
+  session_keyboard_helper_path='./usr/local/bin/greyward-keyboard-config'
+  session_keyboard_module_path='./usr/lib/greyward/greyward_keyboard.py'
+  if ! rpm2cpio "$session_rpm" | cpio -i --quiet --to-stdout "$session_keyboard_helper_path" | cmp -s - "$session/greyward-keyboard-config"; then
+    echo 'The greyward-session RPM contains a stale per-user keyboard helper; rebuild it from this checkout before ISO staging.' >&2
+    exit 1
+  fi
+  if ! rpm2cpio "$session_rpm" | cpio -i --quiet --to-stdout "$session_keyboard_module_path" | cmp -s - "$repo_root/security-center/packaging/application-security/desktop/greyward_keyboard.py"; then
+    echo 'The greyward-session RPM contains a stale keyboard parser; rebuild it from this checkout before ISO staging.' >&2
     exit 1
   fi
 fi
@@ -206,6 +226,11 @@ if [[ -n "$application_security_rpm" ]]; then
   appsec_session_path='./usr/share/greyward-application-security/desktop/session.py'
   if ! rpm2cpio "$application_security_rpm" | cpio -i --quiet --to-stdout "$appsec_session_path" | cmp -s - "$repo_root/security-center/packaging/application-security/desktop/session.py"; then
     echo 'The Application Security RPM contains a stale protected session worker; rebuild it from this checkout before ISO staging.' >&2
+    exit 1
+  fi
+  appsec_keyboard_module_path='./usr/share/greyward-application-security/desktop/greyward_keyboard.py'
+  if ! rpm2cpio "$application_security_rpm" | cpio -i --quiet --to-stdout "$appsec_keyboard_module_path" | cmp -s - "$repo_root/security-center/packaging/application-security/desktop/greyward_keyboard.py"; then
+    echo 'The Application Security RPM contains a stale protected keyboard reader; rebuild it from this checkout before ISO staging.' >&2
     exit 1
   fi
   if [[ -n "$(rpm_query -qp --scripts "$application_security_rpm")" ]]; then
