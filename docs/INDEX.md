@@ -72,6 +72,9 @@ The active [DMS 1.6.2 migration tracker](architecture/DMS_1_6_MIGRATION_PLAN.md)
 defines candidate packaging, exact patch assembly and acceptance gates. It is not a
 release-validation record.
 
+The [DMS monitor configuration record](architecture/DMS_MONITOR_CONFIGURATION.md)
+explains the Wayland socket-path fix and the ISO stager's session-RPM freshness check.
+
 The 4 October [final architecture audit](architecture/FINAL_ARCHITECTURE_AUDIT.md)
 and [build/ISO audit](architecture/BUILD_ISO_AUDIT.md) assess the actual local
 candidate and development guest. Their [pre-release backlog](plans/PRE_RELEASE_IMPROVEMENTS.md)
