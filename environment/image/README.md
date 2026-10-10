@@ -17,6 +17,7 @@ environment/image/build.sh --output output/greyward-production-inputs \
   --branding-rpm output/branding-current/greyward-branding-*.rpm \
   --dms-rpm path/to/selected-greyward-dms.rpm \
   --session-rpm path/to/selected-greyward-session.rpm \
+  --application-security-rpm path/to/greyward-application-security-experimental-*.rpm \
   --security-rpm path/to/greyward-security-center-*.rpm \
   --security-rpm path/to/greyward-security-context-*.rpm \
   --security-build-manifest path/to/security-center-build-manifest.tsv \
@@ -39,6 +40,10 @@ cannot silently restore the broken absolute Wayland socket path.
 It also verifies the RPM's installed Labwc environment matches the production
 source and still selects `XKB_DEFAULT_LAYOUT=fr`, rejecting stale keyboard
 defaults before ISO construction.
+The experimental Application Security RPM is staged as an installed but
+inactive runtime. Staging verifies its protected Labwc worker matches source
+and rejects RPM scriptlets; account enrollment and policy activation remain
+explicit.
 
 The ISO composer additionally requires `--baseline FILE` captured with
 `tools/greyward-dev/capture-image-baseline.ps1` and `--base-sha256` from verified
@@ -120,6 +125,7 @@ environment/image/build-iso.sh \
   --branding-rpm output/branding-current/greyward-branding-*.rpm \
   --dms-rpm path/to/selected-greyward-dms.rpm \
   --session-rpm path/to/selected-greyward-session.rpm \
+  --application-security-rpm path/to/greyward-application-security-experimental-*.rpm \
   --security-rpm output/security-center-current/greyward-security-center-*.rpm \
   --security-rpm output/security-center-current/greyward-security-context-*.rpm \
   --security-build-manifest output/security-center-current/security-center-build-manifest.tsv \

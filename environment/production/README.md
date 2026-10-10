@@ -1,6 +1,9 @@
 # GREYWARD production system definition
 
-Application Security enrollment is **PLANNED, not installed behavior**.
+Application Security enrollment is **PLANNED, not installed behavior**. The
+internal alpha image installs its experimental runtime package but keeps its
+services disabled; no account enrollment or SELinux enrollment policy is
+installed by image provisioning.
 The [source audit](../../docs/security-center/APPLICATION_SECURITY_PLAN.md)
 distinguishes the isolated development provider from the public read-only
 broker. The [enrollment design](../../docs/security-center/APPLICATION_SECURITY_ENROLLMENT.md)
@@ -20,10 +23,9 @@ GREYWARD production system + environment/development overlay = GREYWARD-DEV
 ```
 
 `provision.sh` installs the runtime system and the GREYWARD-owned components
-that the current functional VM uses. The image/factory that calls it supplies
-the two Security Center RPMs in `rpms/`; the repeatable component-build step is
-kept in `environment/development/build-security-center.sh` because its compiler
-and packaging tools are factory-only.
+that the current functional VM uses. The image/factory supplies the two
+Security Center RPMs and the inactive experimental Application Security RPM
+in `rpms/`; the repeatable component-build steps remain factory-only.
 
 DMS 1.6.2 is an unpromoted candidate. The image supplies one local `greyward-dms`
 RPM built from the checked manifest by `packaging/greyward-dms/`; no runtime archive

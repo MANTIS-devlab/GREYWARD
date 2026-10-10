@@ -22,7 +22,9 @@
     "imageInputStager": "../image/build.sh",
     "dmsReleaseManifest": "dms-release.json",
     "dmsRuntimePackage": "greyward-dms",
-    "sessionPolicyPackage": "greyward-session"
+    "sessionPolicyPackage": "greyward-session",
+    "applicationSecurityRuntimePackage": "greyward-application-security-experimental",
+    "applicationSecurityRuntimeActivation": "explicit"
   },
   "notProduction": [
     "environment/development",

@@ -1,6 +1,6 @@
 Name:           greyward-application-security-experimental
 Version:        0.1.0
-Release:        34%{?dist}
+Release:        35%{?dist}
 Summary:        Experimental GREYWARD application-security runtime and Guard CLI
 License:        GPL-3.0-only AND MIT
 Source0:        %{name}-%{version}.tar.gz
@@ -32,13 +32,12 @@ Requires:       python3-setools
 Requires:       greyward-session
 
 %description
-Internal development broker with authenticated owner-scoped inventory reads.
-Coverage reads actual enrollment prerequisites; this package does not establish whole-session protection,
-automatically install SELinux enrollment or activate grants. A separate explicitly
-started provider supplies restrictive managed isolation for normal local users;
-resource/grant changes still require the confined enrolled-owner boundary.
-There is no preset or automatic activation, and
-this package is not part of the production image inputs.
+Experimental application-security runtime with authenticated owner-scoped
+inventory reads. It is installed in the internal alpha image as an inactive
+runtime package. Installation does not establish whole-session protection,
+install SELinux enrollment, enroll accounts, or activate services and grants.
+Explicit enrollment and validated production lifecycle support remain separate
+requirements.
 
 %prep
 %autosetup
@@ -129,6 +128,9 @@ install -Dm0644 packaging/application-security/systems.mantis.greyward.Applicati
 %{_datadir}/dbus-1/system.d/systems.mantis.greyward.ApplicationSecurityDevelopment1.conf
 
 %changelog
+* Sat Oct 10 2026 MANTIS SYSTEMS - 0.1.0-35
+- Include the dormant runtime in the alpha image package set; keep activation explicit.
+
 * Sat Oct 10 2026 MANTIS SYSTEMS - 0.1.0-34
 - Pass the installed French XKB defaults into the protected Labwc worker.
 

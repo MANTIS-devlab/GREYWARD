@@ -24,6 +24,8 @@ The bundle must contain exactly these reviewed inputs:
   rpms/greyward-security-center-*.rpm
   rpms/greyward-security-context-*.rpm
   rpms/security-center-build-manifest.tsv
+  components/selected-components.json # receipt for the source-matched AppSec RPM
+  components/application-security/<input-sha256>/rpms/greyward-application-security-experimental-*.rpm
   inputs/rpms/opensnitch-1.8.0-1.x86_64.rpm
   output/                         # immutable candidates and sidecars
 ```
@@ -32,6 +34,27 @@ Never use a glob that can select two versions. Resolve each path, then record
 its SHA-256. The baseline, Security Center manifest, RPMs and Fedora ISO are
 inputs, not disposable build output. Keep them beside the candidate until the
 candidate has passed the media-removed reboot.
+
+The default component build produces the Application Security RPM under
+`components/`; use only the RPM named by `selected-components.json`, since the
+cache may retain older source revisions.
+
+## Build component inputs
+
+Run the reviewed component builder before the ISO composer. The default set
+includes the source-matched Application Security runtime and its guarded RPM
+builder:
+
+```bash
+python3 /srv/greyward-build/repo/environment/image/build-components.py \
+  --output /srv/greyward-build/components \
+  --dms-inputs /srv/greyward-build/inputs/dms
+```
+
+Receipts bind source, toolchain, RPM identity and hashes. A repeated run reuses
+verified RPM bytes; changed inputs require a new affected package release. The
+cache may retain prior source revisions, so use the Application Security RPM
+named by `components/selected-components.json` in the ISO command below.
 
 ## One-pass build
 
@@ -73,6 +96,12 @@ test "$(find "$build/rpms" -maxdepth 1 -name 'greyward-dms-*.rpm' -type f | wc -
 test "$(find "$build/rpms" -maxdepth 1 -name 'greyward-session-*.rpm' -type f | wc -l)" -eq 1
 test "$(find "$build/rpms" -maxdepth 1 -name 'greyward-security-center-*.rpm' -type f | wc -l)" -eq 1
 test "$(find "$build/rpms" -maxdepth 1 -name 'greyward-security-context-*.rpm' -type f | wc -l)" -eq 1
+component_manifest="$build/components/selected-components.json"
+appsec_key=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["application-security"]["input_sha256"])' "$component_manifest")
+appsec_relative=$(python3 -c 'import json,sys; p=json.load(open(sys.argv[1]))["application-security"]["packages"]; assert len(p)==1; print(next(iter(p)))' "$component_manifest")
+case "$appsec_relative" in rpms/greyward-application-security-experimental-*.rpm) ;; *) echo 'Invalid Application Security component receipt' >&2; exit 1 ;; esac
+appsec_rpm="$build/components/application-security/$appsec_key/$appsec_relative"
+test -s "$appsec_rpm"
 test ! -e "$output"
 df -Pk "$build" "$repo" | awk 'NR > 1 && $4 < 41943040 { exit 1 }'
 
@@ -85,6 +114,7 @@ bash "$repo/environment/image/build-iso.sh" \
   --branding-rpm "$(find "$build/rpms" -maxdepth 1 -name 'greyward-branding-*.rpm' -type f -print -quit)" \
   --dms-rpm "$(find "$build/rpms" -maxdepth 1 -name 'greyward-dms-*.rpm' -type f -print -quit)" \
   --session-rpm "$(find "$build/rpms" -maxdepth 1 -name 'greyward-session-*.rpm' -type f -print -quit)" \
+  --application-security-rpm "$appsec_rpm" \
   --security-rpm "$(find "$build/rpms" -maxdepth 1 -name 'greyward-security-center-*.rpm' -type f -print -quit)" \
   --security-rpm "$(find "$build/rpms" -maxdepth 1 -name 'greyward-security-context-*.rpm' -type f -print -quit)" \
   --security-build-manifest "$build/rpms/security-center-build-manifest.tsv" \
@@ -136,11 +166,8 @@ DNF `--store` bypasses ordinary `keepcache` retention. The factory therefore
 retains selected objects at paths reported by libdnf5 after the fresh solve;
 the next solve checks current metadata and uses DNF checksum validation.
 
-Build the reviewed component set with `environment/image/build-components.py
---output <component-cache> --dms-inputs <verified-archives>`. Receipts bind source,
-toolchain, RPM identity and hashes. A repeated run reuses verified RPM bytes;
-changed inputs require a new affected package release. Never mix intermediate
-Security Center packages with a manifest from another build.
+Never mix intermediate Security Center packages with a manifest from another
+build.
 
 ## Fast update loop
 

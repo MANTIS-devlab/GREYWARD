@@ -26,7 +26,11 @@ if "$require_marker"; then
   test -f /etc/greyward-production-complete || fail 'production completion marker is missing'
 fi
 checkpoint 'required production packages and login boundary'
-rpm -q dms-greeter greyward-session greyward-security-center greyward-security-context audit audit-rules policycoreutils wlopm net-tools >/dev/null || fail 'required production package is missing'
+rpm -q dms-greeter greyward-session greyward-security-center greyward-security-context greyward-application-security-experimental audit audit-rules policycoreutils wlopm net-tools >/dev/null || fail 'required production package is missing'
+for appsec_service in greyward-application-security.service greyward-application-security-workflows.service greyward-flatpak-metadata.service greyward-flatpak-metadata.path; do
+  systemctl is-active --quiet "$appsec_service" && fail "experimental Application Security service must remain inactive: $appsec_service"
+  is_enabled "$appsec_service" && fail "experimental Application Security service must remain disabled: $appsec_service"
+done
 test -x /usr/bin/dms-greeter || fail 'DMS Greeter is not installed'
 /usr/libexec/greyward-dms-verify >/dev/null || fail 'Selected DMS runtime or tested tuple is invalid'
 test "$(rpm -qf --qf '%{NAME}' /usr/bin/dms)" = greyward-dms || fail 'DMS backend is not package-owned'
