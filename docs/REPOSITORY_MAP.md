@@ -128,6 +128,10 @@ public-icon migration with alias/protected-label tests in
 the trusted guest kernel check and both repository gates. Normal-seat activation
 passes; full desktop rollback and authenticated production rescue remain pending.
 
+The Packer file, development bootstrap Kickstarts, and account-provisioning
+overlay remain tracked locally but are omitted from public exports by
+`tools/export-public-repository.ps1`.
+
 Generated directories (`build/`, `cache/`, `output/`, `environment/packer_cache/`,
 `tmp/`, `.greyward-iso-stage.*`, and `.greyward-iso-tree.*`) are local artifacts;
 `.secrets/` contains credentials. None is source of truth. `.vmtest/` is
