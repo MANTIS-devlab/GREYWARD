@@ -1,6 +1,6 @@
 Name:           greyward-application-security-experimental
 Version:        0.1.0
-Release:        41%{?dist}
+Release:        42%{?dist}
 Summary:        Experimental GREYWARD application-security runtime and Guard CLI
 License:        GPL-3.0-only AND MIT
 Source0:        %{name}-%{version}.tar.gz
@@ -131,6 +131,9 @@ install -Dm0644 packaging/application-security/systems.mantis.greyward.Applicati
 %{_datadir}/dbus-1/system.d/systems.mantis.greyward.ApplicationSecurityDevelopment1.conf
 
 %changelog
+* Sun Oct 11 2026 MANTIS SYSTEMS - 0.1.0-42
+- Rebuild from the integrated post-R6 application-security sources.
+
 * Sun Oct 11 2026 MANTIS SYSTEMS - 0.1.0-41
 - Start a minimal trusted splash before initializing the full authentication shell.
 
