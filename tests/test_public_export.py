@@ -62,6 +62,14 @@ class PublicationBoundaryTests(unittest.TestCase):
         result = EXPORT.sanitized_text(text, 'docs/STATUS.md', {'docs/history/security-center/internal-report.md'})
         self.assertEqual(result, 'report (private development evidence)')
 
+    def test_public_readme_does_not_embed_sensitive_desktop_captures(self):
+        text = (ROOT / 'README.md').read_text()
+        result = EXPORT.sanitized_text(text, 'README.md', set())
+        for name in ('greyward-desktop-browser.png', 'greyward-desktop-threat-notification.png',
+                     'greyward-desktop-overview.gif'):
+            self.assertNotIn(name, result)
+        self.assertIn('greyward-desktop-security-center.png', result)
+
     def test_destination_cannot_overwrite_private_source_or_existing_work(self):
         with tempfile.TemporaryDirectory() as temporary:
             source = Path(temporary)/'private'
