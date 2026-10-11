@@ -63,7 +63,7 @@ class PublicationBoundaryTests(unittest.TestCase):
         self.assertEqual(result, 'report (private development evidence)')
 
     def test_public_readme_does_not_embed_sensitive_desktop_captures(self):
-        text = (ROOT / 'README.md').read_text()
+        text = (ROOT / 'README.md').read_text(encoding='utf-8')
         result = EXPORT.sanitized_text(text, 'README.md', set())
         for name in ('greyward-desktop-browser.png', 'greyward-desktop-threat-notification.png',
                      'greyward-desktop-overview.gif'):

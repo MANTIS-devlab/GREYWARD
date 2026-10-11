@@ -48,7 +48,7 @@
 </p>
 
 <p align="center">
-  <img src="docs/assets/screenshots/greyward-desktop-overview.gif" alt="GREYWARD desktop, Security Center and security notifications" width="960">
+  <img src="docs/assets/screenshots/greyward-desktop-security-center.png" alt="GREYWARD desktop, Security Center and security notifications" width="960">
 </p>
 
 ---
@@ -259,9 +259,7 @@ Security Center is the interface through which GREYWARD makes security posture, 
 | **Devices** | USBGuard policy, device history and selected camera/microphone observations. |
 | **Recovery** | Btrfs recovery points and Restic-backed personal backup workflows. |
 
-<p align="center">
-  <img src="docs/assets/screenshots/greyward-desktop-threat-notification.png" alt="GREYWARD security notification during an ordinary desktop workflow" width="920">
-</p>
+
 
 <p align="center"><sub>Security information should stay visible without taking over the desktop.</sub></p>
 
@@ -321,9 +319,7 @@ GREYWARD is meant to feel like GREYWARD.
 
 Its shell, settings, Security Center, notifications and interaction patterns share a deliberate visual direction. The current language is dark and restrained: graphite, silver accents, controlled transparency and relatively low visual noise.
 
-| Desktop overview | Everyday application use |
-| :---: | :---: |
-| <img src="docs/assets/screenshots/greyward-desktop-security-center.png" alt="GREYWARD desktop overview" width="460"> | <img src="docs/assets/screenshots/greyward-desktop-browser.png" alt="Brave running in GREYWARD" width="460"> |
+![GREYWARD Security Center](docs/assets/screenshots/greyward-desktop-security-center.png)
 
 | Layer | Current implementation |
 | --- | --- |
