@@ -45,6 +45,8 @@ if ($LASTEXITCODE -ne 0) { throw 'Public snapshot failed privacy/completeness ch
 if ($LASTEXITCODE -ne 0) { throw 'Unable to initialize the clean public repository.' }
 & git -C $destinationPath config core.autocrlf false
 if ($LASTEXITCODE -ne 0) { throw 'Unable to configure byte-preserving line endings.' }
+& git -C $destinationPath config core.eol lf
+if ($LASTEXITCODE -ne 0) { throw 'Unable to configure portable Linux source line endings.' }
 & git -C $destinationPath add --all
 if ($LASTEXITCODE -ne 0) { throw 'Unable to stage the public repository.' }
 

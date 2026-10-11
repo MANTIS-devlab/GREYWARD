@@ -9,6 +9,7 @@ The authoritative public-source boundary is `tools/publication-policy.json`.
 private Git history or deletion of private originals. Templates provide public
 counterparts to internal build-host and access procedures. Generic package,
 installer, runtime, build and security-test sources remain public.
+Export requires Gitleaks and refuses the candidate when its secret scan fails.
 
 For updates, start from current public `main`, compare the snapshot against the
 public checkout, preserve public-only release records, and remove only explicitly
