@@ -490,7 +490,7 @@ mod tests {
                 .unwrap(),
             4
         );
-        assert!(store.desired_policy().unwrap().grants.is_empty());
+        assert_eq!(store.desired_policy().unwrap().grants.len(), 0);
     }
 
     #[test]
@@ -543,7 +543,7 @@ mod tests {
             Err(StoreError::StaleRevision)
         ));
         assert_eq!(store.desired_policy().unwrap().revision, 2);
-        assert!(store.desired_policy().unwrap().grants.is_empty());
+        assert_eq!(store.desired_policy().unwrap().grants.len(), 0);
     }
 
     #[test]
@@ -668,7 +668,7 @@ mod tests {
         );
         let state = store.desired_policy().unwrap();
         assert_eq!(state.revision, 1);
-        assert!(state.resources.is_empty());
+        assert_eq!(state.resources.len(), 0);
     }
 
     #[test]

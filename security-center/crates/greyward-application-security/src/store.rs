@@ -498,7 +498,7 @@ mod tests {
             PolicyStore::open_private(&path),
             Err(StoreError::Corrupt)
         ));
-        assert!(fs::read(&path).unwrap().is_empty());
+        assert_eq!(fs::read(&path).unwrap().len(), 0);
         fs::remove_dir_all(&directory).unwrap();
     }
 
@@ -558,7 +558,7 @@ mod tests {
         let state = reopened.desired_policy().unwrap();
         assert_eq!(state.revision, 2);
         assert_eq!(state.resources, vec![record]);
-        assert!(state.grants.is_empty());
+        assert_eq!(state.grants.len(), 0);
         reopened
             .commit_intent_change(
                 1002,
@@ -569,6 +569,6 @@ mod tests {
         drop(reopened);
         let final_store = PolicyStore::open_private(path).unwrap();
         assert_eq!(final_store.desired_policy().unwrap().revision, 3);
-        assert!(final_store.desired_policy().unwrap().resources.is_empty());
+        assert_eq!(final_store.desired_policy().unwrap().resources.len(), 0);
     }
 }
