@@ -129,13 +129,24 @@ impl ProviderSlot {
     }
 
     fn acquire_maximum(counter: &Arc<AtomicUsize>, maximum: usize) -> io::Result<Self> {
-        counter
-            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |current| {
-                (current < maximum).then_some(current + 1)
-            })
-            .map_err(|_| {
-                io::Error::new(io::ErrorKind::WouldBlock, "Provider child capacity reached")
-            })?;
+        let mut current = counter.load(Ordering::Acquire);
+        loop {
+            if current >= maximum {
+                return Err(io::Error::new(
+                    io::ErrorKind::WouldBlock,
+                    "Provider child capacity reached",
+                ));
+            }
+            match counter.compare_exchange_weak(
+                current,
+                current + 1,
+                Ordering::AcqRel,
+                Ordering::Acquire,
+            ) {
+                Ok(_) => break,
+                Err(observed) => current = observed,
+            }
+        }
         Ok(Self(Arc::clone(counter)))
     }
 }
