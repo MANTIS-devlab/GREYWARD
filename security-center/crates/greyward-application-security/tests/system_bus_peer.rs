@@ -203,5 +203,5 @@ fn assert_unauthenticated_intent_refused(
         )
     ));
     assert_eq!(store.desired_policy().unwrap().revision, 1);
-    assert!(store.desired_policy().unwrap().resources.is_empty());
+    assert_eq!(store.desired_policy().unwrap().resources.len(), 0);
 }

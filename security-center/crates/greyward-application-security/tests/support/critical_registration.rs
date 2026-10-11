@@ -188,7 +188,7 @@ fn isolated_controls(client: &GuardClient) {
         if expected_exit == 0 {
             assert!(result.contains("Fedora"));
         } else {
-            assert!(result.is_empty());
+            assert_eq!(result.len(), 0);
         }
     }
     for file in ["guard-test.py", "guard-test.sh", "guard-test.AppImage"] {
@@ -632,7 +632,7 @@ pub fn run(
     output.read_line(&mut line).unwrap();
     assert_eq!(line.trim(), "HELD_DESCRIPTOR_REVOKED");
     assert!(child.wait().unwrap().success());
-    assert!(store.desired_policy().unwrap().grants.is_empty());
+    assert_eq!(store.desired_policy().unwrap().grants.len(), 0);
     assert_eq!(
         store.desired_policy().unwrap().resources[0]
             .resource()

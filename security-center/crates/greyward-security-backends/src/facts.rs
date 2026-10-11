@@ -473,7 +473,7 @@ mod tests {
             &["[Context]", "filesystems=home;", "devices=all;"],
         ));
         assert_eq!(access.categories, vec![FlatpakAccessCategory::Scoped]);
-        assert!(access.review_reasons.is_empty());
+        assert_eq!(access.review_reasons.len(), 0);
     }
 
     #[test]
@@ -487,12 +487,12 @@ mod tests {
             record.permissions_state = state.clone();
             let access = resolve_flatpak_access(&record);
             assert_eq!(access.availability, state);
-            assert!(access.categories.is_empty());
+            assert_eq!(access.categories.len(), 0);
         }
         let mut wire = serde_json::to_value(app(&[], &[])).unwrap();
         wire.as_object_mut().unwrap().remove("permissions_state");
         let old: FlatpakApp = serde_json::from_value(wire).unwrap();
-        assert!(resolve_flatpak_access(&old).categories.is_empty());
+        assert_eq!(resolve_flatpak_access(&old).categories.len(), 0);
     }
 
     #[test]

@@ -89,8 +89,8 @@ mod tests {
         ] {
             assert!(installed_records(value.as_bytes()).is_err());
         }
-        assert!(installed_records(b"[]").unwrap().is_empty());
-        assert!(installed_records(b"").unwrap().is_empty());
+        assert_eq!(installed_records(b"[]").unwrap().len(), 0);
+        assert_eq!(installed_records(b"").unwrap().len(), 0);
         assert!(installed_records(b" ").is_err());
     }
     #[test]

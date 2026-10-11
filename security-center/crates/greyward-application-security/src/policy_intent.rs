@@ -506,7 +506,7 @@ mod tests {
         assert_eq!(record.object.owner_uid, actor.identity().owner_uid);
         let encoded = serde_json::to_string(record).unwrap();
         assert!(!encoded.contains(fixture.0.to_str().unwrap()));
-        assert!(store.desired_policy().unwrap().resources.is_empty());
+        assert_eq!(store.desired_policy().unwrap().resources.len(), 0);
         assert_eq!(store.desired_policy().unwrap().revision, 1);
     }
 
@@ -563,6 +563,6 @@ mod tests {
             PolicyIntentReview::register_directory(&store, &actor, input(&fixture), invalid)
                 .is_err()
         );
-        assert!(store.desired_policy().unwrap().resources.is_empty());
+        assert_eq!(store.desired_policy().unwrap().resources.len(), 0);
     }
 }

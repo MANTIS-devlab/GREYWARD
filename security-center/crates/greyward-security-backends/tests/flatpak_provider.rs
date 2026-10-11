@@ -7,7 +7,7 @@ fn installed_flatpak_reads_bind_full_deployment_generations() {
     assert_ne!(rustix::process::getuid().as_raw(), 0);
     let facts = collect_flatpak_facts();
     assert_eq!(facts.availability, FlatpakAvailability::Available);
-    assert!(!facts.apps.is_empty());
+    assert_ne!(facts.apps.len(), 0);
     for app in facts.apps {
         assert_eq!(app.identity_state, FlatpakAvailability::Available);
         assert_eq!(app.deployment_commit.unwrap().as_str().len(), 64);

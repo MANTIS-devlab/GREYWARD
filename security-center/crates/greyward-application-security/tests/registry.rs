@@ -114,7 +114,7 @@ fn per_owner_inventory_cannot_leak_foreign_records() {
             .iter()
             .all(|entry| entry.identity.owner_uid == 1000)
     );
-    assert!(registry.list(9999, None, 10).is_empty());
+    assert_eq!(registry.list(9999, None, 10).len(), 0);
 }
 
 #[test]
@@ -130,11 +130,12 @@ fn provider_refresh_preserves_other_providers_and_partial_absence() {
         .reconcile(1000, vec![flatpak.clone(), native.clone()], 10)
         .unwrap();
     let revision = registry.revision();
-    assert!(
+    assert_eq!(
         registry
             .reconcile_provider(1000, ApplicationProvider::Flatpak, vec![], false, 20)
             .unwrap()
-            .is_empty()
+            .len(),
+        0
     );
     assert_eq!(registry.revision(), revision);
     assert_eq!(registry.list(1000, None, 10).len(), 2);
