@@ -1053,6 +1053,11 @@ test("uses the native DMS subscription for live privacy capsule changes", () => 
   assert.match(widget, /readonly property bool fresh: freshnessLeaseValid/);
   assert.match(widget, /readonly property bool showingSnapshot: displayFresh \|\| requestPending/);
   assert.match(widget, /if \(!freshnessLeaseValid \|\| actionPending\) return;/);
+  assert.match(widget, /notificationStabilityMs\(item\)/);
+  assert.match(widget, /item\.notification_stability_seconds/);
+  assert.match(widget, /now - deferredSince\[item\.id\] >= delay/);
+  assert.match(widget, /for \(const id of Object\.keys\(root\.deferredAttentionSince\)\)/);
+  assert.doesNotMatch(widget, /\{\s*\.\.\./);
   assert.doesNotMatch(widget, /gdbus monitor|notify-send/);
 });
 

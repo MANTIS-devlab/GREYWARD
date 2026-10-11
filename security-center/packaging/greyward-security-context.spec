@@ -1,6 +1,6 @@
 Name:           greyward-security-context
 Version:        0.1.0
-Release:        83%{?dist}
+Release:        84%{?dist}
 Summary:        GREYWARD OpenSnitch control plane and Security Context session bus
 License:        GPL-3.0-only
 Source0:        %{name}-%{version}.tar.gz
@@ -173,6 +173,12 @@ install -Dm0644 security-context/tmpfiles.d/greyward-secure-dns.conf %{buildroot
 
 
 %changelog
+* Sun Oct 11 2026 MANTIS SYSTEMS - 0.1.0-84
+- Debounce secure DNS, firewall and device-protection attention for 30 stable seconds.
+- Accept baseline session coverage when optional portal/deputy evidence is unavailable.
+- Keep live status, required evidence gates and all existing security boundaries intact.
+
+
 * Sun Oct 11 2026 MANTIS SYSTEMS - 0.1.0-83
 - Debounce transient DNS/firewall warning notifications until they remain stable.
 

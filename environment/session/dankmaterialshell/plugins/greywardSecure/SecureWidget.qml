@@ -25,6 +25,7 @@ PluginComponent {
     property string subscriptionId: ""
     property bool initialized: false
     property var previousIds: []
+    property var deferredAttentionSince: ({})
     property string attentionId: ""
     property bool detailsOpen: false
     property bool activityOpen: false
@@ -67,6 +68,11 @@ PluginComponent {
         try { return JSON.parse(match[1].replace(/\\'/g, "'").replace(/\\\\/g, "\\")); } catch (error) { return null; }
     }
     function variantString(value) { return '"' + String(value).replace(/\\/g, "\\\\").replace(/"/g, '\\"') + '"'; }
+    function notificationStabilityMs(item) {
+        if (!item || item.severity !== "WARNING") return 0;
+        const seconds = Number(item.notification_stability_seconds || 0);
+        return Number.isFinite(seconds) && seconds > 0 && seconds <= 300 ? seconds * 1000 : 0;
+    }
     function call(method, args, callback) {
         Proc.runCommand("greywardSecure." + method, ["/usr/bin/gdbus", "call", "--session", "--timeout", "6", "--dest", busName, "--object-path", objectPath, "--method", busName + "." + method].concat(args || []), function(stdout, code) {
             callback(code === 0 ? root.decodeGdbusJson(stdout) : null);
@@ -82,7 +88,29 @@ PluginComponent {
             requestTimeout.stop(); root.requestPending = false; root.clockNow = Date.now();
             if (!next || next.schema !== "greyward.security.experience/v1") return;
             const nextFreshUntil = Date.parse(next.fresh_until || "");
-            const ids = (next.items || []).filter(item => item.severity !== "INFO").map(item => item.id);
+            const now = Date.now();
+            // Keep the taskbar attention caption on the same continuous-warning
+            // window as native notifications, without delaying live status.
+            const previousLeaseValid = root.initialized && Date.parse(root.presentation.fresh_until || "") > now;
+            const deferredSince = {};
+            if (previousLeaseValid) {
+                for (const id of Object.keys(root.deferredAttentionSince)) {
+                    deferredSince[id] = root.deferredAttentionSince[id];
+                }
+            }
+            const deferredIds = {};
+            for (const item of next.items || []) {
+                if (!root.notificationStabilityMs(item)) continue;
+                deferredIds[item.id] = true;
+                if (!Number.isFinite(deferredSince[item.id])) deferredSince[item.id] = now;
+            }
+            for (const id of Object.keys(deferredSince)) if (!deferredIds[id]) delete deferredSince[id];
+            root.deferredAttentionSince = deferredSince;
+            const ids = (next.items || []).filter(item => {
+                if (item.severity === "INFO") return false;
+                const delay = root.notificationStabilityMs(item);
+                return !delay || now - deferredSince[item.id] >= delay;
+            }).map(item => item.id);
             const newItem = ids.find(id => root.previousIds.indexOf(id) < 0);
             if (root.initialized && newItem && (!root.primaryItem || next.items[0]?.id === newItem)) {
                 root.attentionId = newItem; attentionTimer.restart();

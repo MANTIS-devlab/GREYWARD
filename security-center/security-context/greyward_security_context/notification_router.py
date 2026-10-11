@@ -11,8 +11,7 @@ from .clamav import MEDIA_ROOTS
 APP_ID = 'systems.mantis.greyward.securitycenter'
 APP_NAME = 'GREYWARD Security Center'
 ICON = 'greyward-security-status'
-TRANSIENT_WARNING_IDS = frozenset({'secure-dns', 'firewall-unavailable'})
-WARNING_STABILITY_SECONDS = 15.0
+MAX_WARNING_STABILITY_SECONDS = 300.0
 
 
 def scan_context(path):
@@ -97,20 +96,20 @@ class NotificationRouter:
         for key, current in observed.items():
             # Keep current conditions visible in Security Center immediately,
             # but do not toast a short provider wobble as a user action.
-            # Critical escalation bypasses this presentation-only grace.
-            transient_warning = (key in TRANSIENT_WARNING_IDS and
-                                 current.get('severity') == 'WARNING')
-            if not transient_warning:
-                active[key] = current
-                self._warning_since.pop(key, None)
-                continue
-            record = self.records.get(key, {})
-            if record.get('notification_id'):
+            # Only explicit projection metadata opts into this presentation grace;
+            # a recovered notification ID cannot bypass a fresh observation window.
+            # Critical escalation bypasses the warning-only grace.
+            stability = current.get('notification_stability_seconds', 0)
+            deferred_warning = (current.get('severity') == 'WARNING' and
+                                isinstance(stability, (int, float)) and
+                                not isinstance(stability, bool) and
+                                0 < stability <= MAX_WARNING_STABILITY_SECONDS)
+            if not deferred_warning:
                 active[key] = current
                 self._warning_since.pop(key, None)
                 continue
             since = self._warning_since.setdefault(key, now)
-            if now - since >= WARNING_STABILITY_SECONDS:
+            if now - since >= stability:
                 active[key] = current
         for key in set(self.records) - set(active):
             record = self.records.pop(key)

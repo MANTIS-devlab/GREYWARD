@@ -23,13 +23,34 @@ the same PID, SELinux remained Enforcing, and the RPM-owned files were left
 untouched. The ISO package contract now requires `notification_router.py`, so
 staging rejects a Context RPM that omits it. No ISO was built.
 
+11 October Security Center corrections: the DMS taskbar plugin failed to load because
+its widget used object-spread syntax unsupported by the pinned Qt QML parser. The
+source now copies the small state map with a QML-compatible loop. The corrected
+plugin was installed in the `.149` user plugin directory, DMS was restarted, and
+its journal confirmed `Plugin loaded: greywardSecure`.
+
+Protected Data showed session protection unavailable because the `.149` development
+overlay validator required optional portal/deputy evidence. The canonical validator
+already treats those gates as optional for baseline session coverage. The matching
+source module is now in the user overlay; after restarting only the Context user
+service, `GetApplicationCoverage` returned AVAILABLE/PROTECTED with all six required
+gates true and the optional deputy gate false. No SELinux policy or access was changed.
+
+Secure DNS, firewall and device-protection WARNING attention now waits for 30 seconds
+of continuous evidence; live state and critical alerts stay immediate. Package
+identities are advanced to DMS 1.6.2-15 and Security Context RPM 0.1.0-84 so the
+next component build includes the fixes. No ISO was built.
+
+
 11 October per-user keyboard fix (source): Anaconda's installed XKB selection
 is now seeded as the account default. DMS Settings can save a validated layout,
 variant, model and options for the signed-in account; the normal session
 launcher and protected worker read the same fixed settings through one
 validator, with no static XKB layout or SELinux policy change. The pinned DMS
-candidate is now v1.6.2-14 and Application Security RPM Release 36; session RPM
-Release 12 includes the enrolled-login routing fix above. The DMS shell assembled against the pinned upstream archives
+candidate is now v1.6.2-15, Context RPM Release 84, and Application
+Security RPM Release 36.
+Session RPM Release 12 includes the enrolled-login routing fix above. The DMS
+shell assembled against the pinned upstream archives
 matches its receipt. On `.149`, all three RPMs were rebuilt and installed, the
 Anaconda/localed `fr/oss` selection was seeded into `/etc/skel` and the existing
 `stendev` account, and libxkbcommon compiled that keymap successfully. The

@@ -102,5 +102,10 @@ PY
 /etc/xdg/quickshell/dms-plugins
 
 %changelog
+* Sun Oct 11 2026 GREYWARD <build@mantis.systems> - 1.6.2-15
+- Fix the Security Center taskbar widget for the pinned Qt QML parser.
+- Keep continuous-warning attention timing in the packaged widget.
+
+
 * Sun Oct 04 2026 GREYWARD <build@mantis.systems> - 1.6.2-1
 - Verified offline candidate runtime with generated release-matched shell.
