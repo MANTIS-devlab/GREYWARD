@@ -793,7 +793,8 @@ if (-not (Test-Path -LiteralPath $thirdPartyNoticesPath) -or
 }
 if (-not (Test-Path -LiteralPath $publicExportPath) -or
     (Get-Content -Raw -LiteralPath $publicExportPath) -notmatch 'rev-list --all --count' -or
-    (Get-Content -Raw -LiteralPath $publicExportPath) -notmatch 'Destination must be outside') {
+    (Get-Content -Raw -LiteralPath $publicExportPath) -notmatch 'Destination must be outside' -or
+    (Get-Content -Raw -LiteralPath $publicExportPath) -notmatch 'environment/development/provision-overlay\.sh') {
     $errors.Add('The clean-history public export guard is missing or incomplete.')
 }
 

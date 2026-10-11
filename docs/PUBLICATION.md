@@ -33,6 +33,11 @@ from Windows checkouts, and creates one new root commit. Ignored
 credentials, build outputs, VM disks, caches, and the private `.git` directory
 are not copied.
 
+The public export also deliberately omits the development VM's Packer
+configuration, bootstrap Kickstarts, and account-provisioning overlay. Those
+files remain tracked in the local engineering repository and must not be
+published. The export script contains the authoritative path list.
+
 For an update to the existing public checkout, preserve its configured commit
 signing. If the signing key cannot unlock, stop with the reviewed index intact;
 do not disable signing or rewrite configuration merely to complete publication.

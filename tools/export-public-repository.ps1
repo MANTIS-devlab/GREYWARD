@@ -37,7 +37,15 @@ if ($LASTEXITCODE -ne 0) { throw 'Repository validation failed; public export wa
 
 $listed = & git -C $repo ls-files --cached --others --exclude-standard -z
 if ($LASTEXITCODE -ne 0) { throw 'Unable to enumerate the publication candidate.' }
-$paths = ($listed -join "`n") -split "`0" | Where-Object { $_ }
+$localOnlyPaths = @(
+    'environment/greyward.pkr.hcl',
+    'environment/http/greyward-dev-bootstrap.ks.tmpl',
+    'environment/http/greyward-dev-boottest.ks.tmpl',
+    'environment/http/greyward.ks.tmpl',
+    'environment/http/greyward-boottest.ks.tmpl',
+    'environment/development/provision-overlay.sh'
+)
+$paths = ($listed -join "`n") -split "`0" | Where-Object { $_ -and $_ -notin $localOnlyPaths }
 foreach ($relative in $paths) {
     $source = Join-Path $repo $relative
     if (-not (Test-Path -LiteralPath $source -PathType Leaf)) { continue }
