@@ -3,6 +3,7 @@
 import argparse
 import fnmatch
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -52,6 +53,17 @@ def sanitized_text(text, relative, excluded_files):
     return text
 
 
+def verify_secret_scan(destination):
+    scanner = os.environ.get('GREYWARD_GITLEAKS_BINARY') or shutil.which('gitleaks')
+    if not scanner:
+        raise ValueError('A verified gitleaks installation is required before creating a public export')
+    result = subprocess.run([scanner, 'dir', str(destination), '--redact',
+                             '--config', str(destination/'.gitleaks.toml')],
+                            capture_output=True, text=True, check=False)
+    if result.returncode:
+        raise ValueError('Secret scan rejected the candidate; it must not be committed or published')
+
+
 def snapshot(source, destination):
     source, destination = source.resolve(), destination.resolve()
     if destination == source or source in destination.parents:
@@ -88,6 +100,7 @@ def snapshot(source, destination):
     missing = [p for p in policy['requiredPaths'] if not (destination / p).is_file()]
     if missing:
         raise ValueError('Incomplete public source snapshot: ' + ', '.join(missing))
+    verify_secret_scan(destination)
     return {'schema': 'greyward.public-export/v1', 'files': len(copied),
             'excluded': sorted(omitted), 'sourceHistoryCopied': False}
 

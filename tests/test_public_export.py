@@ -49,8 +49,10 @@ class PublicationBoundaryTests(unittest.TestCase):
                 path.parent.mkdir(parents=True, exist_ok=True)
                 path.write_text(content)
             inventory = '\0'.join(p for p in files if not p.startswith('.git/')) + '\0'
-            with patch.object(EXPORT.subprocess, 'check_output', return_value=inventory.encode()):
+            with patch.object(EXPORT.subprocess, 'check_output', return_value=inventory.encode()), \
+                    patch.object(EXPORT, 'verify_secret_scan') as scan:
                 report = EXPORT.snapshot(source, target)
+            scan.assert_called_once_with(target.resolve())
             self.assertFalse((target/'.git').exists())
             self.assertFalse((target/'tools/greyward-dev/common.ps1').exists())
             self.assertEqual((source/'tools/greyward-dev/common.ps1').read_text(), 'private host controls')
@@ -83,6 +85,16 @@ class PublicationBoundaryTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 EXPORT.snapshot(source, target)
             self.assertEqual((target/'existing-work').read_text(), 'preserve')
+
+    def test_secret_scanner_failure_refuses_publication(self):
+        with patch.dict(EXPORT.os.environ, {'GREYWARD_GITLEAKS_BINARY': 'gitleaks'}), \
+                patch.object(EXPORT.subprocess, 'run') as run:
+            run.return_value.returncode = 1
+            with self.assertRaisesRegex(ValueError, 'Secret scan rejected'):
+                EXPORT.verify_secret_scan(Path('/candidate'))
+            command = run.call_args.args[0]
+            self.assertIn('--redact', command)
+            self.assertIn('--config', command)
 
 
 if __name__ == '__main__':
