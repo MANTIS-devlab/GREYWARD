@@ -15,7 +15,9 @@ def file_map(path):
             for p in path.rglob('*') if p.is_file() and not p.is_symlink()}
 
 
-def migrate(config, state, cache, system_plugins, release):
+def migrate(config, state, cache, system_plugins, release, default_monitors=None):
+    marker = config / '.changelog-1.6'
+    first_session = not marker.exists()
     backup = state.parent / 'greyward/dms-migration' / release
     backup.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     if not backup.exists():
@@ -39,6 +41,26 @@ def migrate(config, state, cache, system_plugins, release):
     settings = json.loads(settings_file.read_text()) if settings_file.exists() else {}
     if not isinstance(settings, dict):
         raise ValueError('Malformed desktop settings; preserved backup, activation refused')
+    if first_session:
+        # Auto-select preserves the hardware's current/preferred modes when no
+        # matching profile exists. The packaged Virtual-1 profile supplies the
+        # 1920x1080 first-session fallback only to virtual displays.
+        settings.setdefault('displayProfileAutoSelect', True)
+        monitor_defaults = Path(default_monitors) if default_monitors else Path(
+            '/usr/share/greyward/defaults/dankmaterialshell/monitors.json')
+        monitors_file = config / 'monitors.json'
+        if monitor_defaults.is_file() and not monitors_file.exists() and not monitors_file.is_symlink():
+            monitors = json.loads(monitor_defaults.read_text())
+            if (not isinstance(monitors, dict) or monitors.get('version') != 1
+                    or not isinstance(monitors.get('configurations'), list)):
+                raise ValueError('Malformed packaged display defaults; preserved backup, activation refused')
+            try:
+                with monitors_file.open('x') as stream:
+                    stream.write(json.dumps(monitors, indent=2) + '\n')
+                monitors_file.chmod(0o600)
+            except FileExistsError:
+                # A concurrent or pre-existing user selection is authoritative.
+                pass
     # Establish fresh-user defaults before QML loads; process activity precedes
     # IPC readiness. Existing sessions, including cleared wallpapers, are owned
     # by the user. Preserve legacy settings when no split state exists yet.
@@ -66,7 +88,6 @@ def migrate(config, state, cache, system_plugins, release):
     with os.fdopen(descriptor, 'w') as stream:
         stream.write(json.dumps(settings, indent=2) + '\n')
     temporary_settings.replace(settings_file)
-    marker = config / '.changelog-1.6'
     if not marker.exists():
         with marker.open('x') as stream:
             stream.write('GREYWARD packaged release migration\n')
@@ -99,4 +120,5 @@ if __name__ == '__main__':
                    stdout=subprocess.DEVNULL, timeout=30)
     if not re.fullmatch(r'v1\.6\.2-[1-9][0-9]*', release):
         raise SystemExit('Unsupported migration release')
-    migrate(config, state, cache, Path('/etc/xdg/quickshell/dms-plugins'), release)
+    migrate(config, state, cache, Path('/etc/xdg/quickshell/dms-plugins'), release,
+            Path('/usr/share/greyward/defaults/dankmaterialshell/monitors.json'))

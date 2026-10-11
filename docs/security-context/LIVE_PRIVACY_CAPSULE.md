@@ -20,7 +20,12 @@ The capsule remains the authoritative sensor projection. The DMS widget now
 reads the composed `GetShellPresentation()` (`greyward.security.experience/v1`)
 and subscribes to `ShellSummaryChanged(uint64 revision)`. That presentation
 combines the capsule with existing posture, device, network and file providers.
-The notification router consumes the same items. The widget's 5-second
+The server computes `notification_items` once from the live items and the
+continuous-warning rule. It sends that exact list both to the native desktop
+notification publisher and in `GetShellPresentation()`; the taskbar cards,
+attention caption and badge consume that same list. The taskbar has no separate
+warning timer, so its alert lifecycle cannot drift from desktop notifications.
+Live posture and activity remain visible immediately. The widget's 5-second
 watchdog is recovery only, deliberately ahead of the projection's 30-second
 freshness lease. While its replacement read is in flight it retains the last
 confirmed presentation, but disables mutation actions once that lease expires;
@@ -34,6 +39,15 @@ content revision or repeat notifications. Transport failure expires the display;
 missing detection source files remain in history but leave active shell alerts.
 Both GLib D-Bus entrypoints initialize threading before starting observers.
 See the development stability receipt (private development evidence).
+
+Secure DNS, firewall and device-protection warning items carry a
+`notification_stability_seconds` presentation hint. The Security Center keeps
+their live state visible immediately, while both taskbar alerts and native
+desktop notifications use the server's shared list after the same warning has
+been continuously observed for 30 seconds. Critical events and unrelated
+warnings remain immediate. The in-memory timer restarts after a service
+restart, so a recovered notification ledger cannot bypass a fresh stability
+check.
 
 Protection review uses the same evaluated check results and accepted-deviation
 store as Security Center, exposed additively by the fixed read-only posture

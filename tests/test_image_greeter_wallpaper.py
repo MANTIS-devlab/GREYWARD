@@ -26,12 +26,32 @@ class GreeterWallpaperTests(unittest.TestCase):
             self.assertEqual(Path(state['wallpaperPath']).read_bytes(), source.read_bytes())
             self.assertFalse(state['perMonitorWallpaper'])
             self.assertEqual(session.stat().st_mode & 0o777, 0o644)
+            memory = cache / '.local/state/memory.json'
+            self.assertEqual(json.loads(memory.read_text())['lastSessionDesktopId'], 'greyward-labwc.desktop')
+            # A deliberate later selection survives background refresh/retry.
+            memory.write_text(json.dumps({'lastSessionDesktopId': 'explicit.desktop'}))
             state['isLightMode'] = True
             session.write_text(json.dumps(state))
             source.write_bytes(b'updated-image')
             helper.sync(source, cache, os.getuid(), os.getgid())
             self.assertTrue(json.loads(session.read_text())['isLightMode'])
             self.assertEqual((cache/'greeter_wallpaper_override.jpg').read_bytes(), b'updated-image')
+            self.assertEqual(json.loads(memory.read_text())['lastSessionDesktopId'], 'explicit.desktop')
+
+    def test_greeter_keeps_saved_session_selection_enabled(self):
+        production = (ROOT/'environment/production/provision.sh').read_text()
+        self.assertNotIn('--no-save-session', production)
+        self.assertIn('--no-save-username', production)
+
+    def test_embedded_greeter_shader_uses_cpu_opengl_without_a_ui_override(self):
+        production = (ROOT/'environment/production/provision.sh').read_text()
+        command = next(line for line in production.splitlines() if line.startswith('command = '))
+        for setting in ('WLR_RENDERER=pixman', 'LIBGL_ALWAYS_SOFTWARE=1',
+                        'QT_QUICK_BACKEND=rhi', 'QSG_RHI_BACKEND=opengl',
+                        'QT_OPENGL=software'):
+            self.assertIn(setting, command)
+        self.assertNotIn('QT_QUICK_BACKEND=software', command)
+        self.assertNotIn('--shell-dir', command)
 
     def test_malformed_cache_and_symlink_are_preserved(self):
         with tempfile.TemporaryDirectory() as temporary:

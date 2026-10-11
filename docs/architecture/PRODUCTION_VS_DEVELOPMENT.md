@@ -104,7 +104,7 @@ installed into the target user's system:
 - `environment/greyward.pkr.hcl`, the development Kickstart bootstrap, and
   Packer cache/state: disposable factory inputs, not runtime applications.
 - `.secrets/`, repository SSH configuration, host identities, VM endpoints,
-  `development-user`, and development-only passphrases. These must never be copied into
+  `example-user`, and development-only passphrases. These must never be copied into
   a public ISO or production account policy.
 - `GREYWARD-DEV`, `GREYWARD-BOOTTEST`, Hyper-V helpers, `output/`,
   `build/`, `state/`, screenshots, and generated capture artifacts.
@@ -123,13 +123,15 @@ production candidate. Anything reachable only through
 
 The shared source session tree also has a deliberate staging boundary:
 `environment/session/labwc/environment` and `autostart` contain the disposable
-VM's Virtual-1 behavior. The production image stager copies only the shared
-Labwc compositor/theme assets; it uses `environment/production/labwc-environment`
-and `labwc-autostart` for the installed session. The production environment
-keeps wlroots' software-renderer fallback enabled so virtual GPUs without a
-usable EGL path do not produce a black session; hardware-specific display
-controls remain outside the production payload. The VM overlay may still
-consume its VM-specific files directly.
+VM's Virtual-1 behavior and remain outside production. The production image
+uses `environment/production/labwc-environment` and `labwc-autostart` for its
+installed session. One narrow DMS profile is an explicit exception: on a user's
+first session only, an exact `Virtual-1` output may receive a standard
+1920×1080 fallback. Physical outputs do not match that profile; Labwc keeps the
+mode selected for the connected display. Existing DMS monitor profiles and
+choices are preserved. The production environment keeps wlroots' software-
+renderer fallback enabled so virtual GPUs without a usable EGL path do not
+produce a black session; broader VM-only settings remain development-only.
 
 `environment/image/build.sh` stages the production inputs and records source
 traceability. `environment/image/build-iso.sh` embeds those inputs in the

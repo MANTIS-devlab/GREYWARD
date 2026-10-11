@@ -1,6 +1,6 @@
 Name:           greyward-application-security-experimental
 Version:        0.1.0
-Release:        33%{?dist}
+Release:        41%{?dist}
 Summary:        Experimental GREYWARD application-security runtime and Guard CLI
 License:        GPL-3.0-only AND MIT
 Source0:        %{name}-%{version}.tar.gz
@@ -37,8 +37,10 @@ Coverage reads actual enrollment prerequisites; this package does not establish 
 automatically install SELinux enrollment or activate grants. A separate explicitly
 started provider supplies restrictive managed isolation for normal local users;
 resource/grant changes still require the confined enrolled-owner boundary.
-There is no preset or automatic activation, and
-this package is not part of the production image inputs.
+There is no preset or automatic activation, and generic application-guard
+grants are not automatically activated. The RPM is included only as a
+dependency for the separately packaged protected-session enrollment path; it
+does not establish release acceptance for broader workload isolation.
 
 %prep
 %autosetup
@@ -129,6 +131,27 @@ install -Dm0644 packaging/application-security/systems.mantis.greyward.Applicati
 %{_datadir}/dbus-1/system.d/systems.mantis.greyward.ApplicationSecurityDevelopment1.conf
 
 %changelog
+* Sun Oct 11 2026 MANTIS SYSTEMS - 0.1.0-41
+- Start a minimal trusted splash before initializing the full authentication shell.
+
+* Sun Oct 11 2026 MANTIS SYSTEMS - 0.1.0-40
+- Show a noninteractive GREYWARD startup backdrop while protected login readiness completes.
+
+* Sun Oct 11 2026 MANTIS SYSTEMS - 0.1.0-39
+- Seed the protected DMS auth profile at settings schema v18 to avoid replaying migrations on login.
+* Sun Oct 11 2026 MANTIS SYSTEMS - 0.1.0-38
+- Poll protected Polkit readiness quickly at login, then retain the low-rate heartbeat.
+
+* Sun Oct 11 2026 MANTIS SYSTEMS - 0.1.0-37
+- Rebuild the current application-security source above the installed .149 package floor.
+
+* Sun Oct 11 2026 MANTIS SYSTEMS - 0.1.0-35
+- Accept the matched DMS v1.6.2-14 candidate in authentication assembly.
+
+* Sat Oct 10 2026 MANTIS SYSTEMS - 0.1.0-34
+- Add root-attested installer origin and verified revision-8 authentication assembly.
+- Keep activation outside runtime scriptlets in the explicit enrollment package.
+
 * Sat Oct 10 2026 MANTIS SYSTEMS - 0.1.0-33
 - Mark portal/deputy coverage unverified instead of asserting complete isolation.
 - Include Administration visual sources; explicit assembly remains development-only.

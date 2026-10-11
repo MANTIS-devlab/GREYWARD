@@ -11,11 +11,64 @@ import os
 from pathlib import Path
 import shutil
 import subprocess
+import re
 
 BASE = Path('/usr/lib/greyward/application-security/desktop')
+ACTIVE_BASE = Path('/usr/lib/greyward/application-security/desktop')
 STATE = Path('/run/greyward-application-security')
 LABWC = 'bd5f5ddec12c066e0893a0a4874cbc5d55e157d5b93d3ebe6cd2bdc7b863ba64'
 THEME = Path('/usr/share/greyward/defaults/labwc/Greyward')
+
+
+def selected_dms():
+    """Use the package's complete verifier, never discovery or a claimed path."""
+    result = subprocess.run(['/usr/libexec/greyward-dms-verify'], check=True,
+                            capture_output=True, text=True, timeout=30)
+    root = Path(result.stdout.strip())
+    if root.parent != Path('/usr/lib/greyward/dms') or not re.fullmatch(r'v\d+\.\d+\.\d+-\d+', root.name):
+        raise RuntimeError('Invalid verified DMS selection')
+    return root
+
+
+def trusted_root_file(path):
+    """Require a root-owned file beneath a non-writable, non-symlink path."""
+    for item in [path, *path.parents]:
+        meta = item.lstat()
+        if item.is_symlink() or meta.st_uid or meta.st_mode & 0o022:
+            raise RuntimeError('Untrusted compositor receipt')
+
+
+def compositor_digest(enrollment_path=None, active_base=None):
+    """Read a packaged receipt or migrate the compositor from a verified install."""
+    enrollment_path = enrollment_path or Path('/usr/share/greyward-application-security/enrollment/inputs.json')
+    active_base = active_base or ACTIVE_BASE
+    if enrollment_path.exists() or enrollment_path.is_symlink():
+        trusted_root_file(enrollment_path)
+        data = json.loads(enrollment_path.read_text())
+        if data.get('schema') != 'greyward.enrollment-inputs/v1' or data.get('labwcCommit') != '12987307a5de32db5acbb3f59d41277373ab969e' or not re.fullmatch(r'[0-9a-f]{64}', data.get('labwcSha256', '')):
+            raise RuntimeError('Invalid compositor build receipt')
+        return data['labwcSha256']
+
+    # Older enrolled systems predate the package receipt. Reuse the compositor
+    # only when the current protected desktop's root-owned manifest records its
+    # exact bytes and expected source commit. This keeps migration pinned to the
+    # running installation without accepting an arbitrary host Labwc binary.
+    manifest_path = active_base / 'desktop.json'
+    labwc_path = active_base / 'bin/labwc'
+    if not manifest_path.exists():
+        if active_base.exists():
+            raise RuntimeError('Existing protected compositor receipt missing')
+        return LABWC
+    trusted_root_file(manifest_path)
+    trusted_root_file(labwc_path)
+    data = json.loads(manifest_path.read_text())
+    digest = data.get('files', {}).get('bin/labwc', '')
+    if (data.get('schema') != 'greyward.protected-desktop/v1'
+            or data.get('source', {}).get('labwc') != '12987307a5de32db5acbb3f59d41277373ab969e'
+            or not re.fullmatch(r'[0-9a-f]{64}', digest)
+            or hashlib.sha256(labwc_path.read_bytes()).hexdigest() != digest):
+        raise RuntimeError('Existing protected compositor receipt mismatch')
+    return digest
 
 
 def run(*command):
@@ -57,8 +110,10 @@ def prepare(source, labwc, account_name, materialize_runtime=True):
     uid, gid = int(uid), int(gid)
     if not 1000 <= uid < 60000 or home != '/home/' + name or shell not in ['/usr/bin/zsh', '/bin/bash', '/usr/bin/bash']:
         raise RuntimeError('Unsupported local account')
-    if hashlib.sha256(labwc.read_bytes()).hexdigest() != LABWC:
+    expected_labwc = compositor_digest()
+    if hashlib.sha256(labwc.read_bytes()).hexdigest() != expected_labwc:
         raise RuntimeError('Matched compositor required')
+    dms = selected_dms()
     for parent in [source, *source.parents]:
         meta = parent.lstat()
         if not parent.is_dir() or parent.is_symlink() or meta.st_uid or meta.st_mode & 0o022:
@@ -73,16 +128,16 @@ def prepare(source, labwc, account_name, materialize_runtime=True):
         (Path('/usr/bin/python3.14'), 'auth-python', 'greyward_as_auth_exec_t'),
         (Path('/usr/bin/dbus-daemon'), 'auth-dbus', 'greyward_as_auth_exec_t'),
         (Path('/usr/bin/qs'), 'qs', 'greyward_as_auth_exec_t'),
-        (Path('/usr/lib/greyward/dms/v1.6.2-6/bin/dms'), 'dms', 'greyward_as_auth_exec_t'),
+        (dms / 'bin/dms', 'dms', 'greyward_as_auth_exec_t'),
     ]:
         shutil.copyfile(original, BASE / 'bin' / target)
-        if target == 'labwc' and hashlib.sha256((BASE / 'bin' / target).read_bytes()).hexdigest() != LABWC:
+        if target == 'labwc' and hashlib.sha256((BASE / 'bin' / target).read_bytes()).hexdigest() != expected_labwc:
             raise RuntimeError('Compositor copy changed')
         (BASE / 'bin' / target).chmod(0o555)
         run('/usr/bin/chcon', '-t', label, str(BASE / 'bin' / target))
     # Root reassembles the auth shell from the verified installed DMS closure.
     run('/usr/bin/python3', '-I', str(source.parent / 'authentication/assemble.py'),
-        '--source', '/usr/lib/greyward/dms/v1.6.2-6/shell', '--receipt', '/usr/lib/greyward/dms/v1.6.2-6/release.json',
+        '--source', str(dms / 'shell'), '--receipt', str(dms / 'release.json'),
         '--output', str(BASE / 'authentication-input'))
     shutil.move(BASE / 'authentication-input/shell', BASE / 'shell')
     run('/usr/bin/chcon', '-R', '-t', 'greyward_as_auth_runtime_t', str(BASE / 'shell'))
@@ -118,7 +173,7 @@ def prepare(source, labwc, account_name, materialize_runtime=True):
     previous = {'seuser': seuser.value.decode(), 'range': serange.value.decode()}
     CDLL(None).free(seuser); CDLL(None).free(serange)
     manifest = {'schema': 'greyward.protected-desktop/v1',
-                'source': {'labwc': '12987307a5de32db5acbb3f59d41277373ab969e', 'dms': 'v1.6.2-6'},
+                'source': {'labwc': '12987307a5de32db5acbb3f59d41277373ab969e', 'dms': dms.name},
                 'accounts': {str(uid): {'name': name, 'gid': gid, 'home': home, 'previousMapping': previous}},
                 'files': {}}
     for path in sorted(BASE.rglob('*')):

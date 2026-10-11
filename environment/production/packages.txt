@@ -4,6 +4,8 @@
 hyprland
 labwc
 greyward-session
+greyward-application-security-experimental
+greyward-application-enrollment
 uwsm
 wlopm
 flatpak

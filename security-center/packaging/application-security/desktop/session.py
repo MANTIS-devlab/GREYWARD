@@ -21,6 +21,10 @@ BASE = Path('/usr/lib/greyward/application-security/desktop')
 STATE = Path('/run/greyward-application-security')
 AUTH_CONTEXT = 'system_u:system_r:greyward_as_auth_t:s0'
 DISPLAY_CONTEXT = 'greyward_guard_u:greyward_guard_r:greyward_as_display_t:s0'
+DISPLAY_XKB_DEFAULTS = {
+    'XKB_DEFAULT_MODEL': 'pc105',
+    'XKB_DEFAULT_LAYOUT': 'fr',
+}
 
 
 def private_file(path, maximum=65536, owner=0):
@@ -102,7 +106,10 @@ def worker(kind, uid, gid, sid):
            'HOME': str(auth / 'home') if kind == 'authentication' else account['home'],
            'XDG_RUNTIME_DIR': str(auth / 'runtime') if kind == 'authentication' else f'/run/user/{uid}',
            'DBUS_SESSION_BUS_ADDRESS': f'unix:path={auth}/runtime/bus' if kind == 'authentication' else f'unix:path=/run/user/{uid}/bus',
-           'WAYLAND_DISPLAY': f'/run/user/{uid}/wayland-0', 'WLR_RENDERER': 'pixman',
+           # Keep XDG_RUNTIME_DIR private. DMS's output-management client joins
+           # it with WAYLAND_DISPLAY, so this must name the broker-created alias
+           # below instead of repeating the absolute compositor socket path.
+           'WAYLAND_DISPLAY': 'wayland-0', 'WLR_RENDERER': 'pixman',
            'WLR_RENDERER_ALLOW_SOFTWARE': '1', 'WLR_NO_HARDWARE_CURSORS': '1',
            'WLR_DRM_NO_MODIFIERS': '1', 'QT_QUICK_BACKEND': 'software',
            'QT_QPA_PLATFORM': 'wayland', 'QT_QPA_PLATFORMTHEME': 'generic',
@@ -113,6 +120,11 @@ def worker(kind, uid, gid, sid):
         env.update({f'XDG_{n}_HOME': str(auth / n.lower()) for n in ['CONFIG', 'STATE', 'CACHE']})
         command = [str(BASE / 'bin/auth-python'), '-I', str(BASE / 'authentication.py')]
     elif kind == 'display':
+        # The protected compositor uses its root-owned XDG config directory
+        # and this explicit environment allowlist. Do not load user-writable
+        # Labwc environment files; pass the canonical French AZERTY defaults
+        # directly so wlroots does not silently fall back to US QWERTY.
+        env.update(DISPLAY_XKB_DEFAULTS)
         env.pop('WAYLAND_DISPLAY', None)
         env['PATH'] = '/usr/bin:/usr/sbin'
         env['XDG_CONFIG_HOME'] = str(BASE / 'labwc')
@@ -168,9 +180,11 @@ def start(uid, pid, ticks):
     sys.path.insert(0, str(BASE))
     from materialize import materialize
     materialize(uid, int(account['gid']))
-    for name in ['authentication.log', 'authentication-ready.json', 'bus']:
+    for name in ['authentication.log', 'authentication-ready.json', 'bus', 'wayland-0']:
         old = STATE / f'auth-{uid}/runtime' / name
         if old.exists() or old.is_symlink():
+            if name == 'wayland-0' and not old.is_symlink():
+                raise RuntimeError('Unsafe protected display alias')
             old.unlink()
     cache=STATE/f'display-cache-{uid}'
     cache.mkdir(mode=0o700,exist_ok=True)
@@ -191,6 +205,19 @@ def start(uid, pid, ticks):
     children = []
     try:
         for kind in ['display', 'authentication']:
+            if kind == 'authentication':
+                # The auth shell has a private XDG_RUNTIME_DIR. Give DMS a
+                # fixed relative socket name there, linked to this admitted
+                # session's compositor socket after Labwc has created it.
+                target = Path(f'/run/user/{uid}/wayland-0')
+                socket_stat = target.stat()
+                if not target.is_socket() or socket_stat.st_uid != uid:
+                    raise RuntimeError('Admitted Wayland socket changed')
+                runtime = STATE / f'auth-{uid}/runtime'
+                runtime_stat = runtime.lstat()
+                if not runtime.is_dir() or runtime.is_symlink() or runtime_stat.st_uid != uid or runtime_stat.st_mode & 0o077:
+                    raise RuntimeError('Unsafe protected runtime directory')
+                os.symlink(str(target), runtime / 'wayland-0')
             log = os.fdopen(os.open(STATE / f'{kind}-{uid}.log', os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o600), 'wb')
             os.setxattr(STATE / f'{kind}-{uid}.log', 'security.selinux', f'system_u:object_r:greyward_as_{"auth" if kind == "authentication" else "display"}_runtime_t:s0'.encode())
             child = subprocess.Popen(['/usr/bin/python3', '-I', str(BASE / 'session.py'), '--worker', kind,

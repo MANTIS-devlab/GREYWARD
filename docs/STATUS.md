@@ -1,14 +1,122 @@
 # GREYWARD current status
 
-10 October DMS monitor configuration: the ordinary DMS service on `<development-host>` inherited
-an absolute `WAYLAND_DISPLAY`; DMS joined it to `XDG_RUNTIME_DIR`, making a
-double-prefixed socket path. The unit now pins `wayland-0`. After installing the
-corrected session RPM and restarting only DMS, logs confirmed WLR output-manager
-initialization and `wlr-randr` read back 2560×1440 with SELinux Enforcing. The
-next session RPM is Release 9, and ISO staging now rejects an RPM whose DMS unit
-does not byte-match source. See the
-[monitor configuration record](architecture/DMS_MONITOR_CONFIGURATION.md).
+11 October Security Context alert synchronization: the DMS plugin was using a
+second client-side 30-second timer, so its cards and badge could appear on a
+different schedule from native desktop notifications. Source now computes one
+`notification_items` list for both consumers; Security Center live posture
+remains immediate. The corrected files are installed in the `<development-host>` development
+overlay with backups, original ownership/modes and SELinux labels preserved;
+remote hashes match the deployed source. All 21 focused tests passed on Fedora.
+The user restarted the Context and DMS services after deployment; the DMS
+journal confirms `greywardSecure` loaded at 19:56:06 CEST. SELinux remains
+Enforcing. Naturally persistent warning behavior has not been exercised after
+that reload.
 
+The taskbar's **Open Security Center** action now focuses an existing window or
+launches the desktop entry through DMS `SessionService`, with opening, success
+and failure feedback. Frontend and static contracts cover the launch path.
+
+11 October login, display and notification follow-up: the next protected
+desktop generation reuses the mode selected by the greeter. Its login broker
+still waits for Polkit registration, but its readiness signal polls every
+100 ms during startup and returns to a one-second heartbeat after registration.
+New sessions seed a 1920×1080 profile only for a `Virtual-1` output; physical
+displays retain their selected mode, while existing user profiles are
+preserved. Secure DNS, firewall and device-protection warnings now remain
+visible in live Security Center status immediately, while desktop attention and
+notification prompts wait for 30 seconds of continuous warning. Critical
+events remain immediate. `<development-host>`
+currently runs at 2560×1440 and has an existing migration marker, so its
+resolution choice is not overwritten. The user restarted only
+`greyward-security-context-user.service`; the user manager logged a successful
+start of the updated development overlay at 13:54 CEST, while Labwc and DMS
+remained unchanged and SELinux stayed Enforcing.
+
+11 October protected-session startup follow-up: Application Security 0.1.0-41,
+Enrollment 0.1.0-16 and DMS v1.6.2-14 are installed on `<development-host>`. Enrollment 14
+refreshed the verified session worker and integrity receipts through its
+quiescent migration. The earlier successful login took 6.35 seconds to reach
+DMS; the startup backdrop now appears before the desktop, and the user accepts
+that visual transition workaround for now. This improves the black-screen
+experience but does not claim faster session startup. An earlier failed attempt
+entered GNOME and `gnome-shell` segfaulted in `libmutter-18.so`; the successful
+GREYWARD path later used the protected session.
+
+Earlier 11 October keyring observation: `<development-host>`'s greetd PAM stack includes GNOME Keyring's
+authentication and session hooks, and the login journal reports the daemon
+starting and unlocking. The login keyring file did not exist before the reported
+prompt and was created when the session first requested a secret, indicating
+first-use keyring setup rather than a failed unlock of an existing keyring. It
+was present and unlocked at the last check. No keyring reset, blank-password
+keyring, or PAM/SELinux weakening was used. No later prompt observation is
+recorded.
+
+10 October DMS monitor configuration: `<development-host>` now uses the corrected DMS user
+unit. DMS had joined the absolute `WAYLAND_DISPLAY` it inherited from UWSM to
+`XDG_RUNTIME_DIR`, producing a nonexistent double-prefixed socket path. The
+unit pins the relative `wayland-0` name; after installing the corrected session
+RPM and restarting only DMS, logs confirmed WLR output-manager initialization
+and `wlr-randr` read back 2560×1440. SELinux remained Enforcing. The ISO stager
+now rejects a `greyward-session` RPM unless its packaged DMS unit matches the
+fixed source unit byte for byte. See the [monitor configuration
+record](architecture/DMS_MONITOR_CONFIGURATION.md).
+
+10 October: the user accepts the R5 installation/login fix. R6 is built, hash-verified on Windows and mounted in the existing R5 VM with the output-management commit 8c130a662b047a33406c695d54adf524cc302d99 and a greeter-only CPU OpenGL renderer correction for the canonical wallpaper. Private compiled-protocol and actual embedded-greeter rendering checks pass; installed R6 greeter and DMS apply remain pending. See the candidate evidence (private development evidence).
+
+Earlier entries below are dated evidence, not current acceptance claims.
+
+Earlier 10 October monitor notes recorded three failures in order.
+The protected Labwc global filter omitted `zwlr_output_manager_v1`; the auth
+session then combined its private `XDG_RUNTIME_DIR` with an absolute
+`WAYLAND_DISPLAY`; finally DMS Settings retained a stale QML backend flag even
+after DMS logged a successful WLR manager bind and `wlroutput` capability. The
+Labwc and socket fixes are deployed on `<development-host>`, SELinux remains Enforcing, and a
+headless scale transaction passed. A reactive QML readiness patch is recorded
+in the pinned DMS release manifest; exact shell assembly and a network-isolated
+`greyward-dms-1.6.2-9` RPM build passed. The patched QML file is deployed as a
+manifest-verified development overlay on `<development-host>`, but the DMS RPM selector remains
+at `v1.6.2-6`. The prior desktop session is at the greeter; live Settings and
+mode-change acceptance need a fresh interactive login. No new ISO was built. See the
+[monitor configuration record](architecture/DMS_MONITOR_CONFIGURATION.md) and
+[production contract](../environment/production/README.md).
+
+10 October r5 candidate: Enrollment 5 corrects the confirmed mode-0700 program-directory login failure. The repaired r4 installation reaches the desktop (user confirmation and console evidence). R5 composition, embedded payload checks and Windows SHA-256 verification pass; fresh r5 installation, default session selection and installed security acceptance remain pending. See the candidate evidence (private development evidence).
+
+10 October installed r4 acceptance: installation completed according to the user, but GREYWARD Labwc login fails and the greeter defaults to Hyprland. R4 is not accepted. Only the new test VM is in an approved rescue investigation; .149 remains the unchanged build host. See the failure evidence (private development evidence).
+
+10 October ISO rebuild: r3 failed clean installation because private installer-origin storage was missing; it is rejected. Enrollment revision 4 is rebuilt, eleven lifecycle tests pass, and the actual packaged broker reproduces the missing-directory failure then succeeds with corrected private storage in a synthetic clean root. The r4 ISO has built, passed payload checks, and hash-matched on Windows. It is attached to the new empty test VM without runtime activation on `<development-host>`. Clean-install acceptance remains pending. See the candidate evidence (private development evidence).
+
+10 October enrollment ISO candidate: matched installer enrollment inputs are now
+packaged without activating them on `<development-host>`. The copied offline SELinux store
+links successfully and the packaged compositor digest matches. The build host
+remains the running development system. Candidate composition has passed;
+clean-install, graphical enrollment and encrypted recovery acceptance remain
+pending on the separate test VM. See the [enrollment authority](security-center/APPLICATION_SECURITY_ENROLLMENT.md).
+
+The earlier 10 October blocker receipts below are historical snapshots; their
+pre-assembly NO-GO findings are superseded only by the scoped checks recorded
+above, not by production acceptance. See the candidate evidence (private development evidence).
+
+
+10 October enrollment-required ISO readiness (private development evidence):
+protected graphical login is observed running; dedicated build storage has 41 GiB
+free. Actual authentication assembly rejects the revision-8 RPM's receipt.
+Matched enrollment packaging, installer activation and encrypted repair/rollback
+remain blocking. The user requires enrollment before building; no ISO was built.
+
+
+10 October login routing recovery (private development evidence):
+session 9 is built and installed on the development machine. It restores enrolled
+protected admission after session 8 selected ordinary Labwc. Seven focused Fedora
+tests and package verification pass; real graphical login retry remains pending.
+
+10 October final ISO blocker audit (private development evidence):
+DMS candidate 1.6.2-8 pins recorded Fedora Python 3.14.8 exactly; its offline RPM
+rebuild and 50 upstream tested Go packages pass in the explicitly authorized
+`<development-host>` build workspace.
+Center 90 / Context 82 artifacts remain preserved. Production enrollment and
+authenticated repair/rollback are unvalidated and incompletely packaged; ISO
+construction remains NO-GO. No installed package or active session is changed.
 
 10 October repository consolidation and ISO preparation (private development evidence):
 source candidates Center 90 / Context 82, runtime 33 and DMS 1.6.2-7 have distinct
@@ -495,7 +603,7 @@ replacement for the domain specifications listed in [INDEX.md](INDEX.md).
 - `GREYWARD-DEV` is defined as the production definition plus the explicit
   `environment/development/` overlay.
 - A reachable 2026-08-30 internal-alpha VM is available for runtime diagnosis,
-  but it is development-contaminated (`development-user`, SSH and development services)
+  but it is development-contaminated (`example-user`, SSH and development services)
   and still carries the disposable `greyward` live account. It is evidence for
   user-session behavior only, not installed-production acceptance.
 - Labwc is the canonical compositor; Hyprland remains the supported fallback.

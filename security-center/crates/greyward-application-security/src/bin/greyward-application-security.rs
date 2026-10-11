@@ -8,12 +8,16 @@ fn main() {
             .and_then(|store| serve_reads(store).map_err(|_| ()))
     } else if arguments == ["--workflows"] {
         serve_enrolled().map_err(|_| ())
-    } else if arguments.len() == 2 && arguments[0] == "--prepare-account" {
+    } else if arguments.len() == 2
+        && (arguments[0] == "--prepare-account" || arguments[0] == "--prepare-installer-account")
+    {
         arguments[1].to_str().ok_or(()).and_then(|name| {
-            PolicyStore::open_system()
-                .map_err(|_| ())?
-                .prepare_account(name)
-                .map_err(|_| ())
+            let mut store = PolicyStore::open_system().map_err(|_| ())?;
+            if arguments[0] == "--prepare-installer-account" {
+                store.prepare_installer_account(name).map_err(|_| ())
+            } else {
+                store.prepare_account(name).map_err(|_| ())
+            }
         })
     } else if arguments.len() == 3 && arguments[0] == "--advance-account" {
         let phase = match arguments[2].to_str() {

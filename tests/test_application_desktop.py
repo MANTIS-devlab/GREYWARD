@@ -77,5 +77,42 @@ class DesktopTheme(unittest.TestCase):
                     assembly.copy_theme(source, source / 'display')
 
 
+class ExistingCompositorMigration(unittest.TestCase):
+    def test_uses_only_compositor_bytes_recorded_by_existing_protected_manifest(self):
+        import hashlib
+        import json
+        with tempfile.TemporaryDirectory() as folder:
+            active = Path(folder) / 'active'
+            (active / 'bin').mkdir(parents=True)
+            compositor = active / 'bin/labwc'
+            compositor.write_bytes(b'installed protected compositor')
+            digest = hashlib.sha256(compositor.read_bytes()).hexdigest()
+            (active / 'desktop.json').write_text(json.dumps({
+                'schema': 'greyward.protected-desktop/v1',
+                'source': {'labwc': '12987307a5de32db5acbb3f59d41277373ab969e'},
+                'files': {'bin/labwc': digest},
+            }))
+            with mock.patch.object(assembly, 'trusted_root_file'):
+                self.assertEqual(assembly.compositor_digest(
+                    Path(folder) / 'missing-inputs.json', active), digest)
+
+    def test_rejects_changed_compositor_against_existing_manifest(self):
+        import hashlib
+        import json
+        with tempfile.TemporaryDirectory() as folder:
+            active = Path(folder) / 'active'
+            (active / 'bin').mkdir(parents=True)
+            compositor = active / 'bin/labwc'
+            compositor.write_bytes(b'changed compositor')
+            (active / 'desktop.json').write_text(json.dumps({
+                'schema': 'greyward.protected-desktop/v1',
+                'source': {'labwc': '12987307a5de32db5acbb3f59d41277373ab969e'},
+                'files': {'bin/labwc': hashlib.sha256(b'previous compositor').hexdigest()},
+            }))
+            with mock.patch.object(assembly, 'trusted_root_file'):
+                with self.assertRaisesRegex(RuntimeError, 'receipt mismatch'):
+                    assembly.compositor_digest(Path(folder) / 'missing-inputs.json', active)
+
+
 if __name__ == '__main__':
     unittest.main()

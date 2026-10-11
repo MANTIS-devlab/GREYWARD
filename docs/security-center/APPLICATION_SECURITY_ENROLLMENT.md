@@ -6,6 +6,68 @@ Production activation remains gated by actual enforcement/admission/rollback evi
 records current source and scoped validation. This document owns the proposed
 enrollment lifecycle, not a second application-security product contract.
 
+## Installer candidate integration — 10 October 2026
+
+Revision 4 installed login failed before the compositor could execute: the
+coordinator's umask 077 left its assembled `/usr/lib/greyward/application-security`
+program directories at mode 0700. The retained worker traceback and installed
+`namei` output establish this filesystem-permission defect, rather than a
+missing library or a demonstrated SELinux rule defect. Revision 5 explicitly
+validates the generated program closure before finalizing only its directories
+to root-owned mode 0755. File hashes and labels are unchanged; `/var/lib` policy,
+grants and `/run` authentication storage stay private. Thirteen lifecycle tests
+and an actual packaged-coordinator DAC fixture pass. After the scoped rescue
+repair, the user confirms r4 login succeeds and the real console shows its DMS
+desktop. R5 composition and Windows hash verification pass. Fresh r5 installation,
+default greeter selection and installed enforcement acceptance remain pending;
+the repaired r4 login alone is not production acceptance. See the dated evidence below.
+
+The revision-3 ISO failed first boot: the coordinator omitted the broker's
+root-owned `account-origins` directory and private broker state directory. Revision 4 now validates/creates this
+private directory before broker preparation, checkpoints prepared input hashes,
+refuses changed inputs/mappings on continuation and preserves the original
+first-boot diagnostics. Eleven focused tests and actual packaged-broker clean-root
+preparation pass; installed enrollment remains unvalidated until the replacement
+ISO's clean-install gate passes. The failed test VM is retained. See the dated
+candidate evidence (private development evidence).
+
+IMPLEMENTED for a manual-test ISO: `packaging/greyward-enrollment/` packages the
+six existing SELinux modules, protected Labwc patches, source/digest receipt and
+existing authenticated offline maintenance console. Installation has no policy,
+mapping or service activation scriptlets. The existing first-boot provisioner
+alone invokes its fixed coordinator while login remains gated.
+
+Anaconda captures root-owned provenance for the normal local accounts it creates;
+no predefined account, encryption passphrase or recovery account is supplied.
+The broker's root-only installer operation verifies the captured name, UID, GID
+and home before issuing enrollment. Existing users require deliberate migration.
+The coordinator prepares the actual ordinary-role closure, protected authentication
+from verified DMS 1.6.2-8, Administration and account mappings before admitting a
+new session. Persisted receipts are prerequisites, never proof of PROTECTED.
+Actual live admission and kernel readback remain authoritative.
+
+The candidate uses runtime 34, Center 91, Context 83, Session 10, Branding 15 and
+DMS 1.6.2-8. Six policy modules and four narrow CIL overlays link in a separate
+copied policy store with neverallow checking enabled. Packaged private compositor
+bytes match its receipt. These are package checks: installed enforcement,
+first-boot completion and recovery are **PENDING MANUAL ACCEPTANCE** on a separate
+empty VM. `<development-host>` is used only for candidate assembly and is not re-enrolled,
+rebooted or restarted.
+
+Explicit boot selection of `greyward-maintenance.target` uses the existing
+fresh-LUKS-authenticated physical-console boundary. `greyward-enrollment
+rollback-initial` restores only fresh-install mappings before protected resources
+or grants exist; it retains policy types and evidence. After-use grant/resource
+rollback, upgrades and supported account-management enrollment require deliberate
+repair and remain unfinished. No normal-session rescue bypass is added.
+
+Generic writable Flatpak grants, first-use portal approval and unsupported tool
+profiles remain unavailable. Candidate inclusion of the existing experimental
+runtime does not promote those features or imply universal same-user isolation.
+Non-blocking release hardening remains deferred. Keep installer branding,
+interactive account/LUKS flow, wallpaper, DNS and Administration in manual
+acceptance. Compilation cannot establish those outcomes.
+
 ## Current normal-session implementation
 
 ### Approved practical administration work — 9 October 2026
@@ -47,6 +109,31 @@ administrative command. Root shells remain privileged until explicitly exited,
 even after a timestamp expires. Administrator commands can modify protections;
 this is an explicit trust boundary, not a Protected Data application grant.
 Missing readiness refuses administration and never weakens ordinary coverage.
+
+### Protected desktop startup transition
+
+An earlier `<development-host>` login measured 5.33 seconds from PAM session-open to normal
+DMS configuration load; 2.21 seconds were spent in protected root admission.
+The readiness gate remains in place because removing it would start the ordinary
+desktop before the private authentication shell has registered Polkit. After
+Application Security 40 and Enrollment 15 were installed, the user observed
+about three seconds of black screen followed by about three seconds of the
+startup message. The broker's protected-session worker took 2.37 seconds, which
+matches the initial black interval. The message is currently drawn by the full
+DMS authentication shell, which is why it appears only after that shell starts.
+
+Application Security 41 adds a separate minimal, noninteractive Wayland
+background, started by the protected authentication owner before the full DMS
+shell. It has no keyboard focus or input region. Enrollment 16 refreshes that
+worker and its file receipt through the existing quiescent, rollback-capable
+migration. This moves the visual transition earlier; Polkit readiness and
+ordinary desktop admission remain gated exactly as before. The 100 ms startup
+poll also remains limited to initial readiness, then returns to its one-second
+heartbeat. Application Security 0.1.0-41 and Enrollment 0.1.0-16 both build on
+`<development-host>` with their package checks passing. Both are installed on `<development-host>`, and the
+migration refreshed the protected desktop receipt and shell inputs with SELinux
+Enforcing. The user visually confirmed that the new splash appears early during
+login; the normal DMS session is active afterward and SELinux remains Enforcing.
 
 The native Wayland terminal uses exclusive compositor input, a private devpts
 namespace and libvterm. Its root-owned closure binds the desktop manifest, native
@@ -131,6 +218,14 @@ closure includes the packaged GREYWARD `themerc` and SVG buttons at
 Loading the ordinary account's writable theme directory is not the repair
 path. A verified admitted compositor can reload those trusted decorations
 through SIGHUP without replacing the seat or authentication owner.
+
+The protected Labwc process also uses a fixed environment allowlist and does
+not read the account's writable `~/.config/labwc/environment`. Its launcher
+must therefore pass the canonical `XKB_DEFAULT_MODEL=pc105` and
+`XKB_DEFAULT_LAYOUT=fr` values itself. Without those values wlroots falls back
+to US QWERTY even when Fedora's locale tools report French AZERTY. The focused
+keyboard-layout test keeps this protected path aligned with the production
+Labwc defaults.
 
 Only nonexporting key inspection is reviewed. Unsupported temporary grants,
 general SSH/signing and IDE profiles stay UNAVAILABLE. Automatic installer/

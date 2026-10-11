@@ -112,6 +112,7 @@
   ],
   "runningAppsCurrentWorkspace": false,
   "runningAppsGroupByApp": false,
+  "displayProfileAutoSelect": true,
   "customPowerActionLock": "",
   "lockPamPath": "/etc/pam.d/greyward-dms-lock",
   "lockPamExternallyManaged": true,

@@ -154,6 +154,11 @@ through a root-owned helper before every `greetd` start. It also writes the
 wallpaper selection into `/var/cache/dms-greeter/session.json`, which the
 separately packaged Greeter 1.6.2 actually consumes. Production acceptance checks
 both the copied image and that selection. No separate greeter image is shipped.
+The embedded greeter wallpaper uses a shader effect. Qt runs its RHI/OpenGL
+backend with `LIBGL_ALWAYS_SOFTWARE=1` and `QT_OPENGL=software`, so Mesa supplies
+CPU rendering; Labwc still uses Pixman. Qt's non-shader `software` scenegraph
+rendered this wallpaper black. These settings apply only to the greeter;
+authentication, the embedded frontend and ordinary-session rendering are unchanged.
 
 DMS's production settings refer to the stable system assets in
 `/usr/share/greyward/dms/`; they do not contain developer-home paths. The
@@ -211,10 +216,6 @@ transaction temporarily disables the Flathub remote to prevent metadata refresh
 attempts, then restores it for future updates. DMS's upstream What's New
 changelog is disabled in the staged production patch. A clean install with the
 test VM's adapter disconnected is required before accepting any new ISO.
-
-Display Settings offers compositor include-file setup only for backends that
-implement it. Labwc retains its live WLR display controls without the unsupported
-Setup prompt; this does not add display persistence or change apply behavior.
 
 Auditd is enabled in production with a moderate GREYWARD policy. It records
 identity/authentication and authorization changes, login records, audit-policy
@@ -282,7 +283,7 @@ fingerprint; the production contract also verifies the package-owned provider,
 D-Bus, Polkit, helper, and UI paths. This prevents a stable RPM release number
 from allowing an older package payload to enter a new ISO unnoticed.
 
-The production definition must not require the `development-user` account, a developer
+The production definition must not require the `example-user` account, a developer
 password, passwordless sudo, SSH access, Hyper-V services, or developer tools.
 
 The normal installed path uses encrypted Btrfs root. Boot rollback remains a

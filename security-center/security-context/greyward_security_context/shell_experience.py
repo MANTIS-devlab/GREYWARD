@@ -44,14 +44,16 @@ def build_experience(shell, capsule, devices, usb_error, files, network, operati
             if not any(x["id"] == "sensor-unavailable" for x in pending):
                 pending.append(item("sensor-unavailable", "provider", "WARNING", "Privacy activity unavailable", "Live microphone and camera use cannot be confirmed.", "privacy"))
         elif category == "DEGRADED_PROTECTION" and state == "DEGRADED":
-            pending.append(item("secure-dns", "provider", "WARNING", "Secure DNS needs attention", signal.get("detail", "Encrypted DNS is unavailable."), "network"))
+            pending.append(item("secure-dns", "provider", "WARNING", "Secure DNS needs attention", signal.get("detail", "Encrypted DNS is unavailable."), "network",
+                                notification_stability_seconds=30))
         elif category == "SENSITIVE_DATA" and state == "ACTIVE":
             pending.append(item(signal.get("event_id", "clipboard"), "clipboard", "ACTION", "Sensitive text on clipboard", "Clear it when you have finished pasting.", "privacy",
                                 [action("clear_clipboard", "Clear clipboard")] if "clear_clipboard" in signal.get("actions", []) else []))
 
     if usb_error:
         if shell.get("evaluated_checks") is None:
-            pending.append(item("usb-unavailable", "provider", "WARNING", "Device protection unavailable", "Connected device permissions cannot be confirmed.", "devices"))
+            pending.append(item("usb-unavailable", "provider", "WARNING", "Device protection unavailable", "Connected device permissions cannot be confirmed.", "devices",
+                                notification_stability_seconds=30))
         for ref, op in operations.items():
             if op.get('state') in {'PENDING', 'VERIFYING', 'INDETERMINATE'}:
                 pending.append(item('usb:' + ref, 'usb', 'ACTION', 'Device approval', op.get('detail') or 'Waiting for authorization…', 'devices',
@@ -88,11 +90,13 @@ def build_experience(shell, capsule, devices, usb_error, files, network, operati
             state = check.get("state", "UNAVAILABLE")
             if state in {"REVIEW_NEEDED", "ACTION_REQUIRED", "UNKNOWN", "UNAVAILABLE"}:
                 pending.append(item(reference, "provider", "WARNING", title,
-                                    "Review this protection check in System checks.", "evidence", check_id=check_id))
+                                    "Review this protection check in System checks.", "evidence", check_id=check_id,
+                                    notification_stability_seconds=30))
 
     opensnitch = network.get("opensnitch", {})
     if shell.get('evaluated_checks') is None and shell.get('firewall', {}).get('state') in {'UNAVAILABLE', 'DISABLED', 'INACTIVE'}:
-        pending.append(item('firewall-unavailable', 'provider', 'WARNING', 'Firewall needs attention', 'Firewall protection cannot be confirmed.', 'network'))
+        pending.append(item('firewall-unavailable', 'provider', 'WARNING', 'Firewall needs attention', 'Firewall protection cannot be confirmed.', 'network',
+                            notification_stability_seconds=30))
     if opensnitch.get("state") in {"DEGRADED", "UNAVAILABLE"}:
         pending.append(item("network-protection", "provider", "WARNING", "Network protection needs attention", opensnitch.get("detail") or "Application protection cannot be confirmed.", "network"))
     threat = network.get("threat_intel") or {}

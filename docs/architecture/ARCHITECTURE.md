@@ -26,6 +26,22 @@ session`. DMS Greeter runs as the unprivileged `greeter` account, reads only its
 root-owned cache, and never receives or validates passwords itself. tty autologin is
 disabled; `/etc/pam.d/greetd` remains the authoritative authentication policy.
 
+For enrolled sessions, the protected login broker keeps the session admission
+gate closed until the private Polkit agent is registered. Its readiness signal
+checks every 100 ms during startup, then keeps a one-second heartbeat so the
+broker can detect a later agent failure. Labwc reuses the current output mode
+to avoid a needless display reset at session start. These changes shorten the
+handoff without allowing the ordinary desktop to start before protected
+authentication is ready. The private auth profile seeds the pinned DMS
+settings schema version so login does not replay completed settings migrations
+before the agent is ready; future schema versions still migrate forward. Its
+session worker also gives DMS the broker-created relative `wayland-0` alias
+inside the private authentication runtime. An absolute display path is
+incorrectly joined to that runtime and prevents the protected DMS Wayland
+clients from connecting. The explicit root migration refreshes the profile and
+session worker from trusted package-owned inputs, updates both integrity
+receipts, and requires a quiescent graphical seat.
+
 Offline update boots use the standard `/system-update` marker and
 `system-update.target`. The GREYWARD branding package adds a conditional Plymouth
 status unit to that target. Before DNF5 begins, the unit switches Plymouth to

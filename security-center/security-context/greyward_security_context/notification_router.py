@@ -4,12 +4,14 @@ import json
 import os
 import re
 import subprocess
+import time
 from pathlib import Path
 from .clamav import MEDIA_ROOTS
 
 APP_ID = 'systems.mantis.greyward.securitycenter'
 APP_NAME = 'GREYWARD Security Center'
 ICON = 'greyward-security-status'
+MAX_WARNING_STABILITY_SECONDS = 300.0
 
 
 def scan_context(path):
@@ -24,6 +26,7 @@ class NotificationRouter:
         self.path = state_path or Path(os.environ.get('XDG_RUNTIME_DIR', '/tmp')) / 'greyward-security-notification-delivery.json'
         self.records, self.owner, self.proxy = {}, '', None
         self._closing = set()
+        self._warning_since = {}
         try:
             value = json.loads(self.path.read_text())
             self.records = value.get('records', {})
@@ -82,11 +85,33 @@ class NotificationRouter:
                 if int(reason) in (1, 2): record['acknowledged'] = True
         self._save()
 
+    def eligible_items(self, items):
+        """Return the one alert projection shared by the shell and desktop."""
+        now = time.monotonic()
+        observed = {item['id']: item for item in items}
+        for key in set(self._warning_since) - set(observed):
+            self._warning_since.pop(key, None)
+        eligible = []
+        for item in items:
+            stability = item.get('notification_stability_seconds', 0)
+            deferred_warning = (item.get('severity') == 'WARNING' and
+                                isinstance(stability, (int, float)) and
+                                not isinstance(stability, bool) and
+                                0 < stability <= MAX_WARNING_STABILITY_SECONDS)
+            if not deferred_warning:
+                self._warning_since.pop(item['id'], None)
+                eligible.append(item)
+                continue
+            since = self._warning_since.setdefault(item['id'], now)
+            if now - since >= stability:
+                eligible.append(item)
+        return eligible
+
     def reconcile(self, items):
         import dbus
         if not self._connect(): return
-        active = {x['id']: x for x in items}
-        for key in set(self.records) - set(active):
+        observed = {x['id']: x for x in items}
+        for key in set(self.records) - set(observed):
             record = self.records.pop(key)
             notification_id = record.get('notification_id', 0)
             if notification_id:
@@ -94,7 +119,7 @@ class NotificationRouter:
                     self._closing.add(notification_id)
                     self.proxy.CloseNotification(dbus.UInt32(notification_id), timeout=3)
                 except dbus.DBusException: pass
-        for key, current in active.items():
+        for key, current in observed.items():
             record = self.records.get(key, {})
             old = record.get('item', {})
             record['item'] = current
