@@ -10,9 +10,60 @@ SOURCE = Path(__file__).resolve().parents[1] / 'security-center/packaging/applic
 SPEC = importlib.util.spec_from_file_location('greyward_authentication_assembly', SOURCE)
 assembly = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(assembly)
+MATERIALIZE_SOURCE = Path(__file__).resolve().parents[1] / 'security-center/packaging/application-security/desktop/materialize.py'
+MATERIALIZE_SPEC = importlib.util.spec_from_file_location('greyward_authentication_materialize', MATERIALIZE_SOURCE)
+materialize = importlib.util.module_from_spec(MATERIALIZE_SPEC)
+MATERIALIZE_SPEC.loader.exec_module(materialize)
 
 
 class AuthenticationAssembly(unittest.TestCase):
+    def test_private_auth_profile_marks_pinned_dms_defaults_current(self):
+        template = {'configVersion': 0, 'loginctlLockIntegration': False,
+                    'lockPamPath': '/unsafe/user/value', 'customDefault': 'preserved'}
+        settings = materialize.authentication_settings(template)
+
+        self.assertEqual(settings['configVersion'], 18)
+        self.assertEqual(settings['loginctlLockIntegration'], True)
+        self.assertEqual(settings['lockPamPath'], '/etc/pam.d/greyward-dms-lock')
+        self.assertEqual(settings['customDefault'], 'preserved')
+        self.assertEqual(template['configVersion'], 0)
+        self.assertEqual(template['lockPamPath'], '/unsafe/user/value')
+
+    def test_login_readiness_polls_fast_then_keeps_a_low_rate_heartbeat(self):
+        self.assertIn('id: readinessTimer', assembly.SHELL)
+        self.assertIn('interval: 100', assembly.SHELL)
+        self.assertIn('const registered = PolkitService.agent?.isRegistered === true;', assembly.SHELL)
+        self.assertIn('if (registered)\n                readinessTimer.interval = 1000;', assembly.SHELL)
+        self.assertIn('polkitRegistered: registered', assembly.SHELL)
+
+    def test_startup_backdrop_is_branded_noninteractive_and_behind_the_desktop(self):
+        self.assertIn('import Quickshell.Wayland', assembly.SHELL)
+        self.assertIn('model: Quickshell.screens', assembly.SHELL)
+        self.assertIn('WlrLayershell.layer: WlrLayer.Background', assembly.SHELL)
+        self.assertIn('WlrLayershell.keyboardFocus: WlrKeyboardFocus.None', assembly.SHELL)
+        self.assertIn('mask: Region { item: Item {} }', assembly.SHELL)
+        self.assertIn('Starting your secure desktop', assembly.SHELL)
+
+    def test_early_startup_surface_is_minimal_noninteractive_and_in_auth_shell_receipt(self):
+        splash = assembly.STARTUP_SHELL
+        self.assertIn('import QtQuick', splash)
+        self.assertIn('import Quickshell.Wayland', splash)
+        self.assertIn('WlrLayershell.layer: WlrLayer.Background', splash)
+        self.assertIn('WlrLayershell.keyboardFocus: WlrKeyboardFocus.None', splash)
+        self.assertIn('mask: Region { item: Item {} }', splash)
+        self.assertNotIn('PolkitService', splash)
+        self.assertNotIn('onClicked', splash)
+
+    def test_authentication_worker_starts_optional_splash_before_full_dms(self):
+        source = (Path(__file__).resolve().parents[1] /
+                  'security-center/packaging/application-security/desktop/authentication.py').read_text()
+        splash_start = source.index("BASE / 'shell/startup'")
+        backend_start = source.index("BASE / 'bin/dms'")
+        self.assertLess(splash_start, backend_start)
+        self.assertIn('except OSError as error:', source)
+        self.assertIn("runtime / 'authentication-ready.json'", source)
+        self.assertIn('process.terminate()', source)
+
     def fixture(self, base):
         # Synthetic structure exercises transformation/refusal without pretending
         # to be the pinned upstream files. Real QML/PAM is a separate Fedora gate.
@@ -82,6 +133,9 @@ readonly property bool u2fSuppressedByPrimaryPam: SettingsData.lockPamExternally
             self.assertEqual(first['coverage'], 'UNKNOWN')
             self.assertEqual(assembly.receipt(root), before)
             self.assertEqual(assembly.receipt(base / 'first/shell')[1], first['shellDigest'])
+            self.assertIn('startup/shell.qml', first['shellFiles'])
+            self.assertEqual((base / 'first/shell/startup/shell.qml').read_text(encoding='utf-8'),
+                             assembly.STARTUP_SHELL)
             lock = (base / 'first/shell/Modules/Lock/Lock.qml').read_text()
             self.assertIn('active: !root.authorizationActive', lock)
             self.assertIn('sourceComponent: LockSurface {', lock)
@@ -99,6 +153,24 @@ readonly property bool u2fSuppressedByPrimaryPam: SettingsData.lockPamExternally
                 with self.assertRaises(ValueError):
                     assembly.assemble(root, receipt, base / 'out')
             self.assertFalse((base / 'out').exists())
+
+    def test_candidate_revision_preserves_pins_and_rejects_unknown_releases(self):
+        with tempfile.TemporaryDirectory() as folder:
+            base = Path(folder)
+            root, receipt, pins = self.fixture(base)
+            release = json.loads(receipt.read_text())
+            with mock.patch.object(assembly, 'PREIMAGES', pins):
+                for supported in ['v1.6.2-8', 'v1.6.2-10', 'v1.6.2-11', 'v1.6.2-12', 'v1.6.2-13', 'v1.6.2-14']:
+                    release['releaseId'] = supported
+                    receipt.write_text(json.dumps(release))
+                    result = assembly.assemble(root, receipt,
+                                               base / ('candidate-' + supported.rsplit('-', 1)[1]))
+                    self.assertEqual(result['sourceRelease'], supported)
+                release['releaseId'] = 'v1.6.2-9'
+                receipt.write_text(json.dumps(release))
+                with self.assertRaises(ValueError):
+                    assembly.assemble(root, receipt, base / 'unknown')
+            self.assertFalse((base / 'unknown').exists())
 
     def test_existing_or_nested_outputs_refuse_without_mutation(self):
         with tempfile.TemporaryDirectory() as folder:

@@ -26,6 +26,8 @@ if "$require_marker"; then
   test -f /etc/greyward-production-complete || fail 'production completion marker is missing'
 fi
 checkpoint 'required production packages and login boundary'
+rpm -q greyward-application-security-experimental greyward-application-enrollment >/dev/null || fail 'enrollment package closure is missing'
+/usr/libexec/greyward-enrollment check || fail 'installer enrollment is not prepared'
 rpm -q dms-greeter greyward-session greyward-security-center greyward-security-context audit audit-rules policycoreutils wlopm net-tools >/dev/null || fail 'required production package is missing'
 test -x /usr/bin/dms-greeter || fail 'DMS Greeter is not installed'
 /usr/libexec/greyward-dms-verify >/dev/null || fail 'Selected DMS runtime or tested tuple is invalid'

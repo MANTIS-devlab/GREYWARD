@@ -1,0 +1,2 @@
+/usr/lib/greyward/application-security/administration/terminal -- gen_context(system_u:object_r:greyward_admin_exec_t,s0)
+/usr/lib/greyward/application-security/administration/unix_chkpwd -- gen_context(system_u:object_r:greyward_admin_password_exec_t,s0)

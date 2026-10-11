@@ -4,7 +4,7 @@ Development evidence from normal `.149`; not production lifecycle acceptance.
 
 ## Cause and correction
 
-After boot, greetd authenticated `development-user` but the GREYWARD session exited.
+After boot, greetd authenticated `stendev` but the GREYWARD session exited.
 The protected-seat broker relabels the console before ordinary UWSM startup.
 The login process retained console standard descriptors, producing denied
 ordinary-domain writes/ioctls against the protected authentication terminal.

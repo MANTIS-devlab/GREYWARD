@@ -1024,7 +1024,7 @@ test("keeps Privacy export destination feedback visible and failure-safe", () =>
 
 test("separates confirmed DMS display freshness from evidence and action authority", () => {
   const widget = readFileSync(new URL("../../../environment/session/dankmaterialshell/plugins/greywardSecure/SecureWidget.qml", import.meta.url), "utf8");
-  assert.match(widget, /items: showingSnapshot \? presentation.items/);
+  assert.match(widget, /items: showingSnapshot \? presentation\.notification_items \|\| \[\]/);
   assert.match(widget, /activities: showingSnapshot \? presentation.activity/);
   assert.match(widget, /readonly property bool fresh: freshnessLeaseValid/);
   assert.match(widget, /readonly property bool showingSnapshot: displayFresh \|\| requestPending/);
@@ -1053,6 +1053,9 @@ test("uses the native DMS subscription for live privacy capsule changes", () => 
   assert.match(widget, /readonly property bool fresh: freshnessLeaseValid/);
   assert.match(widget, /readonly property bool showingSnapshot: displayFresh \|\| requestPending/);
   assert.match(widget, /if \(!freshnessLeaseValid \|\| actionPending\) return;/);
+  assert.match(widget, /const eligibleItems = next\.notification_items \|\| \[\]/);
+  assert.match(widget, /root\.items\.slice\(0,1\)/);
+  assert.doesNotMatch(widget, /notificationStabilityMs|deferredAttentionSince|item\.notification_stability_seconds/);
   assert.doesNotMatch(widget, /gdbus monitor|notify-send/);
 });
 

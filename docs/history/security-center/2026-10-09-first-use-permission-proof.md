@@ -27,7 +27,7 @@ FileChooser protocol from that sandbox, not Collabora's actual chooser selection
 or document editing. Run the probe as the enrolled user:
 
 ```bash
-python3 tools/greyward-dev/application-security-first-use-proof.py --app com.collaboraoffice.Office --registered-folder /home/development-user/.ssh --portal
+python3 tools/greyward-dev/application-security-first-use-proof.py --app com.collaboraoffice.Office --registered-folder /home/stendev/.ssh --portal
 ```
 
 | Experiment | Actual result |

@@ -1,7 +1,7 @@
 {
   "schema": "greyward.dms-release/v1",
   "status": "candidate-unpromoted",
-  "releaseId": "v1.6.2-7",
+  "releaseId": "v1.6.2-14",
   "dms": {
     "tag": "v1.6.2",
     "commit": "2db7646fe3ab47fddfdb8723f2da07d61a0d47ac",
@@ -29,11 +29,11 @@
     ],
     "moduleMode": "vendor",
     "network": "disabled",
-    "sourceDateEpoch": 1788872400,
+    "sourceDateEpoch": 1791590400,
     "fedora": 44,
     "requiredPackages": {
-      "golang": "1.26.8-2.fc44.x86_64",
-      "python3": "3.14.7-1.fc44.x86_64",
+      "golang": "1.26.9-1.fc44.x86_64",
+      "python3": "3.14.8-1.fc44.x86_64",
       "make": "4.4.1-12.fc44.x86_64",
       "rpm-build": "6.0.2-1.fc44.x86_64"
     }
@@ -143,11 +143,19 @@
       "preimages": {
         "Modules/Lock/Lock.qml": "82adc905f7581c8f8415fde32a23f4bacc7de2b65f789c6400f1b32176bef968"
       }
+    },
+    {
+      "file": "greyward-wlr-output-readiness.patch",
+      "sha256": "a785e986a6999d0c78f822d2ca05512a5f5fbe95873a5b328ec7a8e030daf14e",
+      "reason": "Use successful wlroutput.getState replies as monitor readiness, with a bounded timeout and retry independent of capability-event ordering.",
+      "preimages": {
+        "Services/WlrOutputService.qml": "8d6c51c57f2bdd66e89518f5306d527f0a19167aa5ec762000d3801bf539a544"
+      }
     }
   ],
   "shell": {
-    "sha256": "4e125c1e38bb01242994c733cc5561f03ce4e711a0d30a009d152f5c85c2dd1f",
-    "patchedFiles": 20,
+    "sha256": "68344e1b9e017c6d82ce232a44050e04fd6b7691a0f3dfb4d091997072dcd73a",
+    "patchedFiles": 21,
     "qmlFiles": 638,
     "commonQmlFiles": 74,
     "commonFiles": 111

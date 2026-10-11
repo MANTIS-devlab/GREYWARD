@@ -4,7 +4,7 @@ Status: PASS for scoped normal-session development integration; dated evidence,
 not release acceptance.
 
 This receipt supersedes the 7 October unenrolled `.149` integration state.
-The normal `development-user` account is deliberately enrolled. Its real greetd PAM
+The normal `stendev` account is deliberately enrolled. Its real greetd PAM
 session, ordinary user manager and SSH shell use `greyward_guard_u` /
 `greyward_guard_r` / `greyward_guard_t`. SELinux remains Enforcing. Fedora
 PAM/authselect are unchanged. No reboot, installer, image or LUKS change occurred.
@@ -107,7 +107,7 @@ inherited NOPASSWD ALL development sudo rule was removed, not restored.
 
 Protecting `.ssh` also correctly denies the dropped-UID OpenSSH public-key
 lookup. The development account's existing **public** authorized keys are copied
-to root-owned `/etc/ssh/greyward-authorized-keys/development-user`; a user-specific sshd
+to root-owned `/etc/ssh/greyward-authorized-keys/stendev`; a user-specific sshd
 drop-in selects that path. Private keys remain protected. This is an explicit
 development integration receipt; production key management/ownership is not
 automatically supplied by the experimental package.

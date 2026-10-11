@@ -10,7 +10,7 @@ Before any deployment, `.149` had a 62 GiB encrypted Btrfs root/home filesystem,
 59 GiB used, approximately 1,006 MiB available (99% used). Inspection identified
 compiler artifacts rather than user files as the safe cleanup candidates:
 
-- Verified `/home/development-user/.cache/go-build` against `go env GOCACHE`, ownership
+- Verified `/home/stendev/.cache/go-build` against `go env GOCACHE`, ownership
   and its cache README; `go clean -cache` increased available space to 3.5 GiB.
 - Verified the exact debug incremental directory beneath
   `/var/tmp/greyward-application-security-build/security-center/target`, its
