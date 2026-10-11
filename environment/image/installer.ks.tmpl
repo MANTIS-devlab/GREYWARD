@@ -145,6 +145,16 @@ ln -sfn ../firstboot-status.service \
 # exists yet. Create the marker directory explicitly before writing the retry
 # boundary used by the first-boot services.
 install -d -m 0755 /mnt/sysroot/var/lib/greyward/installer
+/usr/bin/python3 "$target_stage/installer-accounts.py"
+# Keep every stock console login route gated until installer enrollment is
+# prepared. No PAM edits, predefined accounts or authentication bypass.
+for login_template in getty@ serial-getty@; do
+  install -d -m0755 "/mnt/sysroot/etc/systemd/system/$login_template.service.d"
+  cat > "/mnt/sysroot/etc/systemd/system/$login_template.service.d/greyward-enrollment-pending.conf" <<'EOF'
+[Unit]
+ConditionPathExists=!/var/lib/greyward/installer/production-pending
+EOF
+done
 # Reaching this point means Anaconda has completed its package transaction from
 # the ISO-local repository. The first-boot finalizer uses this durable marker to
 # avoid resolving and reinstalling the same Fedora RPM closure a second time.

@@ -518,6 +518,8 @@ environment/production/external-rpms.txt.
       --dms-rpm "$build/rpms/greyward-dms-CURRENT.x86_64.rpm" \
       --security-rpm "$build/rpms/greyward-security-center-CURRENT.x86_64.rpm" \
       --security-rpm "$build/rpms/greyward-security-context-CURRENT.noarch.rpm" \
+      --enrollment-rpm "$build/rpms/greyward-application-security-experimental-CURRENT.x86_64.rpm" \
+      --enrollment-rpm "$build/rpms/greyward-application-enrollment-CURRENT.x86_64.rpm" \
       --security-build-manifest "$build/rpms/security-center-build-manifest.tsv" \
       --production-rpm "$build/inputs/rpms/opensnitch-1.8.0-1.x86_64.rpm"
 

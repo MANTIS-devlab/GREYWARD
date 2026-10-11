@@ -118,7 +118,7 @@ portal/deputy resistance by itself.
 Build on Fedora with `make -f /usr/share/selinux/devel/Makefile
 greyward_guard_probe.pp`. Install only using the bounded development probe
 tool, on a separate test account. Never add this module to the production
-manifest, change the default login mapping, disable SELinux or map `development-user`.
+manifest, change the default login mapping, disable SELinux or map `stendev`.
 
 Copy the policy, probe Python file and
 `tools/greyward-dev/application-security-feasibility.sh` into a private staging

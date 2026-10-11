@@ -85,7 +85,7 @@ verified on 2026-09-16; the current IP and attached ISO can change between tests
 | Installer media | Candidate ISO attached to the SATA CD/DVD device and connected |
 | Graphics | VMware 3D enabled; VMX caps are 2560x1440, but this is not a DRM-mode guarantee; see the VMware Wayland diagnostic |
 | Network | Bridged `vmxnet3`; DHCP address resolved through the managed alias |
-| Guest access | `development-user`, SSH public-key authentication only; password SSH disabled |
+| Guest access | `stendev`, SSH public-key authentication only; password SSH disabled |
 | VMware Tools | `vmrun checkToolsState` currently reports `unknown`; do not assume guest operations are available |
 
 ### Short SSH protocol for an agent

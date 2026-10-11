@@ -1,5 +1,39 @@
 # GREYWARD documentation index
 
+10 October: the user accepts the R5 installation/login fix. R6 is built, hash-verified on Windows and mounted in the existing R5 VM with the output-management commit 8c130a662b047a33406c695d54adf524cc302d99 and a greeter-only CPU OpenGL renderer correction for the canonical wallpaper. Private compiled-protocol and actual embedded-greeter rendering checks pass; installed R6 greeter and DMS apply remain pending. See the [candidate evidence](history/migrations/2026-10-10-enrollment-iso-candidate.md).
+
+Earlier entries below are dated evidence, not current acceptance claims.
+
+10 October r5 candidate: Enrollment 5 corrects the confirmed mode-0700 program-directory login failure. The repaired r4 installation reaches the desktop (user confirmation and console evidence). R5 composition, embedded payload checks and Windows SHA-256 verification pass; fresh r5 installation, default session selection and installed security acceptance remain pending. See the [candidate evidence](history/migrations/2026-10-10-enrollment-iso-candidate.md).
+
+10 October installed r4 acceptance: installation completed according to the user, but GREYWARD Labwc login fails and the greeter defaults to Hyprland. R4 is not accepted. Only the new test VM is in an approved rescue investigation; .149 remains the unchanged build host. See the [failure evidence](history/migrations/2026-10-10-enrollment-iso-candidate.md).
+
+10 October ISO rebuild: r3 failed clean installation because private installer-origin storage was missing; it is rejected. Enrollment revision 4 is rebuilt, eleven lifecycle tests pass, and the actual packaged broker reproduces the missing-directory failure then succeeds with corrected private storage in a synthetic clean root. The r4 ISO has built, passed payload checks, and hash-matched on Windows. It is attached to the new empty test VM without runtime activation on `.149`. Clean-install acceptance remains pending. See the [candidate evidence](history/migrations/2026-10-10-enrollment-iso-candidate.md).
+
+10 October enrollment ISO candidate: matched installer enrollment inputs are now
+packaged without activating them on `.149`. The copied offline SELinux store
+links successfully and the packaged compositor digest matches. The build host
+remains the running development system. Candidate composition has passed;
+clean-install, graphical enrollment and encrypted recovery acceptance remain
+pending on the separate test VM. See the [enrollment authority](security-center/APPLICATION_SECURITY_ENROLLMENT.md).
+
+The earlier 10 October blocker receipts below are historical snapshots; their
+pre-assembly NO-GO findings are superseded only by the scoped checks recorded
+above, not by production acceptance. See the [candidate evidence](history/migrations/2026-10-10-enrollment-iso-candidate.md).
+
+
+[Enrollment-required ISO readiness](history/migrations/2026-10-10-enrollment-required-readiness.md)
+records the cleared storage gate, observed protected login and actual revision-8
+authentication assembly failure. Mandatory enrollment/recovery gates remain open.
+
+
+[Enrolled login routing recovery](history/security-center/2026-10-10-login-admission-recovery.md)
+records session 9's installed fail-closed routing repair; real login retry is pending.
+
+[Final ISO blockers](history/migrations/2026-10-10-final-iso-blockers.md)
+records the Python toolchain correction, unchanged verification and unresolved
+production enrollment/package/recovery gates. ISO construction remains NO-GO.
+
 [Repository consolidation and ISO preparation, 10 October](history/migrations/2026-10-10-release-preparation.md)
 records source/package checks, safe publication and measured build storage.
 ISO construction remains NO-GO; no deployment or release approval is implied.
@@ -71,9 +105,6 @@ relevant; it never overrides current documentation.
 The active [DMS 1.6.2 migration tracker](architecture/DMS_1_6_MIGRATION_PLAN.md)
 defines candidate packaging, exact patch assembly and acceptance gates. It is not a
 release-validation record.
-
-The [DMS monitor configuration record](architecture/DMS_MONITOR_CONFIGURATION.md)
-explains the Wayland socket-path fix and the ISO stager's session-RPM freshness check.
 
 The 4 October [final architecture audit](architecture/FINAL_ARCHITECTURE_AUDIT.md)
 and [build/ISO audit](architecture/BUILD_ISO_AUDIT.md) assess the actual local

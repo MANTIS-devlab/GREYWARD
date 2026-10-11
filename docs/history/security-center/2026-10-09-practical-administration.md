@@ -10,7 +10,7 @@ establish production or authenticated rescue-boot acceptance.
 Preserved the pre-existing working tree (458 entries at the initial inventory).
 No reset, commit, reboot, ISO change, authentication rewrite or ordinary-role
 administrator admission. Installed Center 88 / Context 81 / experimental runtime
-30 on Fedora 44. SELinux remains enforcing; `development-user` retains
+30 on Fedora 44. SELinux remains enforcing; `stendev` retains
 `greyward_guard_u:greyward_guard_r:greyward_guard_t:s0`.
 
 Root-private rollback directory:

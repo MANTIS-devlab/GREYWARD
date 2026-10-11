@@ -1,6 +1,6 @@
 Name: greyward-session
 Version: 0.1.0
-Release: 9%{?dist}
+Release: 14%{?dist}
 Summary: GREYWARD static desktop session policy and factory defaults
 License: GPL-3.0-only
 BuildArch: noarch
@@ -62,3 +62,10 @@ done
 /etc/xdg-desktop-portal/greyward
 /usr/share/wayland-sessions/greyward-labwc.desktop
 /usr/share/greyward/defaults
+
+%changelog
+* Sun Oct 11 2026 MANTIS SYSTEMS - 0.1.0-14
+- Seed first-session virtual display defaults and reuse Labwc's current output mode.
+
+* Sun Oct 11 2026 MANTIS SYSTEMS - 0.1.0-13
+- Rebuild current session sources above the installed .149 baseline.

@@ -23,6 +23,8 @@ The bundle must contain exactly these reviewed inputs:
   rpms/greyward-branding-*.rpm
   rpms/greyward-security-center-*.rpm
   rpms/greyward-security-context-*.rpm
+  rpms/greyward-application-security-experimental-*.rpm
+  rpms/greyward-application-enrollment-*.rpm
   rpms/security-center-build-manifest.tsv
   inputs/rpms/opensnitch-1.8.0-1.x86_64.rpm
   output/                         # immutable candidates and sidecars
@@ -87,6 +89,8 @@ bash "$repo/environment/image/build-iso.sh" \
   --session-rpm "$(find "$build/rpms" -maxdepth 1 -name 'greyward-session-*.rpm' -type f -print -quit)" \
   --security-rpm "$(find "$build/rpms" -maxdepth 1 -name 'greyward-security-center-*.rpm' -type f -print -quit)" \
   --security-rpm "$(find "$build/rpms" -maxdepth 1 -name 'greyward-security-context-*.rpm' -type f -print -quit)" \
+  --enrollment-rpm "$(find "$build/rpms" -maxdepth 1 -name 'greyward-application-security-experimental-[0-9]*.x86_64.rpm' -type f -print -quit)" \
+  --enrollment-rpm "$(find "$build/rpms" -maxdepth 1 -name 'greyward-application-enrollment-*.x86_64.rpm' -type f -print -quit)" \
   --security-build-manifest "$build/rpms/security-center-build-manifest.tsv" \
   --production-rpm "$build/inputs/rpms/opensnitch-1.8.0-1.x86_64.rpm"
 
@@ -131,6 +135,12 @@ selected installation. The factory checks the seed receipt, retains the reviewed
 objects in a receipt-addressed cache, records the receipt digest, and installs the
 complete final payload into an empty networkless verification root. Never use an
 ambient host cache as verification evidence.
+
+The installer also needs the Flathub remote descriptor. The builder downloads it
+from the official endpoint by default. If the builder cannot reach that endpoint,
+set `GREYWARD_FLATHUB_REPO_FILE` to a local copy downloaded over HTTPS from
+`https://dl.flathub.org/repo/flathub.flatpakrepo`. The factory checks the exact
+Flathub URL and pinned signing-key digest before including the descriptor.
 
 DNF `--store` bypasses ordinary `keepcache` retention. The factory therefore
 retains selected objects at paths reported by libdnf5 after the fresh solve;

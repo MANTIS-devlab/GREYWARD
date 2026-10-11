@@ -2,6 +2,7 @@
   <core>
     <decoration>server</decoration>
     <gap>0</gap>
+    <reuseOutputMode>yes</reuseOutputMode>
     <xwaylandPersistence>yes</xwaylandPersistence>
   </core>
 

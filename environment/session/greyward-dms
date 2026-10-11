@@ -8,6 +8,10 @@ else
 fi
 export PATH="$root/bin:/usr/local/bin:/usr/bin:/bin"
 export DMS_SHELL_DIR="$root/shell"
+if [[ "$(/usr/bin/id -Z)" == greyward_guard_u:* ]]; then
+  # Password-bearing UI belongs to the broker's separate authentication seat.
+  export DMS_DISABLE_POLKIT=1
+fi
 export XDG_DATA_DIRS="/usr/local/share:/usr/share${XDG_DATA_DIRS:+:$XDG_DATA_DIRS}"
 # Global flags can precede the command, so reject shell overrides everywhere.
 for argument in "$@"; do

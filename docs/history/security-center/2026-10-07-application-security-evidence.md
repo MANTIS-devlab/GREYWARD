@@ -229,7 +229,7 @@ The host recovery receipt is retained in ignored
 
 ### Development evidence, 6 October 2026
 
-The fixed `greyward-guard-probe` account on .149 is independent of `development-user`.
+The fixed `greyward-guard-probe` account on .149 is independent of `stendev`.
 The development module and login mapping are never production inputs.
 Installing Fedora SELinux development tools upgraded the test machine's policy
 from 44.8 to **44.11-1.fc44**; this is the tested development tuple, not a

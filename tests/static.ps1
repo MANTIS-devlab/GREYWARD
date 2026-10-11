@@ -47,6 +47,9 @@ $labwcSessionLauncherPath = Join-Path $repo 'environment\production\greyward-sta
 $dmsServicePath = Join-Path $repo 'environment\session\greyward-dms.service'
 $artifactPolicyPath = Join-Path $repo 'environment\production\artifact-policy.json'
 $dmsSettingsPath = Join-Path $repo 'environment\session\dankmaterialshell\settings.json'
+$dmsMonitorDefaultsPath = Join-Path $repo 'environment\session\dankmaterialshell\monitors.json'
+$applicationSecuritySpecPath = Join-Path $repo 'security-center\packaging\application-security\greyward-application-security-experimental.spec'
+$enrollmentSpecPath = Join-Path $repo 'packaging\greyward-enrollment\greyward-enrollment.spec'
 $dmsSessionMigratePath = Join-Path $repo 'environment\session\greyward-dms-session-migrate'
 $dmsPluginSettingsPath = Join-Path $repo 'environment\session\dankmaterialshell\plugin_settings.json'
 $dmsThemePath = Join-Path $repo 'environment\session\dankmaterialshell\greyward-obsidian.json'
@@ -125,10 +128,19 @@ $dmsTrayIconFallbackPatchPath = Join-Path $repo 'environment\patches\dms\greywar
 $securityContractPath = Join-Path $repo 'environment\production\security-center-contract.tsv'
 $anacondaCssPath = Join-Path $repo 'packaging\greyward-branding\SOURCES\greyward-anaconda.css'
 $anacondaConfPath = Join-Path $repo 'packaging\greyward-branding\SOURCES\greyward-anaconda.conf'
-foreach ($required in @($defaultAppsPath, $mimeAppsPath, $braveFlagsPath, $softwareWrapperPath, $softwareDesktopPath, $softwareRuntimeDesktopPath, $productionProvisionPath, $productionManifestPath, $productionAcceptancePath, $productionAcceptanceImplementationPath, $imageEntryPoint, $imageIsoEntryPoint, $imageKickstartPath, $firstbootScriptPath, $firstbootServicePath, $greeterWallpaperSyncPath, $autoUpdateScriptPath, $autoUpdateServicePath, $autoUpdateTimerPath, $labwcEnvironmentPath, $sessionDesktopPath, $labwcSessionLauncherPath, $dmsServicePath, $artifactPolicyPath, $auditRulesPath, $greeterSelinuxPath, $uwsmLabwcPatchPath, $dmsSettingsPatchPath, $dmsLabwcRuntimePatchPath, $dmsLauncherHitboxPatchPath, $dmsSettingsPath, $securityCenterRoutePath, $securePluginManifestPath, $securePluginWidgetPath, $networkTrafficPluginManifestPath, $networkTrafficPluginWidgetPath, $networkTrafficPluginModelPath, $networkTrafficPluginMathPath, $publicIpPluginManifestPath, $publicIpPluginWidgetPath, $session10ReportPath, $session10GatePath, $interactionTestPath, $portalConfigPath, $rygelOverridePath, $blackboxDesktopOverridePath, $blackboxSchemePath, $blackboxDarkPastelSchemePath, $blackboxParaisoSchemePath, $blackboxSetiSchemePath, $blackboxVibrantInkSchemePath, $blackboxDconfPath, $terminalIconPath, $zshConfiguratorPath, $zshSourcesPath, $zshrcPath, $p10kPath, $terminalBriefPath, $terminalBriefTestPath, $devDeployPath, $cryptoPolicyDocPath, $cryptoPolicyModulePath, $dmsAppsDockSpacingPatchPath, $dmsStateMigrationPath, $dmsFlatpakIconResolutionPatchPath, $dmsTrayIconFallbackPatchPath)) {
+foreach ($required in @($defaultAppsPath, $mimeAppsPath, $braveFlagsPath, $softwareWrapperPath, $softwareDesktopPath, $softwareRuntimeDesktopPath, $productionProvisionPath, $productionManifestPath, $productionAcceptancePath, $productionAcceptanceImplementationPath, $imageEntryPoint, $imageIsoEntryPoint, $imageKickstartPath, $firstbootScriptPath, $firstbootServicePath, $greeterWallpaperSyncPath, $autoUpdateScriptPath, $autoUpdateServicePath, $autoUpdateTimerPath, $labwcEnvironmentPath, $sessionDesktopPath, $labwcSessionLauncherPath, $dmsServicePath, $artifactPolicyPath, $auditRulesPath, $greeterSelinuxPath, $uwsmLabwcPatchPath, $dmsSettingsPatchPath, $dmsLabwcRuntimePatchPath, $dmsLauncherHitboxPatchPath, $dmsSettingsPath, $dmsMonitorDefaultsPath, $applicationSecuritySpecPath, $enrollmentSpecPath, $securityCenterRoutePath, $securePluginManifestPath, $securePluginWidgetPath, $networkTrafficPluginManifestPath, $networkTrafficPluginWidgetPath, $networkTrafficPluginModelPath, $networkTrafficPluginMathPath, $publicIpPluginManifestPath, $publicIpPluginWidgetPath, $session10ReportPath, $session10GatePath, $interactionTestPath, $portalConfigPath, $rygelOverridePath, $blackboxDesktopOverridePath, $blackboxSchemePath, $blackboxDarkPastelSchemePath, $blackboxParaisoSchemePath, $blackboxSetiSchemePath, $blackboxVibrantInkSchemePath, $blackboxDconfPath, $terminalIconPath, $zshConfiguratorPath, $zshSourcesPath, $zshrcPath, $p10kPath, $terminalBriefPath, $terminalBriefTestPath, $devDeployPath, $cryptoPolicyDocPath, $cryptoPolicyModulePath, $dmsAppsDockSpacingPatchPath, $dmsStateMigrationPath, $dmsFlatpakIconResolutionPatchPath, $dmsTrayIconFallbackPatchPath)) {
     if (-not (Test-Path -LiteralPath $required)) {
         $errors.Add("Flatpak default application input is missing: $required")
     }
+}
+
+$applicationSecuritySpec = Get-Content -Raw -LiteralPath $applicationSecuritySpecPath
+$enrollmentSpec = Get-Content -Raw -LiteralPath $enrollmentSpecPath
+$applicationSecurityRelease = [regex]::Match($applicationSecuritySpec, '(?m)^Release:\s*([0-9]+)').Groups[1].Value
+$enrollmentDependencyRelease = [regex]::Match($enrollmentSpec, '(?m)^Requires:\s+greyward-application-security-experimental\s*=\s*0\.1\.0-([0-9]+)').Groups[1].Value
+if (-not $applicationSecurityRelease -or $applicationSecurityRelease -ne $enrollmentDependencyRelease -or
+    $applicationSecuritySpec -notmatch 'install -Dm0444 packaging/application-security/authentication/assemble\.py') {
+    $errors.Add('Enrollment must package the protected authentication assembler from the exact matching application-security RPM release.')
 }
 
 foreach ($requiredFirstbootStatus in @($firstbootStatusScriptPath, $firstbootStatusServicePath)) {
@@ -139,7 +151,9 @@ foreach ($requiredFirstbootStatus in @($firstbootStatusScriptPath, $firstbootSta
 
 if (Test-Path -LiteralPath $dmsStateMigrationPath) {
     $migration = Get-Content -Raw -LiteralPath $dmsStateMigrationPath
-    if ($migration -notmatch '\.changelog-1\.6' -or $migration -notmatch 'customized-user-copy-preserved') {
+    if ($migration -notmatch '\.changelog-1\.6' -or $migration -notmatch 'customized-user-copy-preserved' -or
+        $migration -notmatch 'displayProfileAutoSelect' -or $migration -notmatch 'monitors_file\.open\(.x.' -or
+        $migration -notmatch 'monitor_defaults') {
         $errors.Add('DMS state migration must preserve customized plugins and preseed the verified release marker.')
     }
 }
@@ -299,7 +313,10 @@ $labwcSessionLauncher = Get-Content -Raw -LiteralPath $labwcSessionLauncherPath
 if ($productionProvision -notmatch '/usr/bin/env WLR_RENDERER=pixman' -or
     $productionProvision -match 'WLR_DRM_DEVICES=' -or
     $productionProvision -notmatch 'WLR_RENDERER_ALLOW_SOFTWARE=1' -or
-    $productionProvision -notmatch 'QT_QUICK_BACKEND=software' -or
+    $productionProvision -notmatch 'QT_QUICK_BACKEND=rhi' -or
+    $productionProvision -notmatch 'QSG_RHI_BACKEND=opengl' -or
+    $productionProvision -notmatch 'QT_OPENGL=software' -or
+    $productionProvision -notmatch 'LIBGL_ALWAYS_SOFTWARE=1' -or
     $productionProvision -notmatch 'XDG_CONFIG_HOME=/var/cache/dms-greeter/\.config' -or
     $productionProvision -notmatch 'only into that greeter process' -or
     $labwcEnvironment -match '(?m)^WLR_RENDERER=pixman\s*$' -or
@@ -540,8 +557,31 @@ if (Test-Path -LiteralPath $securePluginWidgetPath) {
     if ($securePluginWidget -notmatch '/usr/bin/gdbus') {
         $errors.Add('The GREYWARD Secure DMS plugin must use the packaged absolute gdbus path.')
     }
+    if ($securePluginWidget -notmatch 'presentation\.notification_items' -or
+        $securePluginWidget -notmatch 'next\.notification_items' -or
+        $securePluginWidget -match 'notificationStabilityMs|deferredAttentionSince|root\.presentation\.severity\)') {
+        $errors.Add('The GREYWARD Secure taskbar alerts must consume the shared server-filtered notification list without a separate client grace timer or alert badge.')
+    }
     if ($securePluginWidget -match 'GetShellSummary[\s\S]{0,1200}\},\s*(12000|16000)\)') {
         $errors.Add('The GREYWARD Secure DMS plugin must not use Proc.runCommand debounce as a transport timeout.')
+    }
+    if ($securePluginWidget -notmatch 'function findSecurityCenterWindow\(\)' -or
+        $securePluginWidget -notmatch 'Array\.from\(ToplevelManager\?\.toplevels\?\.values') {
+        $errors.Add('The GREYWARD Secure DMS plugin must find an existing Security Center window before launching another instance.')
+    }
+    if ($securePluginWidget -notmatch 'launchPending' -or
+        $securePluginWidget -notmatch 'Security Center did not open' -or
+        $securePluginWidget -notmatch 'root\.launchPending \? qsTr\("Opening Security Center') {
+        $errors.Add('The GREYWARD Secure DMS plugin must show opening, success, or failure feedback for its Security Center launch button.')
+    }
+    $openSecurityCenterMatch = [regex]::Match($securePluginWidget, '(?s)function openSecurityCenter\(\)\s*\{(.*?)\n    function runAction')
+    if (-not $openSecurityCenterMatch.Success -or
+        $openSecurityCenterMatch.Groups[1].Value.IndexOf('existingWindow') -lt 0 -or
+        $openSecurityCenterMatch.Groups[1].Value.IndexOf('existingWindow') -gt $openSecurityCenterMatch.Groups[1].Value.IndexOf('SessionService.launchDesktopEntry') -or
+        $openSecurityCenterMatch.Groups[1].Value.IndexOf('DesktopEntries.heuristicLookup("systems.mantis.greyward.securitycenter")') -lt 0 -or
+        $openSecurityCenterMatch.Groups[1].Value.IndexOf('SessionService.launchDesktopEntry') -lt 0 -or
+        $openSecurityCenterMatch.Groups[1].Value.Contains('Quickshell.execDetached')) {
+        $errors.Add('The GREYWARD Secure DMS plugin must focus an existing window or launch the Security Center through DMS desktop-entry handling.')
     }
 }
 
@@ -837,6 +877,20 @@ if (Test-Path -LiteralPath $dmsSettingsPath) {
     if ($leftWidgetIds -contains 'runningApps' -or $appsDock.Count -ne 1) {
         $errors.Add('The canonical GREYWARD taskbar must use DMS AppsDock so pinned and running applications share one model.')
     }
+    if ($dmsSettingsJson.displayProfileAutoSelect -ne $true) {
+        $errors.Add('New DMS sessions must auto-select the matching monitor profile.')
+    }
+}
+
+if (Test-Path -LiteralPath $dmsMonitorDefaultsPath) {
+    $monitorDefaults = Get-Content -Raw -LiteralPath $dmsMonitorDefaultsPath | ConvertFrom-Json
+    $virtualMonitor = $monitorDefaults.configurations | Where-Object { $_.outputs.PSObject.Properties.Name -contains 'Virtual-1' } | Select-Object -First 1
+    if ($monitorDefaults.version -ne 1 -or @($monitorDefaults.configurations).Count -ne 1 -or
+        $null -eq $virtualMonitor -or $virtualMonitor.name -ne '' -or
+        $virtualMonitor.outputs.'Virtual-1'.mode -ne '1920x1080@60.000' -or
+        [double]$virtualMonitor.outputs.'Virtual-1'.scale -ne 1.0) {
+        $errors.Add('The virtual monitor fallback must target only Virtual-1 at standard 1920x1080 and scale 1.')
+    }
 }
 
 if (Test-Path -LiteralPath $dmsServicePath) {
@@ -958,6 +1012,9 @@ if (Test-Path -LiteralPath $labwcRcPath) {
     }
     if ($labwcRc -notmatch '<maximizedDecoration>titlebar</maximizedDecoration>') {
         $errors.Add('Labwc must retain the maximized titlebar so Brave window controls remain visible.')
+    }
+    if ($labwcRc -notmatch '<reuseOutputMode>yes</reuseOutputMode>') {
+        $errors.Add('Labwc must reuse the active output mode to avoid an unnecessary output reset during session startup.')
     }
 }
 

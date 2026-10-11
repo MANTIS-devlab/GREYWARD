@@ -139,6 +139,47 @@ class RuntimeTests(unittest.TestCase):
 
 
 class MigrationTests(unittest.TestCase):
+    def test_first_session_seeds_virtual_fallback_and_enables_profile_selection(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp); config = root/'config/DankMaterialShell'
+            defaults = root/'defaults/monitors.json'; defaults.parent.mkdir(parents=True)
+            defaults.write_text((ROOT/'environment/session/dankmaterialshell/monitors.json').read_text())
+            migration.migrate(config, root/'state/DankMaterialShell', root/'cache',
+                              root/'plugins', 'v1.6.2-1', defaults)
+            settings = json.loads((config/'settings.json').read_text())
+            monitors = json.loads((config/'monitors.json').read_text())
+            self.assertTrue(settings['displayProfileAutoSelect'])
+            self.assertEqual(len(monitors['configurations']), 1)
+            profile = monitors['configurations'][0]
+            self.assertEqual(profile['name'], '')
+            self.assertEqual(list(profile['outputs']), ['Virtual-1'])
+            self.assertEqual(profile['outputs']['Virtual-1']['mode'], '1920x1080@60.000')
+            if os.name != 'nt':
+                self.assertEqual((config/'monitors.json').stat().st_mode & 0o777, 0o600)
+
+            # Once the initial defaults exist, a user's monitor choice wins.
+            monitors['configurations'][0]['outputs']['Virtual-1']['mode'] = '2560x1440@60.000'
+            (config/'monitors.json').write_text(json.dumps(monitors))
+            settings['displayProfileAutoSelect'] = False
+            (config/'settings.json').write_text(json.dumps(settings))
+            migration.migrate(config, root/'state/DankMaterialShell', root/'cache',
+                              root/'plugins', 'v1.6.2-1', defaults)
+            self.assertFalse(json.loads((config/'settings.json').read_text())['displayProfileAutoSelect'])
+            self.assertEqual(json.loads((config/'monitors.json').read_text())['configurations'][0]['outputs']['Virtual-1']['mode'],
+                             '2560x1440@60.000')
+
+    def test_existing_session_does_not_receive_vm_defaults(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp); config = root/'config/DankMaterialShell'; config.mkdir(parents=True)
+            (config/'.changelog-1.6').write_text('previous session')
+            (config/'settings.json').write_text(json.dumps({'displayProfileAutoSelect': False}))
+            defaults = root/'defaults/monitors.json'; defaults.parent.mkdir(parents=True)
+            defaults.write_text((ROOT/'environment/session/dankmaterialshell/monitors.json').read_text())
+            migration.migrate(config, root/'state/DankMaterialShell', root/'cache',
+                              root/'plugins', 'v1.6.2-1', defaults)
+            self.assertFalse((config/'monitors.json').exists())
+            self.assertFalse(json.loads((config/'settings.json').read_text())['displayProfileAutoSelect'])
+
     def test_fresh_wallpaper_is_seeded_before_qml_and_user_changes_survive(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp); state = root/'state/DankMaterialShell'
