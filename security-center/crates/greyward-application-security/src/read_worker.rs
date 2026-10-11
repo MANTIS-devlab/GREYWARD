@@ -76,11 +76,21 @@ impl ReadWorker {
         if Instant::now() >= deadline {
             return Err(BrokerError::Deadline);
         }
-        self.capacity
-            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |current| {
-                (current < MAX_READ_JOBS).then_some(current + 1)
-            })
-            .map_err(|_| BrokerError::Capacity)?;
+        let mut current = self.capacity.load(Ordering::Acquire);
+        loop {
+            if current >= MAX_READ_JOBS {
+                return Err(BrokerError::Capacity);
+            }
+            match self.capacity.compare_exchange_weak(
+                current,
+                current + 1,
+                Ordering::AcqRel,
+                Ordering::Acquire,
+            ) {
+                Ok(_) => break,
+                Err(observed) => current = observed,
+            }
+        }
         let slot = Slot(Arc::clone(&self.capacity));
         let (result, receiver) = mpsc::sync_channel(1);
         self.jobs
