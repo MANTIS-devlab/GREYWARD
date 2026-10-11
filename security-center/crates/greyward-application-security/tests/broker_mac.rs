@@ -44,7 +44,7 @@ fn root_broker_installed_metadata_collection_retains_credential_denial() {
             .identity,
         identity
     );
-    assert!(store.list_applications(0, None, 10).unwrap().is_empty());
+    assert_eq!(store.list_applications(0, None, 10).unwrap().len(), 0);
     assert_eq!(
         File::open("/home/greyward-guard-probe/protected/credential")
             .unwrap_err()
@@ -68,7 +68,7 @@ fn root_broker_domain_can_read_process_metadata_but_not_synthetic_credentials() 
         context.split(':').nth(2),
         Some("greyward_application_broker_t")
     );
-    assert!(!fs::read_to_string("/proc/self/stat").unwrap().is_empty());
+    assert_ne!(fs::read_to_string("/proc/self/stat").unwrap(), "");
     let secret = "/home/greyward-guard-probe/protected/credential";
     let metadata = fs::metadata(secret).unwrap();
     assert!(metadata.is_file());
