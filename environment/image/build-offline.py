@@ -6,6 +6,7 @@ No ISO is published until RPM resolution and Flatpak installation work without
 network access. This is a dependency test, not a substitute for a clean VM boot.
 """
 import argparse
+import configparser
 import hashlib
 import json
 import os
@@ -25,6 +26,8 @@ NetworkManager chrony dnf5 dnf-plugins-core plymouth plymouth-scripts
 plymouth-plugin-script plymouth-plugin-label dracut curl ca-certificates patch
 tar gzip util-linux""".split()
 EXCLUDED = "openssh-server,gnome-initial-setup,gnome-session-wayland-session,initial-setup,initial-setup-gui"
+FLATHUB_REPO_URL = "https://dl.flathub.org/repo/"
+FLATHUB_REPO_GPG_KEY_SHA256 = "8b124b52da2b0c8a54b338969ebc108488ca1caf718fb45ba6ffee6c7adfcbe0"
 
 
 def run(*args, env=None, capture=False):
@@ -414,9 +417,43 @@ def prepare_sideload_repo(repo, offline_refs):
     return copied
 
 
+def prepare_flathub_repo(remote):
+    """Use the official Flathub descriptor, optionally supplied over HTTPS."""
+    supplied = os.environ.get('GREYWARD_FLATHUB_REPO_FILE')
+    if supplied:
+        source = Path(supplied)
+        if source.is_symlink():
+            raise ValueError('Flathub repository input must not be a symlink')
+        source = source.resolve(strict=True)
+        if not source.is_file() or source.stat().st_size > 16384:
+            raise ValueError('Flathub repository input is not a small regular file')
+        shutil.copyfile(source, remote)
+    else:
+        download(FLATHUB_REPO_URL + 'flathub.flatpakrepo', remote)
+
+    if remote.stat().st_size > 16384:
+        raise ValueError('Flathub repository descriptor is unexpectedly large')
+    parser = configparser.ConfigParser(interpolation=None)
+    try:
+        parser.read_string(remote.read_text(encoding='utf-8'))
+        descriptor = parser['Flatpak Repo']
+        url = descriptor.get('url', '')
+        key = descriptor.get('gpgkey', '')
+    except (configparser.Error, KeyError, UnicodeError) as error:
+        raise ValueError('Invalid Flathub repository descriptor') from error
+    if url != FLATHUB_REPO_URL:
+        raise ValueError('Flathub repository URL does not match the official endpoint')
+    try:
+        key_digest = hashlib.sha256(key.encode('ascii')).hexdigest()
+    except UnicodeEncodeError as error:
+        raise ValueError('Flathub repository signing key is not ASCII') from error
+    if key_digest != FLATHUB_REPO_GPG_KEY_SHA256:
+        raise ValueError('Flathub repository signing key does not match the pinned key')
+
+
 def build_flatpaks(stage, work, offline, baseline):
     remote = offline / "flathub.flatpakrepo"
-    download("https://dl.flathub.org/repo/flathub.flatpakrepo", remote)
+    prepare_flathub_repo(remote)
     seed_path = os.environ.get('GREYWARD_FLATPAK_SEED')
     if seed_path:
         seed = Path(seed_path).resolve(strict=True)

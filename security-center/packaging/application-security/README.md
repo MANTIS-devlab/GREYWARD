@@ -109,6 +109,10 @@ The spec retains source/licenses and required libseccomp/Wayland helper inputs.
 The builder's `--warm` compares the same archived inputs/private cache; older
 receipts remain [historical](../../../docs/history/security-center/2026-10-07-application-security-package-notes.md).
 
+The protected login profile and readiness regression is checked from the
+repository root with
+`python3 -m unittest discover -s tests -p test_application_authentication.py`.
+
 Latest source workflow evidence is in the plan, including actual kernel grants,
 Safe Open, graphical payloads and GUI review/cancel. Full GUI commit, matched
 package-only acceptance and production coverage are pending. Extended cache,

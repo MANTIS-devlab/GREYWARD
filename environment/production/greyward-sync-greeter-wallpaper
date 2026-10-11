@@ -22,15 +22,38 @@ def sync(source, cache, uid, gid):
     state = json.loads(session.read_text()) if session.exists() else {}
     if not isinstance(state, dict):
         raise ValueError('Malformed greeter session; cache preserved')
+    # Upstream selects the first asynchronously discovered desktop entry when
+    # no saved choice exists. Seed its supported memory contract once, instead
+    # of relying on discovery order or removing the configured fallback.
+    memory = cache / '.local/state/memory.json'
+    for directory in [cache / '.local', memory.parent]:
+        if directory.is_symlink():
+            raise ValueError('Greeter memory directory must not be an alias')
+    if memory.is_symlink():
+        raise ValueError('Greeter memory must be a regular cache file')
+    remembered = json.loads(memory.read_text()) if memory.exists() else {}
+    if not isinstance(remembered, dict):
+        raise ValueError('Malformed greeter memory; cache preserved')
+    seed_memory = not remembered.get('lastSessionId') and not remembered.get('lastSessionDesktopId')
+    if seed_memory:
+        remembered.update(lastSessionId='/usr/share/wayland-sessions/greyward-labwc.desktop',
+                          lastSessionDesktopId='greyward-labwc.desktop')
+        for directory in [cache / '.local', memory.parent]:
+            directory.mkdir(mode=0o700, exist_ok=True)
+            directory.chmod(0o700)
+            os.chown(directory, uid, gid)
     target = cache / 'greeter_wallpaper_override.jpg'
     # Packaged Greeter 1.6.2 consumes SessionData, rather than the shell's newer
     # greeterWallpaperPath setting and override-image shortcut.
     state.update(wallpaperPath=str(target), perMonitorWallpaper=False, monitorWallpapers={})
-    for destination, content in (
+    outputs = [
         (target, image),
         (session, (json.dumps(state, indent=2) + '\n').encode()),
-    ):
-        descriptor, temporary = tempfile.mkstemp(prefix='.greyward-wallpaper-', dir=cache)
+    ]
+    if seed_memory:
+        outputs.append((memory, (json.dumps(remembered, indent=2) + '\n').encode()))
+    for destination, content in outputs:
+        descriptor, temporary = tempfile.mkstemp(prefix='.greyward-wallpaper-', dir=destination.parent)
         try:
             with os.fdopen(descriptor, 'wb') as stream:
                 stream.write(content)

@@ -221,7 +221,9 @@ if [[ "$target_install" == 1 || "${GREYWARD_LOCAL_FINALIZE:-0}" != 1 ]]; then
   test "${#dms_rpms[@]}" -eq 1
   session_rpms=("$stage/rpms/greyward-session-"*.rpm)
   test "${#session_rpms[@]}" -eq 1
-  dnf -y install "${branding_rpms[0]}" "${security_rpms[@]}" "${dms_rpms[0]}" "${session_rpms[0]}"
+  enrollment_rpms=("$stage/rpms/greyward-application-security-experimental-"*.rpm "$stage/rpms/greyward-application-enrollment-"*.rpm)
+  test "${#enrollment_rpms[@]}" -eq 2
+  dnf -y install "${branding_rpms[0]}" "${security_rpms[@]}" "${dms_rpms[0]}" "${session_rpms[0]}" "${enrollment_rpms[@]}"
   rpm -q greyward-branding plymouth-plugin-script
   plymouth-set-default-theme greyward
   dracut --regenerate-all --force
@@ -551,7 +553,7 @@ vt = 1
 
 [default_session]
 user = "greeter"
-command = "/usr/bin/env WLR_RENDERER=pixman WLR_RENDERER_ALLOW_SOFTWARE=1 WLR_NO_HARDWARE_CURSORS=1 WLR_DRM_NO_MODIFIERS=1 LIBGL_ALWAYS_SOFTWARE=1 QT_QUICK_BACKEND=software QSG_RHI_PREFER_SOFTWARE_RENDERER=1 QT_QPA_PLATFORM=wayland XDG_CURRENT_DESKTOP=Labwc:GREYWARD XDG_SESSION_DESKTOP=labwc XDG_CONFIG_HOME=/var/cache/dms-greeter/.config /usr/bin/dms-greeter --command labwc --no-save-session --no-save-username"
+command = "/usr/bin/env WLR_RENDERER=pixman WLR_RENDERER_ALLOW_SOFTWARE=1 WLR_NO_HARDWARE_CURSORS=1 WLR_DRM_NO_MODIFIERS=1 LIBGL_ALWAYS_SOFTWARE=1 QT_QUICK_BACKEND=rhi QSG_RHI_BACKEND=opengl QT_OPENGL=software QSG_RHI_PREFER_SOFTWARE_RENDERER=1 QT_QPA_PLATFORM=wayland XDG_CURRENT_DESKTOP=Labwc:GREYWARD XDG_SESSION_DESKTOP=labwc XDG_CONFIG_HOME=/var/cache/dms-greeter/.config /usr/bin/dms-greeter --command labwc --no-save-username"
 EOF
 chown root:root /etc/greetd/config.toml
 chmod 0644 /etc/greetd/config.toml
@@ -559,6 +561,8 @@ chmod 0644 /etc/greetd/config.toml
 # greeter account. The command above carries the VMware-safe renderer settings
 # only into that greeter process; they are not global service or user-session
 # defaults.
+# Qt's software scenegraph cannot draw the embedded UI's wallpaper shader.
+# Use Mesa software OpenGL for Qt RHI while Labwc retains its Pixman renderer.
 getent passwd greeter >/dev/null
 getent group greeter >/dev/null
 install -d -o greeter -g greeter -m 2770 /var/cache/dms-greeter

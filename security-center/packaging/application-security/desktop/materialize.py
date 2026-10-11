@@ -3,6 +3,31 @@
 import os,json,subprocess
 from pathlib import Path
 STATE=Path('/run/greyward-application-security')
+DMS_AUTH_SETTINGS_CONFIG_VERSION=18
+
+def authentication_settings(template):
+    """Seed the private agent from current factory defaults, not a v0 profile.
+
+    The pinned DMS shell's current settings schema is version 18. Without
+    configVersion, DMS replays every migration on the protected auth shell at
+    each login before its Polkit agent can admit the ordinary desktop. Future
+    DMS migrations remain forward-compatible: a newer target still runs from
+    this version.
+    """
+    settings=dict(template)
+    settings.update({'configVersion':DMS_AUTH_SETTINGS_CONFIG_VERSION,
+        'customPowerActionLock': '', 'loginctlLockIntegration': True,
+        'lockAtStartup': False, 'lockBeforeSuspend': False, 'fadeToLockEnabled': False,
+        'fadeToDpmsEnabled': False, 'lockScreenPowerOffMonitorsOnLock': False,
+        'lockScreenVideoEnabled': False, 'lockPamExternallyManaged': True,
+        'lockPamPath': '/etc/pam.d/greyward-dms-lock', 'enableFprint': False, 'enableU2f': False,
+        'lockScreenNotificationMode': 0, 'lockScreenShowMediaPlayer': False})
+    for key in ['acMonitorTimeout', 'acLockTimeout', 'acPostLockMonitorTimeout',
+                'batteryMonitorTimeout', 'batteryLockTimeout', 'batteryPostLockMonitorTimeout',
+                'acSuspendTimeout', 'batterySuspendTimeout']:
+        settings[key]=0
+    return settings
+
 def run(*command):
     subprocess.run(command,check=True,timeout=15)
 def prepare_enforcement(uid):
@@ -54,17 +79,8 @@ def materialize(uid,gid):
         target=auth/name
         if target.exists() and (target.is_symlink() or target.stat().st_uid != 0 or target.stat().st_nlink != 1):
             raise RuntimeError('Unsafe authentication input')
-    settings = json.loads(Path('/etc/skel/.config/DankMaterialShell/settings.json').read_text())
-    settings.update({'customPowerActionLock': '', 'loginctlLockIntegration': True,
-        'lockAtStartup': False, 'lockBeforeSuspend': False, 'fadeToLockEnabled': False,
-        'fadeToDpmsEnabled': False, 'lockScreenPowerOffMonitorsOnLock': False,
-        'lockScreenVideoEnabled': False, 'lockPamExternallyManaged': True,
-        'lockPamPath': '/etc/pam.d/greyward-dms-lock', 'enableFprint': False, 'enableU2f': False,
-        'lockScreenNotificationMode': 0, 'lockScreenShowMediaPlayer': False})
-    for key in ['acMonitorTimeout', 'acLockTimeout', 'acPostLockMonitorTimeout',
-                'batteryMonitorTimeout', 'batteryLockTimeout', 'batteryPostLockMonitorTimeout',
-                'acSuspendTimeout', 'batterySuspendTimeout']:
-        settings[key] = 0
+    settings = authentication_settings(
+        json.loads(Path('/etc/skel/.config/DankMaterialShell/settings.json').read_text()))
     (auth / 'config/DankMaterialShell/settings.json').write_text(json.dumps(settings))
     (auth / 'config/DankMaterialShell/settings.json').chmod(0o444)
     (auth / 'session-bus.conf').write_text(f'<busconfig><type>session</type><listen>unix:path={auth}/runtime/bus</listen><auth>EXTERNAL</auth><policy context="default"><allow user="{uid}"/><allow own="*"/><allow send_destination="*"/><allow receive_sender="*"/></policy></busconfig>')

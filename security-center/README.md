@@ -62,7 +62,9 @@ physical drag/resize gestures and minimize remain pending.
 - `crates/greyward-application-security`: experimental root-runtime foundation,
   identity registry, policy storage, operations, kernel-bound peer evidence and
   typed read broker, explicit development workflow and Guard CLI. The
-  experimental package is excluded from image inputs.
+  experimental RPM is installed only as an input to protected-session
+  enrollment; its generic application-guard grants remain unavailable and its
+  presence is not evidence of release acceptance.
   The installed public workflow broker is active on `.149`; no production
   application-protection release is provided yet. See
   the [approved implementation authority](../docs/security-center/APPLICATION_SECURITY_PLAN.md).

@@ -10,7 +10,7 @@ receipt](2026-10-09-practical-administration.md). The current authorities remain
 
 The user explicitly approved logout/login. The graphical seat was replaced
 without rebooting, powering off or terminating SSH. Fedora PAM admitted the
-normal development-user account into session 815. Its ordinary user manager retains
+normal stendev account into session 815. Its ordinary user manager retains
 `greyward_guard_t`; the compositor and native authentication remain separate
 protected domains. SELinux is Enforcing. Repeated trusted PID-1 coverage checks
 return `{"verified":true}`.

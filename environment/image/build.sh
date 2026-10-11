@@ -8,13 +8,14 @@ set -euo pipefail
 
 usage() {
   cat <<'EOF'
-Usage: environment/image/build.sh [--output DIRECTORY] [--security-rpm FILE]... [--security-build-manifest FILE] [--dms-rpm FILE] [--production-rpm FILE]... --branding-rpm FILE [--baseline FILE] [--require-complete]
+Usage: environment/image/build.sh [--output DIRECTORY] [--security-rpm FILE]... [--security-build-manifest FILE] [--dms-rpm FILE] [--production-rpm FILE]... [--enrollment-rpm FILE]... --branding-rpm FILE [--baseline FILE] [--require-complete]
 
 Without --security-rpm this prepares an incomplete development input set and
 marks the missing production RPMs in the manifest. A production image tool
-must supply exactly five GREYWARD RPMs: greyward-branding, greyward-session,
+must supply exactly seven GREYWARD RPMs: greyward-branding, greyward-session,
 greyward-security-center, and
-greyward-security-context, greyward-dms, plus every pinned external production RPM listed in
+greyward-security-context, greyward-dms, greyward-application-security-experimental,
+and greyward-application-enrollment, plus every pinned external production RPM listed in
 environment/production/external-rpms.txt. Use
   --require-complete to reject an incomplete input set instead of preparing it
   for source inspection. Complete staging also requires the manifest emitted
@@ -27,6 +28,7 @@ repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 output="$repo_root/output/greyward-production-inputs"
 security_rpms=()
 production_rpms=()
+enrollment_rpms=()
 branding_rpm=''
 dms_rpm=''
 session_rpm=''
@@ -49,6 +51,11 @@ rpm_query() {
 
 while (($#)); do
   case "$1" in
+    --enrollment-rpm)
+      (($# >= 2)) || exit 2
+      enrollment_rpms+=("$(realpath -e "$2")")
+      shift 2
+      ;;
     --output)
       (($# >= 2)) || { usage >&2; exit 2; }
       output=$(realpath -m "$2")
@@ -118,7 +125,20 @@ branding="$repo_root/branding"
 patches="$repo_root/environment/patches"
 kickstart="$repo_root/environment/image/installer.ks.tmpl"
 security_context_unit="$repo_root/security-center/security-context/systemd/greyward-security-context-user.service"
+
+if $require_complete && ((${#enrollment_rpms[@]} != 2)); then
+  echo 'Complete staging requires the matched Application Security runtime and enrollment RPMs.' >&2
+  exit 2
+fi
+declare -A enrollment_names=()
+for rpm in "${enrollment_rpms[@]}"; do
+  name=$(rpm_query -qp --qf '%{NAME}' "$rpm")
+  case "$name" in greyward-application-security-experimental|greyward-application-enrollment) ;; *) echo 'Unexpected enrollment package' >&2; exit 2;; esac
+  [[ -z "${enrollment_names[$name]:-}" ]] || { echo 'Duplicate enrollment package' >&2; exit 2; }
+  enrollment_names[$name]=1
+done
 for required in \
+  "$repo_root/packaging/greyward-enrollment/installer-accounts.py" \
   "$production/packages.txt" "$production/repositories.txt" \
   "$production/external-rpms.txt" \
   "$production/install-dms.sh" "$production/provision.sh" \
@@ -140,6 +160,7 @@ for required in \
   "$production/artifact-policy.json" "$production/dms-release.json" \
   "$production/security-center-contract.tsv" \
   "$security_context_unit" \
+  "$session/dankmaterialshell/monitors.json" \
   "$production/manifest.json" "$patches/dms/launcher-canonical-hitbox.patch" \
   "$patches/dms/polkit-auth-dialog.patch" \
   "$patches/dms/greyward-settings-curation.patch" \
@@ -172,12 +193,22 @@ done
 # breaks DMS monitor configuration, even when the source unit is fixed.
 if [[ -n "$session_rpm" ]]; then
   session_unit_path='./usr/lib/systemd/user/greyward-dms.service'
+  session_migration_path='./usr/local/libexec/greyward-dms-state-migrate'
+  session_monitors_path='./usr/share/greyward/defaults/dankmaterialshell/monitors.json'
   if ! grep -Fqx 'Environment=WAYLAND_DISPLAY=wayland-0' "$session/greyward-dms.service"; then
     echo 'The source DMS unit must set WAYLAND_DISPLAY=wayland-0.' >&2
     exit 1
   fi
   if ! rpm2cpio "$session_rpm" | cpio -i --quiet --to-stdout "$session_unit_path" | cmp -s - "$session/greyward-dms.service"; then
     echo 'The greyward-session RPM contains a stale DMS unit; rebuild it from this checkout before ISO staging.' >&2
+    exit 1
+  fi
+  if ! rpm2cpio "$session_rpm" | cpio -i --quiet --to-stdout "$session_migration_path" | cmp -s - "$session/greyward-dms-state-migrate"; then
+    echo 'The greyward-session RPM contains stale DMS migration logic; rebuild it from this checkout before ISO staging.' >&2
+    exit 1
+  fi
+  if ! rpm2cpio "$session_rpm" | cpio -i --quiet --to-stdout "$session_monitors_path" | cmp -s - "$session/dankmaterialshell/monitors.json"; then
+    echo 'The greyward-session RPM lacks the current first-session display profile; rebuild it from this checkout before ISO staging.' >&2
     exit 1
   fi
 fi
@@ -309,6 +340,8 @@ if [[ -n "$session_rpm" ]]; then cp -a "$session_rpm" "$output/rpms/"; fi
 if [[ -n "$branding_rpm" ]]; then cp -a "$branding_rpm" "$output/rpms/"; fi
 for rpm in "${security_rpms[@]}"; do cp -a "$rpm" "$output/rpms/"; done
 for rpm in "${production_rpms[@]}"; do cp -a "$rpm" "$output/rpms/"; done
+for rpm in "${enrollment_rpms[@]}"; do cp -a "$rpm" "$output/rpms/"; done
+cp -a "$repo_root/packaging/greyward-enrollment/installer-accounts.py" "$output/"
 
 mkdir -p "$output/artifacts"
 if [[ -n "$baseline" ]]; then
@@ -456,7 +489,8 @@ cat > "$output/build-manifest.json" <<EOF
   "security_rpm_count": ${#security_rpms[@]},
   "security_build_manifest": "$(if [[ -n "$security_build_manifest" ]]; then printf '%s' artifacts/security-center-build-manifest.tsv; else printf '%s' MISSING; fi)",
   "production_dependency_rpm_count": ${#production_rpms[@]},
-  "production_inputs_complete": $([[ -n "$session_rpm" && -n "$dms_rpm" && -n "$branding_rpm" && $center_count -eq 1 && $context_count -eq 1 && ${#production_rpms[@]} -eq ${#expected_production_rpms[@]} ]] && printf true || printf false),
+  "enrollment_rpm_count": ${#enrollment_rpms[@]},
+  "production_inputs_complete": $([[ -n "$session_rpm" && -n "$dms_rpm" && -n "$branding_rpm" && $center_count -eq 1 && $context_count -eq 1 && ${#enrollment_rpms[@]} -eq 2 && ${#production_rpms[@]} -eq ${#expected_production_rpms[@]} ]] && printf true || printf false),
   "security_rpms": [$security_rpm_json],
   "artifacts": {
     "package_inventory": "artifacts/package-inventory.txt",

@@ -32,6 +32,10 @@ PluginComponent {
     property bool profileMenuOpen: false
     property bool actionPending: false
     property string actionMessage: ""
+    property bool launchPending: false
+    property int launchChecks: 0
+    property string launchState: ""
+    property string launchMessage: ""
     property double clockNow: Date.now()
     readonly property bool reducedMotion: SettingsData.animationSpeed === SettingsData.AnimationSpeed.None
     readonly property bool freshnessLeaseValid: initialized && Date.parse(presentation.fresh_until || "") > clockNow
@@ -42,7 +46,9 @@ PluginComponent {
     // Confirmed unavailability has a display lease, never an action lease.
     readonly property bool displayFresh: initialized && Date.parse(presentation.display_fresh_until || presentation.fresh_until || "") > clockNow
     readonly property bool showingSnapshot: displayFresh || requestPending
-    readonly property var items: showingSnapshot ? presentation.items || [] : []
+    // Cards, badge and attention use the exact alert list that the server
+    // passes to native desktop notifications. The main status remains live.
+    readonly property var items: showingSnapshot ? presentation.notification_items || [] : []
     readonly property var activities: showingSnapshot ? presentation.activity || [] : []
     readonly property var primaryItem: items.length ? items[0] : null
     readonly property string statusLabel: displayFresh ? presentation.label || qsTr("Status unavailable") : initialized ? qsTr("Status unavailable") : qsTr("Connecting")
@@ -82,9 +88,10 @@ PluginComponent {
             requestTimeout.stop(); root.requestPending = false; root.clockNow = Date.now();
             if (!next || next.schema !== "greyward.security.experience/v1") return;
             const nextFreshUntil = Date.parse(next.fresh_until || "");
-            const ids = (next.items || []).filter(item => item.severity !== "INFO").map(item => item.id);
+            const eligibleItems = next.notification_items || [];
+            const ids = eligibleItems.filter(item => item.severity !== "INFO").map(item => item.id);
             const newItem = ids.find(id => root.previousIds.indexOf(id) < 0);
-            if (root.initialized && newItem && (!root.primaryItem || next.items[0]?.id === newItem)) {
+            if (root.initialized && newItem && (!root.primaryItem || eligibleItems[0]?.id === newItem)) {
                 root.attentionId = newItem; attentionTimer.restart();
             }
             root.previousIds = ids;
@@ -104,13 +111,71 @@ PluginComponent {
             if (["greyward-security-center", "systems.mantis.greyward.securitycenter"].includes(String(window?.appId || "").toLowerCase()) && typeof window.activate === "function") { window.activate(); return; }
         }
     }
+    function findSecurityCenterWindow() {
+        const windows = Array.from(ToplevelManager?.toplevels?.values || []);
+        return windows.find(window => ["greyward-security-center", "systems.mantis.greyward.securitycenter"].includes(String(window?.appId || "").toLowerCase())) || null;
+    }
+    function finishSecurityCenterLaunch(state, message) {
+        launchPending = false;
+        launchState = state;
+        launchMessage = message;
+        launchWindowTimer.stop();
+        launchMessageTimer.restart();
+    }
+    function checkSecurityCenterLaunch() {
+        if (!launchPending) { launchWindowTimer.stop(); return; }
+        launchChecks += 1;
+        const window = findSecurityCenterWindow();
+        if (window) {
+            try { if (typeof window.activate === "function") window.activate(); } catch (error) {}
+            finishSecurityCenterLaunch("success", qsTr("Security Center opened"));
+        } else if (launchChecks >= 48) {
+            finishSecurityCenterLaunch("error", qsTr("Security Center did not open. Check that it is installed, then try again."));
+        }
+    }
     function openRoute(route, resourceRef) {
         activateSecurityCenterWindow();
         const command = ["/usr/bin/greyward-security-center-route", route || "overview"];
         if (route === "protected-data" && /^resource_[0-9a-f]{64}$/.test(String(resourceRef || ""))) command.push(resourceRef);
         Quickshell.execDetached(command);
     }
-    function openSecurityCenter() { activateSecurityCenterWindow(); Quickshell.execDetached(["/usr/bin/greyward-security-center-launch"]); }
+    function openSecurityCenter() {
+        if (launchPending) {
+            launchMessage = qsTr("Opening Security Center…");
+            launchMessageTimer.restart();
+            return;
+        }
+        const existingWindow = findSecurityCenterWindow();
+        if (existingWindow) {
+            try {
+                if (typeof existingWindow.activate === "function") existingWindow.activate();
+                launchState = "success";
+                launchMessage = qsTr("Security Center brought to front");
+            } catch (error) {
+                launchState = "error";
+                launchMessage = qsTr("Security Center is open, but could not be focused");
+            }
+            launchMessageTimer.restart();
+            return;
+        }
+        launchChecks = 0;
+        launchPending = true;
+        launchState = "opening";
+        launchMessage = qsTr("Opening Security Center…");
+        launchMessageTimer.stop();
+        launchWindowTimer.start();
+        try {
+            const desktopEntry = DesktopEntries.heuristicLookup("systems.mantis.greyward.securitycenter");
+            if (!desktopEntry || !desktopEntry.command) {
+                finishSecurityCenterLaunch("error", qsTr("Security Center is missing from the application menu."));
+                return;
+            }
+            // Use DMS's normal desktop-entry path so protected-session launch handling applies.
+            SessionService.launchDesktopEntry(desktopEntry);
+        } catch (error) {
+            finishSecurityCenterLaunch("error", qsTr("Could not start Security Center. Try again."));
+        }
+    }
     function runAction(item, action) {
         if (!freshnessLeaseValid || actionPending) return;
         if (action.id === "open") { openRoute(item.route, item.resource_ref); return; }
@@ -140,6 +205,8 @@ PluginComponent {
     }
     Timer { id: requestTimeout; interval: 7000; onTriggered: { ++root.requestGeneration; root.requestPending = false; root.clockNow = Date.now(); } }
     Timer { id: actionTimeout; interval: 7000; onTriggered: { root.actionPending = false; root.actionMessage = qsTr("The result is not confirmed. Check Security Center before retrying."); messageTimer.restart(); root.refreshSummary(); } }
+    Timer { id: launchWindowTimer; interval: 250; repeat: true; onTriggered: root.checkSecurityCenterLaunch() }
+    Timer { id: launchMessageTimer; interval: 7000; onTriggered: { root.launchState = ""; root.launchMessage = "" } }
     Timer { id: attentionTimer; interval: 10000; onTriggered: root.attentionId = "" }
     Timer { id: messageTimer; interval: 5000; onTriggered: root.actionMessage = "" }
     Timer { interval: 1000; running: true; repeat: true; onTriggered: root.clockNow = Date.now() }
@@ -159,6 +226,7 @@ PluginComponent {
     component SecurityButton: Button {
     id: control
     property bool primary: false
+    property bool busy: false
     implicitHeight: 34
     height: 34
     Layout.minimumHeight: 34
@@ -183,9 +251,9 @@ PluginComponent {
     }
     background: Rectangle {
         radius: 8
-        color: control.down ? "#788893" : control.primary ? (control.hovered ? "#f0f3f5" : "#cad5dd") : control.hovered ? "#35424c" : "#27323b"
-        border.width: control.visualFocus ? 2 : 1
-        border.color: control.visualFocus ? "#f3f6f8" : control.primary ? "#d8e1e7" : "#485560"
+        color: control.down ? "#788893" : control.busy ? "#e5c084" : control.primary ? (control.hovered ? "#f0f3f5" : "#cad5dd") : control.hovered ? "#35424c" : "#27323b"
+        border.width: control.visualFocus || control.busy ? 2 : 1
+        border.color: control.visualFocus ? "#f3f6f8" : control.busy ? "#f0d39d" : control.primary ? "#d8e1e7" : "#485560"
         opacity: control.enabled ? 1 : 0.55
         Behavior on color { ColorAnimation { duration: root.reducedMotion ? 0 : 120 } }
     }
@@ -214,7 +282,7 @@ PluginComponent {
             Text { visible: !vertical && root.hasAttention; width: visible ? 108 : 0; text: root.attentionLabel; color: root.accent; font.family: "Inter"; font.pixelSize: 12; elide: Text.ElideRight; anchors.verticalCenter: parent.verticalCenter }
         }
         Rectangle {
-            visible: root.fresh && ["CRITICAL", "ACTION", "WARNING"].includes(root.presentation.severity)
+            visible: root.fresh && root.items.some(item => ["CRITICAL", "ACTION", "WARNING"].includes(item.severity))
             anchors.right: parent.right; anchors.top: parent.top; anchors.margins: -2
             width: 12; height: 12; radius: 6; color: root.accent
             Text { anchors.centerIn: parent; text: "!"; color: "#1c252c"; font.pixelSize: 10; font.bold: true }
@@ -315,7 +383,15 @@ PluginComponent {
                         SecurityButton { text: qsTr("Refresh status"); enabled: !root.requestPending; onClicked: root.refreshSummary() }
                     }
                     Text { visible: root.actionMessage !== ""; text: root.actionMessage; color: "#cad9d2"; font.family: "Inter"; font.pixelSize: 13; wrapMode: Text.Wrap; Layout.fillWidth: true; Accessible.role: Accessible.StaticText; Accessible.name: text }
-                    SecurityButton { text: qsTr("Open Security Center"); primary: true; Layout.fillWidth: true; onClicked: root.openSecurityCenter() }
+                    SecurityButton { text: root.launchPending ? qsTr("Opening Security Center…") : qsTr("Open Security Center"); primary: true; busy: root.launchPending; Layout.fillWidth: true; onClicked: root.openSecurityCenter() }
+                    Text {
+                        visible: root.launchMessage !== ""
+                        text: root.launchMessage
+                        color: root.launchState === "error" ? "#eeaaa7" : root.launchState === "opening" ? "#e5c084" : "#acd8c4"
+                        font.family: "Inter"; font.pixelSize: 13
+                        Layout.fillWidth: true; wrapMode: Text.Wrap
+                        Accessible.role: Accessible.StaticText
+                    }
                 }
             }
         }

@@ -371,6 +371,65 @@ impl PolicyStore {
     /// # Errors
     /// Rejects non-root callers, unsupported accounts, unsafe receipts or failed journal I/O.
     pub fn prepare_account(&mut self, name: &str) -> Result<(), StoreError> {
+        self.prepare_account_origin(name, AccountOrigin::ExplicitMigration)
+    }
+
+    /// Prepare only a root-attested installer account. This is an offline
+    /// lifecycle operation, never a user-bus or UI authorization endpoint.
+    /// # Errors
+    /// Rejects untrusted/missing installer receipts and unsupported accounts.
+    pub fn prepare_installer_account(&mut self, name: &str) -> Result<(), StoreError> {
+        use std::os::unix::fs::MetadataExt;
+        if rustix::process::getuid().as_raw() != 0 || rustix::process::geteuid().as_raw() != 0 {
+            return Err(StoreError::UnsafeStorage);
+        }
+        let path = Path::new("/var/lib/greyward/installer/accounts.json");
+        for parent in path.ancestors().skip(1) {
+            let meta = std::fs::symlink_metadata(parent)?;
+            if !meta.is_dir() || meta.uid() != 0 || meta.mode() & 0o022 != 0 {
+                return Err(StoreError::UnsafeStorage);
+            }
+        }
+        let meta = std::fs::symlink_metadata(path)?;
+        if !meta.is_file()
+            || meta.uid() != 0
+            || meta.mode() & 0o022 != 0
+            || meta.nlink() != 1
+            || meta.len() > 65536
+        {
+            return Err(StoreError::UnsafeStorage);
+        }
+        let receipt: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(path)?).map_err(|_| StoreError::Corrupt)?;
+        let passwd = std::fs::read_to_string("/etc/passwd")?;
+        let account = passwd
+            .lines()
+            .find_map(|line| {
+                LocalAccount::from_passwd(line)
+                    .ok()
+                    .filter(|a| a.name == name)
+            })
+            .ok_or(StoreError::InvalidPolicyIntent)?;
+        if receipt["schema"] != "greyward.installer-accounts/v1"
+            || !receipt["accounts"].as_array().is_some_and(|records| {
+                records.iter().any(|r| {
+                    r["name"] == account.name
+                        && r["uid"] == account.uid
+                        && r["gid"] == account.gid
+                        && r["home"] == account.home
+                })
+            })
+        {
+            return Err(StoreError::InvalidPolicyIntent);
+        }
+        self.prepare_account_origin(name, AccountOrigin::Installer)
+    }
+
+    fn prepare_account_origin(
+        &mut self,
+        name: &str,
+        origin: AccountOrigin,
+    ) -> Result<(), StoreError> {
         use std::os::unix::fs::MetadataExt;
         if rustix::process::getuid().as_raw() != 0 || rustix::process::geteuid().as_raw() != 0 {
             return Err(StoreError::UnsafeStorage);
@@ -401,12 +460,12 @@ impl PolicyStore {
         )
         .map_err(|_| StoreError::InvalidPolicyIntent)?;
         let generation = content_generation(&bytes);
-        AccountOriginReceipt::issue(account.clone(), AccountOrigin::ExplicitMigration)?;
+        AccountOriginReceipt::issue(account.clone(), origin)?;
         self.journal_enrollment(
             &EnrollmentRecord {
                 schema: ENROLLMENT_SCHEMA.into(),
                 account,
-                origin: AccountOrigin::ExplicitMigration,
+                origin,
                 phase: EnrollmentPhase::Prepared,
                 transaction_ref: SecurityReference::try_from(format!(
                     "operation_{}",

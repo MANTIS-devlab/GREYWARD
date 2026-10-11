@@ -1,2 +1,3 @@
+/usr/lib/greyward/application-security/desktop/bin/labwc -- gen_context(system_u:object_r:greyward_as_display_exec_t,s0)
 /usr/lib/greyward/application-security/desktop/labwc(/.*)? gen_context(system_u:object_r:usr_t,s0)
 /usr/lib/greyward/application-security/desktop/labwc/autostart -- gen_context(system_u:object_r:bin_t,s0)

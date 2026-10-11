@@ -1,4 +1,5 @@
 import copy
+import json
 import sys
 import tempfile
 import unittest
@@ -111,3 +112,68 @@ class NotificationTests(unittest.TestCase):
         self.assertEqual(self.bus.sent[-1][-1], 0)
         self.assertEqual(self.bus.sent[-1][6]['urgency'], 2)
         self.assertFalse(self.bus.sent[-1][6]['x-greyward-quiet'])
+
+    def test_transient_posture_warnings_do_not_toast(self):
+        for reference in ('secure-dns', 'firewall-unavailable', 'usb-unavailable'):
+            with self.subTest(reference=reference):
+                self.router._warning_since.clear()
+                warning = {**self.item, 'id': reference, 'kind': 'provider', 'severity': 'WARNING', 'notification_stability_seconds': 30}
+                with patch('greyward_security_context.notification_router.time.monotonic', side_effect=(10.0, 18.0)):
+                    self.router.reconcile(self.router.eligible_items([warning]))
+                    self.router.reconcile(self.router.eligible_items([]))
+                self.assertEqual(self.bus.sent, [])
+
+    def test_persistent_posture_warnings_toast_after_stability_window(self):
+        for reference in ('secure-dns', 'firewall-unavailable', 'usb-unavailable'):
+            with self.subTest(reference=reference):
+                self.router._warning_since.clear()
+                warning = {**self.item, 'id': reference, 'kind': 'provider', 'severity': 'WARNING', 'notification_stability_seconds': 30}
+                sent_before = len(self.bus.sent)
+                with patch('greyward_security_context.notification_router.time.monotonic',
+                           side_effect=(30.0, 59.9, 60.0)):
+                    self.router.reconcile(self.router.eligible_items([warning]))
+                    self.router.reconcile(self.router.eligible_items([warning]))
+                    self.assertEqual(len(self.bus.sent), sent_before)
+                    self.router.reconcile(self.router.eligible_items([warning]))
+                self.assertEqual(len(self.bus.sent), sent_before + 1)
+
+    def test_recovered_notification_id_does_not_bypass_a_new_stability_window(self):
+        warning = {**self.item, 'id': 'firewall-unavailable', 'kind': 'provider', 'severity': 'WARNING',
+                   'notification_stability_seconds': 30}
+        old = {**warning, 'detail': 'An earlier firewall warning'}
+        self.path.write_text(json.dumps({'owner': self.bus.owner, 'records': {
+            warning['id']: {'item': old, 'notification_id': 77, 'signature': json.dumps(old, sort_keys=True), 'acknowledged': False}
+        }}))
+        self.router = NotificationRouter(self.bus, self.dispatch, self.path)
+        with patch('greyward_security_context.notification_router.time.monotonic', side_effect=(1.0, 30.9, 31.0)):
+            self.router.reconcile(self.router.eligible_items([warning]))
+            self.assertEqual(self.bus.closed, [77])
+            self.router.reconcile(self.router.eligible_items([warning]))
+            self.assertEqual(self.bus.sent, [])
+            self.router.reconcile(self.router.eligible_items([warning]))
+        self.assertEqual(len(self.bus.sent), 1)
+
+    def test_other_and_critical_notifications_are_not_delayed(self):
+        warning = {**self.item, 'id': 'network-protection', 'severity': 'WARNING'}
+        critical = {**self.item, 'id': 'secure-dns', 'severity': 'CRITICAL', 'notification_stability_seconds': 30}
+        with patch('greyward_security_context.notification_router.time.monotonic', return_value=0.0):
+            self.router.reconcile(self.router.eligible_items([warning, critical]))
+        self.assertEqual(len(self.bus.sent), 2)
+
+    def test_alert_projection_is_shared_by_widget_and_native_publisher(self):
+        warning = {**self.item, 'id': 'firewall-unavailable', 'kind': 'provider', 'severity': 'WARNING',
+                   'notification_stability_seconds': 30}
+        urgent = {**self.item, 'id': 'usb:urgent', 'severity': 'ACTION'}
+        with patch('greyward_security_context.notification_router.time.monotonic', side_effect=(10.0, 39.9, 40.0)):
+            first = self.router.eligible_items([warning, urgent])
+            self.router.reconcile(first)
+            self.assertEqual(first, [urgent])
+            self.assertEqual(len(self.bus.sent), 1)
+            self.assertEqual(self.bus.sent[0][3], 'Device')
+            second = self.router.eligible_items([warning, urgent])
+            self.router.reconcile(second)
+            third = self.router.eligible_items([warning, urgent])
+            self.router.reconcile(third)
+        self.assertEqual(second, [urgent])
+        self.assertEqual(third, [warning, urgent])
+        self.assertEqual(len(self.bus.sent), 2)

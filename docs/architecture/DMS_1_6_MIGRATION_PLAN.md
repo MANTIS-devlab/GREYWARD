@@ -18,6 +18,12 @@ DankCommon `26396ce432d6c71c3f5367438f96f4a8d667e160`, and dankgo
 digests/preimages, shell digest, build inputs, and the development compatibility tuple.
 The backend API is 34; the release changelog's older API number is not authoritative.
 
+The image candidate advances the GREYWARD package identity to v1.6.2-14 and pins
+the currently signed Fedora 44 Go package, 1.26.9-1.fc44. The earlier 1.26.8
+build package is no longer available from the enabled signed repositories; the
+candidate does not use unsigned build artifacts. This changes the reproducible
+build input and package identity, not the upstream DMS source or security policy.
+
 Keep Labwc/UWSM, Security Context's `greyward.security.experience/v1` contract,
 typed actions, freshness and route allowlists, Update Center/recovery authority,
 branding and the exact GREYWARD desktop interactions. No new generic command API.

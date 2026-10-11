@@ -1,6 +1,15 @@
 #!/bin/sh
 set -eu
 
+# Enrolled desktops must enter the existing broker-owned protected seat.
+# An ordinary Labwc process cannot receive raw input devices in this domain.
+# Missing protected-login inputs must fail rather than fall back to that path.
+case "$(/usr/bin/id -Z)" in
+  greyward_guard_u:*)
+    exec /usr/bin/python3 -I /usr/share/greyward-application-security/desktop/login.py
+    ;;
+esac
+
 # Some virtual GPUs advertise a DRM device without exposing a usable render
 # node. In that case wlroots can select an EGL/dmabuf path that fails after the
 # greeter or DMS creates its first surface. Keep Pixman scoped to a known

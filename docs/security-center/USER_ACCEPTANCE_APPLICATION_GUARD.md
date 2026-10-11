@@ -3,21 +3,21 @@
 ## Terminal fixtures added on 9 October 2026
 
 The user explicitly requested terminal testing in addition to the earlier
-mouse-only scenarios below. The normal enrolled `development-user` account on `.149`
+mouse-only scenarios below. The normal enrolled `stendev` account on `.149`
 now has two harmless scripts in `~/GREYWARD-Guard-Tests/`:
 `legitimate-read.sh` and `threat-read.sh`. Each only prints a description,
-attempts to read `/home/development-user/.ssh/greyward_mock_key.txt`, and returns the
+attempts to read `/home/stendev/.ssh/greyward_mock_key.txt`, and returns the
 read exit status. The file contains synthetic text, not a usable SSH key.
-It has mode 0600, is owned by `development-user`, and has the existing registered SSH
+It has mode 0600, is owned by `stendev`, and has the existing registered SSH
 directory resource label. Existing credentials and grants were not changed.
 
 Live checks through the normal enrolled SSH account:
 
 - Both scripts return permission denied and exit 1 before any grant.
-- `/usr/bin/sudo -n /usr/bin/cat -- /home/development-user/.ssh/greyward_mock_key.txt`
+- `/usr/bin/sudo -n /usr/bin/cat -- /home/stendev/.ssh/greyward_mock_key.txt`
   is denied at sudo execution. No fresh interactive sudo authentication was
   tested. Do not promise that an authenticated sudo command is currently usable.
-- `greyward-guard grant review /home/development-user/GREYWARD-Guard-Tests/legitimate-read.sh
+- `greyward-guard grant review /home/stendev/GREYWARD-Guard-Tests/legitimate-read.sh
   resource_d8be0f8653b46e904ffdc90ee5bab65f6da49a47470edb30f274d420d07e0d99`
   returns provider unavailable without fallback. The implemented reviewed-tool
   profile is fixed SSH key inspection; arbitrary script/cat raw-read grants and
@@ -31,7 +31,7 @@ shell, interpreter, or cat executable broad credential access to make this pass.
 
 The following guide remains the earlier desktop-only acceptance procedure.
 
-For the enrolled `development-user` desktop on `.149`. Use the mouse and Security
+For the enrolled `stendev` desktop on `.149`. Use the mouse and Security
 Center. **Do not open Terminal.** The prepared launchers are in the application
 menu, and the test key is synthetic. Never save, copy, or use it to connect to
 anything.

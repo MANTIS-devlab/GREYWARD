@@ -10,7 +10,7 @@ The real `.149` public `ApplicationSecurity1` owner is now the explicitly
 enabled `greyward-application-security-workflows.service`. It uses the shared
 root-owned schema-four database, identity cache, dispatcher and isolation runner;
 no parallel mock provider or private bus substitutes for this deployment.
-Center 61 / Context 67 are installed and running as normal user `development-user` (1001).
+Center 61 / Context 67 are installed and running as normal user `stendev` (1001).
 The running Center binary SHA-256 is
 `2733961529726432608a09e40580f1fc8787fe7fe77cc57adb82a38e201a4fa9`.
 
