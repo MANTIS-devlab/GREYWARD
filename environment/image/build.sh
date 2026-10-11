@@ -161,6 +161,7 @@ for required in \
   "$production/security-center-contract.tsv" \
   "$security_context_unit" \
   "$session/dankmaterialshell/monitors.json" \
+  "$production/labwc-autostart" \
   "$production/manifest.json" "$patches/dms/launcher-canonical-hitbox.patch" \
   "$patches/dms/polkit-auth-dialog.patch" \
   "$patches/dms/greyward-settings-curation.patch" \
@@ -195,6 +196,7 @@ if [[ -n "$session_rpm" ]]; then
   session_unit_path='./usr/lib/systemd/user/greyward-dms.service'
   session_migration_path='./usr/local/libexec/greyward-dms-state-migrate'
   session_monitors_path='./usr/share/greyward/defaults/dankmaterialshell/monitors.json'
+  session_autostart_path='./usr/share/greyward/defaults/labwc/autostart'
   if ! grep -Fqx 'Environment=WAYLAND_DISPLAY=wayland-0' "$session/greyward-dms.service"; then
     echo 'The source DMS unit must set WAYLAND_DISPLAY=wayland-0.' >&2
     exit 1
@@ -209,6 +211,10 @@ if [[ -n "$session_rpm" ]]; then
   fi
   if ! rpm2cpio "$session_rpm" | cpio -i --quiet --to-stdout "$session_monitors_path" | cmp -s - "$session/dankmaterialshell/monitors.json"; then
     echo 'The greyward-session RPM lacks the current first-session display profile; rebuild it from this checkout before ISO staging.' >&2
+    exit 1
+  fi
+  if ! rpm2cpio "$session_rpm" | cpio -i --quiet --to-stdout "$session_autostart_path" | cmp -s - "$production/labwc-autostart"; then
+    echo 'The greyward-session RPM lacks the current VM display fallback; rebuild it from this checkout before ISO staging.' >&2
     exit 1
   fi
 fi
@@ -240,6 +246,20 @@ fi
 if $require_complete && [[ -z "$dms_rpm" ]]; then
   echo "Complete production staging requires a verified greyward-dms RPM." >&2
   exit 2
+fi
+if $require_complete; then
+  selected_dms_version=$(rpm_query -qp --qf '%{VERSION}-%{RELEASE}' "$dms_rpm")
+  expected_dms_requirement="greyward-dms = $selected_dms_version"
+  enrollment_rpm=''
+  for candidate in "${enrollment_rpms[@]}"; do
+    if [[ "$(rpm_query -qp --qf '%{NAME}' "$candidate")" == greyward-application-enrollment ]]; then
+      enrollment_rpm=$candidate
+    fi
+  done
+  if [[ -z "$enrollment_rpm" ]] || ! rpm_query -qp --requires "$enrollment_rpm" | grep -Fqx "$expected_dms_requirement"; then
+    echo "The enrollment RPM must require the selected DMS runtime exactly ($expected_dms_requirement)." >&2
+    exit 1
+  fi
 fi
 if $require_complete && [[ -z "$branding_rpm" ]]; then
   echo "Complete production staging requires one greyward-branding RPM." >&2
@@ -380,6 +400,21 @@ for key in ('schema','releaseId','dms','inputs','patches','shell','build','compa
     elif expected[key] != actual.get(key): raise SystemExit('DMS runtime receipt mismatch: '+key)
 if not actual.get('binarySha256') or not actual.get('firstPartyFiles'): raise SystemExit('Incomplete DMS RPM receipt')
 PY
+  plugin_source="$session/dankmaterialshell/plugins"
+  plugin_count=0
+  while IFS= read -r -d '' plugin_file; do
+    plugin_count=$((plugin_count + 1))
+    plugin_relative=${plugin_file#"$plugin_source"/}
+    rpm_plugin_path="./etc/xdg/quickshell/dms-plugins/$plugin_relative"
+    if ! rpm2cpio "$dms_rpm" | cpio -i --quiet --to-stdout "$rpm_plugin_path" | cmp -s - "$plugin_file"; then
+      echo "The greyward-dms RPM contains a stale first-party plugin: $plugin_relative; rebuild it from this checkout before ISO staging." >&2
+      exit 1
+    fi
+  done < <(find "$plugin_source" -type f -print0 | LC_ALL=C sort -z)
+  if ((plugin_count == 0)); then
+    echo 'No current first-party DMS plugins were found for RPM verification.' >&2
+    exit 1
+  fi
   for branding_path in \
     /usr/share/anaconda/pixmaps/greyward-anaconda-logo.png \
     /usr/share/anaconda/pixmaps/greyward-anaconda.css \

@@ -130,6 +130,9 @@ $anacondaCssPath = Join-Path $repo 'packaging\greyward-branding\SOURCES\greyward
 $anacondaConfPath = Join-Path $repo 'packaging\greyward-branding\SOURCES\greyward-anaconda.conf'
 foreach ($required in @($defaultAppsPath, $mimeAppsPath, $braveFlagsPath, $softwareWrapperPath, $softwareDesktopPath, $softwareRuntimeDesktopPath, $productionProvisionPath, $productionManifestPath, $productionAcceptancePath, $productionAcceptanceImplementationPath, $imageEntryPoint, $imageIsoEntryPoint, $imageKickstartPath, $firstbootScriptPath, $firstbootServicePath, $greeterWallpaperSyncPath, $autoUpdateScriptPath, $autoUpdateServicePath, $autoUpdateTimerPath, $labwcEnvironmentPath, $sessionDesktopPath, $labwcSessionLauncherPath, $dmsServicePath, $artifactPolicyPath, $auditRulesPath, $greeterSelinuxPath, $uwsmLabwcPatchPath, $dmsSettingsPatchPath, $dmsLabwcRuntimePatchPath, $dmsLauncherHitboxPatchPath, $dmsSettingsPath, $dmsMonitorDefaultsPath, $applicationSecuritySpecPath, $enrollmentSpecPath, $securityCenterRoutePath, $securePluginManifestPath, $securePluginWidgetPath, $networkTrafficPluginManifestPath, $networkTrafficPluginWidgetPath, $networkTrafficPluginModelPath, $networkTrafficPluginMathPath, $publicIpPluginManifestPath, $publicIpPluginWidgetPath, $session10ReportPath, $session10GatePath, $interactionTestPath, $portalConfigPath, $rygelOverridePath, $blackboxDesktopOverridePath, $blackboxSchemePath, $blackboxDarkPastelSchemePath, $blackboxParaisoSchemePath, $blackboxSetiSchemePath, $blackboxVibrantInkSchemePath, $blackboxDconfPath, $terminalIconPath, $zshConfiguratorPath, $zshSourcesPath, $zshrcPath, $p10kPath, $terminalBriefPath, $terminalBriefTestPath, $devDeployPath, $cryptoPolicyDocPath, $cryptoPolicyModulePath, $dmsAppsDockSpacingPatchPath, $dmsStateMigrationPath, $dmsFlatpakIconResolutionPatchPath, $dmsTrayIconFallbackPatchPath)) {
     if (-not (Test-Path -LiteralPath $required)) {
+        $relative = [IO.Path]::GetRelativePath($repo, $required).Replace('\', '/')
+        $publication = Get-Content -Raw -LiteralPath (Join-Path $repo 'tools/publication-policy.json') | ConvertFrom-Json
+        if (@($publication.excludedPaths | Where-Object { $relative -like $_ }).Count -gt 0) { continue }
         $errors.Add("Flatpak default application input is missing: $required")
     }
 }
@@ -405,8 +408,9 @@ if (Test-Path -LiteralPath $terminalOverridePath) {
     }
     if ((Get-Content -Raw -LiteralPath $productionProvisionPath) -notmatch 'desktop-entry-overrides/com\.raggesilver\.BlackBox\.desktop' -or
         (Get-Content -Raw -LiteralPath $imageEntryPoint) -notmatch 'desktop-entry-overrides/com\.raggesilver\.BlackBox\.desktop' -or
-        (Get-Content -Raw -LiteralPath $devDeployPath) -notmatch 'desktop-entry-overrides/com\.raggesilver\.BlackBox\.desktop' -or
-        (Get-Content -Raw -LiteralPath $devDeployPath) -notmatch 'launcher_cache\.json') {
+        ((Test-Path -LiteralPath $devDeployPath) -and (
+            (Get-Content -Raw -LiteralPath $devDeployPath) -notmatch 'desktop-entry-overrides/com\.raggesilver\.BlackBox\.desktop' -or
+            (Get-Content -Raw -LiteralPath $devDeployPath) -notmatch 'launcher_cache\.json'))) {
         $errors.Add('Production/image/development deployment does not install Black Box as GREYWARD Terminal and invalidate the DMS launcher cache.')
     }
 }
@@ -498,9 +502,9 @@ if ($terminalBrief -notmatch 'def render\(' -or
 if ((Get-Content -Raw -LiteralPath $productionProvisionPath) -notmatch 'configure-zsh\.sh' -or
     (Get-Content -Raw -LiteralPath $imageEntryPoint) -notmatch 'configure-zsh\.sh' -or
         (Get-Content -Raw -LiteralPath $productionAcceptanceImplementationPath) -notmatch 'POWERLEVEL9K_MODE=nerdfont-complete' -or
-    (Get-Content -Raw -LiteralPath $devDeployPath) -notmatch 'greyward-configure-zsh' -or
+    ((Test-Path -LiteralPath $devDeployPath) -and (Get-Content -Raw -LiteralPath $devDeployPath) -notmatch 'greyward-configure-zsh') -or
     (Get-Content -Raw -LiteralPath $productionProvisionPath) -notmatch 'greyward-terminal-brief\.py' -or
-    (Get-Content -Raw -LiteralPath $devDeployPath) -notmatch 'greyward-terminal-brief\.py') {
+    ((Test-Path -LiteralPath $devDeployPath) -and (Get-Content -Raw -LiteralPath $devDeployPath) -notmatch 'greyward-terminal-brief\.py')) {
     $errors.Add('Production/image/acceptance paths do not consume the canonical zsh payload.')
 }
 

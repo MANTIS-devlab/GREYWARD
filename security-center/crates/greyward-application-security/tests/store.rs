@@ -37,7 +37,7 @@ fn transactional_inventory_preserves_other_users_and_generation_changes() {
         10
     );
     assert_eq!(store.list_applications(1001, None, 10).unwrap().len(), 1);
-    assert!(store.list_applications(9999, None, 10).unwrap().is_empty());
+    assert_eq!(store.list_applications(9999, None, 10).unwrap().len(), 0);
 }
 
 #[test]

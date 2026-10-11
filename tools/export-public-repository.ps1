@@ -35,32 +35,18 @@ if ($LASTEXITCODE -ne 0) { throw 'Static validation failed; public export was no
 & pwsh -NoProfile -File (Join-Path $repo 'tools/validate-repository.ps1')
 if ($LASTEXITCODE -ne 0) { throw 'Repository validation failed; public export was not created.' }
 
-$listed = & git -C $repo ls-files --cached --others --exclude-standard -z
-if ($LASTEXITCODE -ne 0) { throw 'Unable to enumerate the publication candidate.' }
-$localOnlyPaths = @(
-    'environment/greyward.pkr.hcl',
-    'environment/http/greyward-dev-bootstrap.ks.tmpl',
-    'environment/http/greyward-dev-boottest.ks.tmpl',
-    'environment/http/greyward.ks.tmpl',
-    'environment/http/greyward-boottest.ks.tmpl',
-    'environment/development/provision-overlay.sh'
-)
-$paths = ($listed -join "`n") -split "`0" | Where-Object { $_ -and $_ -notin $localOnlyPaths }
-foreach ($relative in $paths) {
-    $source = Join-Path $repo $relative
-    if (-not (Test-Path -LiteralPath $source -PathType Leaf)) { continue }
-    $target = Join-Path $destinationPath $relative
-    $parent = Split-Path $target -Parent
-    if (-not (Test-Path -LiteralPath $parent)) {
-        New-Item -ItemType Directory -Path $parent -Force | Out-Null
-    }
-    Copy-Item -LiteralPath $source -Destination $target
-}
+# publication-policy.json is the canonical boundary, including the private
+# environment/development/provision-overlay.sh and machine-control scripts.
+$python = if ($IsWindows) { 'python' } else { 'python3' }
+& $python (Join-Path $repo 'tools/public-export.py') --source $repo --destination $destinationPath
+if ($LASTEXITCODE -ne 0) { throw 'Public snapshot failed privacy/completeness checks.' }
 
 & git -C $destinationPath init --quiet --initial-branch=main
 if ($LASTEXITCODE -ne 0) { throw 'Unable to initialize the clean public repository.' }
 & git -C $destinationPath config core.autocrlf false
 if ($LASTEXITCODE -ne 0) { throw 'Unable to configure byte-preserving line endings.' }
+& git -C $destinationPath config core.eol lf
+if ($LASTEXITCODE -ne 0) { throw 'Unable to configure portable Linux source line endings.' }
 & git -C $destinationPath add --all
 if ($LASTEXITCODE -ne 0) { throw 'Unable to stage the public repository.' }
 
@@ -90,7 +76,7 @@ foreach ($relative in (& git -C $destinationPath ls-files)) {
     }
 }
 
-& git -C $destinationPath -c "user.name=$AuthorName" -c "user.email=$AuthorEmail" -c commit.gpgsign=false `
+& git -C $destinationPath -c "user.name=$AuthorName" -c "user.email=$AuthorEmail" `
     commit --quiet -m 'Initial public release'
 if ($LASTEXITCODE -ne 0) { throw 'Unable to create the clean public root commit.' }
 

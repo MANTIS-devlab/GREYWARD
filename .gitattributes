@@ -20,10 +20,13 @@ spikes/application-security/portal/*.patch text eol=lf whitespace=-blank-at-eol,
 # Unified diff context columns preserve upstream tabs and empty lines verbatim.
 security-center/packaging/application-security/desktop/*.patch text eol=lf whitespace=-blank-at-eol,-blank-at-eof,-space-before-tab
 environment/session/greyward-* text eol=lf
+environment/production/greyward-* text eol=lf
+security-center/security-context/bin/* text eol=lf
 environment/session/labwc/autostart text eol=lf
 environment/production/labwc-autostart text eol=lf
 packaging/greyward-dms/*.spec text eol=lf
 packaging/greyward-session/*.spec text eol=lf
+packaging/greyward-enrollment/*.spec text eol=lf
 *.png binary
 *.jpg binary
 *.jpeg binary

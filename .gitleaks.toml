@@ -1,0 +1,14 @@
+title = "GREYWARD public source secret checks"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Exact verified dependency fingerprints and deliberately fake classifier fixture"
+regexTarget = "secret"
+regexes = [
+  '^8b124b52da2b0c8a54b338969ebc108488ca1caf718fb45ba6ffee6c7adfcbe0$',
+  '^57ae10ee0b4c1339056ce10f9450597b95ca796bbfae65ca1d2348040e194cd5$',
+  '^a7eeba0607f0e166beb7f426aac87670fd39c66f9e76bac859ffb72cfca26aea$',
+  '^ghp_123456789012345678$'
+]

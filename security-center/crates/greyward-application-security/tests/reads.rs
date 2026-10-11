@@ -168,7 +168,7 @@ fn caller_scope_and_revision_are_enforced_across_pagination_and_detail() {
         Err(ReadError::RevisionChanged)
     ));
     let empty = reads.list(&caller, None, None, 10).unwrap();
-    assert!(empty.applications.is_empty());
+    assert_eq!(empty.applications.len(), 0);
     assert_eq!(empty.inventory_health, EnforcementHealth::Unknown);
 }
 

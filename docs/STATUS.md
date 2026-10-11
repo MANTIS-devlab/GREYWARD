@@ -1,5 +1,27 @@
 # GREYWARD current status
 
+## Source publication audit — 11 October
+
+The earlier per-account DMS keyboard preference implementation is preserved as
+unpromoted development work. It is absent from the current package sources:
+its source checks and package assembly did not establish installed next-login
+keyboard behavior. It must be reconciled with the newer desktop generation
+before promotion. Current source CI does not prove ISO installation, live
+desktop behavior or offline recovery acceptance.
+
+11 October ISO rebuild: `GREYWARD-0.3.5-Dawn-x86_64.iso` was composed from
+the existing cache and validated. SHA-256 is
+`46ed1156b7096f905f3c0b1e990c4775da8d82c93030c58d77e2d225dab6302e`;
+the ISO sidecar checksum passed on `<development-host>`. It includes DMS 1.6.2-15 with the
+current Security Context plugin (launcher feedback and synchronized alert
+projection), session 0.1.0-16 with a bounded 1920×1080 request for the exact
+`Virtual-1` virtual output before DMS starts, and Enrollment 0.1.0-18 matched
+to DMS 1.6.2-15. The source-to-package guards and production-stage validation
+passed; the ISO carries its boot records and validated offline installation
+payload. The build reused the existing DNF/Flatpak caches. No VM was created or
+booted, and installed-system display behavior remains untested. See the
+[monitor configuration record](architecture/DMS_MONITOR_CONFIGURATION.md).
+
 11 October Security Context alert synchronization: the DMS plugin was using a
 second client-side 30-second timer, so its cards and badge could appear on a
 different schedule from native desktop notifications. Source now computes one

@@ -34,10 +34,18 @@ def nevra(path):
     return run('rpm', '-qp', '--qf', '%{NEVRA}', path, capture_output=True, text=True).stdout
 
 
+def dms_build_command(repo, dms_inputs, output, builder, privileged_caller=False):
+    command = ['unshare', '--net', 'runuser', '-u', builder, '--']
+    if not privileged_caller:
+        command = ['sudo', '-n', *command]
+    return [*command, 'bash', repo/'packaging/greyward-dms/build.sh', dms_inputs, output]
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--dms-inputs', type=Path, required=True)
+    parser.add_argument('--builder-user', help='Unprivileged account used for isolated DMS builds when the component builder runs as root.')
     parser.add_argument('--only', default='dms,security,session,branding')
     args = parser.parse_args()
     output = args.output.resolve(); output.mkdir(parents=True, exist_ok=True)
@@ -84,8 +92,24 @@ def main():
         entry.mkdir(parents=True)
         if name == 'dms':
             import pwd
-            user=pwd.getpwuid(os.getuid()).pw_name
-            run('sudo', '-n', 'unshare', '--net', 'runuser', '-u', user, '--', 'bash', REPO/'packaging/greyward-dms/build.sh', args.dms_inputs.resolve(), entry/'build')
+            if os.geteuid() == 0:
+                if not args.builder_user:
+                    raise SystemExit('Root-run DMS builds require --builder-user so rpmbuild does not run as root.')
+                try:
+                    account = pwd.getpwnam(args.builder_user)
+                except KeyError as error:
+                    raise SystemExit('Unknown DMS builder account: ' + args.builder_user) from error
+                if account.pw_uid == 0:
+                    raise SystemExit('DMS RPM builds must use an unprivileged builder account.')
+                os.chown(entry, account.pw_uid, account.pw_gid)
+                user = args.builder_user
+                privileged_caller = True
+            else:
+                user = pwd.getpwuid(os.getuid()).pw_name
+                if args.builder_user and args.builder_user != user:
+                    raise SystemExit('A non-root caller may build only as its own account.')
+                privileged_caller = False
+            run(*dms_build_command(REPO, args.dms_inputs.resolve(), entry/'build', user, privileged_caller))
         elif name == 'session':
             run('bash', REPO/'packaging/greyward-session/build.sh', entry/'build')
         elif name == 'security':

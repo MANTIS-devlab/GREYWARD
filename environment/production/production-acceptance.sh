@@ -28,7 +28,7 @@ fi
 checkpoint 'required production packages and login boundary'
 rpm -q greyward-application-security-experimental greyward-application-enrollment >/dev/null || fail 'enrollment package closure is missing'
 /usr/libexec/greyward-enrollment check || fail 'installer enrollment is not prepared'
-rpm -q dms-greeter greyward-session greyward-security-center greyward-security-context audit audit-rules policycoreutils wlopm net-tools >/dev/null || fail 'required production package is missing'
+rpm -q dms-greeter greyward-session greyward-security-center greyward-security-context audit audit-rules policycoreutils wlr-randr wlopm net-tools >/dev/null || fail 'required production package is missing'
 test -x /usr/bin/dms-greeter || fail 'DMS Greeter is not installed'
 /usr/libexec/greyward-dms-verify >/dev/null || fail 'Selected DMS runtime or tested tuple is invalid'
 test "$(rpm -qf --qf '%{NAME}' /usr/bin/dms)" = greyward-dms || fail 'DMS backend is not package-owned'

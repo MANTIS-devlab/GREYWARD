@@ -219,8 +219,8 @@ fn fresh_owner_checks_require_two_actual_authentications() {
             .revision,
         3
     );
-    assert!(store.desired_policy().unwrap().resources.is_empty());
-    assert!(store.desired_policy().unwrap().grants.is_empty());
+    assert_eq!(store.desired_policy().unwrap().resources.len(), 0);
+    assert_eq!(store.desired_policy().unwrap().grants.len(), 0);
     assert!(registration.revalidate(&store, &actor).is_err());
     child.stdin.take().unwrap().write_all(&[1]).unwrap();
     assert!(child.wait().unwrap().success());
