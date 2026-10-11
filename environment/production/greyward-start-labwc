@@ -1,6 +1,18 @@
 #!/bin/sh
 set -eu
 
+# Enrolled sessions must enter through the broker-admitted display worker.
+# greyward_guard_t intentionally cannot read keyboard or pointer devices.
+session_context=$(/usr/bin/id -Z)
+if [ "$session_context" = 'greyward_guard_u:greyward_guard_r:greyward_guard_t:s0' ]; then
+  login_helper=/usr/share/greyward-application-security/desktop/login.py
+  if [ ! -x /usr/bin/greyward-guard ] || [ ! -r "$login_helper" ]; then
+    printf '%s\n' 'GREYWARD protected desktop admission is unavailable.' >&2
+    exit 1
+  fi
+  exec /usr/bin/python3 -I "$login_helper"
+fi
+
 # Some virtual GPUs advertise a DRM device without exposing a usable render
 # node. In that case wlroots can select an EGL/dmabuf path that fails after the
 # greeter or DMS creates its first surface. Keep Pixman scoped to a known

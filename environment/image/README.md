@@ -42,7 +42,11 @@ contains no hard-coded XKB layout. It also byte-compares the installed keyboard
 helper and its parser with source. Provisioning seeds each account from the
 keyboard layout selected in Anaconda; the session launcher passes validated
 per-account settings through UWSM, and DMS overrides apply at the next sign-in.
-A stale session RPM is rejected before ISO construction.
+A stale session RPM is rejected before ISO construction. The stager also refuses
+CRLF bytes or an invalid shebang in the launcher and requires the enrolled
+session to use the broker-admitted display login path. It byte-compares the
+protected login helper inside the Application Security RPM with its source, so
+an ISO cannot ship the fixed launcher without the helper it calls.
 The experimental Application Security RPM is staged as an installed but
 inactive runtime. Staging verifies its protected Labwc worker matches source
 and rejects RPM scriptlets; account enrollment and policy activation remain

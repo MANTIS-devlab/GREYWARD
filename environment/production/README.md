@@ -60,7 +60,16 @@ their native user services, so this startup guarantee does not add a parallel
 update or security backend.
 
 The canonical Labwc session entry starts through `greyward-start-labwc`. The
-launcher selects wlroots' Pixman renderer for known VMware/Hyper-V virtual GPUs
+launcher checks the current SELinux context before starting UWSM. For an enrolled
+`greyward_guard_t` session, it delegates to the root-owned login helper, which
+detaches from the authentication tty and requests the broker-admitted display
+worker. The ordinary guard domain intentionally remains denied input-device
+access; the compositor receives input through `greyward_as_display_t`. Missing
+admission components fail closed with a direct error. The launcher must keep LF
+line endings because Linux resolves its shebang literally; CRLF makes the
+interpreter path invalid and prevents login. Repository static validation and
+installed-system acceptance check these contracts. The launcher selects
+wlroots' Pixman renderer for known VMware/Hyper-V virtual GPUs
 and for systems that expose no usable DRM render node, where an accelerated
 EGL/dma-buf path cannot be relied on during DMS startup. Bare-metal GPUs with a
 usable render node keep hardware acceleration; the production image does not

@@ -196,6 +196,10 @@ class OfflineTests(unittest.TestCase):
         self.assertIn('/dev/dri/renderD*', launcher)
         self.assertIn('has_render_node=false', launcher)
         self.assertIn('export WLR_RENDERER=pixman', launcher)
+        self.assertIn('session_context=$(/usr/bin/id -Z)', launcher)
+        self.assertIn("if [ \"$session_context\" = 'greyward_guard_u:greyward_guard_r:greyward_guard_t:s0' ]; then", launcher)
+        self.assertIn('exec /usr/bin/python3 -I "$login_helper"', launcher)
+        self.assertIn('greyward-application-security/desktop/login.py', launcher)
         self.assertIn('exec /usr/local/bin/greyward-keyboard-config exec -- /usr/bin/uwsm start -D Labwc:GREYWARD labwc', launcher)
         self.assertNotIn("/usr/libexec/greyward-dms-greeter", provision)
         self.assertNotIn('test -r "$stage/greyward-dms-greeter"', provision)
@@ -376,12 +380,19 @@ class OfflineTests(unittest.TestCase):
     def test_iso_staging_rejects_stale_session_dms_unit(self):
         unit = (ROOT / "environment/session/greyward-dms.service").read_text()
         stager = (ROOT / "environment/image/build.sh").read_text()
+        launcher_path = ROOT / "environment/production/greyward-start-labwc"
+        launcher = launcher_path.read_bytes()
         self.assertEqual(unit.count("Environment=WAYLAND_DISPLAY=wayland-0"), 1)
+        self.assertNotIn(b"\r", launcher)
+        self.assertEqual(launcher.splitlines()[0], b"#!/bin/sh")
+        self.assertIn("CRLF bytes", stager)
+        self.assertIn("Enrolled sessions must route through the protected desktop login helper", stager)
         self.assertIn("session_unit_path='./usr/lib/systemd/user/greyward-dms.service'", stager)
         self.assertIn('rpm2cpio "$session_rpm" | cpio -i --quiet --to-stdout "$session_unit_path" | cmp -s - "$session/greyward-dms.service"', stager)
         self.assertIn("rebuild it from this checkout before ISO staging", stager)
         self.assertIn("session_launcher_path='./usr/local/libexec/greyward-start-labwc'", stager)
-        self.assertIn('cmp -s - "$production/greyward-start-labwc"', stager)
+        self.assertIn("sed '1s|^#!/usr/bin/sh$|#!/bin/sh|'", stager)
+        self.assertIn('cmp -s - "$session_launcher_source"', stager)
 
     def test_iso_staging_rejects_stale_session_keyboard_components(self):
         stager = (ROOT / "environment/image/build.sh").read_text()
@@ -395,6 +406,8 @@ class OfflineTests(unittest.TestCase):
         self.assertIn('"$session/greyward-keyboard-config"', stager)
         self.assertIn('greyward_keyboard.py"; then', stager)
         self.assertIn("appsec_keyboard_module_path='./usr/share/greyward-application-security/desktop/greyward_keyboard.py'", stager)
+        self.assertIn("appsec_login_path='./usr/share/greyward-application-security/desktop/login.py'", stager)
+        self.assertIn("stale protected desktop login helper", stager)
         launcher = (ROOT / "environment/production/greyward-start-labwc").read_text()
         self.assertIn('exec /usr/local/bin/greyward-keyboard-config exec -- /usr/bin/uwsm start', launcher)
 

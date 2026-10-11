@@ -1,5 +1,16 @@
 # GREYWARD current status
 
+11 October enrolled graphical login recovery: the GREYWARD Labwc launcher was
+starting UWSM directly while the account was confined as `greyward_guard_t`.
+SELinux correctly denied that domain access to `/dev/input/event*`, so Labwc
+failed before the desktop appeared. The launcher now routes only that enrolled
+SELinux context through the existing root-owned login helper and broker-admitted
+`greyward_as_display_t` compositor. Ordinary application input access remains
+denied. Session RPM `0.1.0-12.fc44` is installed on `.149`; `rpm -V` is clean.
+No VM, greetd or graphical-session restart was performed. The next interactive
+login is pending user verification. The same source change is included in the
+next ISO inputs. SELinux remains Enforcing.
+
 11 October DNS/firewall notification flapping fix: a transient provider warning
 no longer raises and clears a desktop toast from a single sample. The
 notification router now requires either `secure-dns` or `firewall-unavailable`
@@ -17,8 +28,8 @@ is now seeded as the account default. DMS Settings can save a validated layout,
 variant, model and options for the signed-in account; the normal session
 launcher and protected worker read the same fixed settings through one
 validator, with no static XKB layout or SELinux policy change. The pinned DMS
-candidate is now v1.6.2-14, session RPM Release 11 and Application Security RPM
-Release 36. The DMS shell assembled against the pinned upstream archives
+candidate is now v1.6.2-14 and Application Security RPM Release 36; session RPM
+Release 12 includes the enrolled-login routing fix above. The DMS shell assembled against the pinned upstream archives
 matches its receipt. On `.149`, all three RPMs were rebuilt and installed, the
 Anaconda/localed `fr/oss` selection was seeded into `/etc/skel` and the existing
 `stendev` account, and libxkbcommon compiled that keymap successfully. The

@@ -69,6 +69,9 @@ grep -q -- '-w /etc/passwd.*-k identity' /etc/audit/audit.rules || fail 'GREYWAR
 grep -q -- '-a always,exit.*key=module-load' /etc/audit/audit.rules || fail 'GREYWARD module audit rule is not loaded'
 semodule -l | grep -qx greyward-dms-greeter || fail 'GREYWARD greeter SELinux policy is not loaded'
 test "$(rpm -qf --qf '%{NAME}' /usr/local/libexec/greyward-start-labwc)" = greyward-session || fail 'UWSM Labwc launcher is not package-owned'
+test "$(head -n 1 /usr/local/libexec/greyward-start-labwc)" = '#!/usr/bin/sh' || fail 'UWSM Labwc launcher has an invalid shebang or CRLF line ending'
+grep -qF 'greyward_guard_u:greyward_guard_r:greyward_guard_t:s0' /usr/local/libexec/greyward-start-labwc || fail 'Enrolled sessions do not route through protected desktop admission'
+grep -qF 'greyward-application-security/desktop/login.py' /usr/local/libexec/greyward-start-labwc || fail 'Protected desktop login helper is not selected by the launcher'
 if is_enabled gdm; then fail 'temporary GDM setup path is still enabled'; fi
 checkpoint 'Anaconda account and Initial Setup removal'
 mapfile -t human_users < <(awk -F: '$3 >= 1000 && $6 ~ /^\/home\// { print $1 }' /etc/passwd)

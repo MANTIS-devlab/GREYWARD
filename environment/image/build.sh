@@ -176,6 +176,24 @@ for required in \
   test -e "$required" || { echo "Missing production input: $required" >&2; exit 1; }
 done
 
+# Login is security-sensitive: reject a CRLF shebang that Linux cannot execute,
+# and require enrolled sessions to use the broker-admitted compositor path.
+session_launcher_source="$production/greyward-start-labwc"
+if LC_ALL=C grep -q $'\r' "$session_launcher_source"; then
+  echo 'The GREYWARD Labwc launcher contains CRLF bytes; commit and package it with LF line endings.' >&2
+  exit 1
+fi
+if [[ "$(head -n 1 "$session_launcher_source")" != '#!/bin/sh' ]]; then
+  echo 'The GREYWARD Labwc launcher must start with #!/bin/sh.' >&2
+  exit 1
+fi
+if ! grep -Fq 'greyward_guard_u:greyward_guard_r:greyward_guard_t:s0' "$session_launcher_source" || \
+   ! grep -Fq 'greyward-application-security/desktop/login.py' "$session_launcher_source" || \
+   ! grep -Fq 'exec /usr/bin/python3 -I "$login_helper"' "$session_launcher_source"; then
+  echo 'Enrolled sessions must route through the protected desktop login helper.' >&2
+  exit 1
+fi
+
 # The ISO must install the DMS unit built from this checkout. A stale
 # greyward-session RPM silently restores the absolute Wayland socket path and
 # breaks DMS monitor configuration, even when the source unit is fixed.
@@ -190,7 +208,9 @@ if [[ -n "$session_rpm" ]]; then
     exit 1
   fi
   session_launcher_path='./usr/local/libexec/greyward-start-labwc'
-  if ! rpm2cpio "$session_rpm" | cpio -i --quiet --to-stdout "$session_launcher_path" | cmp -s - "$production/greyward-start-labwc"; then
+  # Fedora's RPM build rewrites the standard /bin/sh shebang to /usr/bin/sh.
+  # Normalize only that first-line rewrite before checking the rest byte-for-byte.
+  if ! rpm2cpio "$session_rpm" | cpio -i --quiet --to-stdout "$session_launcher_path" | sed '1s|^#!/usr/bin/sh$|#!/bin/sh|' | cmp -s - "$session_launcher_source"; then
     echo 'The greyward-session RPM contains a stale Labwc launcher; rebuild it from this checkout before ISO staging.' >&2
     exit 1
   fi
@@ -223,6 +243,11 @@ fi
 # enrolled systems. Keep the shipped RPM's worker byte-identical to source and
 # reject scriptlets that could activate the experimental runtime on install.
 if [[ -n "$application_security_rpm" ]]; then
+  appsec_login_path='./usr/share/greyward-application-security/desktop/login.py'
+  if ! rpm2cpio "$application_security_rpm" | cpio -i --quiet --to-stdout "$appsec_login_path" | cmp -s - "$repo_root/security-center/packaging/application-security/desktop/login.py"; then
+    echo 'The Application Security RPM contains a stale protected desktop login helper; rebuild it from this checkout before ISO staging.' >&2
+    exit 1
+  fi
   appsec_session_path='./usr/share/greyward-application-security/desktop/session.py'
   if ! rpm2cpio "$application_security_rpm" | cpio -i --quiet --to-stdout "$appsec_session_path" | cmp -s - "$repo_root/security-center/packaging/application-security/desktop/session.py"; then
     echo 'The Application Security RPM contains a stale protected session worker; rebuild it from this checkout before ISO staging.' >&2

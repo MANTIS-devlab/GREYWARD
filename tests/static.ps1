@@ -296,6 +296,10 @@ if ($firstbootStatusService -notmatch 'ConditionPathExists=/var/lib/greyward/ins
 $labwcEnvironment = Get-Content -Raw -LiteralPath $labwcEnvironmentPath
 $sessionDesktop = Get-Content -Raw -LiteralPath $sessionDesktopPath
 $labwcSessionLauncher = Get-Content -Raw -LiteralPath $labwcSessionLauncherPath
+$labwcSessionLauncherBytes = [IO.File]::ReadAllBytes($labwcSessionLauncherPath)
+if ([Array]::IndexOf($labwcSessionLauncherBytes, [byte]13) -ge 0) {
+    $errors.Add('The installed Labwc session launcher must use LF line endings so its shebang resolves on Linux.')
+}
 if ($productionProvision -notmatch '/usr/bin/env WLR_RENDERER=pixman' -or
     $productionProvision -match 'WLR_DRM_DEVICES=' -or
     $productionProvision -notmatch 'WLR_RENDERER_ALLOW_SOFTWARE=1' -or
@@ -309,8 +313,12 @@ if ($productionProvision -notmatch '/usr/bin/env WLR_RENDERER=pixman' -or
     $labwcSessionLauncher -notmatch '\(0x\)\?\(15ad\|1414\)' -or
     $labwcSessionLauncher -notmatch '/dev/dri/renderD\*' -or
     $labwcSessionLauncher -notmatch 'export WLR_RENDERER=pixman' -or
+    $labwcSessionLauncher -notmatch 'session_context=\$\(/usr/bin/id -Z\)' -or
+    $labwcSessionLauncher -notmatch 'greyward_guard_u:greyward_guard_r:greyward_guard_t:s0' -or
+    $labwcSessionLauncher -notmatch 'exec /usr/bin/python3 -I "\$login_helper"' -or
+    $labwcSessionLauncher -notmatch 'greyward-application-security/desktop/login\.py' -or
     $labwcSessionLauncher -notmatch 'exec /usr/local/bin/greyward-keyboard-config exec -- /usr/bin/uwsm start -D Labwc:GREYWARD labwc') {
-    $errors.Add('The greeter must keep its software fallback, while the installed Labwc session must select Pixman only for unsupported virtual/no-render-node graphics and retain hardware rendering on capable bare metal.')
+    $errors.Add('The greeter must keep its software fallback, the enrolled session must route through protected desktop admission, and the installed Labwc session must select Pixman only for unsupported virtual/no-render-node graphics.')
 }
 $greeterCheckIndex = $firstbootScript.IndexOf('if [[ "$greeter_ready" != true ]]')
 $cleanupMarkerIndex = $firstbootScript.IndexOf('rm -f "$pending"')
