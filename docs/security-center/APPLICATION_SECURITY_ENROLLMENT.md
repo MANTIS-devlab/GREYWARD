@@ -1,6 +1,6 @@
 # Production Application Security enrollment
 
-Status: normal `.149` development enrollment active, 8 October 2026. Automatic
+Status: normal `<development-host>` development enrollment active, 8 October 2026. Automatic
 production installation/upgrade/rescue acceptance remains unvalidated.
 Production activation remains gated by actual enforcement/admission/rollback evidence. The [delivery plan](APPLICATION_SECURITY_PLAN.md)
 records current source and scoped validation. This document owns the proposed
@@ -29,7 +29,7 @@ refuses changed inputs/mappings on continuation and preserves the original
 first-boot diagnostics. Eleven focused tests and actual packaged-broker clean-root
 preparation pass; installed enrollment remains unvalidated until the replacement
 ISO's clean-install gate passes. The failed test VM is retained. See the dated
-[candidate evidence](../history/migrations/2026-10-10-enrollment-iso-candidate.md).
+candidate evidence (private development evidence).
 
 IMPLEMENTED for a manual-test ISO: `packaging/greyward-enrollment/` packages the
 six existing SELinux modules, protected Labwc patches, source/digest receipt and
@@ -51,7 +51,7 @@ DMS 1.6.2-8. Six policy modules and four narrow CIL overlays link in a separate
 copied policy store with neverallow checking enabled. Packaged private compositor
 bytes match its receipt. These are package checks: installed enforcement,
 first-boot completion and recovery are **PENDING MANUAL ACCEPTANCE** on a separate
-empty VM. `.149` is used only for candidate assembly and is not re-enrolled,
+empty VM. `<development-host>` is used only for candidate assembly and is not re-enrolled,
 rebooted or restarted.
 
 Explicit boot selection of `greyward-maintenance.target` uses the existing
@@ -74,10 +74,10 @@ acceptance. Compilation cannot establish those outcomes.
 
 IMPLEMENTED in Center 89 / Context 81 / experimental runtime 32 and session
 package 8, with separately compiled SELinux/compositor inputs. The approved
-normal-seat activation and core Administration/lock/grant checks pass on `.149`;
+normal-seat activation and core Administration/lock/grant checks pass on `<development-host>`;
 whole-desktop rollback remains pending at the user's request to keep the session
 running; production recovery acceptance remains IN PROGRESS.
-See the [normal-seat compatibility receipt](../history/security-center/2026-10-09-desktop-compatibility.md).
+See the normal-seat compatibility receipt (private development evidence).
 Installed packages alone do not enable Administration. Ordinary
 `sudo_exec_t` execution remains denied. A non-setuid graphical sudo handoff requests a root-prepared private
 Administration terminal, distinct from native DMS authentication and ordinary
@@ -112,7 +112,7 @@ Missing readiness refuses administration and never weakens ordinary coverage.
 
 ### Protected desktop startup transition
 
-An earlier `.149` login measured 5.33 seconds from PAM session-open to normal
+An earlier `<development-host>` login measured 5.33 seconds from PAM session-open to normal
 DMS configuration load; 2.21 seconds were spent in protected root admission.
 The readiness gate remains in place because removing it would start the ordinary
 desktop before the private authentication shell has registered Polkit. After
@@ -130,7 +130,7 @@ migration. This moves the visual transition earlier; Polkit readiness and
 ordinary desktop admission remain gated exactly as before. The 100 ms startup
 poll also remains limited to initial readiness, then returns to its one-second
 heartbeat. Application Security 0.1.0-41 and Enrollment 0.1.0-16 both build on
-`.149` with their package checks passing. Both are installed on `.149`, and the
+`<development-host>` with their package checks passing. Both are installed on `<development-host>`, and the
 migration refreshed the protected desktop receipt and shell inputs with SELinux
 Enforcing. The user visually confirmed that the new splash appears early during
 login; the normal DMS session is active afterward and SELinux remains Enforcing.
@@ -165,7 +165,7 @@ synthetic protected-file read, wrong-password refusal, actual tty-cache reuse,
 rendering and exclusive-surface pause/resume. Current-kernel decisions deny 372
 ordinary-closure administration process/PTY/runtime accesses; the pre-PAM
 terminal cannot read the synthetic registered resource. These are scoped tests,
-not normal-seat acceptance. See the [dated receipt](../history/security-center/2026-10-09-practical-administration.md).
+not normal-seat acceptance. See the dated receipt (private development evidence).
 
 Targeted usability changes implement trusted USBGuard read projection, narrowly
 typed Flatpak service metadata and unambiguous broker activation. Actual ordinary
@@ -192,7 +192,7 @@ Registered resource reopening now binds kernel filesystem type/ID, inode,
 owner and protected label rather than persisting Btrfs's mount device number.
 Legacy receipts require verified root migration; they are not silently repaired.
 Runtime 28 and the canonical session module fix the observed post-reboot resource
-and graphical Flatpak failures. [Scoped evidence and rollback](../history/security-center/2026-10-08-session-resource-flatpak-recovery.md).
+and graphical Flatpak failures. Scoped evidence and rollback (private development evidence).
 
 The normal development account is deliberately mapped and admitted through
 actual greetd PAM, a root-owned matched Labwc seat, private native DMS
@@ -207,7 +207,7 @@ Real descriptor registration and tested persistent READ-grant creation pass
 with fresh authentication. Two unchanged launches succeed; ordinary/direct
 reads are denied. The installed Center displays actual protected resources.
 GUI revocation and installed Center 66 / Context 68 / runtime 25 now pass in the
-[normal-session receipt](../history/security-center/2026-10-08-application-security-normal-session.md).
+normal-session receipt (private development evidence).
 Root SSH recovery is retained without a new account/password. Protecting `.ssh`
 requires a root-owned public authorized-key lookup for the development account;
 private keys remain denied to ordinary subjects.
@@ -251,13 +251,13 @@ The default public service remains read-only. Runtime 20 reads fresh negative
 enrollment prerequisites: absent enrollment or an authenticated unconfined peer
 is UNAVAILABLE, rather than a permanent default UNKNOWN. Positive whole-session
 coverage remains unimplemented; a journal/type-policy check does not supply it.
-See the [installed integration evidence](../history/security-center/2026-10-07-application-security-live-integration.md).
+See the installed integration evidence (private development evidence).
 The explicit
 `--workflows` entry and installed workflow unit now expose the existing
-`serve_enrolled` dispatcher on `.149`. Unenrolled normal local accounts receive
+`serve_enrolled` dispatcher on `<development-host>`. Unenrolled normal local accounts receive
 managed-isolation capability only; policy changes require the confined enrolled
 actor and protected-authentication checks. No preset or production activation
-is supplied. See the [live development receipt](../history/security-center/2026-10-07-application-security-live-development.md).
+is supplied. See the live development receipt (private development evidence).
 Existing production schema upgrades refuse on ordinary broker open; the future
 offline coordinator must snapshot and explicitly migrate before activation.
 No installer account is enrolled, no existing mapping is changed and no
@@ -272,7 +272,7 @@ Nine focused tests pass, including real cryptsetup on a private synthetic file
 container. Actual maintenance boot, console and installed-system repair/rollback
 are **NOT VALIDATED**. No separate account/password was added.
 
-Blocking `.149` evidence: the inherited Fedora ordinary-user template permits
+Blocking `<development-host>` evidence: the inherited Fedora ordinary-user template permits
 a same-UID sibling to read synthetic process memory and reopen its pipe through
 `/proc/PID/fd`. `deny_ptrace` addresses memory attachment, but the SELinux
 `PTRACE_MODE_READ` hook uses `file:read`; it does not close the pipe path alone.
@@ -288,7 +288,7 @@ kernel probes pass on UID 1002. A matched, generated auth-only DMS shell passes
 wrong-password retention, two native PAM unlock cycles and two fresh GUI Polkit
 owner challenges on a private headless display. Unlock/reset IPC cannot release
 the lock. Fedora PAM is unchanged; the normal DMS desktop is not assigned this
-authentication role. See the [authentication receipt](../history/security-center/2026-10-07-application-security-authentication.md).
+authentication role. See the authentication receipt (private development evidence).
 
 Production binding checks actual cross-domain kernel decisions and self-read
 compatibility. This remains a prerequisite, **not a live coverage verifier**.
@@ -324,7 +324,7 @@ reconciliation, package lifecycle, first-session admission and real coverage
 provider remain unimplemented. E0–E5 remain unpassed. These are blocking product
 work, not DEFERRED HARDENING. Exhaustive optional matrices remain deferred.
 Scoped commands, invocations and results are retained in the
-[initial enrollment evidence](../history/security-center/2026-10-07-application-security-enrollment-initial.md).
+initial enrollment evidence (private development evidence).
 
 ### Required boundary correction before activation
 
@@ -375,7 +375,7 @@ architectural integration gate, not extra hardening.
 Actual normal-desktop registry inspection on 7 October confirms an unconfined
 Labwc peer and virtual keyboard/pointer, capture, session-lock and layer-shell
 globals on the normal socket. The
-[live integration receipt](../history/security-center/2026-10-07-application-security-live-integration.md)
+live integration receipt (private development evidence)
 records the non-mutating query. A normal-account mapping alone cannot supply a
 trusted input boundary. Admission must first establish root-prepared trusted
 desktop/authentication subjects and their full connection; ordinary applications
@@ -414,7 +414,7 @@ the account pending and protection unavailable; it does not launch unconfined.
 
 ## Evidence and remaining architectural gaps
 
-Read-only inspection of `.149` on 7 October found SELinux Enforcing,
+Read-only inspection of `<development-host>` on 7 October found SELinux Enforcing,
 selinux-policy/targeted 44.11-1.fc44, policycoreutils 3.11-2.fc44,
 systemd 259.8-1.fc44, greetd 0.10.3-6.fc44, UWSM 0.24.3-1.fc44,
 Labwc 0.9.6-1.fc44 and DMS Greeter 1.6.2-1.fc44. These are observations,
@@ -731,7 +731,7 @@ is a production install recipe.
 | E5: installed product | Matched packages and fresh interactive ISO installation preserve branding/account/LUKS/storage/handoff; DMS login/lock, Flatpak ordinary access and Protected Data deny/allow/revoke. |
 
 Implement E1–E4 first on a separate account/environment, preserving SSH recovery
-and the active `.149` desktop. Never restart the user's installer VM or reboot
+and the active `<development-host>` desktop. Never restart the user's installer VM or reboot
 the development guest without an explicitly arranged disruptive test. No gate
 above is currently passed for production enrollment.
 

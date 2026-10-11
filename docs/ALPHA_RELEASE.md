@@ -2,7 +2,7 @@
 
 Status: **INTERNAL ALPHA — NOT A RELEASE APPROVAL**
 
-The [10 October consolidation and storage assessment](history/migrations/2026-10-10-release-preparation.md)
+The 10 October consolidation and storage assessment (private development evidence)
 is **NO-GO for ISO construction** pending exact new package receipts, a separate
 adequately sized Fedora builder and the stated mandatory validation gates.
 New source candidates are DMS 1.6.2-7, Center 90 / Context 82; runtime 33 remains

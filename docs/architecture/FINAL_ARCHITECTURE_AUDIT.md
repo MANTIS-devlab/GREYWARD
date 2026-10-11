@@ -1,6 +1,6 @@
 # TOP 10 CHANGES ACTUALLY WORTH MAKING
 
-Engineering assessment of the local GREYWARD tree and `.149`, 4 October 2026.
+Engineering assessment of the local GREYWARD tree and `<development-host>`, 4 October 2026.
 Recommendations are **PLANNED**, not implementation or release acceptance.
 The [implementation backlog](../plans/PRE_RELEASE_IMPROVEMENTS.md) owns priorities;
 the [build audit](BUILD_ISO_AUDIT.md) owns the detailed pipeline assessment.
@@ -15,7 +15,7 @@ DMS lock-screen decision supersedes its swaylock recommendation; the
 | 2 / A2 | Validate current Security Center/Context RPMs without development overrides | VM RPMs are center release 45/context 46, while source specs are 47/52. The session runs current loose Python source; installed root providers are a different generation. |
 | 3 / A3 | Reuse verified RPM and Flatpak downloads across ISO builds | Both download stores are inside disposable directories. Even a branding-only ISO rebuild starts dependency acquisition again. |
 | 4 / A4 | Profile and bound Security Context collection work | Two short cgroup samples measured 32.68% and 11.26% of one core. Full projection reads, a posture subprocess and repeated provider reads deserve attention before tiny shell timing differences. |
-| 5 / A5 | Give copied session/default policy a package owner | The wrapper, lock entrypoint and DMS unit are unowned on `.149`; the provisioner also overwrites a Security Context RPM-owned unit. RPM updates cannot fully express the installed desktop. |
+| 5 / A5 | Give copied session/default policy a package owner | The wrapper, lock entrypoint and DMS unit are unowned on `<development-host>`; the provisioner also overwrites a Security Context RPM-owned unit. RPM updates cannot fully express the installed desktop. |
 | 6 / A6 | Generate release identity once and retire same-NEVRA candidate replacement | Fourteen development DMS builds used `1.6.2-1`; selector, spec and manifest repeat that identity. Different bytes behind one package version undermine ordinary upgrade/rollback selection. |
 | 7 / A7 | Include Flatpak 1.18.4 and Fedora's fwupd 2.1.8 in the next tested input set | Flatpak fixes concrete privileged file operations and desktop process-group handling; fwupd fixes crashes/leaks and adds hardware support. Both appear in cached Fedora metadata. |
 | 8 / A8 | Retire the 2018 GeoIP database as an assumed production dependency | The VM's only country database dates to April 2018. Local-only endpoint hints are useful; obsolete data and host-dependent tests are not. |
@@ -37,7 +37,7 @@ Read-only SSH revalidated Fedora 44, UUID
 SELinux, active candidate/idle units, API 34, internal sampler and one Quickshell
 notification owner. Raw audit samples are retained under ignored
 `output/pre-release-audit/`. Earlier migration results are explicitly dated in
-[the candidate evidence](../history/migrations/2026-10-04-dms-1.6.2-candidate.md).
+the candidate evidence (private development evidence).
 No fresh ISO, physical device or rendered interaction test was run here.
 
 External research used project release notes, documentation, repository source,
@@ -132,7 +132,7 @@ package-upgrade/reboot/rollback case proves this better than more string tests.
 
 ### A2 — validate the package boundary actually being released
 
-**Current problem:** `.149` runs center 45/context 46; specs are 47/52. The active
+**Current problem:** `<development-host>` runs center 45/context 46; specs are 47/52. The active
 session drop-in points at a development `session10_bus.py`. Its `user_bus.py`
 hash matches local source, but differs from the installed package file. The
 installed package lacks `shell_runtime.py`; that feature is supplied by the
@@ -307,7 +307,7 @@ or speculative certification/signing programme is recommended by this audit.
 | Editing UWSM's installed plugin in provision.sh | **REPLACE** under A9; the underlying mkdir fix remains necessary. |
 | Repeated dependency downloads into throwaway roots | **SIMPLIFY** with A3; fresh verification roots stay. |
 | Hyprland/portal fallback payload | **KEEP** while declared supported; optionalize later, not silent deletion. |
-| dgop 1.6, legacy DMS payload and candidate backups on `.149` | **DEVELOPMENT ONLY**, retain until rollback gates end; exclude from fresh production selection. |
+| dgop 1.6, legacy DMS payload and candidate backups on `<development-host>` | **DEVELOPMENT ONLY**, retain until rollback gates end; exclude from fresh production selection. |
 | Packer, SSH/Hyper-V access, compilers, build logs and diagnostic tools | **DEVELOPMENT ONLY**; production package list already separates the intended boundary. Audit actual closure for transitive leakage. |
 | First-boot gate, pending/ready/error markers, media closure checks | **KEEP**: they prevent known incomplete-login/install failures. |
 | Narrow DMS identity/security patches | **KEEP** until an exact replacement passes parity, not because upstream offers a similarly named feature. |

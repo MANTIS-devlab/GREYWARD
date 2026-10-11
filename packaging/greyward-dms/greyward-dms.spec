@@ -102,5 +102,8 @@ PY
 /etc/xdg/quickshell/dms-plugins
 
 %changelog
+* Sun Oct 11 2026 GREYWARD <build@mantis.systems> - 1.6.2-15
+- Ship the current first-party shell plugin payload and verify it against source during ISO staging.
+
 * Sun Oct 04 2026 GREYWARD <build@mantis.systems> - 1.6.2-1
 - Verified offline candidate runtime with generated release-matched shell.

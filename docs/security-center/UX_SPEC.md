@@ -14,8 +14,8 @@ PROTECTED label refers to verified protections with accepted limitations, not
 “All required protections are active.” Reviewed access is labelled SSH key
 inspection; generic native/Flatpak/script/IDE access remains unavailable.
 
-These are source changes with local regression evidence, not a new `.149`
-installed tuple. See the [scoped receipt](../history/security-center/2026-10-09-security-truthfulness.md)
+These are source changes with local regression evidence, not a new `<development-host>`
+installed tuple. See the scoped receipt (private development evidence)
 for validation limits and matched deployment/rollback requirements.
 
 

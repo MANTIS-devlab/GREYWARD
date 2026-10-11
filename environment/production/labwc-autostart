@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/usr/bin/sh
 # DMS is the canonical GREYWARD shell.
 # DMS owns the graphical Polkit agent used by user-confirmed privileged actions.
 # Labwc creates the Wayland socket after the user manager is already running.
@@ -11,6 +11,12 @@ dbus-update-activation-environment --systemd \
 systemctl --user import-environment \
   WAYLAND_DISPLAY XDG_CURRENT_DESKTOP XDG_SESSION_DESKTOP XDG_DATA_DIRS \
   2>/dev/null || true
+# A VM's virtual output may start at the low compatibility mode selected by
+# the greeter even when 1920x1080 is advertised. Select that standard mode
+# before DMS starts, and leave physical outputs and unsupported modes alone.
+if command -v wlr-randr >/dev/null 2>&1; then
+  timeout 3s wlr-randr --output Virtual-1 --mode 1920x1080 >/dev/null 2>&1 || true
+fi
 # The graphical-session target can be reached before Labwc's environment was
 # imported into the user manager. Start Security Context at this same known
 # good boundary so its D-Bus name is present for DMS on every fresh login.

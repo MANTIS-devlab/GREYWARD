@@ -91,7 +91,7 @@ entry derived from this source, preserving old pins without a duplicate launcher
 or a dependency on the retired Kitty command.
 
 The production Black Box defaults in `blackbox/schemes/` and
-`dconf/50-greyward-blackbox` are the captured live `.149` state: dark theme
+`dconf/50-greyward-blackbox` are the captured live `<development-host>` state: dark theme
 `Dark Pastel`, light theme `Gruvbox Light`, `Cascadia Mono NF 14`, 93% opacity,
 12px terminal padding, remembered 1237x945 window size, visible header/menu,
 floating controls, easy copy/paste, 1000 scrollback lines, and the login-shell
@@ -283,7 +283,7 @@ fingerprint; the production contract also verifies the package-owned provider,
 D-Bus, Polkit, helper, and UI paths. This prevents a stable RPM release number
 from allowing an older package payload to enter a new ISO unnoticed.
 
-The production definition must not require the `stendev` account, a developer
+The production definition must not require the `example-user` account, a developer
 password, passwordless sudo, SSH access, Hyper-V services, or developer tools.
 
 The normal installed path uses encrypted Btrfs root. Boot rollback remains a

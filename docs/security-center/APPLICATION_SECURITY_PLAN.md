@@ -14,8 +14,8 @@ PROTECTED label refers to verified protections with accepted limitations, not
 “All required protections are active.” Reviewed access is labelled SSH key
 inspection; generic native/Flatpak/script/IDE access remains unavailable.
 
-These are source changes with local regression evidence, not a new `.149`
-installed tuple. See the [scoped receipt](../history/security-center/2026-10-09-security-truthfulness.md)
+These are source changes with local regression evidence, not a new `<development-host>`
+installed tuple. See the scoped receipt (private development evidence)
 for validation limits and matched deployment/rollback requirements.
 
 
@@ -26,7 +26,7 @@ their corresponding implementation passes acceptance.
 
 ## Bounded hybrid Flatpak proof — BLOCKED, 9 October 2026
 
-**Latest prerequisite:** the [D-Bus boundary proof](../history/security-center/2026-10-09-dbus-boundary-proof.md)
+**Latest prerequisite:** the D-Bus boundary proof (private development evidence)
 validates a small explicit development CIL overlay that denies ordinary process
 inspection of the existing user/a11y buses, preserving messaging/FD masks and
 stock chooser/Context/Administration readbacks. All 62 ordinary domains deny
@@ -54,7 +54,7 @@ memory read descriptor open succeeds, and an invalid `pidfd_getfd` probe passes
 the attach-mode check. No memory was read/written or valid FD copied. Consequently
 the current bus/frontend/proxy closure cannot yet supply the required protected
 identity-forwarding boundary. A frontend-only patch is insufficient. See the
-[bounded execution receipt](../history/security-center/2026-10-09-hybrid-flatpak-bootstrap.md).
+bounded execution receipt (private development evidence).
 
 Work stopped before grant or UI integration to reassess that prerequisite.
 Protecting and freshly activating the shared IPC closure would widen this proof
@@ -81,7 +81,7 @@ automatic denial → notification → verified Review → user decision → retr
 before full UI, script grants or general Sensitive files provisioning. Folder
 scope is explicit; Collabora is a representative installation, not a policy.
 
-The [installed prerequisite experiment](../history/security-center/2026-10-09-first-use-permission-proof.md)
+The installed prerequisite experiment (private development evidence)
 found sandbox-hidden paths produce no resource AVC, while the stock FileChooser
 denial belongs to the shared GTK portal, not the requesting Flatpak. App-only
 permission leaves that chooser denied; shared-portal access cannot be added
@@ -102,7 +102,7 @@ authorization test entry point yet. Protection and Administration are unchanged.
 and session package 8 activate the approved Administration boundary through
 normal greetd/PAM. Actual sudo handoff, confined root, native lock, generic
 Flatpak launch preparation, ordinary GTK selection and reviewed grant reuse/
-revocation pass. The [compatibility receipt](../history/security-center/2026-10-09-desktop-compatibility.md)
+revocation pass. The compatibility receipt (private development evidence)
 records the precise tests, development overlays and remaining functional gates.
 Screen sharing is unavailable under protected compositor capture restrictions;
 full desktop rollback, VPN connection and production rescue remain unpassed.
@@ -129,10 +129,10 @@ Brave's real portal/Zypak launch. That repair was validated with Center 85 /
 Context 76; subsequent scoped package changes are recorded in STATUS.
 The actual Applications view, browser HTTPS and public-IP widget were checked;
 mandatory native/Flatpak resource denials remain intact. See the
-[repair receipt](../history/security-center/2026-10-08-session-resource-flatpak-recovery.md)
+repair receipt (private development evidence)
 for causes, the explicit legacy receipt migration and deferred lifecycle gates.
 
-The normal `.149` development account is deliberately enrolled. Actual greetd
+The normal `<development-host>` development account is deliberately enrolled. Actual greetd
 PAM, its ordinary user manager and SSH shell use the confined role. A root-owned
 matched Labwc seat and separate DMS native authentication are active; Fedora
 PAM/authselect remain unchanged. Fresh root coverage reports PROTECTED /
@@ -153,10 +153,10 @@ leases, wrong owners and revisions. Native authentication focus and background
 read contention are corrected in installed Center 66 / Context 68 / runtime 25.
 Actual GUI revocation publishes verified completion and denies subsequent
 launch; registered data stays protected across broker restart. See the
-[normal-session receipt](../history/security-center/2026-10-08-application-security-normal-session.md)
+normal-session receipt (private development evidence)
 for live evidence, exact package scope and recovery.
 
-The subsequent [workspace delivery](../history/security-center/2026-10-08-security-center-workspace.md)
+The subsequent workspace delivery (private development evidence)
 installs Center 68 / Context 69 with runtime 25 unchanged. It restores dedicated
 Network Activity and separates Security History/recovery, preserving the real
 normal-session protection and typed workflows. [UX_SPEC.md](UX_SPEC.md) owns
@@ -164,7 +164,7 @@ the current navigation/component contract; the original destination outline
 below is superseded where it combines these monitoring surfaces. Fresh final
 coverage, direct denial, normal Flatpak behavior and all installed routes pass.
 
-The [refresh/theme repair](../history/security-center/2026-10-08-protection-refresh-theme.md)
+The refresh/theme repair (private development evidence)
 installs Center 70 / Context 69 / runtime 26. Visible renewal accounts for
 read latency before the five-second evidence lease, and unchanged projections
 keep their DOM/focus. True expiry still withdraws positive protection. The
@@ -172,18 +172,18 @@ protected Labwc closure now contains canonical root-owned theme/button assets;
 the normal admitted seat reloads them without a session restart. These changes
 do not widen the authentication or resource/grant boundaries.
 
-The subsequent [visual polish delivery](../history/security-center/2026-10-08-security-center-visual-polish.md)
+The subsequent visual polish delivery (private development evidence)
 installs Center 72 with Context 69 / runtime 26 unchanged. Canonical material
 tokens, semantic states, responsive Network Activity and native EN/FR startup
 are validated in the actual desktop. Registration/grant authority is unchanged;
 live expiry, ordinary/direct/revoked denial and Flatpak compatibility pass.
 Inventory uncertainty and unsupported grant profiles remain explicit.
-The subsequent [focused quality pass](../history/security-center/2026-10-08-security-center-quality-regressions.md)
+The subsequent focused quality pass (private development evidence)
 installs Center 73, with Context 69/runtime 26 unchanged. Actual native screen
 and reversible-interaction review covers graphite materials, icon corrections
 and density. It does not alter or broaden resource/grant authority.
 
-The [Security Activity context delivery](../history/security-center/2026-10-08-security-activity-context.md)
+The Security Activity context delivery (private development evidence)
 installs Center 75 / Context 71 / runtime 27. Correlated enforcing audit denials
 retain bounded historical process metadata and kernel occurrence time without
 inventing application identity. Security History and resource/application
@@ -206,7 +206,7 @@ section and normal-session receipt above take precedence.
 This section records source truth as of 7 October. Sections 2–4 retain the explicitly dated
 planning baseline; subsequent design sections describe the approved target,
 not a claim that every provider is implemented. Chronological experimental
-receipts have moved to [historical evidence](../history/security-center/2026-10-07-application-security-evidence.md).
+receipts have moved to historical evidence (private development evidence).
 The [production enrollment design](APPLICATION_SECURITY_ENROLLMENT.md) now
 records accepted recovery/account/admin decisions and initial implementation.
 Source includes the transactional journal, local-account/per-owner bindings and
@@ -217,15 +217,15 @@ generation/revision/argument constraints; legacy generic launches refuse.
 Only nonexporting pinned SSH-key inspection is currently profiled. Unsupported
 temporary grants remain UNAVAILABLE. Activation is **BLOCKED** by production
 seat/input integration, account admission, durable labels and lifecycle/recovery.
-See the [scoped authentication evidence](../history/security-center/2026-10-07-application-security-authentication.md). The
-installed public workflow broker is now explicitly active on `.149`, alongside
+See the scoped authentication evidence (private development evidence). The
+installed public workflow broker is now explicitly active on `<development-host>`, alongside
 Center 64 / Context 67 / runtime 20. Normal local accounts can use restrictive managed
 isolation; resource/grant changes still require confined enrollment and protected
 authentication. Fresh negative enrollment evidence reports UNAVAILABLE on the
 unenrolled normal account; no effective PROTECTED profile is advertised. No account mapping,
 installer or image activation occurred. See the
-[live development receipt](../history/security-center/2026-10-07-application-security-live-development.md).
-The [live integration receipt](../history/security-center/2026-10-07-application-security-live-integration.md)
+live development receipt (private development evidence).
+The live integration receipt (private development evidence)
 records the actual normal-desktop fix: serialized fresh reads preserve live
 inventory/actions, broker loss expires them, and automatic recovery restores
 them. Overview and its Applications summary cannot claim protection from legacy
@@ -251,7 +251,7 @@ SSH/IDE access. Existing operation readback, cancellation, freshness and route
 ownership remain authoritative. EN/FR, native dialog focus/cancel, searchable
 lists and scaled graphite/silver components use the existing visual system.
 
-These components are installed and connected to the live broker on `.149`; this is not production enrollment. Missing
+These components are installed and connected to the live broker on `<development-host>`; this is not production enrollment. Missing
 backend data remains unavailable; no preview data or bridge replacement is
 shipped. See the scoped authentication receipt for runtime evidence and limits.
 The earlier private native-window check passes for real unavailable responses
@@ -264,7 +264,7 @@ production session or a GUI grant authorization/commit transaction.
 
 | Area | Source present now | Effective scope / outstanding work |
 |---|---|---|
-| Broker / policy | Shared identity, schema-four root-owned registry/intention/label/enrollment journal, bounded reads, revisions, kernel-bound caller and operation ownership. | Default service exposes five reads. Explicit installed workflow service is active on `.149` using the same public bus/store; no preset or image inclusion. Public coverage uses fresh negative prerequisites: the unenrolled normal account is UNAVAILABLE; positive coverage is not implemented. |
+| Broker / policy | Shared identity, schema-four root-owned registry/intention/label/enrollment journal, bounded reads, revisions, kernel-bound caller and operation ownership. | Default service exposes five reads. Explicit installed workflow service is active on `<development-host>` using the same public bus/store; no preset or image inclusion. Public coverage uses fresh negative prerequisites: the unenrolled normal account is UNAVAILABLE; positive coverage is not implemented. |
 | Development workflows | Separate `ApplicationSecurityDevelopment1` bus, descriptor registration, fresh authorized review/apply/cancel/readback, grant revocation and prepared launch. | Provider, paths, labels and policy modules are fixed to isolated UID 1002. Not a selectable production provider. |
 | Protected Data | O_PATH directory selection retained through root preparation; bounded label application, original-object journal and live kernel policy/object readback. | Four synthetic objects tested; limit 1,024 objects/depth 16. Unsupported symlinks, special files/mounts and unsafe replacement refused. Production persistent label/reconciliation coverage is open. |
 | Grants / Guard | Immutable executable/installation generation; profiled persistent READ grants, root-prepared entry, disjoint subjects and reference-based revoke. | Only pinned nonexporting `openssh-key-inspection/v1` can currently create/reuse a grant. Legacy generic records are withdrawable, never launchable. WRITE/temporary raw grants, SSH login/signing and IDE profiles unavailable. Package membership is not approved signer/source provenance. |
@@ -293,7 +293,7 @@ compromise remains outside this isolation boundary.
 ### Validation evidence and its limits
 
 VALIDATED means only the named scoped check actually ran. Latest historical
-`.149` source receipt: `application-security-registration-guard.sh --workflow`,
+`<development-host>` source receipt: `application-security-registration-guard.sh --workflow`,
 authentication invocation `55ab0132ea12409e80a4d1e6fe6f2566`, outer exit 0,
 inner PASS, 90.606 seconds and five fresh owner authentications. Authentication
 binary SHA-256 `d37c08add6b012571c3fc7a325141944570300cece67fed234eda5e57c3adc0f`;
@@ -309,12 +309,12 @@ Retained ignored logs: `output/application-security/20261007-product/`.
 | Regression/rollback | Minimum broad-home Flatpak ordinary access/deny; headless DMS/Labwc; original password/labels/mapping/modules restored; active DMS PID 4888 and SSH/Enforcing retained. | Fresh installed image, physical seat/suspend, full recovery product. |
 | Focused source suites | Fedora workspace Cargo tests, fmt and all-target Clippy; 296 Context tests; 94 frontend contracts with three live-environment tests skipped; both repository gates. | Skipped tests, independent audit or release acceptance. |
 
-Installed Center 64 / Context 67 use runtime 20's real public workflow broker on `.149`;
+Installed Center 64 / Context 67 use runtime 20's real public workflow broker on `<development-host>`;
 DMS 1.6.2-6 is retained. Runtime revision 19 introduced installed-service
 umask, namespace-home and actual-UID display fixes. The
-[live development receipt](../history/security-center/2026-10-07-application-security-live-development.md)
+live development receipt (private development evidence)
 owns exact package hashes, installed results and remaining limitations. Earlier
-[Center 60 / Context 65 deployment](../history/security-center/2026-10-07-application-security-desktop-review.md)
+Center 60 / Context 65 deployment (private development evidence)
 is historical. Production enrollment and clean-image acceptance are not claimed.
 Current normal-desktop validation and exact Center-64/runtime-20 receipts are in
 the live integration receipt. Four inventory records and managed-isolation
@@ -357,7 +357,7 @@ Existing Flatpak overrides are preserved until reviewed. DMS native locking
 remains canonical. OpenSnitch, firewalld, secure DNS, USBGuard, Update Center
 and recovery retain their existing authority.
 
-Develop and integrate on the real installed `.149` system. Use the separate
+Develop and integrate on the real installed `<development-host>` system. Use the separate
 confined account only when a specific enforcement/authentication test needs it.
 Preserve SSH recovery. Do not reboot the
 development machine or modify the user's installation-test VM as part of this
@@ -692,12 +692,12 @@ VALIDATED, BLOCKED. VALIDATED requires a concrete command/result/evidence scope.
 Each phase depends on earlier foundational gates, updates its owning source,
 API/backend, frontend, migration and tests together, and records security
 considerations/readback. The initial MVP used a separate experimental account;
-the current scoped delivery works on the normal `.149` development account.
+the current scoped delivery works on the normal `<development-host>` development account.
 This is not a public protection release. Production requires phases 0–8.
 Future: operation brokers avoiding raw keys, VM isolation and justified eBPF
 observability. Neither future work nor launcher-only MVP satisfies release.
 
 
 Historical receipts and superseded implementation descriptions are retained
-in [the evidence archive](../history/security-center/2026-10-07-application-security-evidence.md).
+in the evidence archive (private development evidence).
 They do not override the current audit or prove later package revisions.

@@ -38,7 +38,7 @@ security evidence or enables actions. Deadline-only renewal does not change the
 content revision or repeat notifications. Transport failure expires the display;
 missing detection source files remain in history but leave active shell alerts.
 Both GLib D-Bus entrypoints initialize threading before starting observers.
-See the [development stability receipt](../history/security-center/2026-10-08-security-plugin-stability.md).
+See the development stability receipt (private development evidence).
 
 Secure DNS, firewall and device-protection warning items carry a
 `notification_stability_seconds` presentation hint. The Security Center keeps

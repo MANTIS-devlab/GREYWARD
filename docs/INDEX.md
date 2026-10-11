@@ -1,17 +1,17 @@
 # GREYWARD documentation index
 
-10 October: the user accepts the R5 installation/login fix. R6 is built, hash-verified on Windows and mounted in the existing R5 VM with the output-management commit 8c130a662b047a33406c695d54adf524cc302d99 and a greeter-only CPU OpenGL renderer correction for the canonical wallpaper. Private compiled-protocol and actual embedded-greeter rendering checks pass; installed R6 greeter and DMS apply remain pending. See the [candidate evidence](history/migrations/2026-10-10-enrollment-iso-candidate.md).
+10 October: the user accepts the R5 installation/login fix. R6 is built, hash-verified on Windows and mounted in the existing R5 VM with the output-management commit 8c130a662b047a33406c695d54adf524cc302d99 and a greeter-only CPU OpenGL renderer correction for the canonical wallpaper. Private compiled-protocol and actual embedded-greeter rendering checks pass; installed R6 greeter and DMS apply remain pending. See the candidate evidence (private development evidence).
 
 Earlier entries below are dated evidence, not current acceptance claims.
 
-10 October r5 candidate: Enrollment 5 corrects the confirmed mode-0700 program-directory login failure. The repaired r4 installation reaches the desktop (user confirmation and console evidence). R5 composition, embedded payload checks and Windows SHA-256 verification pass; fresh r5 installation, default session selection and installed security acceptance remain pending. See the [candidate evidence](history/migrations/2026-10-10-enrollment-iso-candidate.md).
+10 October r5 candidate: Enrollment 5 corrects the confirmed mode-0700 program-directory login failure. The repaired r4 installation reaches the desktop (user confirmation and console evidence). R5 composition, embedded payload checks and Windows SHA-256 verification pass; fresh r5 installation, default session selection and installed security acceptance remain pending. See the candidate evidence (private development evidence).
 
-10 October installed r4 acceptance: installation completed according to the user, but GREYWARD Labwc login fails and the greeter defaults to Hyprland. R4 is not accepted. Only the new test VM is in an approved rescue investigation; .149 remains the unchanged build host. See the [failure evidence](history/migrations/2026-10-10-enrollment-iso-candidate.md).
+10 October installed r4 acceptance: installation completed according to the user, but GREYWARD Labwc login fails and the greeter defaults to Hyprland. R4 is not accepted. Only the new test VM is in an approved rescue investigation; .149 remains the unchanged build host. See the failure evidence (private development evidence).
 
-10 October ISO rebuild: r3 failed clean installation because private installer-origin storage was missing; it is rejected. Enrollment revision 4 is rebuilt, eleven lifecycle tests pass, and the actual packaged broker reproduces the missing-directory failure then succeeds with corrected private storage in a synthetic clean root. The r4 ISO has built, passed payload checks, and hash-matched on Windows. It is attached to the new empty test VM without runtime activation on `.149`. Clean-install acceptance remains pending. See the [candidate evidence](history/migrations/2026-10-10-enrollment-iso-candidate.md).
+10 October ISO rebuild: r3 failed clean installation because private installer-origin storage was missing; it is rejected. Enrollment revision 4 is rebuilt, eleven lifecycle tests pass, and the actual packaged broker reproduces the missing-directory failure then succeeds with corrected private storage in a synthetic clean root. The r4 ISO has built, passed payload checks, and hash-matched on Windows. It is attached to the new empty test VM without runtime activation on `<development-host>`. Clean-install acceptance remains pending. See the candidate evidence (private development evidence).
 
 10 October enrollment ISO candidate: matched installer enrollment inputs are now
-packaged without activating them on `.149`. The copied offline SELinux store
+packaged without activating them on `<development-host>`. The copied offline SELinux store
 links successfully and the packaged compositor digest matches. The build host
 remains the running development system. Candidate composition has passed;
 clean-install, graphical enrollment and encrypted recovery acceptance remain
@@ -19,29 +19,29 @@ pending on the separate test VM. See the [enrollment authority](security-center/
 
 The earlier 10 October blocker receipts below are historical snapshots; their
 pre-assembly NO-GO findings are superseded only by the scoped checks recorded
-above, not by production acceptance. See the [candidate evidence](history/migrations/2026-10-10-enrollment-iso-candidate.md).
+above, not by production acceptance. See the candidate evidence (private development evidence).
 
 
-[Enrollment-required ISO readiness](history/migrations/2026-10-10-enrollment-required-readiness.md)
+Enrollment-required ISO readiness (private development evidence)
 records the cleared storage gate, observed protected login and actual revision-8
 authentication assembly failure. Mandatory enrollment/recovery gates remain open.
 
 
-[Enrolled login routing recovery](history/security-center/2026-10-10-login-admission-recovery.md)
+Enrolled login routing recovery (private development evidence)
 records session 9's installed fail-closed routing repair; real login retry is pending.
 
-[Final ISO blockers](history/migrations/2026-10-10-final-iso-blockers.md)
+Final ISO blockers (private development evidence)
 records the Python toolchain correction, unchanged verification and unresolved
 production enrollment/package/recovery gates. ISO construction remains NO-GO.
 
-[Repository consolidation and ISO preparation, 10 October](history/migrations/2026-10-10-release-preparation.md)
+Repository consolidation and ISO preparation, 10 October (private development evidence)
 records source/package checks, safe publication and measured build storage.
 ISO construction remains NO-GO; no deployment or release approval is implied.
 
-Source-only [targeted security truthfulness fixes](history/security-center/2026-10-09-security-truthfulness.md)
+Source-only targeted security truthfulness fixes (private development evidence)
 correct confined ClamAV status collection and narrow portal/VPN/accepted-risk/grant
 claims. Local checks are distinct from pending installed-session validation;
-`.149` remains on its existing package tuple with no deployment or service change.
+`<development-host>` remains on its existing package tuple with no deployment or service change.
 
 
 This is the starting point for contributors and repository automation. Read the current
@@ -62,12 +62,12 @@ working candidate prematurely.
 
 ## Thirty-second project model
 
-Latest scoped development recovery: [enrolled graphical login](history/security-center/2026-10-08-enrolled-login-recovery.md).
-Follow-up: [post-reboot resources, graphical Flatpak and public-IP recovery](history/security-center/2026-10-08-session-resource-flatpak-recovery.md).
-Permission experiment: [bounded hybrid launch and shared-bus prerequisite](history/security-center/2026-10-09-hybrid-flatpak-bootstrap.md)
+Latest scoped development recovery: enrolled graphical login (private development evidence).
+Follow-up: post-reboot resources, graphical Flatpak and public-IP recovery (private development evidence).
+Permission experiment: bounded hybrid launch and shared-bus prerequisite (private development evidence)
 (BLOCKED; no Flatpak grant/bridge delivered). Current authority remains the
 [Application Security plan](security-center/APPLICATION_SECURITY_PLAN.md).
-The [D-Bus boundary follow-up](history/security-center/2026-10-09-dbus-boundary-proof.md)
+The D-Bus boundary follow-up (private development evidence)
 validates a reversible live inspection correction and existing native preview
 ownership; portal-to-Flatpak request binding and product gates remain unpassed.
 
@@ -114,7 +114,7 @@ or replace the executable ISO runbook.
 
 ## Task routing
 
-The [first-use permission prerequisite receipt](history/security-center/2026-10-09-first-use-permission-proof.md)
+The first-use permission prerequisite receipt (private development evidence)
 records the stopped generic Flatpak experiment: namespace invisibility, shared
 FileChooser attribution and host FUSE alias boundaries. The
 [Application Security authority](security-center/APPLICATION_SECURITY_PLAN.md)
@@ -122,13 +122,13 @@ marks both feature gates unpassed; no generic Flatpak grant delivery is claimed.
 
 Practical sudo administration is owned by the
 [enrollment authority](security-center/APPLICATION_SECURITY_ENROLLMENT.md), with
-[scoped 9 October evidence](history/security-center/2026-10-09-practical-administration.md).
-The [normal-seat compatibility follow-up](history/security-center/2026-10-09-desktop-compatibility.md)
+scoped 9 October evidence (private development evidence).
+The normal-seat compatibility follow-up (private development evidence)
 records approved activation and real Administration/portal/Flatpak/grant checks.
 Full desktop rollback and production rescue remain unproven.
-The [Administration visual follow-up](history/security-center/2026-10-09-administration-visual-polish.md)
+The Administration visual follow-up (private development evidence)
 records the scoped native-console warning, materials and terminal-color repair.
-The [obsidian follow-up](history/security-center/2026-10-09-administration-obsidian.md)
+The obsidian follow-up (private development evidence)
 records embedded canonical branding, the red title, sudo explanation and real
 desktop validation of the refined finish.
 
@@ -141,43 +141,43 @@ isolated-account evidence and explicitly unavailable providers. Source truth
 and historical receipts were reconciled on 7 October. The
 [production enrollment design](security-center/APPLICATION_SECURITY_ENROLLMENT.md)
 records approved decisions and initial journal/provider/maintenance source.
-Separate authentication and bounded-tool checks have [scoped evidence](history/security-center/2026-10-07-application-security-authentication.md).
-The [normal-session receipt](history/security-center/2026-10-08-application-security-normal-session.md)
-records actual deliberate enrollment of the normal `.149` account: protected
+Separate authentication and bounded-tool checks have scoped evidence (private development evidence).
+The normal-session receipt (private development evidence)
+records actual deliberate enrollment of the normal `<development-host>` account: protected
 native DMS authentication, confined desktop/user manager/SSH, real resources,
 tested grants and deny/allow/revoke. Installed Center 66 / Context 68 / runtime 25 pass live GUI revocation and
 package readback. Automatic production/image lifecycle remains unvalidated. The subsequent
-[workspace receipt](history/security-center/2026-10-08-security-center-workspace.md)
+workspace receipt (private development evidence)
 records grouped navigation, restored dedicated Network Activity and separate
 Security History; [UX_SPEC.md](security-center/UX_SPEC.md) owns current presentation.
-The [refresh/theme receipt](history/security-center/2026-10-08-protection-refresh-theme.md)
+The refresh/theme receipt (private development evidence)
 records Center 70 / Context 69 / runtime 26, live lease renewal and restoration
 of the root-owned GREYWARD compositor decorations.
-The [normal-session recheck](history/security-center/2026-10-08-normal-session-recheck.md)
+The normal-session recheck (private development evidence)
 confirms that exact installed tuple against real coverage, resource denial,
 Flatpak behavior and the normal desktop's stable protection presentation.
-The [visual polish receipt](history/security-center/2026-10-08-security-center-visual-polish.md)
+The visual polish receipt (private development evidence)
 records the previous Center 72 / Context 69 / runtime 26 tuple, coherent materials,
 EN/FR desktop review and preserved real protection boundaries.
-The [focused quality/regression receipt](history/security-center/2026-10-08-security-center-quality-regressions.md)
+The focused quality/regression receipt (private development evidence)
 records previous Center 73 / Context 69 / runtime 26, historical visual comparison,
 actual native screen/interaction review and recovery evidence.
-The earlier [live development](history/security-center/2026-10-07-application-security-live-development.md),
-[live integration](history/security-center/2026-10-07-application-security-live-integration.md)
-and [desktop review](history/security-center/2026-10-07-application-security-desktop-review.md)
+The earlier live development (private development evidence),
+live integration (private development evidence)
+and desktop review (private development evidence)
 receipts are historical. The enrollment design owns activation, upgrade,
 coverage and LUKS recovery; it is not an automatic install recipe.
-[Historical evidence](history/security-center/2026-10-07-application-security-evidence.md)
+Historical evidence (private development evidence)
 retains older receipts without overriding current capability status.
 The user-driven [Application Guard and Protected Data acceptance guide](security-center/USER_ACCEPTANCE_APPLICATION_GUARD.md)
-records prepared `.149` desktop scenarios and the current limitation: Center
+records prepared `<development-host>` desktop scenarios and the current limitation: Center
 can review and revoke the tested permission, but has no visible reviewed-tool
 launch action to prove an allowed application read. The guide is not a test
 result.
-The [Security Activity context receipt](history/security-center/2026-10-08-security-activity-context.md)
+The Security Activity context receipt (private development evidence)
 records previous Center 75 / Context 71 / runtime 27, actual kernel-denial context,
 shared disclosures and normal-desktop/package validation.
-The [file review lifecycle receipt](history/security-center/2026-10-08-file-review-lifecycle.md)
+The file review lifecycle receipt (private development evidence)
 records the scoped correction for handled detections and missing-source history;
 [File Security](security-center/FILE_SECURITY.md) owns the current contract.
 
@@ -279,7 +279,7 @@ implementation.
 
 ## Historical material
 
-The [5 October pre-release implementation record](history/migrations/2026-10-05-pre-release-implementation.md)
+The 5 October pre-release implementation record (private development evidence)
 documents the published migration, installer and portable-DNS changes and their
 validation limits.
 
@@ -287,9 +287,9 @@ Historical migration notes, session reports, screenshots, and superseded plans
 are under [history/](history/README.md). They explain decisions or evidence but are not
 sources of current architecture.
 
-- [Security Center performance development receipt](history/security-center/2026-10-08-security-center-performance.md) — measured Center 80 → 84 changes, actual desktop tests and unresolved latency.
-- [Integrated window chrome development receipt](history/security-center/2026-10-08-integrated-window-chrome.md) — installed inputs, actual visual evidence and remaining physical gesture checks.
+- Security Center performance development receipt (private development evidence) — measured Center 80 → 84 changes, actual desktop tests and unresolved latency.
+- Integrated window chrome development receipt (private development evidence) — installed inputs, actual visual evidence and remaining physical gesture checks.
 
-- [Security plugin stability development receipt](history/security-center/2026-10-08-security-plugin-stability.md) — actual desktop flyout, Context threading, negative-display freshness and retained provider warnings.
+- Security plugin stability development receipt (private development evidence) — actual desktop flyout, Context threading, negative-display freshness and retained provider warnings.
 
-- [Security plugin and Center state parity](history/security-center/2026-10-08-security-plugin-parity.md) — shared evaluated checks, accepted exceptions and scanner readiness.
+- Security plugin and Center state parity (private development evidence) — shared evaluated checks, accepted exceptions and scanner readiness.

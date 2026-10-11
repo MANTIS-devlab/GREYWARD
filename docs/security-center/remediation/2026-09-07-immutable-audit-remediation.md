@@ -8,7 +8,7 @@
 ## Scope and evidence boundary
 
 This record remediates findings F01-F07 from the immutable runtime audit in
-`output/runtime-audit-20260906/AUDIT.md`. The `.149` VM is development evidence,
+`output/runtime-audit-20260906/AUDIT.md`. The `<development-host>` VM is development evidence,
 not a release image. Runtime checks used the development VM over the managed
 GREYWARD SSH path; no real C2 address or destructive network fixture was used.
 
@@ -17,7 +17,7 @@ GREYWARD SSH path; no real C2 address or destructive network fixture was used.
 | Finding | Previous state and root cause | Correction | Status |
 | --- | --- | --- | --- |
 | F01 threat-policy mutation authorization | The system D-Bus default policy allowed `SetThreatException` and `SetThreatIntelEnabled`; payload validation was not an authorization boundary. | Removed those default-context allows. The existing wheel-group allow remains the explicit mutation boundary; `ListRules` remains readable. | **FIXED + RUNTIME VERIFIED** |
-| F02 crypto baseline | Production and `.149` selected stock Fedora `FUTURE`, which rejected RSA-2048 third-party signing material and was not GREYWARD-owned. | Added `environment/production/crypto-policy/GREYWARD.pmod`, applied as `DEFAULT:GREYWARD`, retaining RSA-2048 while removing SHA-1, TLS CBC, static RSA key exchange, Camellia, and FFDHE-2048. | **FIXED + RUNTIME VERIFIED** |
+| F02 crypto baseline | Production and `<development-host>` selected stock Fedora `FUTURE`, which rejected RSA-2048 third-party signing material and was not GREYWARD-owned. | Added `environment/production/crypto-policy/GREYWARD.pmod`, applied as `DEFAULT:GREYWARD`, retaining RSA-2048 while removing SHA-1, TLS CBC, static RSA key exchange, Camellia, and FFDHE-2048. | **FIXED + RUNTIME VERIFIED** |
 | F03 Flatpak provider truthfulness | `flatpak remote-ls --updates` exit status 1 was accepted as an empty update list, allowing a false AVAILABLE/zero/complete result. | Flatpak update queries accept only exit 0; stderr becomes provider degradation and no update is inferred. The actual user-service environment reports `AVAILABLE` only when its query succeeds; the incomplete SSH environment reproduces the failure and the collector reports `DEGRADED`. | **FIXED + RUNTIME VERIFIED** |
 | F04 global OpenSnitch projections | Runtime JSON projections and the daemon log were world-readable. | Runtime projections, root spool, and log use root:wheel with 0640 files and 0750 runtime directory; the OpenSnitch drop-in and tmpfiles rule converge the log mode. | **FIXED + RUNTIME VERIFIED** |
 | F05 maintained text editor | The production package contract did not include a maintained graphical text editor or its MIME default. | Added Fedora `gnome-text-editor` and `text/plain=org.gnome.TextEditor.desktop`; the VM package, MIME query, and graphical launch fixture passed. | **FIXED + RUNTIME VERIFIED** |
@@ -37,7 +37,7 @@ attempts, but the external QUIC handshakes timed out on this VM/network path;
 that is recorded as an environment limitation rather than attributed to the
 crypto policy.
 
-The following values are taken from the Fedora 44 policy files on `.149` and
+The following values are taken from the Fedora 44 policy files on `<development-host>` and
 the generated `/etc/crypto-policies/state/CURRENT.pol`:
 
 | Property | Fedora DEFAULT | Fedora FUTURE | GREYWARD |
@@ -59,7 +59,7 @@ as a manual administrator choice but is not the GREYWARD production contract.
   success/failure cases are covered.
 - `tests/static.ps1` passed, including production package, MIME, Tabby, image
   staging, and crypto-policy checks.
-- `.149` runtime: authorized threat mutation returned success without changing
+- `<development-host>` runtime: authorized threat mutation returned success without changing
   enablement; both valid and invalid unauthorized threat mutations returned
   D-Bus `Access denied`; the normal GREYWARD user read Network Activity while
   `nobody` could not read the projections or log; OpenSnitch and its control
@@ -74,7 +74,7 @@ as a manual administrator choice but is not the GREYWARD production contract.
   contains its vendor `--no-sandbox` flag, but is shadowed by the GREYWARD
   override and was not edited in place because package updates would replace
   that change.
-- `.149` has no maintained alternate terminal installed; Tabby is the only
+- `<development-host>` has no maintained alternate terminal installed; Tabby is the only
   terminal package present. Because Tabby starts and remains usable with the
   GREYWARD launcher, replacing the supported terminal was not justified as a
   low-risk remediation. The upstream renderer limitation remains explicit in

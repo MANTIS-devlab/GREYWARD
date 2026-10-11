@@ -30,7 +30,7 @@ Context pins its root system-bus owner; the Tauri facade exposes only typed
 fixed methods. The default broker supplies five scoped reads. Development
 registration/reviewed READ-grant/revoke dispatch remains subject to enrolled
 confined-owner checks. The explicit installed workflow service also supplies
-restrictive isolation to normal local accounts on `.149`, using the same
+restrictive isolation to normal local accounts on `<development-host>`, using the same
 dispatcher/store. The normal development account is now deliberately enrolled;
 coverage comes from fresh root session/kernel/object readback. Independent
 isolation and policy-change capabilities never establish PROTECTED by themselves.

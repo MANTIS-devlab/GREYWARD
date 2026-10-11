@@ -131,7 +131,7 @@ The final command results are:
 ## Runtime validation
 
 The exact VMConnect console for the running
-`GREYWARD-ALPHA-GEN2-20260828` guest was inspected with current screenshots.
+`<development VM>` guest was inspected with current screenshots.
 The initial SSH timeout was traced to the active installed `TRAVEL` profile:
 NetworkManager assigned `eth0` to firewalld's `drop` zone, whose target was
 `DROP` and which exposed no SSH service. Through the Hyper-V console path, the

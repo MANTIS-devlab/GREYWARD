@@ -1,10 +1,23 @@
 # GREYWARD current status
 
+11 October ISO rebuild: `GREYWARD-0.3.5-Dawn-x86_64.iso` was composed from
+the existing cache and validated. SHA-256 is
+`46ed1156b7096f905f3c0b1e990c4775da8d82c93030c58d77e2d225dab6302e`;
+the ISO sidecar checksum passed on `<development-host>`. It includes DMS 1.6.2-15 with the
+current Security Context plugin (launcher feedback and synchronized alert
+projection), session 0.1.0-16 with a bounded 1920×1080 request for the exact
+`Virtual-1` virtual output before DMS starts, and Enrollment 0.1.0-18 matched
+to DMS 1.6.2-15. The source-to-package guards and production-stage validation
+passed; the ISO carries its boot records and validated offline installation
+payload. The build reused the existing DNF/Flatpak caches. No VM was created or
+booted, and installed-system display behavior remains untested. See the
+[monitor configuration record](architecture/DMS_MONITOR_CONFIGURATION.md).
+
 11 October Security Context alert synchronization: the DMS plugin was using a
 second client-side 30-second timer, so its cards and badge could appear on a
 different schedule from native desktop notifications. Source now computes one
 `notification_items` list for both consumers; Security Center live posture
-remains immediate. The corrected files are installed in the `.149` development
+remains immediate. The corrected files are installed in the `<development-host>` development
 overlay with backups, original ownership/modes and SELinux labels preserved;
 remote hashes match the deployed source. All 21 focused tests passed on Fedora.
 The user restarted the Context and DMS services after deployment; the DMS
@@ -25,7 +38,7 @@ displays retain their selected mode, while existing user profiles are
 preserved. Secure DNS, firewall and device-protection warnings now remain
 visible in live Security Center status immediately, while desktop attention and
 notification prompts wait for 30 seconds of continuous warning. Critical
-events remain immediate. `.149`
+events remain immediate. `<development-host>`
 currently runs at 2560×1440 and has an existing migration marker, so its
 resolution choice is not overwritten. The user restarted only
 `greyward-security-context-user.service`; the user manager logged a successful
@@ -33,7 +46,7 @@ start of the updated development overlay at 13:54 CEST, while Labwc and DMS
 remained unchanged and SELinux stayed Enforcing.
 
 11 October protected-session startup follow-up: Application Security 0.1.0-41,
-Enrollment 0.1.0-16 and DMS v1.6.2-14 are installed on `.149`. Enrollment 14
+Enrollment 0.1.0-16 and DMS v1.6.2-14 are installed on `<development-host>`. Enrollment 14
 refreshed the verified session worker and integrity receipts through its
 quiescent migration. The earlier successful login took 6.35 seconds to reach
 DMS; the startup backdrop now appears before the desktop, and the user accepts
@@ -42,7 +55,7 @@ experience but does not claim faster session startup. An earlier failed attempt
 entered GNOME and `gnome-shell` segfaulted in `libmutter-18.so`; the successful
 GREYWARD path later used the protected session.
 
-Earlier 11 October keyring observation: `.149`'s greetd PAM stack includes GNOME Keyring's
+Earlier 11 October keyring observation: `<development-host>`'s greetd PAM stack includes GNOME Keyring's
 authentication and session hooks, and the login journal reports the daemon
 starting and unlocking. The login keyring file did not exist before the reported
 prompt and was created when the session first requested a secret, indicating
@@ -51,7 +64,7 @@ was present and unlocked at the last check. No keyring reset, blank-password
 keyring, or PAM/SELinux weakening was used. No later prompt observation is
 recorded.
 
-10 October DMS monitor configuration: `.149` now uses the corrected DMS user
+10 October DMS monitor configuration: `<development-host>` now uses the corrected DMS user
 unit. DMS had joined the absolute `WAYLAND_DISPLAY` it inherited from UWSM to
 `XDG_RUNTIME_DIR`, producing a nonexistent double-prefixed socket path. The
 unit pins the relative `wayland-0` name; after installing the corrected session
@@ -61,7 +74,7 @@ now rejects a `greyward-session` RPM unless its packaged DMS unit matches the
 fixed source unit byte for byte. See the [monitor configuration
 record](architecture/DMS_MONITOR_CONFIGURATION.md).
 
-10 October: the user accepts the R5 installation/login fix. R6 is built, hash-verified on Windows and mounted in the existing R5 VM with the output-management commit 8c130a662b047a33406c695d54adf524cc302d99 and a greeter-only CPU OpenGL renderer correction for the canonical wallpaper. Private compiled-protocol and actual embedded-greeter rendering checks pass; installed R6 greeter and DMS apply remain pending. See the [candidate evidence](history/migrations/2026-10-10-enrollment-iso-candidate.md).
+10 October: the user accepts the R5 installation/login fix. R6 is built, hash-verified on Windows and mounted in the existing R5 VM with the output-management commit 8c130a662b047a33406c695d54adf524cc302d99 and a greeter-only CPU OpenGL renderer correction for the canonical wallpaper. Private compiled-protocol and actual embedded-greeter rendering checks pass; installed R6 greeter and DMS apply remain pending. See the candidate evidence (private development evidence).
 
 Earlier entries below are dated evidence, not current acceptance claims.
 
@@ -70,24 +83,24 @@ The protected Labwc global filter omitted `zwlr_output_manager_v1`; the auth
 session then combined its private `XDG_RUNTIME_DIR` with an absolute
 `WAYLAND_DISPLAY`; finally DMS Settings retained a stale QML backend flag even
 after DMS logged a successful WLR manager bind and `wlroutput` capability. The
-Labwc and socket fixes are deployed on `.149`, SELinux remains Enforcing, and a
+Labwc and socket fixes are deployed on `<development-host>`, SELinux remains Enforcing, and a
 headless scale transaction passed. A reactive QML readiness patch is recorded
 in the pinned DMS release manifest; exact shell assembly and a network-isolated
 `greyward-dms-1.6.2-9` RPM build passed. The patched QML file is deployed as a
-manifest-verified development overlay on `.149`, but the DMS RPM selector remains
+manifest-verified development overlay on `<development-host>`, but the DMS RPM selector remains
 at `v1.6.2-6`. The prior desktop session is at the greeter; live Settings and
 mode-change acceptance need a fresh interactive login. No new ISO was built. See the
 [monitor configuration record](architecture/DMS_MONITOR_CONFIGURATION.md) and
 [production contract](../environment/production/README.md).
 
-10 October r5 candidate: Enrollment 5 corrects the confirmed mode-0700 program-directory login failure. The repaired r4 installation reaches the desktop (user confirmation and console evidence). R5 composition, embedded payload checks and Windows SHA-256 verification pass; fresh r5 installation, default session selection and installed security acceptance remain pending. See the [candidate evidence](history/migrations/2026-10-10-enrollment-iso-candidate.md).
+10 October r5 candidate: Enrollment 5 corrects the confirmed mode-0700 program-directory login failure. The repaired r4 installation reaches the desktop (user confirmation and console evidence). R5 composition, embedded payload checks and Windows SHA-256 verification pass; fresh r5 installation, default session selection and installed security acceptance remain pending. See the candidate evidence (private development evidence).
 
-10 October installed r4 acceptance: installation completed according to the user, but GREYWARD Labwc login fails and the greeter defaults to Hyprland. R4 is not accepted. Only the new test VM is in an approved rescue investigation; .149 remains the unchanged build host. See the [failure evidence](history/migrations/2026-10-10-enrollment-iso-candidate.md).
+10 October installed r4 acceptance: installation completed according to the user, but GREYWARD Labwc login fails and the greeter defaults to Hyprland. R4 is not accepted. Only the new test VM is in an approved rescue investigation; .149 remains the unchanged build host. See the failure evidence (private development evidence).
 
-10 October ISO rebuild: r3 failed clean installation because private installer-origin storage was missing; it is rejected. Enrollment revision 4 is rebuilt, eleven lifecycle tests pass, and the actual packaged broker reproduces the missing-directory failure then succeeds with corrected private storage in a synthetic clean root. The r4 ISO has built, passed payload checks, and hash-matched on Windows. It is attached to the new empty test VM without runtime activation on `.149`. Clean-install acceptance remains pending. See the [candidate evidence](history/migrations/2026-10-10-enrollment-iso-candidate.md).
+10 October ISO rebuild: r3 failed clean installation because private installer-origin storage was missing; it is rejected. Enrollment revision 4 is rebuilt, eleven lifecycle tests pass, and the actual packaged broker reproduces the missing-directory failure then succeeds with corrected private storage in a synthetic clean root. The r4 ISO has built, passed payload checks, and hash-matched on Windows. It is attached to the new empty test VM without runtime activation on `<development-host>`. Clean-install acceptance remains pending. See the candidate evidence (private development evidence).
 
 10 October enrollment ISO candidate: matched installer enrollment inputs are now
-packaged without activating them on `.149`. The copied offline SELinux store
+packaged without activating them on `<development-host>`. The copied offline SELinux store
 links successfully and the packaged compositor digest matches. The build host
 remains the running development system. Candidate composition has passed;
 clean-install, graphical enrollment and encrypted recovery acceptance remain
@@ -95,30 +108,30 @@ pending on the separate test VM. See the [enrollment authority](security-center/
 
 The earlier 10 October blocker receipts below are historical snapshots; their
 pre-assembly NO-GO findings are superseded only by the scoped checks recorded
-above, not by production acceptance. See the [candidate evidence](history/migrations/2026-10-10-enrollment-iso-candidate.md).
+above, not by production acceptance. See the candidate evidence (private development evidence).
 
 
-10 October [enrollment-required ISO readiness](history/migrations/2026-10-10-enrollment-required-readiness.md):
+10 October enrollment-required ISO readiness (private development evidence):
 protected graphical login is observed running; dedicated build storage has 41 GiB
 free. Actual authentication assembly rejects the revision-8 RPM's receipt.
 Matched enrollment packaging, installer activation and encrypted repair/rollback
 remain blocking. The user requires enrollment before building; no ISO was built.
 
 
-10 October [login routing recovery](history/security-center/2026-10-10-login-admission-recovery.md):
+10 October login routing recovery (private development evidence):
 session 9 is built and installed on the development machine. It restores enrolled
 protected admission after session 8 selected ordinary Labwc. Seven focused Fedora
 tests and package verification pass; real graphical login retry remains pending.
 
-10 October [final ISO blocker audit](history/migrations/2026-10-10-final-iso-blockers.md):
+10 October final ISO blocker audit (private development evidence):
 DMS candidate 1.6.2-8 pins recorded Fedora Python 3.14.8 exactly; its offline RPM
 rebuild and 50 upstream tested Go packages pass in the explicitly authorized
-`.149` build workspace.
+`<development-host>` build workspace.
 Center 90 / Context 82 artifacts remain preserved. Production enrollment and
 authenticated repair/rollback are unvalidated and incompletely packaged; ISO
 construction remains NO-GO. No installed package or active session is changed.
 
-10 October [repository consolidation and ISO preparation](history/migrations/2026-10-10-release-preparation.md):
+10 October repository consolidation and ISO preparation (private development evidence):
 source candidates Center 90 / Context 82, runtime 33 and DMS 1.6.2-7 have distinct
 identities; the installed development tuple remains unchanged. Experimental runtime
 and D-Bus overlay are excluded from the image. ISO construction is NO-GO pending
@@ -127,13 +140,13 @@ cleanup, ISO build, session interruption or release tag was performed.
 Publication is BLOCKED by the configured SSH commit-signing key failing to
 unlock. No new commit or push occurred; reviewed public changes remain staged.
 
-Source-only [targeted security truthfulness fixes](history/security-center/2026-10-09-security-truthfulness.md)
+Source-only targeted security truthfulness fixes (private development evidence)
 correct confined ClamAV status collection and narrow portal/VPN/accepted-risk/grant
 claims. Local checks are distinct from pending installed-session validation;
-`.149` remains on its existing package tuple with no deployment or service change.
+`<development-host>` remains on its existing package tuple with no deployment or service change.
 
 
-9 October D-Bus prerequisite: **inspection correction VALIDATED on `.149`**.
+9 October D-Bus prerequisite: **inspection correction VALIDATED on `<development-host>`**.
 An explicit unpackaged development CIL overlay denies ordinary inspection of
 the existing session/a11y buses; 62-domain kernel readback and actual mem-open/
 invalid-FD probes pass. Messaging/FD masks, stock Flatpak chooser, Context and
@@ -141,7 +154,7 @@ Administration projections remain compatible. Remove/reapply rollback passes
 without any bus/session restart. Existing native root previews reject foreign,
 exited, stale and changed-object use. **Portal request-to-Flatpak recipient
 binding remains NOT IMPLEMENTED; hybrid permissions remain BLOCKED.** See the
-[scoped receipt](history/security-center/2026-10-09-dbus-boundary-proof.md).
+scoped receipt (private development evidence).
 
 9 October bounded hybrid permissions: **BLOCKED** before bridge/grant integration.
 The disposable Flatpak subject bootstrap and non-mutating live session-bus check
@@ -150,7 +163,7 @@ inspection authorization check; its wider trust closure needs reassessment befor
 forwarded portal identities can authorize grants. Both application-specific
 enforcement and first-use UX gates remain NOT DEMONSTRATED. Temporary policy,
 workloads and code copies were removed; no grants or desktop/bus activation
-changed. See the [execution receipt](history/security-center/2026-10-09-hybrid-flatpak-bootstrap.md)
+changed. See the execution receipt (private development evidence)
 and [current authority](security-center/APPLICATION_SECURITY_PLAN.md).
 
 Previous 9 October first-use prerequisite: **BLOCKED** at the minimal-architecture
@@ -159,7 +172,7 @@ the shared GTK FileChooser's denial does not identify the requesting Flatpak.
 App-only grants cannot unblock that chooser; broad portal access is not an
 accepted workaround. No generic grant UI, script provider, Sensitive files
 provisioning, authorization or runtime changes were made in that previous probe. See the
-[prerequisite receipt](history/security-center/2026-10-09-first-use-permission-proof.md)
+prerequisite receipt (private development evidence)
 and [current authority](security-center/APPLICATION_SECURITY_PLAN.md).
 
 This document answers “what is true today?”. It is a status summary, not a
@@ -167,7 +180,7 @@ replacement for the domain specifications listed in [INDEX.md](INDEX.md).
 
 ## Implemented or active
 
-- Administration console visual polish (9 October): the normal `.149` desktop
+- Administration console visual polish (9 October): the normal `<development-host>` desktop
   runs an explicitly assembled native UI overlay on runtime 32; package-owned
   files and Center 89 / Context 81 / session 8 remain unchanged. Risk review now
   explains credential exposure, security changes, data loss and root-shell
@@ -177,7 +190,7 @@ replacement for the domain specifications listed in [INDEX.md](INDEX.md).
   canvas instead of black default cell rectangles. Actual
   normal-seat review, fresh PAM, confined sudo/root execution and terminal output
   were visually checked. Renderer/admission and kernel checks are recorded in
-  the [latest visual receipt](history/security-center/2026-10-09-administration-obsidian.md).
+  the latest visual receipt (private development evidence).
   This is development evidence, not a newly built runtime RPM or image.
 
 - Practical SELinux administration/usability (9 October): Center 89 / Context 81 /
@@ -197,9 +210,9 @@ replacement for the domain specifications listed in [INDEX.md](INDEX.md).
   remain unpassed. DMS's two prior development plugin overlays have reconciled
   root receipts, not a new reproducible DMS package.
   See the [enrollment authority](security-center/APPLICATION_SECURITY_ENROLLMENT.md)
-  and [normal-seat receipt](history/security-center/2026-10-09-desktop-compatibility.md).
+  and normal-seat receipt (private development evidence).
 
-- Sensitive-access Review routing deployed on `.149` (9 October): Center 87 /
+- Sensitive-access Review routing deployed on `<development-host>` (9 October): Center 87 /
   Context 80 / runtime 28, plus a recorded root-owned development overlay for
   the DMS 1.6.2-6 security widget. The publisher supplies the validated resource
   reference; Center opens that registered resource, related denial history and
@@ -220,7 +233,7 @@ replacement for the domain specifications listed in [INDEX.md](INDEX.md).
   remain undelivered functional work. Intermittent legacy DNS/USB projection
   unavailability observed during validation is not claimed fixed by this pass.
 
-- Normal `.149` Black Box terminal paste repaired (9 October). Actual
+- Normal `<development-host>` Black Box terminal paste repaired (9 October). Actual
   Ctrl+Shift+V reproduced immediate window closure with a simultaneous SELinux
   denial of Labwc writing the ordinary client's selection pipe. The canonical
   compositor policy now permits only that FIFO write; no protected-file read or
@@ -231,7 +244,7 @@ replacement for the domain specifications listed in [INDEX.md](INDEX.md).
   export and build receipts are retained in root-only `terminal-paste-20261009`
   under `/var/lib/greyward-development/application-security-live/`.
 
-- Context 77 Update Center resolver repair deployed on `.149` (9 October):
+- Context 77 Update Center resolver repair deployed on `<development-host>` (9 October):
   native DNF resolution now enforces the desktop holds already shown by inventory
   and used by Apply. The former Quickshell 0.3.2 conflict is gone: live resolution
   returns RESOLVED, 535 package changes, zero removals; the installed Updates page
@@ -242,7 +255,7 @@ replacement for the domain specifications listed in [INDEX.md](INDEX.md).
   is retained; root-only receipt backup is `update-resolver-20261009` beneath
   `/var/lib/greyward-development/application-security-live/`.
 
-- Context 79 authenticated update handoff deployed on `.149` (9 October).
+- Context 79 authenticated update handoff deployed on `<development-host>` (9 October).
   The failed post-password operation retained the ordinary confined domain,
   so Btrfs recovery inspection was denied and misleadingly reported a missing
   subvolume. A root-only socket-activated fixed worker now supplies system-service
@@ -262,50 +275,50 @@ replacement for the domain specifications listed in [INDEX.md](INDEX.md).
   download/preparation completion and the offline update/reboot are not yet
   claimed as passed.
 
-- Security Center 86 sidebar deployed on `.149`: shared shield emblem centered
+- Security Center 86 sidebar deployed on `<development-host>`: shared shield emblem centered
   above branding, larger menu labels, and removed local-security footer. The menu
   uses the available height; normal and maximized layouts visually checked in the
   real desktop. Frontend UX 93/93, branding and repository gates pass.
 
-- Normal `.149` post-login resource/Flatpak failures repaired: runtime 28 with
+- Normal `<development-host>` post-login resource/Flatpak failures repaired: runtime 28 with
   stable filesystem receipt reopening, canonical descendant namespace policy,
   and bounded public-IP transport retries. Broker resource coverage is PROTECTED;
   actual Brave loads HTTPS and the public IP is visible. Native/Flatpak protected
   reads and parent namespace writes remain denied. Center 85 / Context 76 retained.
-  [Causes, evidence and limits](history/security-center/2026-10-08-session-resource-flatpak-recovery.md).
+  Causes, evidence and limits (private development evidence).
 
-- Enrolled `.149` greetd login recovered: ordinary UWSM startup no longer
+- Enrolled `<development-host>` greetd login recovered: ordinary UWSM startup no longer
   inherits protected-console IO; the audited plugin overlay now has its matched
   selected receipt. Real GREYWARD login reaches the visible desktop/taskbar,
   protected-seat verification passes and SSH remains available. Four focused
-  Fedora descriptor checks pass. [Recovery evidence and limits](history/security-center/2026-10-08-enrolled-login-recovery.md).
+  Fedora descriptor checks pass. Recovery evidence and limits (private development evidence).
 
-- Plugin/Center protection-state parity is installed on `.149`: Center 85,
+- Plugin/Center protection-state parity is installed on `<development-host>`: Center 85,
   Context 76 / runtime 27. The shell uses shared evaluated check states and
   accepted deviations, and the same File Security readiness as Center.
   Actual System checks shows zero findings; the flyout shows Protected and
   no spurious malware/firewall/device warning. Eight live samples remain
   Protected; mandatory desktop readback passes. Existing recorded blocks
-  remain informational. [Parity evidence](history/security-center/2026-10-08-security-plugin-parity.md).
+  remain informational. Parity evidence (private development evidence).
 
-- Security Center plugin stability receipt historically records normal `.149`: Center 84,
+- Security Center plugin stability receipt historically records normal `<development-host>`: Center 84,
   Context 75, runtime 27, DMS 1.6.2-6 with a backed-up development QML overlay.
   D-Bus threading initialization and separate negative-display/action leases
   correct the diagnosed crash precondition and expired-display flapping. Actual
   flyout inspection and 30 live samples show stable Review needed; real provider
   warnings remain. Context had zero restarts during this short check.
-  [Evidence and limitations](history/security-center/2026-10-08-security-plugin-stability.md).
+  Evidence and limitations (private development evidence).
 
 - Security Center's main window is explicitly exempted from Labwc's forced
-  server decoration in canonical session configuration and the normal `.149`
+  server decoration in canonical session configuration and the normal `<development-host>`
   protected desktop. The GTK app ID was observed through the real Wayland
   toplevel protocol. VMConnect shows a single application-owned titlebar in
   normal and maximized states, with maximize/restore working. The titlebar receipt records
   84 / Context 72 / runtime 27; protected-desktop readback passes. Earlier
   WebKit-only chrome captures did not validate the compositor frame.
 
-- The [performance development receipt](history/security-center/2026-10-08-security-center-performance.md)
-  historically records installed Center 84 / Context 72 / runtime 27 on normal `.149`.
+- The performance development receipt (private development evidence)
+  historically records installed Center 84 / Context 72 / runtime 27 on normal `<development-host>`.
   Persistent navigation, lease-aware read scheduling, independent optional
   Overview history, Recovery-specific reads and stale-response fixes are
   implemented. Startup p95 and application-list median improved; sampled
@@ -314,8 +327,8 @@ replacement for the domain specifications listed in [INDEX.md](INDEX.md).
   Network deadline failures and provider long-tail latency remain unresolved;
   this is scoped development evidence, not complete performance/release acceptance.
 
-- [Integrated window chrome](history/security-center/2026-10-08-integrated-window-chrome.md)
-  historically records Center 80 / Context 72 / runtime 27 on normal `.149`.
+- Integrated window chrome (private development evidence)
+  historically records Center 80 / Context 72 / runtime 27 on normal `<development-host>`.
   The application owns a continuous, unbranded titlebar with canonical Labwc
   artwork and bounded native window actions. Build, focused tests and protected
   desktop verification pass. Actual normal/maximized/restored captures and
@@ -332,16 +345,16 @@ replacement for the domain specifications listed in [INDEX.md](INDEX.md).
   The separate Context 73 candidate and three-surface live branding review
   are not yet validated. This is not image or release evidence.
 
-- The [file review lifecycle receipt](history/security-center/2026-10-08-file-review-lifecycle.md)
-  historically records Center 76 / Context 72 / runtime 27 on normal `.149`.
+- The file review lifecycle receipt (private development evidence)
+  historically records Center 76 / Context 72 / runtime 27 on normal `<development-host>`.
   Quarantined/deleted detections and absent-source history leave active review;
   failed actions, restored files and uncertain source status stay reviewable.
   Actual EICAR scan/quarantine clears the active list and retains history controls.
   Running-build integrity and protected-desktop verification pass; 121 frontend
   and 25 focused Python tests pass. This is scoped development validation.
 
-- The [Security Activity context receipt](history/security-center/2026-10-08-security-activity-context.md)
-  historically records Center 75 / Context 71 / runtime 27 on normal `.149`:
+- The Security Activity context receipt (private development evidence)
+  historically records Center 75 / Context 71 / runtime 27 on normal `<development-host>`:
   shared contextual event rows, historical kernel PID/basename, real action,
   resource label, decision and explanation. Actual direct reads are denied and
   visible end-to-end; old attribution stays UNKNOWN. Default/minimum UI review,
@@ -349,8 +362,8 @@ replacement for the domain specifications listed in [INDEX.md](INDEX.md).
   gates pass. Session protection remains verified; matched rollback inputs are
   retained. This is scoped development evidence, not release acceptance.
 
-- The [focused quality/regression receipt](history/security-center/2026-10-08-security-center-quality-regressions.md)
-  historically records Center 73 / Context 69 / runtime 26 on the normal `.149`
+- The focused quality/regression receipt (private development evidence)
+  historically records Center 73 / Context 69 / runtime 26 on the normal `<development-host>`
   desktop: neutral graphite grain/silver depth, distinct functional glyphs,
   corrected Files fallback and compact activity/list density. All 13 screens
   were visually reviewed at default/minimum sizes, live reversible interactions
@@ -358,8 +371,8 @@ replacement for the domain specifications listed in [INDEX.md](INDEX.md).
   connected and verified; previous Center 72 and the receipt are recoverable.
   This is scoped development UI evidence, not production/image acceptance.
 
-- The [visual polish receipt](history/security-center/2026-10-08-security-center-visual-polish.md)
-  historically records Center 72 / Context 69 / runtime 26 on the actual `.149`
+- The visual polish receipt (private development evidence)
+  historically records Center 72 / Context 69 / runtime 26 on the actual `<development-host>`
   desktop. All 13 destinations pass EN capture/layout checks at 1440×900 and
   1100×700 and actual French review at the minimum size. Canonical materials,
   semantic state, readable controls and responsive Network Activity are restored.
@@ -368,8 +381,8 @@ replacement for the domain specifications listed in [INDEX.md](INDEX.md).
   lease expiry still withdraws positive protection. Unsupported grant profiles,
   inventory uncertainty and deferred production validation remain explicit.
 
-- The [normal-session recheck](history/security-center/2026-10-08-normal-session-recheck.md)
-  historically confirms Center 70 / Context 69 / runtime 26 on the real `.149`
+- The normal-session recheck (private development evidence)
+  historically confirms Center 70 / Context 69 / runtime 26 on the real `<development-host>`
   desktop: fresh PROTECTED coverage, registered-resource readback, direct and
   revoked-grant denial, normal Flatpak compatibility and connected resource
   detail/history. Protection stayed stable through 30-second Applications and
@@ -384,11 +397,11 @@ replacement for the domain specifications listed in [INDEX.md](INDEX.md).
   Evidence renewal now precedes the actual lease deadline; unchanged fresh
   projections preserve the page. Root-owned GREYWARD theme/buttons are included
   in the protected Labwc closure and loaded without replacing the seat. See
-  the [refresh/theme receipt](history/security-center/2026-10-08-protection-refresh-theme.md) and
-  see the [workspace receipt](history/security-center/2026-10-08-security-center-workspace.md)
+  the refresh/theme receipt (private development evidence) and
+  see the workspace receipt (private development evidence)
   for installed validation and limits. No enforcement authority changes.
 
-- The normal `.149` development account is deliberately enrolled, with actual
+- The normal `<development-host>` development account is deliberately enrolled, with actual
   confined greetd/user-manager/SSH execution, root-owned matched Labwc and a
   separate native DMS authentication domain. SELinux is Enforcing and Fedora
   PAM/authselect are unchanged. Fresh authoritative coverage and the real
@@ -400,7 +413,7 @@ replacement for the domain specifications listed in [INDEX.md](INDEX.md).
   Center 66 / Context 68 / runtime 25 have clean package readback; positive
   coverage survives broker restart, and final GUI revocation publishes verified
   completion. The temporary test policy/helpers are removed. See the
-  [normal-session receipt](history/security-center/2026-10-08-application-security-normal-session.md)
+  normal-session receipt (private development evidence)
   for live evidence, recovery and current limits. Disk preflight had 7.1 GiB
   free; no data was deleted to make space. Root and ordinary SSH remain available.
   Automatic production lifecycle/installer/upgrade/rescue acceptance is not
@@ -440,7 +453,7 @@ replacement for the domain specifications listed in [INDEX.md](INDEX.md).
   release/image and exhaustive compatibility matrices are DEFERRED HARDENING.
   See the [current authority](security-center/APPLICATION_SECURITY_PLAN.md).
   Documentation was audited against source on 7 October; superseded receipts
-  are [historical](history/security-center/2026-10-07-application-security-status.md). [Production enrollment](security-center/APPLICATION_SECURITY_ENROLLMENT.md)
+  are historical (private development evidence). [Production enrollment](security-center/APPLICATION_SECURITY_ENROLLMENT.md)
   has accepted recovery/account/admin decisions and initial source for the
   existing-database enrollment journal, local-account/per-owner bindings and
   an inert offline LUKS-authenticated console. Nine focused maintenance tests
@@ -451,13 +464,13 @@ replacement for the domain specifications listed in [INDEX.md](INDEX.md).
   changed code/path/arguments/revision refuse, and generic legacy grants cannot
   activate/launch. Two kernel profile reuses, direct denials and read-rule
   withdrawal pass. SSH login/signing, IDE raw access and the restrictive temporary
-  fallback remain unavailable. See the [scoped receipt](history/security-center/2026-10-07-application-security-authentication.md).
+  fallback remain unavailable. See the scoped receipt (private development evidence).
   Activation remains BLOCKED by production seat/input, admission and lifecycle. No production gates,
   real maintenance boot, account admission or installed rollback have passed.
   Those isolated authentication checks changed no account mapping, package,
   active desktop or ISO. The subsequent Center/Context review upgrade is
   recorded separately above. The
-  [initial receipt](history/security-center/2026-10-07-application-security-enrollment-initial.md)
+  initial receipt (private development evidence)
   distinguishes source checks from production evidence.
   Earlier focused revalidation passed runtime Rust tests (115 passed, 21
   environment-specific tests ignored), workspace formatting, runtime all-target
@@ -544,7 +557,7 @@ replacement for the domain specifications listed in [INDEX.md](INDEX.md).
   guest acceptance and old-runtime/state rollback checks are historical evidence
   for the superseded lock configuration. Native-lock restart recovery is now
   separately tested; fresh-image gates remain open. The
-  [dated evidence](history/migrations/2026-10-04-dms-1.6.2-candidate.md) records
+  dated evidence (private development evidence) records
   scope and the recovered locker-failure black-screen incident. The
   [active tracker](architecture/DMS_1_6_MIGRATION_PLAN.md) records remaining
   authentication/suspend, visual, performance, fresh-image and hardware gates.
@@ -555,16 +568,16 @@ replacement for the domain specifications listed in [INDEX.md](INDEX.md).
   acceptance is implied by the earlier ISO records below.
 
 - Security Center shell redesign is implemented in source and running in the
-  `.149` development overlay: fixed identity, independent live activity,
+  `<development-host>` development overlay: fixed identity, independent live activity,
   progressive disclosure and one shared notification projection. Real microphone
   and EICAR/quarantine transitions were exercised. Physical camera/storage,
   authenticated persistent USB trust and the rebuilt privileged scan package
   remain acceptance gaps; this is not release-image validation. See the
-  [dated runtime record](history/security-center/2026-09-16-security-shell-runtime.md)
+  dated runtime record (private development evidence)
   for tested cases and remaining build/visual gates.
 
 - The installed-system definition is `environment/production/`.
-- The ISO workflow now requires an explicit `.149` runtime baseline and verified
+- The ISO workflow now requires an explicit `<development-host>` runtime baseline and verified
   base-media checksum. It imports portable preferences, checks package version
   floors/Flatpak commits, rejects stale branding assets, validates the embedded
   payload, and bounds first-boot retries. It now bundles dependencies at build
@@ -579,7 +592,7 @@ replacement for the domain specifications listed in [INDEX.md](INDEX.md).
   its verified Anaconda RPM closure prevents a duplicate first-boot RPM
   transaction on a fresh install. The candidate is not yet clean-installed or
   runtime-accepted in Hyper-V or on bare metal.
-- Standalone dependency validation on `.149` passed for 1,140 RPMs (signatures,
+- Standalone dependency validation on `<development-host>` passed for 1,140 RPMs (signatures,
   baseline floors, resolution with networking absent), all five Flatpak apps
   installed into an empty offline installation, and pinned desktop/shell inputs.
   This validates the dependency workflow, not a newly composed or installed ISO.
@@ -603,7 +616,7 @@ replacement for the domain specifications listed in [INDEX.md](INDEX.md).
 - `GREYWARD-DEV` is defined as the production definition plus the explicit
   `environment/development/` overlay.
 - A reachable 2026-08-30 internal-alpha VM is available for runtime diagnosis,
-  but it is development-contaminated (`stendev`, SSH and development services)
+  but it is development-contaminated (`example-user`, SSH and development services)
   and still carries the disposable `greyward` live account. It is evidence for
   user-session behavior only, not installed-production acceptance.
 - Labwc is the canonical compositor; Hyprland remains the supported fallback.
@@ -616,7 +629,7 @@ replacement for the domain specifications listed in [INDEX.md](INDEX.md).
   the repository-owned `GREYWARD.pmod` is a small hardened layer that keeps
   RSA-2048 compatibility. This is a secure-default baseline, not a FIPS or
   release-readiness claim; compatibility validation remains part of clean-image
-  acceptance. The `.149` development VM remains runtime evidence only.
+  acceptance. The `<development-host>` development VM remains runtime evidence only.
 - Recovery V1 provides local recovery-point and Restic backup components; boot
   rollback remains a separate prototype.
 - Update Center review and provider resolution remain unprivileged. Applying a
@@ -672,7 +685,7 @@ replacement for the domain specifications listed in [INDEX.md](INDEX.md).
   the package contains the fixed official-feed updater, deterministic threat
   precedence, narrow application exceptions, activity metadata, notifications,
   and the Security Center Threat Protection view. Fixture and Fedora service
-  checks pass. As of 2026-09-06, `.149` has the development-source iteration
+  checks pass. As of 2026-09-06, `<development-host>` has the development-source iteration
   active with the updater timer running; this is development evidence, not
   packaged-release or clean-image acceptance.
 

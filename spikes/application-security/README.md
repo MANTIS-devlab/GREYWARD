@@ -10,7 +10,7 @@ UID-1002 paths or test root permissions into installed policy.
 `selinux/greyward_session_bus_boundary.cil` is a reversible, explicitly installed
 development inspection correction for the existing user/a11y bus type. The
 kernel/compatibility/native-review fixtures in `tools/greyward-dev/` and
-[scoped receipt](../../docs/history/security-center/2026-10-09-dbus-boundary-proof.md)
+scoped receipt (private development evidence)
 verify its limited behavior and rollback. It adds no allow, grant, portal or
 production enrollment. Request-to-Flatpak recipient association remains absent.
 
@@ -19,7 +19,7 @@ template in `selinux/greyward_hybrid_flatpak_probe.te`. It is not installed
 product policy or a grant. Its root harness and normal-account bus check are
 `tools/greyward-dev/application-security-hybrid-bootstrap.py` and
 `tools/greyward-dev/application-security-hybrid-bus-check.py`. The
-[9 October receipt](../../docs/history/security-center/2026-10-09-hybrid-flatpak-bootstrap.md)
+9 October receipt (private development evidence)
 records the blocked IPC trust prerequisite and removed test modules. Do not
 continue into a portal bridge or describe the bootstrap as either product gate.
 
@@ -35,7 +35,7 @@ invocation/hashes and limits are in the current plan; this is not a fresh
 production greetd/package test.
 
 Older `--end-to-end` and standalone bubblewrap-only Safe Open recipes belong
-to [historical experiments](../../docs/history/security-center/2026-10-07-application-security-spikes.md).
+to historical experiments (private development evidence).
 The current Safe Open shares the broker runner, refusing unsupported Flatpak
 handlers and protected-label copying with no unrestricted fallback.
 

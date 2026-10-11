@@ -28,7 +28,7 @@ Black Box implementation.
 
 ## Runtime evidence
 
-- Fedora Updates provided `blackbox-terminal-0.15.2-1.fc44.x86_64` on `.149`.
+- Fedora Updates provided `blackbox-terminal-0.15.2-1.fc44.x86_64` on `<development-host>`.
 - An isolated Black Box launch in the existing Wayland/Labwc session created a
   `/usr/bin/zsh --login` child with `TERM=xterm-256color` and
   `COLORTERM=truecolor`. The shell-only prompt correction now shows the current
@@ -45,7 +45,7 @@ Black Box implementation.
 - `tests/static.ps1`, `tools/validate-repository.ps1`, and `git diff --check`
   passed after the Black Box source migration.
 - The live development deployment completed with `DEPLOY OK` and no reboot.
-- `.149` reports `blackbox-terminal-0.15.2-1.fc44.x86_64`; Kitty and Tabby are
+- `<development-host>` reports `blackbox-terminal-0.15.2-1.fc44.x86_64`; Kitty and Tabby are
   not installed. The installed override reports `Name=Terminal`, the Zsh
   launcher, GREYWARD icon, and `StartupWMClass=com.raggesilver.BlackBox`.
 - The live Black Box settings were captured as the fresh-install production
@@ -73,11 +73,11 @@ Black Box implementation.
   on a runtime image renderer.
 - The canonical desktop and Labwc/Hyprland launchers set
   `GREYWARD_TERMINAL_BRIEF=1`; the first Black Box window therefore does not
-  depend on `TERM_PROGRAM` timing. On `.149`, the interactive pseudo-terminal
+  depend on `TERM_PROGRAM` timing. On `<development-host>`, the interactive pseudo-terminal
   check rendered the brief and reached `READY_OK` without a reboot.
 - No real user C2 or unrelated network policy is involved.
 
 ## Status
 
 **F07 — FIXED + RUNTIME VERIFIED** — Black Box is now the sole production
-terminal backend and the live `.149` session is ready to accept commands.
+terminal backend and the live `<development-host>` session is ready to accept commands.

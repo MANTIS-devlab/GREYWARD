@@ -34,7 +34,7 @@ implemented with Kitty as the rendering and terminal engine.
   `tabby` to `greyward-terminal`; a customized DMS `barPinnedApps` list is not
   rewritten. Existing user-owned `~/.config/tabby` data is not deleted.
 
-## Runtime evidence on `.149`
+## Runtime evidence on `<development-host>`
 
 - Kitty `0.48.2` installed successfully with its required Kitty helper,
   shell-integration, and terminfo packages.
@@ -77,4 +77,4 @@ implemented with Kitty as the rendering and terminal engine.
 **FIXED + RUNTIME VERIFIED** — the canonical Terminal migration, live Kitty /
 Oh My Zsh / Powerlevel10k session, DMS search identities, default pins, hidden
 backend launchers, and isolated terminal interaction fixture all passed on
-`.149` without a reboot.
+`<development-host>` without a reboot.

@@ -3,7 +3,7 @@
 ## Resolved diagnosis — 10 October 2026
 
 The latest screenshot still shows “WLR output management protocol not
-supported.” Read-only inspection of `.149` found SELinux Enforcing, the
+supported.” Read-only inspection of `<development-host>` found SELinux Enforcing, the
 protected DMS v1.6.2-13 shell, and two DMS instances: the protected shell in its
 private authentication runtime and the ordinary `greyward-dms.service` under
 the systemd user manager.
@@ -20,7 +20,7 @@ The fix pins `WAYLAND_DISPLAY=wayland-0` in
 `environment/session/greyward-dms.service`. That unit setting overrides the
 absolute environment inherited from UWSM for DMS and its QML process only. The
 private protected shell keeps its separate `XDG_RUNTIME_DIR` and broker-created
-socket alias. The corrected `greyward-session` RPM was installed on `.149` and
+socket alias. The corrected `greyward-session` RPM was installed on `<development-host>` and
 only DMS was restarted. Its log then confirmed successful WLR output-manager
 initialization; `wlr-randr` read back the VM output at 2560×1440. SELinux stayed
 Enforcing. The interactive Settings check is the user's acceptance step.
@@ -80,21 +80,24 @@ session-only; the compositor patch does not add display-control privileges.
 ## First-session display defaults
 
 The production DMS defaults enable matching-profile auto-selection and package
-one unnamed output profile for exactly `Virtual-1` at 1920×1080, scale 1. DMS
-matches the profile by its output set, so it does not apply to physical
-connectors such as eDP, DP or HDMI. Bare-metal sessions keep the mode selected
-for their connected display. The VM starts at the reliable 1920×1080 default;
-the user can choose another advertised mode in DMS Settings if the virtual
-display provides one.
+one unnamed output profile for exactly `Virtual-1` at 1920×1080, scale 1. The
+Labwc autostart also requests the standard 1920×1080 mode on that exact virtual
+output before DMS starts. This handles a greeter-selected 1024×768 compatibility
+mode even when 1920×1080 is advertised. The request is bounded to three seconds,
+uses only an advertised mode, and safely does nothing if that output or mode is
+unavailable. Physical connectors such as eDP, DP or HDMI are never changed;
+Labwc continues to reuse the mode selected for those displays. The user can
+choose another advertised mode in DMS Settings afterward.
 
 The session migration copies that profile only before the first GREYWARD DMS
 session, only when `monitors.json` does not already exist, and never when the
 DMS 1.6 migration marker shows an established session. It enables auto-select
 only as a default and preserves explicit settings, profiles and later user
-changes. On `.149`, the existing marker and manually selected 2560×1440 mode
+changes. On `<development-host>`, the existing marker and manually selected 2560×1440 mode
 remain untouched. Labwc's `reuseOutputMode` retains the mode selected by the
-greeter during compositor startup; the protected Polkit readiness gate still
-must complete before the normal desktop is admitted.
+greeter during compositor startup; the production autostart then corrects only
+the known virtual-output fallback before DMS starts. The protected Polkit
+readiness gate still must complete before the normal desktop is admitted.
 
 ## ISO inclusion and validation
 
@@ -125,7 +128,7 @@ and `python tests/test_dms_wayland_runtime.py`.
 The original source-only inspection and the R6 candidate report are historical
 records; they predate the live update below.
 
-## Historical `.149` update — 10 October 2026
+## Historical `<development-host>` update — 10 October 2026
 
 The protected Labwc source was rebuilt from the pinned Labwc 0.9.6 archive with
 both GREYWARD patches applied at zero fuzz. The enrollment RPM was rebuilt as
@@ -133,7 +136,7 @@ both GREYWARD patches applied at zero fuzz. The enrollment RPM was rebuilt as
 did not contain the output-management addition, so it was not used.
 
 The RPM's protected compositor was extracted without installing the RPM or its
-newer package dependencies. That exact binary now replaces `.149`'s private
+newer package dependencies. That exact binary now replaces `<development-host>`'s private
 Labwc executable, and the root-owned desktop manifest was updated and verified.
 SELinux remains Enforcing. A separate headless Labwc session using the packaged
 binary exposed the output-management protocol to `wlr-randr`; a scale change
@@ -146,7 +149,7 @@ binding and the `wlroutput` capability. Settings nevertheless continued to
 show the error, which led to the QML readiness fix above. Its DMS shell was
 assembled from the pinned source and vendor archives with the exact patch
 inventory and receipt checks. Candidate `greyward-dms-1.6.2-9.fc44` built on
-`.149` in a network-isolated namespace; its Go test suite passed. For live
+`<development-host>` in a network-isolated namespace; its Go test suite passed. For live
 diagnosis, the patched QML service was copied into the protected desktop payload
 and its root-owned file receipt updated. The installed DMS RPM selector remains
 `v1.6.2-6`; this one-file overlay is a development check, while future ISO
@@ -162,10 +165,10 @@ capability. It did not fix the visible Settings error and is superseded by the
 request/response diagnosis above. The live DMS API response confirms that the
 backend can answer; the shell must base availability on that response.
 
-## Superseded live `.149` recheck — 10 October 2026
+## Superseded live `<development-host>` recheck — 10 October 2026
 
 The earlier stale-generation diagnosis did not explain the current failure.
-`.149` is now running the protected `v1.6.2-12` shell, whose DMS API advertises
+`<development-host>` is now running the protected `v1.6.2-12` shell, whose DMS API advertises
 `wlroutput`. The active Settings screen still shows the unavailable message,
 while a direct read-only request returns the monitor state. The response-based
 source patch is being assembled as `v1.6.2-13`; deployment and visual

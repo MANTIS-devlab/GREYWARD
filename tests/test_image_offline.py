@@ -385,13 +385,18 @@ class OfflineTests(unittest.TestCase):
         self.assertIn('OMITTED_RPM_NAMES', offline)
 
     def test_vmware_candidate_preflight_refuses_persistent_iso_boot(self):
-        source = (ROOT / "tools/greyward-dev/validate-vmware-candidate.ps1").read_text()
+        private_harness = ROOT / "tools/greyward-dev/validate-vmware-candidate.ps1"
         iso_checker = (ROOT / "tools/greyward-dev/validate-vmware-iso.py").read_text()
-        self.assertIn('bios.bootOrder', source)
-        self.assertIn('sata0:1.fileName', source)
-        self.assertIn('vmrun.exe', source)
         self.assertIn('pycdlib', iso_checker)
         self.assertIn('Rock Ridge', iso_checker)
+        if private_harness.exists():
+            source = private_harness.read_text()
+            self.assertIn('bios.bootOrder', source)
+            self.assertIn('sata0:1.fileName', source)
+            self.assertIn('vmrun.exe', source)
+        else:
+            policy = json.loads((ROOT / 'tools/publication-policy.json').read_text())
+            self.assertIn('tools/greyward-dev/*.ps1', policy['excludedPaths'])
 
     def test_dms_installer_has_no_download_fallback(self):
         source = (ROOT / "environment/production/install-dms.sh").read_text()

@@ -55,7 +55,7 @@ does not make root commands harmless, and a timestamp expiry cannot revoke an
 already running root shell. Root/kernel compromise remains outside this boundary.
 See [the enrollment authority](APPLICATION_SECURITY_ENROLLMENT.md) for scoped
 evidence and recovery limitations. The subsequent
-[normal-seat compatibility receipt](../history/security-center/2026-10-09-desktop-compatibility.md)
+normal-seat compatibility receipt (private development evidence)
 records actual activation, fresh Administration authentication, native locking,
 937 kernel decisions, Flatpak alias denial and grant reuse/revocation. Nested
 sudo uses a generation-matched private Fedora password helper, never the shared
@@ -232,10 +232,10 @@ legacy generic grants, changed identity/revision and broader arguments; the
 only current profile discards every output stream from pinned key inspection.
 Production input/agent admission, temporary fallback, additional raw-access tool
 profiles and lifecycle/recovery remain mandatory work before automatic enrollment.
-The [scoped authentication receipt](../history/security-center/2026-10-07-application-security-authentication.md)
+The scoped authentication receipt (private development evidence)
 does not establish physical-seat or production coverage. The existing account mappings, native DMS
 locking and Fedora PAM remain unchanged. Scoped
-[evidence](../history/security-center/2026-10-07-application-security-enrollment-initial.md)
+evidence (private development evidence)
 must not be treated as a passed production coverage or recovery gate.
 
 ## Validation ownership

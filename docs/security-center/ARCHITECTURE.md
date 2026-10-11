@@ -78,12 +78,12 @@ commands or infer protection from display strings.
 The [delivery authority](APPLICATION_SECURITY_PLAN.md) distinguishes current
 source from the installed tuple. The [enrollment design](APPLICATION_SECURITY_ENROLLMENT.md)
 has approved decisions and actual normal-account development admission on
-`.149`. A root-owned matched compositor, generated auth-only native DMS shell
+`<development-host>`. A root-owned matched compositor, generated auth-only native DMS shell
 and separate Fedora helper domains protect authentication. Fresh root readback
 checks real session/user-manager/SSH roles, scope, immutable generation,
 authentication readiness, kernel decisions and registered labels. Tested
 key-inspection grants pass normal-session deny/allow/revoke. See the
-[normal-session receipt](../history/security-center/2026-10-08-application-security-normal-session.md).
+normal-session receipt (private development evidence).
 Automatic production lifecycle and clean-image acceptance remain unvalidated.
 No existing unconfined desktop is protected merely because SELinux
 is enforcing or a broker process is running.
@@ -98,7 +98,7 @@ Guard CLI / Safe Open ───────────────────�
 ```
 
 The following default/private-bus description is historical foundation behavior
-from 7 October, superseded for the normal `.149` account by the normal-session
+from 7 October, superseded for the normal `<development-host>` account by the normal-session
 receipt above. It is not the current live coverage/activation state.
 
 The default `systems.mantis.greyward.ApplicationSecurity1` service is inert
@@ -110,14 +110,14 @@ authorized apply, operations and prepared launches. Its policy, resource and
 worker provider remains fixed to isolated UID 1002 in the installed development
 entry point. Source adds per-owner bindings and serialized enrollment dispatch,
 but no production enrollment, live coverage or multi-user kernel proof exists.
-On `.149`, the explicitly enabled installed workflow unit now runs that same
+On `<development-host>`, the explicitly enabled installed workflow unit now runs that same
 dispatcher on the public bus/store. An isolation-only binding permits normal
 local users to prepare restrictive workloads, with no resource/grant mutations.
 Separate typed capability flags are not enforcement evidence. Root-owned scratch
 parents remain private; explicit internal modes withstand umask 0077 and PID 1
 mounts the disposable home in the worker namespace. Display binding verifies the
 actual UID and pinned Labwc peer. See the
-[live receipt](../history/security-center/2026-10-07-application-security-live-development.md).
+live receipt (private development evidence).
 
 The source Context/Tauri allowlist contains typed reads and workflows, not a
 generic forwarding or root execution API. Root-owner pinning, kernel peer

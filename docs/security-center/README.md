@@ -24,15 +24,15 @@ The current performance audit and its measured limits are recorded in
 Current Application Guard/Protected Data source and scoped evidence are in
 [APPLICATION_SECURITY_PLAN.md](APPLICATION_SECURITY_PLAN.md). Its dated audit
 supersedes earlier prototype descriptions. [Production enrollment](APPLICATION_SECURITY_ENROLLMENT.md)
-has an active, confined normal development session on `.149`. Center 89 /
+has an active, confined normal development session on `<development-host>`. Center 89 /
 Context 81 / runtime 32 and session package 8 have actual normal-seat
 Administration, native lock, portal, Flatpak and reviewed grant/revocation
-evidence in the [9 October compatibility receipt](../history/security-center/2026-10-09-desktop-compatibility.md).
+evidence in the 9 October compatibility receipt (private development evidence).
 Automatic production enrollment, clean-image and authenticated offline recovery
 acceptance remain unpassed; ordinary screen sharing remains unavailable.
 The earlier runtime 20 unenrolled and Center 64 / Context 67 observations are
 historical, recorded in the
-[live integration receipt](../history/security-center/2026-10-07-application-security-live-integration.md).
+live integration receipt (private development evidence).
 Historical experiment/package receipts are explicitly archived under
 `docs/history/security-center/` rather than treated as current architecture.
 

@@ -3,9 +3,9 @@
 Status: real normal-session DEVELOPMENT implementation, not release acceptance. Canonical
 [current implementation and receipts](../../../docs/security-center/APPLICATION_SECURITY_PLAN.md);
 [production enrollment design](../../../docs/security-center/APPLICATION_SECURITY_ENROLLMENT.md)
-has approved decisions and normal `.149` enrollment using the protected native
+has approved decisions and normal `<development-host>` enrollment using the protected native
 authentication domain and root-owned matched seat. See the
-[normal-session receipt](../../../docs/history/security-center/2026-10-08-application-security-normal-session.md)
+normal-session receipt (private development evidence)
 for real resources, tested grants, kernel outcomes and recovery. Automatic
 production installation/upgrade/rescue acceptance remains unvalidated.
 The following earlier package observations are historical:
@@ -107,7 +107,7 @@ with pinned Fedora `/usr/bin` Cargo/Rust tools, the committed lock/vendor input
 and offline resolution. Do not invoke Cargo as root or download in `%build`.
 The spec retains source/licenses and required libseccomp/Wayland helper inputs.
 The builder's `--warm` compares the same archived inputs/private cache; older
-receipts remain [historical](../../../docs/history/security-center/2026-10-07-application-security-package-notes.md).
+receipts remain historical (private development evidence).
 
 The protected login profile and readiness regression is checked from the
 repository root with

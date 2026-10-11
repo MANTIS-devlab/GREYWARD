@@ -1,51 +1,23 @@
-# Public repository publication
+# Public source maintenance
 
-The clean public checkout is `F:\GREYWARD-public`, with remote
-`https://github.com/MANTIS-devlab/GREYWARD.git`. Update that checkout from the
-validated current source tree; never merge or push engineering repository refs
-into it. Preserve unrelated public-only files and release records, stage only
-reviewed source changes, retain executable script modes, and scan the candidate
-for secrets before committing and pushing. The initial-export procedure below
-applies when creating a new public checkout, not to subsequent commits in the
-existing clean public history.
+`main` is the only permanent public branch. Preserve unique work before
+integrating and removing temporary branches. Check CI at the exact integrated
+commit. Never force-push or rewrite public history without explicit approval.
 
-The existing local repository is an engineering record, not a publication
-artifact. Earlier commits contain development-only credentials and workstation
-identifiers that were removed from the current tree but remain recoverable from
-Git history. Do not add a public remote to this repository, push any of its
-refs, or publish a bundle made from it.
+The authoritative public-source boundary is `tools/publication-policy.json`.
+`tools/public-export.py` copies a sanitized current-source snapshot without
+private Git history or deletion of private originals. Templates provide public
+counterparts to internal build-host and access procedures. Generic package,
+installer, runtime, build and security-test sources remain public.
 
-Create a new, unrelated Git repository from the validated current tree:
+For updates, start from current public `main`, compare the snapshot against the
+public checkout, preserve public-only release records, and remove only explicitly
+excluded private material. Validate the candidate with the static, repository,
+Python, frontend and Linux Rust checks before publishing. Review secrets and
+private-path scans, executable file modes and component receipts. Preserve
+configured commit signing. Initial export is distinct from updating existing
+history; do not replace public history with a newly initialized repository.
 
-```powershell
-pwsh -NoProfile -File .\tools\export-public-repository.ps1 `
-  -Destination 'F:\GREYWARD-public' `
-  -AuthorName 'MANTIS SYSTEMS' `
-  -AuthorEmail 'public-contact@example.org'
-```
-
-Use the project's real public contact address in place of the example. The
-command refuses a destination inside this working repository, refuses a
-non-empty destination, runs both repository validation gates, copies only the
-current Git publication candidate (tracked plus non-ignored untracked files),
-preserves tracked executable bits, restores executable mode for shebang scripts
-from Windows checkouts, and creates one new root commit. Ignored
-credentials, build outputs, VM disks, caches, and the private `.git` directory
-are not copied.
-
-The public export also deliberately omits the development VM's Packer
-configuration, bootstrap Kickstarts, and account-provisioning overlay. Those
-files remain tracked in the local engineering repository and must not be
-published. The export script contains the authoritative path list.
-
-For an update to the existing public checkout, preserve its configured commit
-signing. If the signing key cannot unlock, stop with the reviewed index intact;
-do not disable signing or rewrite configuration merely to complete publication.
-The [10 October consolidation receipt](history/migrations/2026-10-10-release-preparation.md)
-records such a signing-authentication block: no commit or push was created.
-
-Before adding a remote, review the resulting one-commit repository with a
-secret scanner appropriate to the hosting organization and inspect its staged
-file inventory. Publish only the new repository. Keep this private engineering
-repository and all of its refs local; deleting a branch or making a shallow
-clone is not sufficient history removal.
+ISO composition, clean installation, live desktop behavior and security/recovery
+acceptance are separate evidence. Do not publish an unvalidated experiment as a
+completed feature. See `AGENTS.md` for permanent maintenance obligations.

@@ -39,7 +39,7 @@ semantics from unsupported target capabilities.
 subject confined, complete session coverage and isolation. Enforcement evidence
 expires after at most 30 seconds; Context read leases are at most five seconds
 and cannot exceed remaining evidence freshness. The deliberately enrolled normal
-`.149` account has verified scoped evidence;
+`<development-host>` account has verified scoped evidence;
 unenrolled or incomplete sessions have no effective profile. UNKNOWN, UNAVAILABLE
 and DEGRADED must never become PROTECTED/TRUSTED for display convenience.
 

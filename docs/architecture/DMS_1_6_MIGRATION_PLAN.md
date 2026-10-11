@@ -117,7 +117,7 @@ workflow is redundant simply because upstream names a similar surface.
 
 ## Phases and gates
 
-The [4 October development evidence](../history/migrations/2026-10-04-dms-1.6.2-candidate.md)
+The 4 October development evidence (private development evidence)
 records package/session tests and the actual rollback rehearsal. It does not
 replace outstanding promotion gates or establish graphical authentication success.
 

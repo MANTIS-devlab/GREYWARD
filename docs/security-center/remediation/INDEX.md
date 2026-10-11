@@ -6,7 +6,7 @@ and do not turn planned work into a current claim.
 
 | Record | Scope | Status |
 | --- | --- | --- |
-| [2026-09-07 F07 Black Box terminal](2026-09-07-f07-blackbox-terminal.md) | Replace Kitty/Tabby with Fedora-native Black Box under the GREYWARD-owned Terminal identity, while preserving the exact Oh My Zsh/Powerlevel10k shell setup | **F07 — FIXED + RUNTIME VERIFIED** on `.149`; no reboot used |
+| [2026-09-07 F07 Black Box terminal](2026-09-07-f07-blackbox-terminal.md) | Replace Kitty/Tabby with Fedora-native Black Box under the GREYWARD-owned Terminal identity, while preserving the exact Oh My Zsh/Powerlevel10k shell setup | **F07 — FIXED + RUNTIME VERIFIED** on `<development-host>`; no reboot used |
 | [2026-09-07 F07 terminal migration](2026-09-07-f07-terminal-migration.md) | Historical superseded migration from Tabby to Kitty; retained as evidence for the intermediate state | Historical |
 | [2026-09-07 immutable audit remediation](2026-09-07-immutable-audit-remediation.md) | Historical F01-F07 audit record covering threat-policy authorization, crypto baseline, Flatpak truthfulness, OpenSnitch projection boundary, text editor, OpenVPN backend, and the former Tabby sandbox | Historical snapshot; later F07 terminal evidence is superseded by the Black Box record |
 | [2026-09-01 production payload verification](2026-09-01-production-payload.md) | Complete production image inputs, Security Center RPM/tool staging, development-overlay separation, and first-setup service enablement | Complete stage and Alpha runtime revalidated; fresh ISO install remains open |

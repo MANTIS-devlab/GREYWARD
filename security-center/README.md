@@ -18,40 +18,40 @@ Launcher, running-app taskbar, plugin and system notifications share the
 [Security Center shield-G identity](../branding/BRANDING.md#security-center-application-identity).
 The canonical SVG generates both packaged icon names and the PNG fallback.
 
-Current development status, 8 October: the normal `.149` account is deliberately
+Current development status, 8 October: the normal `<development-host>` account is deliberately
 confined and the real installed broker/Context/Center expose actual protected
 resources and tested key-inspection grants. Ordinary/direct access is denied;
 reviewed launches and GUI revocation use native protected Fedora authentication.
-See the [normal-session receipt](../docs/history/security-center/2026-10-08-application-security-normal-session.md)
+See the normal-session receipt (private development evidence)
 for the baseline Center 66 / Context 68 / runtime 25 enforcement validation.
-The subsequent [workspace receipt](../docs/history/security-center/2026-10-08-security-center-workspace.md)
+The subsequent workspace receipt (private development evidence)
 records the Center 68 / Context 69 / runtime 25 presentation update, dedicated
 Network Activity and separate Security History. The subsequent
-[refresh/theme receipt](../docs/history/security-center/2026-10-08-protection-refresh-theme.md)
+refresh/theme receipt (private development evidence)
 records Center 70 / Context 69 / runtime 26: visible lease renewal,
 stable views and canonical decorations in the root-owned compositor closure. This does not
 claim automatic production/image enrollment. The older private-account and
 unenrolled package observations in the detailed foundation notes below are
 historical where superseded by that receipt. The earlier
-[visual polish receipt](../docs/history/security-center/2026-10-08-security-center-visual-polish.md)
+visual polish receipt (private development evidence)
 records installed Center 72 / Context 69 / runtime 26, coherent materials and
 semantic state, real EN/FR route review, native locale handoff and actual
 deny/expiry/readback checks. This remains development evidence, with unsupported
 grant profiles and production lifecycle limits stated explicitly.
-The previous [focused quality/regression receipt](../docs/history/security-center/2026-10-08-security-center-quality-regressions.md)
+The previous focused quality/regression receipt (private development evidence)
 records installed Center 73 / Context 69 / runtime 26, restored graphite finish,
 intentional icons, compact lists and actual default/minimum desktop review.
 
-The [Security Activity context receipt](../docs/history/security-center/2026-10-08-security-activity-context.md)
+The Security Activity context receipt (private development evidence)
 records the previous Center 75 / Context 71 / runtime 27 development tuple:
 shared actor/action/resource/decision rows, bounded historical kernel process
 metadata, real denial proof and normal-desktop validation. Historical identities
 stay unknown when unrecorded; history cannot establish current protection.
-The [file review lifecycle receipt](../docs/history/security-center/2026-10-08-file-review-lifecycle.md)
+The file review lifecycle receipt (private development evidence)
 records the scoped active-review/history fix. The current behavior is defined
 in [File Security](../docs/security-center/FILE_SECURITY.md).
 
-The [integrated window chrome receipt](../docs/history/security-center/2026-10-08-integrated-window-chrome.md)
+The integrated window chrome receipt (private development evidence)
 records installed Center 80 / Context 72 / runtime 27, application-owned
 unbranded chrome and bounded native operations. Actual normal/maximized/restored visual review and minimum-size checks pass;
 physical drag/resize gestures and minimize remain pending.
@@ -65,7 +65,7 @@ physical drag/resize gestures and minimize remain pending.
   experimental RPM is installed only as an input to protected-session
   enrollment; its generic application-guard grants remain unavailable and its
   presence is not evidence of release acceptance.
-  The installed public workflow broker is active on `.149`; no production
+  The installed public workflow broker is active on `<development-host>`; no production
   application-protection release is provided yet. See
   the [approved implementation authority](../docs/security-center/APPLICATION_SECURITY_PLAN.md).
 
@@ -124,14 +124,14 @@ physical drag/resize gestures and minimize remain pending.
   per-owner provider/workload bindings. Ordinary production broker opening
   refuses older schemas until an offline snapshot/migration coordinator exists.
   The default public service remains read-only. The explicit `--workflows`
-  service exposes the shared dispatcher on `.149`, with managed isolation for
+  service exposes the shared dispatcher on `<development-host>`, with managed isolation for
   normal local accounts and policy mutations requiring enrolled-owner checks.
   Context 67 / Center 64 validate separate capability flags; missing legacy
   flags default false. PID 1 creates the private home in the workload namespace,
   scratch-root modes are explicit under umask 0077, and the private display
   helper binds the actual workload UID. See the
-  [live development receipt](../docs/history/security-center/2026-10-07-application-security-live-development.md).
-  The [live integration receipt](../docs/history/security-center/2026-10-07-application-security-live-integration.md)
+  live development receipt (private development evidence).
+  The live integration receipt (private development evidence)
   records installed Center 64 / Context 67 / runtime 20: normal desktop reads,
   route refresh, actual broker loss/recovery and accurate negative coverage in
   Overview and Applications. That dated receipt predates deliberate normal-account

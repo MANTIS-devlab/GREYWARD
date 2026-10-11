@@ -36,10 +36,10 @@ not a second policy database or enforcement owner. See the
 [current source/validation authority](../security-center/APPLICATION_SECURITY_PLAN.md).
 
 The default public broker provides five reads only; the explicitly enabled
-installed workflow unit adds managed isolation on `.149` through the same bus.
+installed workflow unit adds managed isolation on `<development-host>` through the same bus.
 The adapter, introduced in Context 67, validates separate `isolation` and `policy_changes` booleans, with
 absent legacy capabilities defaulting to false. Policy changes still require
-confined enrollment; the enrolled normal `.149` account now has fresh scoped
+confined enrollment; the enrolled normal `<development-host>` account now has fresh scoped
 PROTECTED coverage. Unenrolled/incomplete scopes remain UNKNOWN or UNAVAILABLE. A root-owned opt-in
 selects the separate UID-1002 development bus only for that test account; it
 cannot enroll another account or establish whole-session coverage. The adapter

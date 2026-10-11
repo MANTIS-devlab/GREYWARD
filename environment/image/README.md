@@ -44,7 +44,7 @@ RPM version floors and selected Flatpak commits at first boot. Configuration
 source drift is rejected. The ISO is published only after extracted-payload
 checksum validation, with SHA-256 and provenance sidecars. Follow
 [`ISO_CREATION.md`](../../docs/architecture/ISO_CREATION.md) for the complete recipe
-and the explicit limits of the `.149` state import.
+and the explicit limits of the `<development-host>` state import.
 
 The stager also emits `artifacts/` with package, COPR, Flatpak, and
 license/SBOM inventory records. Source staging marks resolved values as

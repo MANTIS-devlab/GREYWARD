@@ -13,7 +13,7 @@ and the backlog for unfinished package/image gates.
 
 ## Current pipeline, reconstructed from code
 
-GREYWARD does not currently build a live desktop ISO from `.149`. It remasters
+GREYWARD does not currently build a live desktop ISO from `<development-host>`. It remasters
 Fedora Everything/netinst media with Anaconda stage2 and a full offline payload.
 Packer is the development factory, not the production ISO composer.
 
@@ -31,7 +31,7 @@ Packer is the development factory, not the production ISO composer.
 | 10. Publication | Extract embedded production tree using xorriso; validate staged closure and checksums; exercise copy boundary; publish ISO plus digest/provenance only after inspection | This catches known media-copy/Rock Ridge failures. Publication is media-valid, explicitly not installed-system acceptance. |
 | 11. Anaconda | Kickstart local package repository, encryption/Btrfs/storage/account creation, nochroot post copies production payload to `/usr/lib/greyward/installer/production`, primes target boot branding and first-boot units | No development account or live root handoff. `/usr` stage placement protects against separate `/var` subvolume copy mistakes. |
 | 12. First boot | `provision-firstboot.sh` verifies payload, masks competing Initial Setup, invokes offline production provisioner, checks baseline/acceptance and removes greetd gate only after ready | Static copying, service setup, system Flatpak installation and account seeding. Failure remains visible/retryable; no network is needed for package construction. |
-| 13. Runtime acceptance | Production acceptance on installed image; genuine authentication/hardware cases independently | `.149` guest health and old ISO screenshots do not satisfy this stage for the new DMS package. |
+| 13. Runtime acceptance | Production acceptance on installed image; genuine authentication/hardware cases independently | `<development-host>` guest health and old ISO screenshots do not satisfy this stage for the new DMS package. |
 
 The four current GREYWARD package roles are branding, DMS runtime, Security
 Center frontend/backend binary, and Security Context/providers. They are already
@@ -203,7 +203,7 @@ than treating ordinary persistent DNF mutation as equivalent to image updates.
 | Wrapper/session units are unowned | A5; package ownership plus dependency declarations for lock, flock/pgrep and routing helpers. |
 | Factory creates the account before GREYWARD defaults are installed | Preserve actual-account seeding; `/etc/skel` alone cannot populate that first account. |
 | Guest antivirus signatures are already 168 MB of existing state | A clean offline install must show correct signature availability/freshness; do not infer protection from active scanner service. Decide seed/update behavior using current existing contracts. |
-| Hyper-V agents/build tools exist on `.149` | Keep factory-only; inspect final closure for unintended toolchain/SSH packages. Their presence is not a physical-hardware requirement. |
+| Hyper-V agents/build tools exist on `<development-host>` | Keep factory-only; inspect final closure for unintended toolchain/SSH packages. Their presence is not a physical-hardware requirement. |
 
 The factory validator's extra media/copy passes, empty verification roots and
 first-boot gate are deliberate solutions to earlier failures. Remove repeated

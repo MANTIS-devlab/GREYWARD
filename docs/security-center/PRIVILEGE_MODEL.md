@@ -61,8 +61,8 @@ Authenticated administration can read protected data and modify or disable
 protections. It is an explicit exception, never a persistent application grant.
 Cache expiry does not end a root shell. The ordinary login mapping and protection
 claims remain separately verified. Normal-seat activation, fresh PAM, confined
-root execution, lock handoff and grant/revocation checks now pass on `.149`.
-The [dated compatibility receipt](../history/security-center/2026-10-09-desktop-compatibility.md)
+root execution, lock handoff and grant/revocation checks now pass on `<development-host>`.
+The dated compatibility receipt (private development evidence)
 records the actual scope and remaining recovery/compatibility gates. Installing
 the package or showing an Administration button alone does not prove isolation.
 
@@ -84,7 +84,7 @@ Enter or the approval button begins authentication; Escape or Cancel cancels. Re
 that have expired or cannot be displayed completely cannot execute. Default
 terminal cells match the canvas; intentional ANSI backgrounds, reverse video
 and true-color output remain supported, with a legible base ANSI palette.
-See the [obsidian follow-up receipt](../history/security-center/2026-10-09-administration-obsidian.md)
+See the obsidian follow-up receipt (private development evidence)
 for the development overlay and actual desktop evidence.
 
 ## Operation classes

@@ -52,7 +52,7 @@ the same historical domain guard; a portable split-scope candidate passes 239
 Context source tests and isolated real resolved checks. Installed-image DNS is
 still unaccepted. See the compatibility investigation for evidence.
 Fresh install/login/reboot and native-runtime rollback remain IN PROGRESS.
-Native DMS locking remains canonical; `.149` was not rebooted.
+Native DMS locking remains canonical; `<development-host>` was not rebooted.
 
 ## Approved execution status
 
@@ -60,7 +60,7 @@ Native DMS locking remains canonical; `.149` was not rebooted.
 
 Updated 5 October after portable-DNS package validation. Evidence paths below refer to the private
 
-`.149` execution workspace `/mnt/greyward-build/pre-release/`; generated artefacts
+`<development-host>` execution workspace `/mnt/greyward-build/pre-release/`; generated artefacts
 
 are not committed. VALIDATED is reserved for completed item acceptance.
 
@@ -108,7 +108,7 @@ impact, not an artificial arithmetic score. Related micro-work is grouped.
 
 | DO NOW / A1 | Align DMS tuple, ISO solve and Update Center compatibility | 5 | 3 | 3 | 4 | Available repo versions already conflict. A resolved compatible closure, package upgrade/reboot, READY desktop and previous-runtime restore must pass. |
 
-| DO NOW / A2 | Build current center/context RPMs and validate without loose-source overrides | 5 | 2 | 2 | 3 | `.149` mixes source with older RPMs. Current packaged session/root providers must expose the same typed behavior and truthful failures. |
+| DO NOW / A2 | Build current center/context RPMs and validate without loose-source overrides | 5 | 2 | 2 | 3 | `<development-host>` mixes source with older RPMs. Current packaged session/root providers must expose the same typed behavior and truthful failures. |
 
 | DO NOW / A7 | Include Fedora Flatpak 1.18.4 and fwupd 2.1.8 in tested inputs | 5 | 2 | 2 | 2 | Concrete upstream fixes; cached Fedora builds available. Test offline Flatpak install/launch/remove/portal paths, firmware enumeration and applicable hardware separately. |
 
@@ -192,7 +192,7 @@ impact, not an artificial arithmetic score. Related micro-work is grouped.
 
 9. **Development without full ISO builds:** focused source checks → affected
 
-   RPM(s) → reversible `.149` deployment/package-only session → real interaction
+   RPM(s) → reversible `<development-host>` deployment/package-only session → real interaction
 
    checks. ISO/boot validation is needed for install/boot integration changes and
 

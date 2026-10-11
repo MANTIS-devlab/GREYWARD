@@ -2,10 +2,10 @@
 
 ## Current development pass — 8 October 2026
 
-Installed comparison on the normal enrolled `.149` desktop: Center 80 → 84,
+Installed comparison on the normal enrolled `<development-host>` desktop: Center 80 → 84,
 Context 72 and Application Security runtime 27 unchanged. This is measured
 development evidence, not clean-image, cold-boot or release acceptance.
-The [dated receipt](../history/security-center/2026-10-08-security-center-performance.md)
+The dated receipt (private development evidence)
 records the exact inputs, checks and remaining issues.
 
 ### Changes justified by profiling
@@ -403,7 +403,7 @@ Original 31–33 MiB and final 223–224 MiB readings were cgroup `memory.curren
 including file cache, not process RSS. A transient 311 MiB was observed. These are
 not comparable process-memory measurements; no memory saving is claimed.
 After installing Context 58, its cgroup showed approximately 30.7 MB anonymous
-memory and 1.2 MB file cache. Evidence is in the private `.149` workspace
+memory and 1.2 MB file cache. Evidence is in the private `<development-host>` workspace
 `/mnt/greyward-build/pre-release/profile-before/`, `profile-after/`, `profile-final/`
 and `profile-final/consumed-contract-and-timings.json`.
 

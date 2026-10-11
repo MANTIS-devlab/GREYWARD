@@ -221,7 +221,7 @@ the branding RPM release is 0.1.0-8.
 
 ## Validation performed
 
-- Read-only SSH inspection of Alpha `.149`: identity, package NEVRAs, owned
+- Read-only SSH inspection of Alpha `<development-host>`: identity, package NEVRAs, owned
   Security Center files, enabled/active provider services, and build-artifact
   inventory.
 - `pwsh -NoProfile -File .\tests\static.ps1` — passed.
