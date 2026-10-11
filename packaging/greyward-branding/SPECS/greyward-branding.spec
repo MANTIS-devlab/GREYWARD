@@ -1,6 +1,6 @@
 Name:           greyward-branding
 Version:        0.1.0
-Release:        15%{?dist}
+Release:        16%{?dist}
 Summary:        GREYWARD-owned shell, Anaconda, wallpaper, and Plymouth branding assets
 License:        GPL-3.0-only AND LicenseRef-GREYWARD-Branding
 BuildArch:      noarch
@@ -58,6 +58,9 @@ ln -s ../greyward-update-status.service %{buildroot}%{_unitdir}/system-update.ta
 %license %{_licensedir}/%{name}/GREYWARD-Branding-NOTICE
 
 %changelog
+* Sun Oct 11 2026 MANTIS SYSTEMS - 0.1.0-16
+- Rebuild the package from the integrated GREYWARD branding sources.
+
 * Sat Sep 19 2026 MANTIS SYSTEMS - 0.1.0-15
 - Separate GPL scripts and configuration from reserved identity artwork
 
