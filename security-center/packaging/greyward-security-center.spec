@@ -1,6 +1,6 @@
 Name:           greyward-security-center
 Version:        0.1.0
-Release:        90%{?dist}
+Release:        95%{?dist}
 Summary:        GREYWARD local security posture and control application
 License:        GPL-3.0-only AND Apache-2.0 AND OFL-1.1 AND CC0-1.0
 Source0:        %{name}-%{version}.tar.gz
@@ -40,7 +40,7 @@ printf 'GREYWARD_TIMING stage=rust-tauri-build seconds=%s\n' "$((SECONDS - build
 
 %check
 %if 0%{?greyward_skip_rust_tests}
-printf 'GREYWARD_TIMING stage=rust-tests seconds=0 (already passed against staged source)\n'
+printf 'GREYWARD_TIMING stage=rust-tests seconds=0 (SKIPPED by explicit builder setting; see external test evidence)\n'
 %else
 export CARGO_TARGET_DIR="%{greyward_cargo_target}"
 test_started=$SECONDS
@@ -106,7 +106,20 @@ install -Dm0755 greyward-safe-open.so \
 %postun
 /usr/bin/fc-cache -f >/dev/null 2>&1 || :
 %changelog
-* Sat Oct 10 2026 MANTIS SYSTEMS - 0.1.0-90
+* Sun Oct 11 2026 MANTIS SYSTEMS - 0.1.0-95
+- Refresh the source manifest after aligning application-security package inputs.
+
+* Sun Oct 11 2026 MANTIS SYSTEMS - 0.1.0-94
+- Rebuild the RPM set from the exact current Security Center source tree.
+
+* Sun Oct 11 2026 MANTIS SYSTEMS - 0.1.0-93
+- Rebuild the reviewed Security Center package set for DMS candidate v1.6.2-14.
+- Report an explicit environment-requested Rust test bypass as skipped, not passed.
+
+* Sat Oct 10 2026 MANTIS SYSTEMS - 0.1.0-92
+- Rebuild the matched source manifest with the protected compositor output-management fix.
+
+* Sat Oct 10 2026 MANTIS SYSTEMS - 0.1.0-91
 - Decode matched ClamAV metadata and retain measured accepted limitations.
 - Disclose unverified VPN and portal coverage and narrow supported-grant copy.
 

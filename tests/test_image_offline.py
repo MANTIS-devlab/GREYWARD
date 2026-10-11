@@ -1,5 +1,6 @@
 """Standalone media failure and network-boundary regression tests."""
 import importlib.util
+import hashlib
 import json
 from pathlib import Path
 import tempfile
@@ -13,6 +14,32 @@ spec.loader.exec_module(offline)
 
 
 class OfflineTests(unittest.TestCase):
+    def test_local_flathub_descriptor_is_url_and_key_pinned(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            source = Path(temporary) / 'flathub.flatpakrepo'
+            destination = Path(temporary) / 'offline/flathub.flatpakrepo'
+            destination.parent.mkdir()
+            key = 'test signing key'
+            source.write_text(
+                '[Flatpak Repo]\n'
+                f'Url={offline.FLATHUB_REPO_URL}\n'
+                f'GPGKey={key}\n',
+                encoding='utf-8',
+            )
+            expected_key_hash = hashlib.sha256(key.encode()).hexdigest()
+            with patch.dict(offline.os.environ, {'GREYWARD_FLATHUB_REPO_FILE': str(source)}), \
+                 patch.object(offline, 'FLATHUB_REPO_GPG_KEY_SHA256', expected_key_hash), \
+                 patch.object(offline, 'download') as download:
+                offline.prepare_flathub_repo(destination)
+                self.assertEqual(destination.read_bytes(), source.read_bytes())
+                download.assert_not_called()
+
+            source.write_text('[Flatpak Repo]\nUrl=https://untrusted.invalid/\nGPGKey=test signing key\n')
+            with patch.dict(offline.os.environ, {'GREYWARD_FLATHUB_REPO_FILE': str(source)}), \
+                 patch.object(offline, 'FLATHUB_REPO_GPG_KEY_SHA256', expected_key_hash):
+                with self.assertRaisesRegex(ValueError, 'URL'):
+                    offline.prepare_flathub_repo(destination)
+
     def test_explicit_flatpak_seed_rejects_changed_bytes_or_selected_commit(self):
         with tempfile.TemporaryDirectory() as temporary:
             seed = Path(temporary)
@@ -71,6 +98,7 @@ class OfflineTests(unittest.TestCase):
         source = (ROOT / "environment/image/build-iso.sh").read_text()
         self.assertIn('sudo -n env "GREYWARD_ISO_WORK_ROOT=$work_root"', source)
         self.assertIn('"GREYWARD_ACQUISITION_CACHE=${GREYWARD_ACQUISITION_CACHE:-$work_root/.greyward-acquisition-cache}" bash "$0" "$@"', source)
+        self.assertIn('"GREYWARD_FLATHUB_REPO_FILE=${GREYWARD_FLATHUB_REPO_FILE:-}"', source)
 
     def test_both_repositories_retain_group_metadata(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -372,14 +400,18 @@ class OfflineTests(unittest.TestCase):
         self.assertNotIn("releases/latest", source)
         self.assertIn('rpm -Uvh --replacepkgs "$rpm_file"', source)
 
-
-    def test_iso_staging_rejects_stale_session_dms_unit(self):
+    def test_iso_staging_rejects_stale_session_display_payload(self):
         unit = (ROOT / "environment/session/greyward-dms.service").read_text()
         stager = (ROOT / "environment/image/build.sh").read_text()
         self.assertEqual(unit.count("Environment=WAYLAND_DISPLAY=wayland-0"), 1)
         self.assertIn("session_unit_path='./usr/lib/systemd/user/greyward-dms.service'", stager)
         self.assertIn('rpm2cpio "$session_rpm" | cpio -i --quiet --to-stdout "$session_unit_path" | cmp -s - "$session/greyward-dms.service"', stager)
+        self.assertIn("session_migration_path='./usr/local/libexec/greyward-dms-state-migrate'", stager)
+        self.assertIn('rpm2cpio "$session_rpm" | cpio -i --quiet --to-stdout "$session_migration_path" | cmp -s - "$session/greyward-dms-state-migrate"', stager)
+        self.assertIn("session_monitors_path='./usr/share/greyward/defaults/dankmaterialshell/monitors.json'", stager)
+        self.assertIn('rpm2cpio "$session_rpm" | cpio -i --quiet --to-stdout "$session_monitors_path" | cmp -s - "$session/dankmaterialshell/monitors.json"', stager)
         self.assertIn("rebuild it from this checkout before ISO staging", stager)
+
 
 if __name__ == "__main__":
     unittest.main()

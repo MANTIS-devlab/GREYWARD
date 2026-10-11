@@ -13,13 +13,13 @@ index b8abc63..7901adf 100644
  #include <sys/wait.h>
  #include <wlr/backend/headless.h>
  #include <wlr/backend/multi.h>
-@@ -296,6 +298,42 @@ allow_for_sandbox(const struct wlr_security_context_v1_state *security_state,
+@@ -296,6 +298,44 @@ allow_for_sandbox(const struct wlr_security_context_v1_state *security_state,
  	return false;
  }
  
 +/* Kernel socket identity, never app_id, PID titles or client-supplied metadata.
 + * Privileged clients are fixed root-prepared authentication/display subjects.
-+ * Ordinary clients keep desktop chrome, but never input, capture or lock rights.
++ * Ordinary clients may manage outputs, but never input, capture or lock rights.
 + * Security-context clients retain upstream's stricter allowlist above. */
 +static bool
 +greyward_client_domain(const struct wl_client *client, const char *expected)
@@ -44,6 +44,8 @@ index b8abc63..7901adf 100644
 +		"zwlr_layer_shell_v1", "zwlr_foreign_toplevel_manager_v1",
 +		"ext_foreign_toplevel_list_v1", "ext_idle_notifier_v1",
 +		"ext_workspace_manager_v1", "zcosmic_workspace_manager_v1",
++		/* User display preferences: mode, scale, refresh and output layout. */
++		"zwlr_output_manager_v1",
 +	};
 +	for (size_t i = 0; i < ARRAY_SIZE(chrome); i++) {
 +		if (!strcmp(iface->name, chrome[i])) {
@@ -56,7 +58,7 @@ index b8abc63..7901adf 100644
  static bool
  server_global_filter(const struct wl_client *client, const struct wl_global *global, void *data)
  {
-@@ -309,9 +347,9 @@ server_global_filter(const struct wl_client *client, const struct wl_global *glo
+@@ -309,9 +349,9 @@ server_global_filter(const struct wl_client *client, const struct wl_global *glo
  		? server->xwayland->server->client
  		: NULL;
  
@@ -69,7 +71,7 @@ index b8abc63..7901adf 100644
  	}
  #endif
  
-@@ -344,7 +382,14 @@ server_global_filter(const struct wl_client *client, const struct wl_global *glo
+@@ -344,7 +384,14 @@ server_global_filter(const struct wl_client *client, const struct wl_global *glo
  		return allow;
  	}
  

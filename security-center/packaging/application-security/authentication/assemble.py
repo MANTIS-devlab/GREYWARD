@@ -16,17 +16,73 @@ PREIMAGES = {
     "Modules/Lock/Pam.qml": "d4a9f0a2b775d3117a0c405cef09173b38bb96bb1dc497cde67d0b664e2b0a1c",
 }
 
+# Revision 8 changes build receipts/desktop plugins; the authentication inputs
+# remain exact-pinned below. A new release still requires explicit review.
+SUPPORTED_RELEASES = frozenset({"v1.6.2-6", "v1.6.2-8", "v1.6.2-10", "v1.6.2-11", "v1.6.2-12", "v1.6.2-13", "v1.6.2-14"})
+
 SHELL = '''//@ pragma UseQApplication
 //@ pragma AppId com.danklinux.dms
 import QtQuick
 import Quickshell
 import Quickshell.Io
+import Quickshell.Wayland
 import qs.Common
 import qs.DankCommon.Common as DC
 import qs.Modules.Lock
 import qs.Services
 
 ShellRoot {
+    Variants {
+        model: Quickshell.screens
+
+        PanelWindow {
+            required property var modelData
+            screen: modelData
+
+            WlrLayershell.layer: WlrLayer.Background
+            WlrLayershell.exclusionMode: ExclusionMode.Ignore
+            WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
+            anchors.top: true
+            anchors.bottom: true
+            anchors.left: true
+            anchors.right: true
+            color: "#151a20"
+
+            // Show a trusted background during protected-login startup. The
+            // normal desktop wallpaper replaces it at the same layer.
+            mask: Region { item: Item {} }
+
+            Rectangle {
+                anchors.fill: parent
+                gradient: Gradient {
+                    GradientStop { position: 0.0; color: "#202830" }
+                    GradientStop { position: 1.0; color: "#11161b" }
+                }
+            }
+
+            Column {
+                anchors.centerIn: parent
+                spacing: 12
+
+                Text {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    text: "GREYWARD"
+                    color: "#d9e1e7"
+                    font.pixelSize: 28
+                    font.weight: Font.DemiBold
+                    font.letterSpacing: 4
+                }
+
+                Text {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    text: "Starting your secure desktop…"
+                    color: "#aab7c2"
+                    font.pixelSize: 15
+                }
+            }
+        }
+    }
+
     Component.onCompleted: {
         Quickshell.watchFiles = false;
         DC.Style.theme = Theme;
@@ -52,17 +108,25 @@ ShellRoot {
         path: Quickshell.env("XDG_RUNTIME_DIR") + "/authentication-ready.json"
     }
     Timer {
-        interval: 1000
+        id: readinessTimer
+        interval: 100
         running: true
         repeat: true
-        onTriggered: readiness.setText(JSON.stringify({
-            schema: "greyward.authentication-readiness/v1",
-            pid: Quickshell.processId, observedAtMs: Date.now(),
-            polkitRegistered: PolkitService.agent?.isRegistered === true,
-            polkitActive: PolkitService.agent?.isActive === true,
-            exclusiveInput: nativeLock.authenticationInputSecure,
-            lockRequested: nativeLock.shouldLock
-        }))
+        onTriggered: {
+            const registered = PolkitService.agent?.isRegistered === true;
+            readiness.setText(JSON.stringify({
+                schema: "greyward.authentication-readiness/v1",
+                pid: Quickshell.processId, observedAtMs: Date.now(),
+                polkitRegistered: registered,
+                polkitActive: PolkitService.agent?.isActive === true,
+                exclusiveInput: nativeLock.authenticationInputSecure,
+                lockRequested: nativeLock.shouldLock
+            }));
+            // Poll quickly only during startup so login does not wait for the
+            // first one-second heartbeat after Polkit registers.
+            if (registered)
+                readinessTimer.interval = 1000;
+        }
     }
     IpcHandler {
         target: "settings"
@@ -78,6 +142,66 @@ ShellRoot {
             return JSON.stringify({ polkitRegistered: PolkitService.agent?.isRegistered === true,
                 polkitActive: PolkitService.agent?.isActive === true,
                 responseRequired: PolkitService.agent?.flow?.isResponseRequired === true });
+        }
+    }
+}
+'''
+
+# Start a tiny compositor surface before the full DMS authentication shell
+# initializes. It carries no input and gives the protected session a visible
+# transition while the existing readiness gate completes.
+STARTUP_SHELL = '''//@ pragma UseQApplication
+//@ pragma AppId systems.mantis.greyward.startup
+import QtQuick
+import Quickshell
+import Quickshell.Wayland
+
+ShellRoot {
+    Variants {
+        model: Quickshell.screens
+
+        PanelWindow {
+            required property var modelData
+            screen: modelData
+
+            WlrLayershell.layer: WlrLayer.Background
+            WlrLayershell.exclusionMode: ExclusionMode.Ignore
+            WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
+            anchors.top: true
+            anchors.bottom: true
+            anchors.left: true
+            anchors.right: true
+            color: "#151a20"
+            mask: Region { item: Item {} }
+
+            Rectangle {
+                anchors.fill: parent
+                gradient: Gradient {
+                    GradientStop { position: 0.0; color: "#202830" }
+                    GradientStop { position: 1.0; color: "#11161b" }
+                }
+            }
+
+            Column {
+                anchors.centerIn: parent
+                spacing: 12
+
+                Text {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    text: "GREYWARD"
+                    color: "#d9e1e7"
+                    font.pixelSize: 28
+                    font.weight: Font.DemiBold
+                    font.letterSpacing: 4
+                }
+
+                Text {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    text: "Starting your secure desktop…"
+                    color: "#aab7c2"
+                    font.pixelSize: 15
+                }
+            }
         }
     }
 }
@@ -255,7 +379,7 @@ def assemble(source, release_receipt, output):
         raise ValueError("Alias source/receipt is not supported")
     release = json.loads(Path(release_receipt).read_text(encoding="utf-8"))
     files, digest = receipt(source)
-    if release.get("schema") != "greyward.dms-release/v1" or release.get("releaseId") != "v1.6.2-6" or release.get("shellFiles") != files or release.get("shell", {}).get("sha256") != digest:
+    if release.get("schema") != "greyward.dms-release/v1" or release.get("releaseId") not in SUPPORTED_RELEASES or release.get("shellFiles") != files or release.get("shell", {}).get("sha256") != digest:
         raise ValueError("Matched DMS package shell/receipt required")
     if any(files.get(name) != digest for name, digest in PREIMAGES.items()):
         raise ValueError("Authentication source changed; review and tests required")
@@ -267,6 +391,9 @@ def assemble(source, release_receipt, output):
     shutil.copytree(source, output / "shell")
     for name, text in {"shell.qml": SHELL, "Modules/Lock/Lock.qml": lock, "Modules/Lock/Pam.qml": pam}.items():
         (output / "shell" / name).write_bytes(text.encode())
+    startup = output / "shell/startup"
+    startup.mkdir()
+    (startup / "shell.qml").write_bytes(STARTUP_SHELL.encode())
     generated, digest = receipt(output / "shell")
     result = {"schema": "greyward.authentication-shell/v1", "sourceRelease": release["releaseId"],
               "sourceDigest": release["shell"]["sha256"], "shellDigest": digest,

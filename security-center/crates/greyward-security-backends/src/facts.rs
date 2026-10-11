@@ -473,7 +473,7 @@ mod tests {
             &["[Context]", "filesystems=home;", "devices=all;"],
         ));
         assert_eq!(access.categories, vec![FlatpakAccessCategory::Scoped]);
-        assert_eq!(access.review_reasons, [] as [FlatpakAccessCategory; 0]);
+        assert!(access.review_reasons.is_empty());
     }
 
     #[test]

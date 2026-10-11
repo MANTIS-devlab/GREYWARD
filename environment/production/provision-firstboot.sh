@@ -21,7 +21,10 @@ status=/var/lib/greyward/installer/status.txt
 log=/var/log/greyward-production-firstboot.log
 console=/dev/tty1
 
-install -D -m 0644 /dev/null "$log"
+# Retain the original failure across retries; journal and text evidence agree.
+install -d -m 0755 /var/log
+touch "$log"
+chmod 0644 "$log"
 install -D -m 0644 /dev/null "$status"
 if [[ -w "$console" ]]; then
   exec > >(tee -a "$log" "$console")
@@ -139,6 +142,8 @@ install -D -m 0644 "$stage/offline/flatpak-inventory.tsv" /usr/share/greyward/ar
 # acceptance script checks actual RPMs, services, files, session entries,
 # encryption, and Security Center artifacts rather than trusting exit status.
 report 'Checking the installed system'
+/usr/libexec/greyward-enrollment prepare
+/usr/libexec/greyward-enrollment check
 install -D -m 0644 /dev/null "$ready"
 rm -f /etc/greyward-production-complete
 timeout --foreground 10m /usr/local/libexec/greyward-production-acceptance --pre-marker

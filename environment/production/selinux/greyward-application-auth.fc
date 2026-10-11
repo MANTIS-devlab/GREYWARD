@@ -1,0 +1,3 @@
+/usr/lib/greyward/application-security/desktop/bin/(auth-python|auth-dbus|qs|dms) -- gen_context(system_u:object_r:greyward_as_auth_exec_t,s0)
+/usr/lib/greyward/application-security/desktop/authentication\.py -- gen_context(system_u:object_r:greyward_as_auth_runtime_t,s0)
+/usr/lib/greyward/application-security/desktop/shell(/.*)? gen_context(system_u:object_r:greyward_as_auth_runtime_t,s0)

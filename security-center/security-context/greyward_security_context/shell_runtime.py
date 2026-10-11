@@ -103,6 +103,11 @@ class ShellRuntime:
         return False
 
     def _publish(self, value, heartbeat, release_collector=True):
+        # One server-side gate drives both the DMS alert surface and native
+        # notifications. Keep the full live items in the presentation so
+        # posture stays current while short warning flaps remain quiet.
+        notification_items = self.router.eligible_items(value.get('items', []))
+        value['notification_items'] = notification_items
         with self.lock:
             old = {k: v for k, v in self.snapshot.items() if k not in {'revision', 'fresh_until', 'display_fresh_until'}}
             shape = {k: v for k, v in value.items() if k not in {'revision', 'fresh_until', 'display_fresh_until'}}
@@ -111,7 +116,7 @@ class ShellRuntime:
             self.snapshot = value
         if changed or heartbeat:
             self.service.ShellSummaryChanged(value['revision'])
-            self.router.reconcile(value['items'])
+            self.router.reconcile(notification_items)
         if release_collector:
             self.running = False
         return False

@@ -18,6 +18,12 @@ fi
 ZSH_THEME="powerlevel10k/powerlevel10k"
 plugins=(git)
 
+# This adapter proposes an operation; only the protected Administration seat
+# may authenticate/execute it. Direct sudo remains denied by the kernel.
+if [[ "$(/usr/bin/id -Z 2>/dev/null)" == greyward_guard_u:* ]]; then
+  alias sudo='/usr/bin/greyward-administration'
+fi
+
 # Powerlevel10k's optional instant prompt is safe to use when its cache exists;
 # the normal theme still starts correctly before that cache has been created.
 if [[ -r "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh" ]]; then

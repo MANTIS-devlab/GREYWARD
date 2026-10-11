@@ -30,6 +30,25 @@ class ShellExperienceTests(unittest.TestCase):
         self.assertTrue(all(item["route"] == "evidence" for item in value["items"]))
         self.assertTrue(all(item["check_id"] for item in value["items"]))
 
+    def test_flapping_posture_warnings_keep_live_status_and_defer_attention(self):
+        value = self.render(
+            shell={"evaluated_checks": [
+                {"check_id": "network.active-connection", "state": "REVIEW_NEEDED"},
+                {"check_id": "devices.usbguard.posture", "state": "UNAVAILABLE"},
+            ]},
+            capsule={"signals": [{"signal_id": "secure-dns", "category": "DEGRADED_PROTECTION", "state": "DEGRADED"}]},
+        )
+        warnings = {entry["id"]: entry for entry in value["items"]}
+        self.assertEqual(set(warnings), {"secure-dns", "firewall-unavailable", "usb-unavailable"})
+        self.assertTrue(all(entry["notification_stability_seconds"] == 30 for entry in warnings.values()))
+        self.assertEqual(value["severity"], "WARNING")
+
+    def test_fallback_firewall_and_device_warnings_also_declare_stability(self):
+        value = self.render(shell={"firewall": {"state": "UNAVAILABLE"}}, usb_error="provider offline")
+        warnings = {entry["id"]: entry for entry in value["items"]}
+        self.assertEqual(set(warnings), {"firewall-unavailable", "usb-unavailable"})
+        self.assertTrue(all(entry["notification_stability_seconds"] == 30 for entry in warnings.values()))
+
     def test_file_security_failure_is_not_hidden_by_positive_system_posture(self):
         value = self.render(shell={"posture": {"state": "PROTECTED"}, "malware": {"state": "CURRENT"}},
                             files={"state": "AVAILABLE", "clamav": {"status": "OUTDATED", "detail": "Definitions expired"}})

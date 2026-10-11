@@ -12,6 +12,7 @@ usage() {
 Usage: environment/image/build-iso.sh --base-iso FILE --output FILE \
   --branding-rpm FILE --dms-rpm FILE --session-rpm FILE --security-rpm FILE --security-rpm FILE \
   --security-build-manifest FILE --production-rpm FILE... \
+  --enrollment-rpm FILE --enrollment-rpm FILE \
   --baseline FILE --base-sha256 SHA256
 
 The base ISO must be Fedora Everything/netinst media with an Anaconda stage2.
@@ -30,6 +31,7 @@ base_iso=''
 output=''
 security_rpms=()
 production_rpms=()
+enrollment_rpms=()
 branding_rpm=''
 dms_rpm=''
 session_rpm=''
@@ -44,11 +46,13 @@ if [[ "$(id -u)" != 0 ]]; then
   sudo -n true || { echo 'ISO composition requires noninteractive sudo.' >&2; exit 1; }
   exec sudo -n env "GREYWARD_ISO_WORK_ROOT=$work_root" \
     "GREYWARD_FLATPAK_SEED=${GREYWARD_FLATPAK_SEED:-}" \
+    "GREYWARD_FLATHUB_REPO_FILE=${GREYWARD_FLATHUB_REPO_FILE:-}" \
     "GREYWARD_ACQUISITION_CACHE=${GREYWARD_ACQUISITION_CACHE:-$work_root/.greyward-acquisition-cache}" bash "$0" "$@"
 fi
 
 while (($#)); do
   case "$1" in
+    --enrollment-rpm) (($# >= 2)) || exit 2; enrollment_rpms+=("$(realpath -e "$2")"); shift 2 ;;
     --baseline) (($# >= 2)) || exit 2; baseline=$(realpath -e "$2"); shift 2 ;;
     --base-sha256) (($# >= 2)) || exit 2; base_sha256="$2"; shift 2 ;;
     --base-iso)
@@ -105,6 +109,7 @@ done
 [[ "$(basename "$branding_rpm")" == greyward-branding-*.rpm ]] || { echo "Invalid branding RPM." >&2; exit 2; }
 [[ -f "$base_iso" ]] || { echo "Base ISO not found: $base_iso" >&2; exit 1; }
 [[ ! -e "$output" ]] || { echo "Output already exists: $output" >&2; exit 2; }
+[[ ${#enrollment_rpms[@]} -eq 2 ]] || { echo 'Two matched enrollment/runtime RPMs are required.' >&2; exit 2; }
 [[ -n "$baseline" && "$base_sha256" =~ ^[0-9a-fA-F]{64}$ ]] || {
   echo 'A captured --baseline and verified vendor --base-sha256 are required.' >&2; exit 2;
 }
@@ -172,6 +177,7 @@ staging_args=(
 for rpm in "${production_rpms[@]}"; do
   staging_args+=(--production-rpm "$rpm")
 done
+for rpm in "${enrollment_rpms[@]}"; do staging_args+=(--enrollment-rpm "$rpm"); done
 bash "$repo_root/environment/image/build.sh" "${staging_args[@]}" --require-complete
 # Inject only the GREYWARD GTK branding assets into Anaconda's supported
 # updates.img mechanism. Do not replace Anaconda's account pages, storage
