@@ -48,7 +48,7 @@
 </p>
 
 <p align="center">
-  <img src="docs/assets/screenshots/greyward-desktop-security-center.png" alt="GREYWARD desktop, Security Center and security notifications" width="960">
+  <img src="docs/assets/screenshots/greyward-desktop-overview.gif" alt="GREYWARD desktop, Security Center and security notifications" width="960">
 </p>
 
 ---

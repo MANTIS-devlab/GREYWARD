@@ -19,7 +19,6 @@
     "security-center-fixed.png",
     "docs/assets/screenshots/greyward-desktop-browser.png",
     "docs/assets/screenshots/greyward-desktop-threat-notification.png",
-    "docs/assets/screenshots/greyward-desktop-overview.gif",
     "*.key",
     "*.pem",
     "*.p12",
