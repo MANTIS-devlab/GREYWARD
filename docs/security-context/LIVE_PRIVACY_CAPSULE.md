@@ -20,11 +20,15 @@ The capsule remains the authoritative sensor projection. The DMS widget now
 reads the composed `GetShellPresentation()` (`greyward.security.experience/v1`)
 and subscribes to `ShellSummaryChanged(uint64 revision)`. That presentation
 combines the capsule with existing posture, device, network and file providers.
-The notification router consumes the same items. The widget's 5-second
-watchdog is recovery only, deliberately ahead of the projection's 30-second
-freshness lease. While its replacement read is in flight it retains the last
-confirmed presentation, but disables mutation actions once that lease expires;
-no frontend security monitor or notification emitter is installed.
+The service publishes current `items` for live status and one
+`notification_items` projection after each warning's continuous-evidence
+window. The native notification router and DMS plugin alert cards and badge
+consume that exact projection; there is no independent plugin timer. The
+widget's 5-second watchdog is recovery only, deliberately ahead of the
+projection's 30-second freshness lease. While its replacement read is in
+flight it retains the last confirmed presentation, but disables mutation
+actions once that lease expires; no frontend security monitor or notification
+emitter is installed.
 
 The presentation has separate deadlines: `fresh_until` remains the evidence
 and action lease; additive `display_fresh_until` permits a confirmed unavailable

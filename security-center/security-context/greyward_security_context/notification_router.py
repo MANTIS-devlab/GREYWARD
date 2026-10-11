@@ -85,17 +85,16 @@ class NotificationRouter:
                 if int(reason) in (1, 2): record['acknowledged'] = True
         self._save()
 
-    def reconcile(self, items):
-        import dbus
-        if not self._connect(): return
+    def eligible_items(self, items):
+        """Return the canonical alert projection after warning grace periods."""
         observed = {x['id']: x for x in items}
         now = time.monotonic()
         for key in set(self._warning_since) - set(observed):
             self._warning_since.pop(key, None)
-        active = {}
+        active = []
         for key, current in observed.items():
-            # Keep current conditions visible in Security Center immediately,
-            # but do not toast a short provider wobble as a user action.
+            # Keep current conditions visible in the status projection,
+            # but do not surface a short provider wobble as a user alert.
             # Only explicit projection metadata opts into this presentation grace;
             # a recovered notification ID cannot bypass a fresh observation window.
             # Critical escalation bypasses the warning-only grace.
@@ -105,12 +104,19 @@ class NotificationRouter:
                                 not isinstance(stability, bool) and
                                 0 < stability <= MAX_WARNING_STABILITY_SECONDS)
             if not deferred_warning:
-                active[key] = current
+                active.append(current)
                 self._warning_since.pop(key, None)
                 continue
             since = self._warning_since.setdefault(key, now)
             if now - since >= stability:
-                active[key] = current
+                active.append(current)
+        return active
+
+    def reconcile(self, items):
+        """Publish the already stabilized alerts shared with the DMS plugin."""
+        import dbus
+        if not self._connect(): return
+        active = {x['id']: x for x in items}
         for key in set(self.records) - set(active):
             record = self.records.pop(key)
             notification_id = record.get('notification_id', 0)

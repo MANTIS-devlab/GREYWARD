@@ -1024,7 +1024,7 @@ test("keeps Privacy export destination feedback visible and failure-safe", () =>
 
 test("separates confirmed DMS display freshness from evidence and action authority", () => {
   const widget = readFileSync(new URL("../../../environment/session/dankmaterialshell/plugins/greywardSecure/SecureWidget.qml", import.meta.url), "utf8");
-  assert.match(widget, /items: showingSnapshot \? presentation.items/);
+  assert.match(widget, /notificationItems: showingSnapshot \? presentation\.notification_items \|\| \[\]/);
   assert.match(widget, /activities: showingSnapshot \? presentation.activity/);
   assert.match(widget, /readonly property bool fresh: freshnessLeaseValid/);
   assert.match(widget, /readonly property bool showingSnapshot: displayFresh \|\| requestPending/);
@@ -1053,10 +1053,9 @@ test("uses the native DMS subscription for live privacy capsule changes", () => 
   assert.match(widget, /readonly property bool fresh: freshnessLeaseValid/);
   assert.match(widget, /readonly property bool showingSnapshot: displayFresh \|\| requestPending/);
   assert.match(widget, /if \(!freshnessLeaseValid \|\| actionPending\) return;/);
-  assert.match(widget, /notificationStabilityMs\(item\)/);
-  assert.match(widget, /item\.notification_stability_seconds/);
-  assert.match(widget, /now - deferredSince\[item\.id\] >= delay/);
-  assert.match(widget, /for \(const id of Object\.keys\(root\.deferredAttentionSince\)\)/);
+  assert.match(widget, /const notificationItems = next\.notification_items \|\| \[\]/);
+  assert.match(widget, /root\.otherItemsOpen \? root\.notificationItems : root\.notificationItems\.slice\(0,1\)/);
+  assert.doesNotMatch(widget, /notificationStabilityMs|deferredAttentionSince|notification_stability_seconds/);
   assert.doesNotMatch(widget, /\{\s*\.\.\./);
   assert.doesNotMatch(widget, /gdbus monitor|notify-send/);
 });

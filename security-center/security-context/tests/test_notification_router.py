@@ -40,6 +40,12 @@ class NotificationTests(unittest.TestCase):
         self.router = NotificationRouter(self.bus, self.dispatch, self.path)
         self.item = {'id': 'usb:one', 'kind': 'usb', 'severity': 'ACTION', 'title': 'Device', 'detail': 'Blocked', 'actions': [{'id': 'trust_once', 'label': 'Trust once'}]}
 
+    def update(self, items):
+        """Exercise the same shared projection and delivery path as ShellRuntime."""
+        eligible = self.router.eligible_items(items)
+        self.router.reconcile(eligible)
+        return eligible
+
     def test_review_uses_existing_typed_check_route_and_rejects_unknown_routes(self):
         from greyward_security_context.notification_router import open_route
         with patch('greyward_security_context.notification_router.subprocess.Popen') as launch:
@@ -49,16 +55,16 @@ class NotificationTests(unittest.TestCase):
             launch.assert_called_once()
 
     def test_duplicate_replace_resolve_and_stale_action(self):
-        self.router.reconcile([self.item])
-        self.router.reconcile([self.item])
+        self.update([self.item])
+        self.update([self.item])
         self.assertEqual(len(self.bus.sent), 1)
         changed = {**self.item, 'detail': 'Waiting', 'actions': []}
-        self.router.reconcile([changed])
+        self.update([changed])
         self.assertEqual(self.bus.sent[-1][1], 1)
         self.assertTrue(self.bus.sent[-1][6]['x-greyward-quiet'])
         self.router._action(1, 'trust_once')
         self.dispatch.assert_not_called()
-        self.router.reconcile([])
+        self.update([])
         self.assertEqual(self.bus.closed, [1])
         self.router._action(1, 'open')
         self.dispatch.assert_not_called()
@@ -86,29 +92,29 @@ class NotificationTests(unittest.TestCase):
         self.dispatch.assert_not_called()
 
     def test_dismiss_acknowledges_until_resolution_then_new_event(self):
-        self.router.reconcile([self.item])
+        self.update([self.item])
         self.router._closed(1, 2)
-        self.router.reconcile([self.item])
+        self.update([self.item])
         self.assertEqual(len(self.bus.sent), 1)
         self.router.reconcile([])
-        self.router.reconcile([self.item])
+        self.update([self.item])
         self.assertEqual(len(self.bus.sent), 2)
 
     def test_backend_restart_does_not_replay_server_restart_is_quiet(self):
-        self.router.reconcile([self.item])
+        self.update([self.item])
         self.router = NotificationRouter(self.bus, self.dispatch, self.path)
-        self.router.reconcile([self.item])
+        self.update([self.item])
         self.assertEqual(len(self.bus.sent), 1)
         self.bus.owner = ':1.30'
-        self.router.reconcile([self.item])
+        self.update([self.item])
         self.assertEqual(len(self.bus.sent), 2)
         self.assertEqual(self.bus.sent[-1][1], 0)
         self.assertTrue(self.bus.sent[-1][6]['x-greyward-quiet'])
 
     def test_critical_escalation_reopens_acknowledged_item(self):
-        self.router.reconcile([self.item])
+        self.update([self.item])
         self.router._closed(1, 2)
-        self.router.reconcile([{**self.item, 'severity': 'CRITICAL', 'timeout_ms': 0}])
+        self.update([{**self.item, 'severity': 'CRITICAL', 'timeout_ms': 0}])
         self.assertEqual(self.bus.sent[-1][-1], 0)
         self.assertEqual(self.bus.sent[-1][6]['urgency'], 2)
         self.assertFalse(self.bus.sent[-1][6]['x-greyward-quiet'])
@@ -119,7 +125,8 @@ class NotificationTests(unittest.TestCase):
                 self.router._warning_since.clear()
                 warning = {**self.item, 'id': reference, 'kind': 'provider', 'severity': 'WARNING', 'notification_stability_seconds': 30}
                 with patch('greyward_security_context.notification_router.time.monotonic', side_effect=(10.0, 18.0)):
-                    self.router.reconcile([warning])
+                    self.assertEqual(self.router.eligible_items([warning]), [])
+                    self.assertEqual(self.router.eligible_items([]), [])
                     self.router.reconcile([])
                 self.assertEqual(self.bus.sent, [])
 
@@ -131,10 +138,12 @@ class NotificationTests(unittest.TestCase):
                 sent_before = len(self.bus.sent)
                 with patch('greyward_security_context.notification_router.time.monotonic',
                            side_effect=(30.0, 59.9, 60.0)):
-                    self.router.reconcile([warning])
-                    self.router.reconcile([warning])
+                    self.assertEqual(self.router.eligible_items([warning]), [])
+                    self.assertEqual(self.router.eligible_items([warning]), [])
                     self.assertEqual(len(self.bus.sent), sent_before)
-                    self.router.reconcile([warning])
+                    eligible = self.router.eligible_items([warning])
+                    self.assertEqual(eligible, [warning])
+                    self.router.reconcile(eligible)
                 self.assertEqual(len(self.bus.sent), sent_before + 1)
 
     def test_recovered_notification_id_does_not_bypass_a_new_stability_window(self):
@@ -146,16 +155,24 @@ class NotificationTests(unittest.TestCase):
         }}))
         self.router = NotificationRouter(self.bus, self.dispatch, self.path)
         with patch('greyward_security_context.notification_router.time.monotonic', side_effect=(1.0, 30.9, 31.0)):
-            self.router.reconcile([warning])
+            self.router.reconcile(self.router.eligible_items([warning]))
             self.assertEqual(self.bus.closed, [77])
-            self.router.reconcile([warning])
+            self.router.reconcile(self.router.eligible_items([warning]))
             self.assertEqual(self.bus.sent, [])
-            self.router.reconcile([warning])
+            self.router.reconcile(self.router.eligible_items([warning]))
         self.assertEqual(len(self.bus.sent), 1)
 
     def test_other_and_critical_notifications_are_not_delayed(self):
         warning = {**self.item, 'id': 'network-protection', 'severity': 'WARNING'}
         critical = {**self.item, 'id': 'secure-dns', 'severity': 'CRITICAL', 'notification_stability_seconds': 30}
         with patch('greyward_security_context.notification_router.time.monotonic', return_value=0.0):
-            self.router.reconcile([warning, critical])
+            self.update([warning, critical])
         self.assertEqual(len(self.bus.sent), 2)
+
+    def test_shared_projection_keeps_live_actions_and_hides_only_unstable_warnings(self):
+        warning = {**self.item, 'id': 'firewall-unavailable', 'kind': 'provider', 'severity': 'WARNING',
+                   'notification_stability_seconds': 30}
+        action = {**self.item, 'id': 'usb:blocked', 'severity': 'ACTION'}
+        with patch('greyward_security_context.notification_router.time.monotonic', return_value=10.0):
+            eligible = self.router.eligible_items([warning, action])
+        self.assertEqual([item['id'] for item in eligible], ['usb:blocked'])

@@ -551,6 +551,35 @@ if (Test-Path -LiteralPath $securePluginWidgetPath) {
     if ($securePluginWidget -match 'GetShellSummary[\s\S]{0,1200}\},\s*(12000|16000)\)') {
         $errors.Add('The GREYWARD Secure DMS plugin must not use Proc.runCommand debounce as a transport timeout.')
     }
+    if ($securePluginWidget -notmatch 'function findSecurityCenterWindow\(\)' -or
+        $securePluginWidget -notmatch 'Array\.from\(ToplevelManager\?\.toplevels\?\.values') {
+        $errors.Add('The GREYWARD Secure DMS plugin must find an existing Security Center window before launching another instance.')
+    }
+    if ($securePluginWidget -notmatch 'launchPending' -or
+        $securePluginWidget -notmatch 'Security Center did not open' -or
+        $securePluginWidget -notmatch 'root\.launchPending \? qsTr\("Opening Security Center') {
+        $errors.Add('The GREYWARD Secure DMS plugin must show opening, success, or failure feedback for its Security Center launch button.')
+    }
+    if ($securePluginWidget -notmatch 'presentation\.notification_items' -or
+        $securePluginWidget -notmatch 'root\.notificationItems\.slice\(0,1\)' -or
+        $securePluginWidget -match 'presentation\.items|deferredAttentionSince|notificationStabilityMs') {
+        $errors.Add('The GREYWARD Secure DMS plugin must display the server-stabilized alert set and must not run a separate warning timer.')
+    }
+    $openSecurityCenterMatch = [regex]::Match($securePluginWidget, '(?s)function openSecurityCenter\(\)\s*\{(.*?)\n    function runAction')
+    if (-not $openSecurityCenterMatch.Success -or
+        $openSecurityCenterMatch.Groups[1].Value.IndexOf('existingWindow') -lt 0 -or
+        $openSecurityCenterMatch.Groups[1].Value.IndexOf('existingWindow') -gt $openSecurityCenterMatch.Groups[1].Value.IndexOf('SessionService.launchDesktopEntry') -or
+        $openSecurityCenterMatch.Groups[1].Value.IndexOf('DesktopEntries.heuristicLookup("systems.mantis.greyward.securitycenter")') -lt 0 -or
+        $openSecurityCenterMatch.Groups[1].Value.IndexOf('SessionService.launchDesktopEntry') -lt 0 -or
+        $openSecurityCenterMatch.Groups[1].Value.Contains('Quickshell.execDetached')) {
+        $errors.Add('The GREYWARD Secure DMS plugin must focus an existing window or launch the Security Center through DMS desktop-entry handling.')
+    }
+}
+$shellRuntimePath = Join-Path $repo 'security-center\security-context\greyward_security_context\shell_runtime.py'
+$shellRuntime = Get-Content -Raw -LiteralPath $shellRuntimePath
+if ($shellRuntime -notmatch "value\['notification_items'\]\s*=\s*self\.router\.eligible_items\(value\.get\('items',\s*\[\]\)\)" -or
+    $shellRuntime -notmatch "self\.router\.reconcile\(value\['notification_items'\]\)") {
+    $errors.Add('Security Context must publish and notify from the same stabilized alert projection consumed by the DMS plugin.')
 }
 
 if (Test-Path -LiteralPath $imageKickstartPath) {

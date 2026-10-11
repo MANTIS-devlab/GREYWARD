@@ -48,10 +48,12 @@ class OperationTests(unittest.TestCase):
         self.runtime = object.__new__(ShellRuntime)
         self.runtime.lock = threading.Lock()
         self.runtime.operations = {}
-        self.runtime.snapshot = {'revision': 1, 'items': [{'id': 'usb:ref', 'connection_ref': 'ref', 'title': 'Test', 'actions': [{'id': 'trust_once'}]}]}
+        items = [{'id': 'usb:ref', 'connection_ref': 'ref', 'title': 'Test', 'actions': [{'id': 'trust_once'}]}]
+        self.runtime.snapshot = {'revision': 1, 'items': items, 'notification_items': items}
         self.runtime.invalidate = Mock()
         self.runtime.service = Mock()
         self.runtime.router = Mock()
+        self.runtime.router.eligible_items.side_effect = lambda items: list(items)
         self.runtime.running = False
 
     def test_display_lease_renewal_does_not_change_revision_or_notifications(self):
@@ -63,6 +65,16 @@ class OperationTests(unittest.TestCase):
         self.assertEqual(self.runtime.snapshot['display_fresh_until'], 'renewed')
         self.runtime.service.ShellSummaryChanged.assert_not_called()
         self.runtime.router.reconcile.assert_not_called()
+
+    def test_publish_shares_stabilized_items_with_plugin_and_native_router(self):
+        warning = {'id': 'firewall-unavailable', 'severity': 'WARNING'}
+        eligible = []
+        self.runtime.router.eligible_items.side_effect = None
+        self.runtime.router.eligible_items.return_value = eligible
+        value = {'items': [warning], 'fresh_until': 'current'}
+        self.runtime._publish(value, False)
+        self.assertEqual(self.runtime.snapshot['notification_items'], eligible)
+        self.runtime.router.reconcile.assert_called_once_with(eligible)
 
     def test_ack_is_published_before_worker_and_duplicate_coalesces(self):
         with patch('greyward_security_context.shell_runtime.threading.Thread') as worker:

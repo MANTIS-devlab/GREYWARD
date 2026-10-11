@@ -210,3 +210,24 @@ test("security widget Review forwards only the resource route without a mutation
   context.runAction({route:"protected-data",resource_ref:reference},{id:"open"});
   assert.equal(commands.length,1);
 });
+
+test("security widget opens Security Center through normal DMS desktop-entry handling", () => {
+  const qml=readFileSync(new URL("../../../environment/session/dankmaterialshell/plugins/greywardSecure/SecureWidget.qml",import.meta.url),"utf8");
+  const fragment=qml.slice(qml.indexOf("    function findSecurityCenterWindow()"),qml.indexOf("    function runAction("));
+  const entry={id:"systems.mantis.greyward.securitycenter",command:["/usr/bin/greyward-security-center-launch"]};
+  const lookedUp=[],launched=[];
+  const context={
+    ToplevelManager:{toplevels:{values:[]}},
+    DesktopEntries:{heuristicLookup:id=>{lookedUp.push(id);return entry;}},
+    SessionService:{launchDesktopEntry:value=>launched.push(value)},
+    launchPending:false,launchChecks:0,launchState:"",launchMessage:"",
+    launchWindowTimer:{start(){},stop(){}},launchMessageTimer:{start(){},restart(){},stop(){}},
+    qsTr:value=>value
+  };
+  vm.runInNewContext(fragment,context);
+  context.openSecurityCenter();
+  assert.deepEqual(lookedUp,["systems.mantis.greyward.securitycenter"]);
+  assert.equal(launched.length,1);
+  assert.equal(launched[0],entry);
+  assert.equal(context.launchPending,true);
+});

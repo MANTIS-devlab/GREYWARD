@@ -11,23 +11,39 @@ No VM, greetd or graphical-session restart was performed. The next interactive
 login is pending user verification. The same source change is included in the
 next ISO inputs. SELinux remains Enforcing.
 
-11 October DNS/firewall notification flapping fix: a transient provider warning
-no longer raises and clears a desktop toast from a single sample. The
-notification router now requires either `secure-dns` or `firewall-unavailable`
-to remain continuously at WARNING for 15 seconds. Security Center's live state
-remains immediate; critical notifications and other warning types are not
-delayed. The focused router tests pass. On `.149`, this exact router is active
-through a user-owned development overlay of the installed Python modules; only
-`greyward-security-context-user.service` was restarted. DMS stayed active with
-the same PID, SELinux remained Enforcing, and the RPM-owned files were left
-untouched. The ISO package contract now requires `notification_router.py`, so
-staging rejects a Context RPM that omits it. No ISO was built.
+11 October DNS/firewall notification flapping fix: transient provider warnings
+no longer raise and clear desktop alerts from a single sample. Secure DNS,
+firewall and device-protection warnings require 30 seconds of continuous
+evidence before raising an alert; current posture remains immediate, and
+critical notifications are not delayed. A follow-up linked the DMS plugin to
+the notification router's exact stabilized `notification_items` projection.
+Native desktop notifications, plugin alert cards, taskbar badge and attention
+caption now share one server-side timer, so they appear and clear together. On
+`.149`, the matching files are now in the existing development overlay and user
+plugin directory, with prior copies backed up and ownership, modes and SELinux
+labels preserved. Root SSH cannot restart `stendev`'s user services through its
+bus, so the Security Context and DMS services still need a user-side reload
+before live verification. Installed RPM remains `0.1.0-81`; no package or
+policy was changed, and no ISO was built.
 
 11 October Security Center corrections: the DMS taskbar plugin failed to load because
 its widget used object-spread syntax unsupported by the pinned Qt QML parser. The
 source now copies the small state map with a QML-compatible loop. The corrected
 plugin was installed in the `.149` user plugin directory, DMS was restarted, and
 its journal confirmed `Plugin loaded: greywardSecure`.
+
+Follow-up taskbar launch correction: the plugin's **Open Security Center** button
+invoked the launch script directly instead of DMS's normal desktop-entry handling.
+The source now focuses a matching existing window or resolves the Security Center
+desktop entry and launches it through `SessionService.launchDesktopEntry`, while
+showing progress and checking for the real application window. This retains DMS
+launch configuration and the protected-session launch path. Static and frontend
+contracts cover the behavior. The corrected QML is installed on `.149` with the
+previous copy backed up. SELinux prevented the root SSH session from restarting
+DMS through `stendev`'s user bus, so the user restarted `greyward-dms.service`
+from their session. The `.149` journal then confirmed `greywardSecure` loaded
+from the corrected plugin, and the user confirmed the button opens Security
+Center.
 
 Protected Data showed session protection unavailable because the `.149` development
 overlay validator required optional portal/deputy evidence. The canonical validator

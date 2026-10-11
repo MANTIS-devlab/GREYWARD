@@ -103,6 +103,9 @@ class ShellRuntime:
         return False
 
     def _publish(self, value, heartbeat, release_collector=True):
+        # One server-side gate feeds native notifications and the DMS plugin's
+        # alert cards and badge. The plugin never starts a separate timer.
+        value['notification_items'] = self.router.eligible_items(value.get('items', []))
         with self.lock:
             old = {k: v for k, v in self.snapshot.items() if k not in {'revision', 'fresh_until', 'display_fresh_until'}}
             shape = {k: v for k, v in value.items() if k not in {'revision', 'fresh_until', 'display_fresh_until'}}
@@ -111,7 +114,7 @@ class ShellRuntime:
             self.snapshot = value
         if changed or heartbeat:
             self.service.ShellSummaryChanged(value['revision'])
-            self.router.reconcile(value['items'])
+            self.router.reconcile(value['notification_items'])
         if release_collector:
             self.running = False
         return False
