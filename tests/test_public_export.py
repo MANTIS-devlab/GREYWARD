@@ -14,6 +14,11 @@ POLICY = json.loads((ROOT / 'tools/publication-policy.json').read_text())
 
 
 class PublicationBoundaryTests(unittest.TestCase):
+    def test_extensionless_installed_scripts_keep_linux_line_endings(self):
+        attributes = (ROOT / '.gitattributes').read_text()
+        self.assertIn('environment/production/greyward-* text eol=lf', attributes)
+        self.assertIn('security-center/security-context/bin/* text eol=lf', attributes)
+
     def test_private_factory_accounts_logs_and_host_controls_are_excluded(self):
         for path in ('environment/greyward.pkr.hcl', 'environment/development/provision-overlay.sh',
                      'tools/greyward-dev/common.ps1', 'tools/greyward-dev/destroy.ps1',
