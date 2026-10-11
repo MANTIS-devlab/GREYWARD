@@ -10,6 +10,10 @@ ROOT = Path(__file__).resolve().parents[1]
 SPEC = importlib.util.spec_from_file_location('dms_assembly', ROOT / 'packaging/greyward-dms/assemble.py')
 ASSEMBLY = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(ASSEMBLY)
+IMAGE_BUILDER = ROOT / 'environment/image/build.sh'
+COMPONENT_BUILDER_SPEC = importlib.util.spec_from_file_location('greyward_build_components', ROOT / 'environment/image/build-components.py')
+COMPONENT_BUILDER = importlib.util.module_from_spec(COMPONENT_BUILDER_SPEC)
+COMPONENT_BUILDER_SPEC.loader.exec_module(COMPONENT_BUILDER)
 
 
 class BuildInputVerificationTests(unittest.TestCase):
@@ -41,6 +45,40 @@ class BuildInputVerificationTests(unittest.TestCase):
     def test_matching_tools_still_require_verified_upstream_archive(self):
         with self.assertRaisesRegex(ValueError, 'source archive checksum mismatch'):
             self.attempt()
+
+    def test_iso_builder_rejects_stale_first_party_plugin_payload(self):
+        source = IMAGE_BUILDER.read_text()
+        self.assertIn('plugin_source="$session/dankmaterialshell/plugins"', source)
+        self.assertIn('rpm_plugin_path="./etc/xdg/quickshell/dms-plugins/$plugin_relative"', source)
+        self.assertIn('cmp -s - "$plugin_file"', source)
+
+    def test_iso_builder_rejects_stale_virtual_display_fallback(self):
+        source = IMAGE_BUILDER.read_text()
+        startup = (ROOT / 'environment/production/labwc-autostart').read_text()
+        session_spec = (ROOT / 'packaging/greyward-session/greyward-session.spec').read_text()
+        production_packages = (ROOT / 'environment/production/packages.txt').read_text().splitlines()
+        acceptance = (ROOT / 'environment/production/production-acceptance.sh').read_text()
+        self.assertIn('session_autostart_path=\'./usr/share/greyward/defaults/labwc/autostart\'', source)
+        self.assertIn('cmp -s - "$production/labwc-autostart"', source)
+        self.assertIn('timeout 3s wlr-randr --output Virtual-1 --mode 1920x1080', startup)
+        self.assertNotIn('--custom-mode', startup)
+        self.assertLess(startup.index('wlr-randr --output Virtual-1 --mode 1920x1080'),
+                        startup.index('systemctl --user start --no-block greyward-dms.service'))
+        self.assertIn('Requires: wlr-randr', session_spec)
+        self.assertIn('wlr-randr', production_packages)
+        self.assertIn('policycoreutils wlr-randr wlopm', acceptance)
+
+    def test_iso_builder_rejects_enrollment_rpm_built_for_another_dms_version(self):
+        source = IMAGE_BUILDER.read_text()
+        enrollment_spec = (ROOT / 'packaging/greyward-enrollment/greyward-enrollment.spec').read_text()
+        self.assertIn('expected_dms_requirement="greyward-dms = $selected_dms_version"', source)
+        self.assertIn('rpm_query -qp --requires "$enrollment_rpm"', source)
+        self.assertIn('Requires: greyward-dms = 1.6.2-15%{?dist}', enrollment_spec)
+
+    def test_root_component_builder_drops_to_unprivileged_user_before_dms_build(self):
+        command = COMPONENT_BUILDER.dms_build_command(Path('/repo'), Path('/inputs'), Path('/output'), 'stendev', True)
+        self.assertEqual(command[:7], ['unshare', '--net', 'runuser', '-u', 'stendev', '--', 'bash'])
+        self.assertNotIn('sudo', command)
 
 
 if __name__ == '__main__':

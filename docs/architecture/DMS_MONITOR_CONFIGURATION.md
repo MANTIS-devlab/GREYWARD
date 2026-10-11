@@ -80,12 +80,14 @@ session-only; the compositor patch does not add display-control privileges.
 ## First-session display defaults
 
 The production DMS defaults enable matching-profile auto-selection and package
-one unnamed output profile for exactly `Virtual-1` at 1920×1080, scale 1. DMS
-matches the profile by its output set, so it does not apply to physical
-connectors such as eDP, DP or HDMI. Bare-metal sessions keep the mode selected
-for their connected display. The VM starts at the reliable 1920×1080 default;
-the user can choose another advertised mode in DMS Settings if the virtual
-display provides one.
+one unnamed output profile for exactly `Virtual-1` at 1920×1080, scale 1. The
+Labwc autostart also requests the standard 1920×1080 mode on that exact virtual
+output before DMS starts. This handles a greeter-selected 1024×768 compatibility
+mode even when 1920×1080 is advertised. The request is bounded to three seconds,
+uses only an advertised mode, and safely does nothing if that output or mode is
+unavailable. Physical connectors such as eDP, DP or HDMI are never changed;
+Labwc continues to reuse the mode selected for those displays. The user can
+choose another advertised mode in DMS Settings afterward.
 
 The session migration copies that profile only before the first GREYWARD DMS
 session, only when `monitors.json` does not already exist, and never when the
@@ -93,8 +95,9 @@ DMS 1.6 migration marker shows an established session. It enables auto-select
 only as a default and preserves explicit settings, profiles and later user
 changes. On `<development-host>`, the existing marker and manually selected 2560×1440 mode
 remain untouched. Labwc's `reuseOutputMode` retains the mode selected by the
-greeter during compositor startup; the protected Polkit readiness gate still
-must complete before the normal desktop is admitted.
+greeter during compositor startup; the production autostart then corrects only
+the known virtual-output fallback before DMS starts. The protected Polkit
+readiness gate still must complete before the normal desktop is admitted.
 
 ## ISO inclusion and validation
 

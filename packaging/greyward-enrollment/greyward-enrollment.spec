@@ -1,6 +1,6 @@
 Name: greyward-application-enrollment
 Version: 0.1.0
-Release: 17%{?dist}
+Release: 18%{?dist}
 Summary: GREYWARD protected-session installation inputs
 License: GPL-2.0-only AND GPL-3.0-only AND MIT
 Source0: %{name}-%{version}.tar.gz
@@ -30,7 +30,7 @@ BuildRequires: pkgconfig(libsfdo-icon)
 BuildRequires: gettext
 BuildRequires: pkgconfig(cmocka)
 Requires: greyward-application-security-experimental = 0.1.0-42%{?dist}
-Requires: greyward-dms = 1.6.2-14%{?dist}
+Requires: greyward-dms = 1.6.2-15%{?dist}
 Requires: greyward-session >= 0.1.0-10
 Requires: selinux-policy-targeted = 44.11-1.fc44
 Requires: flatpak-selinux
@@ -105,6 +105,9 @@ install -Dm0644 security-center/packaging/application-security/greyward-maintena
 %{_unitdir}/greyward-maintenance-console.service
 
 %changelog
+* Sun Oct 11 2026 MANTIS SYSTEMS - 0.1.0-18
+- Match DMS v1.6.2-15 runtime.
+
 * Sun Oct 11 2026 MANTIS SYSTEMS - 0.1.0-17
 - Match the refreshed Application Guard RPM source revision.
 

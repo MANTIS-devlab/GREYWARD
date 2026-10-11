@@ -24,6 +24,7 @@ environment/session/labwc/autostart text eol=lf
 environment/production/labwc-autostart text eol=lf
 packaging/greyward-dms/*.spec text eol=lf
 packaging/greyward-session/*.spec text eol=lf
+packaging/greyward-enrollment/*.spec text eol=lf
 *.png binary
 *.jpg binary
 *.jpeg binary

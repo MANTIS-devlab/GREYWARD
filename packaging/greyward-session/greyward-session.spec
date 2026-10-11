@@ -1,6 +1,6 @@
 Name: greyward-session
 Version: 0.1.0
-Release: 14%{?dist}
+Release: 16%{?dist}
 Summary: GREYWARD static desktop session policy and factory defaults
 License: GPL-3.0-only
 BuildArch: noarch
@@ -8,6 +8,7 @@ Source0: greyward-session.tar.gz
 Requires: greyward-dms
 Requires: uwsm
 Requires: labwc
+Requires: wlr-randr
 Requires: wlopm
 Requires: python3
 Requires: pam
@@ -64,6 +65,12 @@ done
 /usr/share/greyward/defaults
 
 %changelog
+* Sun Oct 11 2026 MANTIS SYSTEMS - 0.1.0-16
+- Finalize the VM display fallback with byte-identical source packaging.
+
+* Sun Oct 11 2026 MANTIS SYSTEMS - 0.1.0-15
+- Apply the advertised 1920x1080 fallback to the exact VM output before DMS starts.
+
 * Sun Oct 11 2026 MANTIS SYSTEMS - 0.1.0-14
 - Seed first-session virtual display defaults and reuse Labwc's current output mode.
 

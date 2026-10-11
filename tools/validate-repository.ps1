@@ -57,20 +57,15 @@ foreach ($entry in $canonicalIndexEntries) {
 $mapPath = Join-Path $repo 'docs\REPOSITORY_MAP.md'
 $map = Get-Content -Raw -LiteralPath $mapPath
 $mapPathTokens = [regex]::Matches($map, '`([^`\r\n]+)`') | ForEach-Object { $_.Groups[1].Value }
-# Public exports intentionally omit disposable local VM factory inputs.
-# Validate them if present, but do not require them in a published checkout.
-$optionalRepositoryPaths = @(
-    '.secrets/',
-    'environment/packer_cache/',
-    'environment/greyward.pkr.hcl',
-    'environment/http/greyward-dev-bootstrap.ks.tmpl',
-    'environment/http/greyward-dev-boottest.ks.tmpl',
-    'environment/http/greyward.ks.tmpl',
-    'environment/http/greyward-boottest.ks.tmpl'
-)
+$optionalRepositoryPaths = @('.secrets/', 'environment/packer_cache/')
+$publicationPolicy = Get-Content -Raw -LiteralPath (Join-Path $repo 'tools/publication-policy.json') | ConvertFrom-Json
 foreach ($token in ($mapPathTokens | Sort-Object -Unique)) {
     if ($token -match '^(environment|security-center|packaging|branding|tests|tools|docs|spikes|\.secrets|AGENTS\.md)/') {
         if ($token -in $optionalRepositoryPaths) { continue }
+        # Only explicit private-export exclusions may be absent in public.
+        # Validate every retained generic build/runtime/test path as usual.
+        if (-not (Test-Path -LiteralPath (Join-Path $repo $token)) -and
+            @($publicationPolicy.excludedPaths | Where-Object { $token -like $_ }).Count -gt 0) { continue }
         Test-RepositoryPath -path $token -source 'docs/REPOSITORY_MAP.md'
     }
 }
