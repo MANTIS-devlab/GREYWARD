@@ -1,5 +1,14 @@
 # GREYWARD current status
 
+## Source publication audit — 11 October
+
+The earlier per-account DMS keyboard preference implementation is preserved as
+unpromoted development work. It is absent from the current package sources:
+its source checks and package assembly did not establish installed next-login
+keyboard behavior. It must be reconciled with the newer desktop generation
+before promotion. Current source CI does not prove ISO installation, live
+desktop behavior or offline recovery acceptance.
+
 11 October ISO rebuild: `GREYWARD-0.3.5-Dawn-x86_64.iso` was composed from
 the existing cache and validated. SHA-256 is
 `46ed1156b7096f905f3c0b1e990c4775da8d82c93030c58d77e2d225dab6302e`;
