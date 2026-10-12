@@ -20,13 +20,13 @@
 </p>
 
 <p align="center">
-  <a href="https://sourceforge.net/projects/greyward/files/v0.2.0/">
-    <img alt="Download GREYWARD 0.2.0 Nightfall" src="https://img.shields.io/badge/Download-0.2.0%20Nightfall-C9CCD1?style=for-the-badge&labelColor=24262A">
+  <a href="https://sourceforge.net/projects/greyward/files/v0.3.5/">
+    <img alt="Download GREYWARD 0.3.5 Dawn" src="https://img.shields.io/badge/Download-0.3.5%20Dawn-C9CCD1?style=for-the-badge&labelColor=24262A">
   </a>
 </p>
 
 <p align="center">
-  <sub>Latest linked published image: 0.2.0 Nightfall. Features described below may reflect newer development builds and are not necessarily included in this ISO.</sub>
+  <sub>Latest linked published image: 0.3.5 Dawn. Features described below may reflect newer development builds and are not necessarily included in this ISO.</sub>
 </p>
 
 <p align="center">
