@@ -1,0 +1,57 @@
+{
+  "schema": "greyward.icon-family/v1",
+  "name": "Greyward",
+  "palette": {
+    "edge": "#9eafb9", "highlight": "#edf2f3", "paper": "#d7dfe2",
+    "paperShade": "#95a5b0", "obsidian": "#15212b", "obsidianShade": "#070e15",
+    "slate": "#3d505f", "text": "#e0e7ea", "muted": "#8a9ca9",
+    "blue": "#82a9be", "green": "#89aa9c", "violet": "#a69abc",
+    "amber": "#bea584", "red": "#c28e94"
+  },
+  "folderBadges": {
+    "folder": null, "inode-directory": null, "folder-open": null, "user-home": "house", "folder-home": "house",
+    "folder-desktop": "monitor", "user-desktop": "monitor", "folder-documents": "file-text",
+    "folder-download": "download", "folder-downloads": "download", "folder-pictures": "image",
+    "folder-music": "music-2", "folder-videos": "video", "folder-publicshare": "network",
+    "folder-templates": "copy", "folder-remote": "globe", "folder-network": "network",
+    "folder-locked": "lock", "folder-encrypted": "key", "folder-development": "code-xml",
+    "folder-git": "code-xml", "folder-temp": "clock", "folder-drag-accept": "folder-input"
+  },
+  "mimeTypes": {
+    "text-x-generic": ["file-text", "blue"], "text-plain": ["file-text", "blue"],
+    "application-octet-stream": ["file", "muted"], "unknown": ["file", "muted"],
+    "application-x-zerosize": ["file", "muted"], "empty": ["file", "muted"],
+    "application-pdf": ["pdf", "red"], "application-msword": ["file-text", "blue"],
+    "application-vnd.oasis.opendocument.text": ["file-text", "blue"],
+    "application-vnd.openxmlformats-officedocument.wordprocessingml.document": ["file-text", "blue"],
+    "application-vnd.oasis.opendocument.spreadsheet": ["file-spreadsheet", "green"],
+    "application-vnd.openxmlformats-officedocument.spreadsheetml.sheet": ["file-spreadsheet", "green"],
+    "application-vnd.ms-excel": ["file-spreadsheet", "green"], "text-csv": ["file-spreadsheet", "green"],
+    "application-vnd.oasis.opendocument.presentation": ["presentation", "amber"],
+    "application-vnd.openxmlformats-officedocument.presentationml.presentation": ["presentation", "amber"],
+    "application-vnd.ms-powerpoint": ["presentation", "amber"],
+    "image-x-generic": ["image", "violet"], "image-jpeg": ["image", "violet"],
+    "image-png": ["image", "violet"], "image-svg+xml": ["image", "violet"],
+    "image-webp": ["image", "violet"], "image-gif": ["image", "violet"],
+    "audio-x-generic": ["audio-lines", "green"], "audio-mpeg": ["audio-lines", "green"],
+    "audio-ogg": ["audio-lines", "green"], "video-x-generic": ["video", "violet"],
+    "video-mp4": ["video", "violet"], "application-x-executable": ["terminal", "amber"],
+    "application-x-shellscript": ["file-terminal", "amber"], "text-x-script": ["file-terminal", "amber"],
+    "text-x-python": ["file-code", "amber"], "text-x-csrc": ["file-code", "blue"],
+    "text-x-c++src": ["file-code", "blue"], "text-html": ["code-xml", "amber"],
+    "application-json": ["file-code", "amber"], "text-markdown": ["file-text", "blue"],
+    "text-x-generic-template": ["file-text", "muted"], "application-x-desktop": ["app-window", "blue"],
+    "package-x-generic": ["file-archive", "amber"], "application-zip": ["file-archive", "amber"],
+    "application-x-compressed-tar": ["file-archive", "amber"], "application-x-tar": ["file-archive", "amber"],
+    "application-x-7z-compressed": ["file-archive", "amber"], "application-x-rar": ["file-archive", "amber"],
+    "application-x-rpm": ["package-open", "amber"], "application-pgp-keys": ["key", "green"]
+  },
+  "objects": {
+    "user-trash": ["trash", "muted"], "user-trash-full": ["trash", "amber"],
+    "drive-harddisk": ["hard-drive", "muted"], "drive-harddisk-solidstate": ["hard-drive", "muted"],
+    "drive-removable-media": ["hard-drive", "blue"], "drive-removable-media-usb": ["hard-drive", "blue"],
+    "media-removable": ["hard-drive", "blue"], "media-optical": ["disc", "muted"],
+    "network-server": ["network", "blue"], "network-workgroup": ["network", "blue"],
+    "network-wired": ["network", "blue"], "computer": ["monitor", "muted"]
+  }
+}

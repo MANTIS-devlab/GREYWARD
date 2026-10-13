@@ -1,5 +1,21 @@
 # GREYWARD current status
 
+## 14 October shared icon family
+
+Files 1.0.0-11 is installed on the development desktop. The native theme and
+Strata's icon-only resource overlay use one catalog; real column/grid and
+desktop checks confirm the shared folder/plain-text appearance. Package builds,
+five focused tests, repository gates and installed asset/resource coverage pass.
+The upstream Strata ELF and third-party application logos are preserved. Real
+thumbnails remain content previews, not themed icons. Broader image acceptance
+is pending; see [the owning record](architecture/FILE_MANAGER_DESKTOP.md).
+
+The 00:15 automatic-lock attempt coincides with another real session closure:
+the guardian reports authentication-owner-exited and logind removes the session.
+It precedes icon installation. This is not ordinary lock-screen behavior and
+its cause remains unresolved. Clipboard/drag/drop successes do not prove native
+locking or overall session stability. No auth/compositor policy was relaxed.
+
 ## 13 October Strata and transparent desktop proof
 
 Strata 1.0.0 (verified checksum and upstream build attestation) and Fedora

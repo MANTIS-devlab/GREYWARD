@@ -25,6 +25,23 @@ with DMS. The existing bounded DMS shell readiness probe avoids mapping icons
 before its wallpaper. Automatic startup passes in the development login;
 clean-image acceptance remains pending.
 
+The shared file/object family is defined by
+`branding/source/greyward-icon-family.json`. `tools/generate-file-icons.py`
+builds the native Greyward icon theme and matching Strata SVG resources from
+the verified source archive. The desktop-only Qt style selects this native
+theme through QIcon, not an unsupported PCManFM `IconThemeName` setting;
+PCManFM's supported fallback setting also names Greyward. Existing profiles
+and DMS icon selections require a deliberate targeted migration rather than
+overwriting user preferences.
+
+Strata's launcher selects only its root-owned icon resource subtree through
+GLib's supported G_RESOURCE_OVERLAYS mechanism. The attested ELF, application
+code and authentication resources are unchanged. All embedded action and
+Catppuccin file SVGs receive the shared treatment; Lucide/Feather and Catppuccin
+notices are retained. Third-party application logos and real content thumbnails
+remain their own identity/content rather than synthetic file icons. This is an
+icon-family change, not a global GTK/Qt interface theme.
+
 `branding/source/greyward-files.svg` is the canonical Obsidian/Platinum folder
 icon, packaged with the GREYWARD branding notice. The upstream attested binary
 remains unchanged. Its launcher uses the root-owned SVG directly, avoiding stale

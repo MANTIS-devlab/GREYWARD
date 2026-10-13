@@ -1,5 +1,16 @@
 # GREYWARD repository map
 
+Shared icon-family ownership: `branding/source/greyward-icon-family.json`,
+`tools/generate-file-icons.py`, desktop-only QIcon selection in
+`environment/session/desktop/style/obsidian.cpp`, and the icon-only Strata
+resource overlay selected by its existing launcher. `packaging/greyward-files/`
+generates/packages assets and their ISC/MIT notices. Validation:
+`python -m unittest discover -s tests -p 'test_file_icon_family.py'`, offline
+package/installed-resource checks and real desktop/column/grid comparison.
+Authority: [file manager desktop integration](architecture/FILE_MANAGER_DESKTOP.md).
+Revision 11 corrects native theme selection and GIO folder naming. Overall
+session/lock stability remains unresolved after the later 00:15 closure.
+
 File manager/desktop migration ownership: `environment/session/desktop/`,
 `environment/session/greyward-desktop-shortcut`, `greyward-files-seed`,
 `greyward-desktop-icons.service` and `packaging/greyward-files/`;

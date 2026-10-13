@@ -30,6 +30,15 @@ be retained outside Git. The separate historical greeter JPG was removed from
 the publication candidate rather than making an unsupported rights claim.
 Do not add third-party material to this table.
 
+The file/object family catalog `source/greyward-icon-family.json` has SHA-256
+`5a0a23c786fedda273e68931de2ecdf673bdb844744ee783005ff1d5fb70b510`.
+Its folder/page/material geometry is GREYWARD artwork; its separately attributed
+action and extension glyphs are derived from Lucide/Feather and Catppuccin in
+the pinned Strata source archive recorded in `packaging/greyward-files/source.json`.
+`tools/generate-file-icons.py` copies those exact ISC/MIT notices into the RPM
+and records each generated asset's digest. Those third-party glyphs are not
+claimed as reserved GREYWARD branding.
+
 The current Security Center emblem was approved by the maintainer on 8 October
 2026 after built-in image generation using the canonical GREYWARD symbol as
 reference. The repository SVG is a polygonal refinement of that candidate;
