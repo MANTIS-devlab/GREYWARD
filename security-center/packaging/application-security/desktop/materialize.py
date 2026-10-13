@@ -75,14 +75,22 @@ def materialize(uid,gid):
     (auth / 'config/DankMaterialShell').chmod(0o755)
     if (auth / 'config/DankMaterialShell').is_symlink():
         raise RuntimeError('Unsafe authentication settings directory')
-    for name in ['config/DankMaterialShell/settings.json','session-bus.conf']:
+    for name in ['config/DankMaterialShell/settings.json',
+                 'config/DankMaterialShell/clsettings.json','session-bus.conf']:
         target=auth/name
-        if target.exists() and (target.is_symlink() or target.stat().st_uid != 0 or target.stat().st_nlink != 1):
+        if target.is_symlink() or (target.exists() and (target.stat().st_uid != 0 or target.stat().st_nlink != 1)):
             raise RuntimeError('Unsafe authentication input')
     settings = authentication_settings(
         json.loads(Path('/etc/skel/.config/DankMaterialShell/settings.json').read_text()))
     (auth / 'config/DankMaterialShell/settings.json').write_text(json.dumps(settings))
     (auth / 'config/DankMaterialShell/settings.json').chmod(0o444)
+    # The private native-lock/Polkit owner must not collect ordinary clipboard
+    # selections or pass its protected pipes to ordinary sources. Use DMS's
+    # native disabled mode before its backend binds data-control; ordinary
+    # desktop clipboard behavior and SELinux descriptor isolation stay intact.
+    (auth / 'config/DankMaterialShell/clsettings.json').write_text(
+        json.dumps({'disabled':True}))
+    (auth / 'config/DankMaterialShell/clsettings.json').chmod(0o444)
     (auth / 'session-bus.conf').write_text(f'<busconfig><type>session</type><listen>unix:path={auth}/runtime/bus</listen><auth>EXTERNAL</auth><policy context="default"><allow user="{uid}"/><allow own="*"/><allow send_destination="*"/><allow receive_sender="*"/></policy></busconfig>')
     (auth / 'session-bus.conf').chmod(0o444)
     administration = auth / 'runtime/administration-state.json'

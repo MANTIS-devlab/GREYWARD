@@ -1,6 +1,20 @@
 # File manager and desktop integration
 
-## Current development proof — 13 October
+## Current development proof — 14 October
+
+Runtime 50/Enrollment 31 disable only the private authentication backend's
+clipboard collector through DMS's native configuration. The same desktop-to-Strata
+paste that closed two earlier sessions now succeeds in the normal desktop, with
+identical original/destination SHA-256 and the same live protected authentication
+PID. No guardian closure follows. Automated drag/drop transfers nothing through
+VMConnect, but the user then confirms a successful manual transfer; the real
+destination, identical digest and unchanged session are verified independently.
+SELinux is Enforcing; the ordinary-domain open/close regression
+allows the synthetic normal file and denies the registered mock secret without
+reading content. Broad stability, native-lock and Administration acceptance are
+not implied by these checks. The dated investigation below explains the change.
+
+### 13 October investigation and activation history
 
 Further live validation: the native DMS menu replaced the old Files taskbar pin
 with Strata; Brave and Terminal retained their positions. The persisted taskbar
@@ -8,8 +22,8 @@ list survives the subsequent user reconnect. The real Strata shortcut opens
 normally with its new folder icon. Copying the synthetic text from Strata to
 PCManFM's desktop succeeds and both files have the same SHA-256.
 
-A later spontaneous closure during drag/drop remains an unresolved blocking
-stability regression. The user confirms it was not a deliberate logout. The
+A later spontaneous closure during drag/drop blocked the migration's
+stability acceptance. The user confirms it was not a deliberate logout. The
 journal shows the guardian retiring the admitted scope while Labwc was still
 alive, not an established compositor crash. An explicitly approved repeat with
 read-only readiness/process-lifetime observation did not immediately reproduce
@@ -20,8 +34,25 @@ issue is fixed; a subsequent ten-minute observation records 114,233 further
 checks without rejection or worker exit. Source records a bounded guardian exit
 reason in the system journal, without credential/readiness contents and without
 changing teardown, authentication or freshness requirements. Eleven focused
-Fedora tests pass. This diagnostic change is not yet deployed; another matched
-activation requires approval.
+Fedora tests pass. The explicitly approved logout activates Application Security
+49 and Enrollment 30, with matching protected desktop/Administration receipts,
+clean RPM verification, SELinux Enforcing and SSH available. The user's subsequent
+normal login succeeds. A desktop-to-Strata paste reproduces the closure before
+creating the destination copy: the guardian records `readiness-io`, and concurrent
+read-only observation confirms the readiness PID disappears before seat teardown.
+This establishes loss of the authentication UI, not its underlying exit cause.
+At that stage the issue remained blocking; a successful login was not stability acceptance.
+
+The subsequently approved single paste captures a fatal EOF on the private DMS
+backend's Wayland connection, followed by `authentication-owner-exited`. The
+private backend unnecessarily binds data-control and collects ordinary clipboard
+offers. Runtime 50/Enrollment 31 now seed its native `clsettings.json` with
+`disabled=true` before startup, root-owned/read-only under the existing protected
+runtime label. Ordinary desktop configuration is untouched. Three Fedora tests
+cover the generated setting, retained lock/PAM defaults, hardlinks and dangling
+aliases; offline builds and package/receipt checks pass. The real post-correction
+paste passes as recorded above. No descriptor-policy allowance or guardian grace
+period was added. Remaining interaction/security gates are still explicit.
 
 Current installed file integration is `greyward-files` 1.0.0-8 with Session 17.
 Both verify cleanly. FileManager1 selects the synthetic original in Strata on
@@ -169,9 +200,10 @@ an integrated release feature or remove Nautilus from the production baseline.
 | Synthetic text preview | PASS: original test text visibly rendered in Strata; binary/document sandbox coverage remains NON VÉRIFIÉ |
 | DMS shortcut package | PASS: exact assembly, offline RPM/Go checks, matched installation and successful real login for 1.6.2-17 |
 | Taskbar shortcut creation, native and Flatpak | PASS: real menu creation and original launcher hashes for Brave Flatpak, Black Box and Strata; Strata shortcut launch passes; other shortcut launches and another Flatpak case remain NON VÉRIFIÉ |
-| Clipboard Strata to desktop | PASS: real Ctrl+C/Ctrl+V, immediate native icon and identical synthetic-file SHA-256 |
-| Drag/drop, reverse clipboard, trash, binary previews, USB, SMB/SFTP | NON VÉRIFIÉ: drop did not complete; a guardian-driven session closure blocks stability acceptance |
-| Protected Data and Administration regressions | NON VÉRIFIÉ: no policy relaxation performed |
+| Clipboard in both directions | PASS: real Ctrl+C/Ctrl+V, native desktop/Strata display and identical synthetic-file SHA-256; reverse paste passes after runtime 50's private clipboard correction |
+| Drag/drop | PASS for the user's manual synthetic transfer, real destination SHA-256 and unchanged protected session; the VMConnect automated gesture remains inconclusive |
+| Trash, binary previews, USB, SMB/SFTP | NON VÉRIFIÉ |
+| Protected Data and Administration regressions | PASS only for an ordinary-domain open/close of the synthetic normal file and denial of the existing registered mock key, without content reads; Strata/Safe Open and Administration interaction regressions remain NON VÉRIFIÉ |
 | Restart and reconnect | PASS only for approved matched migration, real login and automatic transparent icons; intermittent spontaneous closure remains unresolved, broader crash recovery NON VÉRIFIÉ |
 | Resolution changes and multiple monitors | NON VÉRIFIÉ |
 | Offline package/ISO closure and fresh installation | NON VÉRIFIÉ |

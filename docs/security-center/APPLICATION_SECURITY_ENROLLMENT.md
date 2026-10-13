@@ -6,6 +6,15 @@ Production activation remains gated by actual enforcement/admission/rollback evi
 records current source and scoped validation. This document owns the proposed
 enrollment lifecycle, not a second application-security product contract.
 
+The private authentication backend's clipboard collector is disabled before
+startup using DMS's native `clsettings.json` (`disabled=true`). The root-generated
+read-only input uses the existing authentication runtime label; hardlinks and
+aliases are refused. Only the ordinary desktop handles ordinary clipboard
+operations. Authentication readiness and mandatory seat teardown are unchanged.
+Three focused Fedora configuration tests pass; the current installed clipboard
+and stability evidence is recorded in
+[file manager integration](../architecture/FILE_MANAGER_DESKTOP.md).
+
 ## Installer candidate integration — 10 October 2026
 
 Revision 4 installed login failed before the compositor could execute: the
