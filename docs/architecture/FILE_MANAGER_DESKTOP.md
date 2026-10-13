@@ -186,6 +186,45 @@ an integrated release feature or remove Nautilus from the production baseline.
 
 ## Acceptance evidence
 
+### 14 October icon-family correction
+
+The canonical catalog is `branding/source/greyward-icon-family.json` and its
+generator is `tools/generate-file-icons.py`. One Obsidian/Platinum object family
+is packaged as the native Greyward icon theme and an icon-only Strata GLib
+resource overlay. Folder and plain-text resources share identical source SVGs;
+extension-specific marks use the same document frame and subdued palette.
+Action glyphs retain distinct Lucide geometry and a common Platinum stroke.
+The package retains upstream attribution and the original attested Strata ELF.
+Real document/image thumbnails and third-party application brands are retained.
+
+The first installed selection was incorrect: PCManFM 2.4.1 ignores
+`IconThemeName`. Revision 10 selects QIcon's theme through the already scoped
+desktop style and uses the supported fallback setting. Native GIO then exposed
+the missing primary `inode-directory` alias; revision 11 adds it instead of
+relying on another theme's fallback. These are integration defects, not evidence
+that merely installing a theme completes visual unification. Existing layouts
+and wallpaper are preserved; only the icon user unit is restarted.
+
+Revision 11 is installed with clean RPM verification. Actual desktop and Strata
+column/grid comparison passes for the synthetic folders and text files. The
+installed receipt validates all 760 theme/overlay assets, and all 454 embedded
+upstream action/extension SVGs are covered with no missing resource. Folder and
+plain-text vectors are byte-identical across the two consumers. The unchanged
+ELF digest is `aa9c9da083bfb4d8d3a72d573a93d02045228bbecb24f6bd2aed33367f999a09`.
+Five focused source tests and the static/repository gates pass. Unmapped system
+icons inherit Breeze/Adwaita; this does not claim to rebrand every third-party
+application or to replace actual file thumbnails. Clean-image adoption remains
+pending the broader migration gates.
+
+The earlier clipboard and manual drag/drop checks remain scoped passes. A
+later 14 October 00:15 automatic-lock attempt coincides with a real guardian
+closure (`authentication-owner-exited`). Logind removes that graphical session;
+this was not just a surviving session behind a lock screen. The ordinary shell
+also reports inability to start the protected session-lock protocol. Causality
+and correct native lock/unlock remain unresolved: do not present overall session
+stability or locking as validated from the clipboard correction. The event
+precedes icon installation. No guardian or authentication permission was relaxed.
+
 | Check | Current evidence |
 |---|---|
 | Strata archive provenance | PASS: SHA-256 and GitHub Actions attestation |

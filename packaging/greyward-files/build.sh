@@ -19,6 +19,7 @@ tar -C "$repo" -czf "$output/SOURCES/greyward-files-inputs.tar.gz" \
   environment/session/greyward-desktop-icons environment/session/greyward-desktop-icons.service \
   environment/session/greyward-desktop-shortcut packaging/greyward-files/source.json \
   packaging/greyward-files/pcmanfm-desktop-only.patch \
-  branding/source/greyward-files.svg branding/LICENSE
+  branding/source/greyward-files.svg branding/source/greyward-icon-family.json \
+  tools/generate-file-icons.py branding/LICENSE
 cp "$repo/packaging/greyward-files/greyward-files.spec" "$output/SPECS/"
 rpmbuild --define "_topdir $(realpath "$output")" -ba "$output/SPECS/greyward-files.spec"

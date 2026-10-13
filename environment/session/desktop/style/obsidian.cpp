@@ -1,5 +1,6 @@
 #include <QApplication>
 #include <QFont>
+#include <QIcon>
 #include <QMenu>
 #include <QPainter>
 #include <QProxyStyle>
@@ -10,7 +11,11 @@
 // Selected only by the desktop-icons launcher; never a global Qt theme.
 class Obsidian final : public QProxyStyle {
 public:
-    Obsidian() : QProxyStyle(QStyleFactory::create("Fusion")) {}
+    Obsidian() : QProxyStyle(QStyleFactory::create("Fusion")) {
+        // This plugin is selected only by our desktop process. Set the native
+        // theme before PCManFM snapshots QIcon::themeName in its settings.
+        QIcon::setThemeName(QStringLiteral("Greyward"));
+    }
 
     QPalette standardPalette() const override {
         QPalette p = QProxyStyle::standardPalette();

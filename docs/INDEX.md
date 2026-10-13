@@ -1,5 +1,12 @@
 # GREYWARD documentation index
 
+14 October icon unification: the native Greyward theme and icon-only Strata
+resource overlay share the Obsidian/Platinum family. Installed revision 11 fixes
+both the ignored PCManFM theme setting and GIO's missing folder alias; real
+desktop/Strata comparison passes for folders and text in column/grid views.
+The later automatic-lock/session-closure defect remains unresolved. See
+[the owning file/desktop record](architecture/FILE_MANAGER_DESKTOP.md).
+
 13 October file manager migration: verified Strata 1.0.0 and Fedora PCManFM-Qt
 2.4.1 now run as confined ordinary applications in a reversible development proof.
 The native transparent desktop preserves the DMS wallpaper. See
