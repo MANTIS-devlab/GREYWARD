@@ -7,6 +7,14 @@ through `security-center/packaging/application-security/administration/embed-log
 at build time. The verified native binary renders it with librsvg; no runtime
 artwork path, external asset or user font dependency is introduced by the logo.
 
+## File manager application identity
+
+The file manager uses `source/greyward-files.svg`: a layered folder with a
+Platinum paper edge, Obsidian front and silver outlines. `greyward-files` packages
+this canonical SVG under its own icon name and the upstream Strata alias. The
+upstream executable and its verified provenance remain unchanged. The artwork
+is confined to the file manager identity; other applications keep their icons.
+
 ## Security Center application identity
 
 The approved 8 October 2026 design combines GREYWARD's folded geometric G with

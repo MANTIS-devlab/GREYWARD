@@ -1,5 +1,14 @@
 # GREYWARD documentation index
 
+13 October file manager migration: verified Strata 1.0.0 and Fedora PCManFM-Qt
+2.4.1 now run as confined ordinary applications in a reversible development proof.
+The native transparent desktop preserves the DMS wallpaper. See
+[file manager and desktop integration](architecture/FILE_MANAGER_DESKTOP.md)
+for evidence, remaining implementation and rollback; this is not ISO acceptance.
+The installed proof now includes automatic icons, native taskbar shortcut
+creation and the canonical file-manager folder icon. Earlier entries below
+describe historical states.
+
 10 October: the user accepts the R5 installation/login fix. R6 is built, hash-verified on Windows and mounted in the existing R5 VM with the output-management commit 8c130a662b047a33406c695d54adf524cc302d99 and a greeter-only CPU OpenGL renderer correction for the canonical wallpaper. Private compiled-protocol and actual embedded-greeter rendering checks pass; installed R6 greeter and DMS apply remain pending. See the candidate evidence (private development evidence).
 
 Earlier entries below are dated evidence, not current acceptance claims.

@@ -1,5 +1,16 @@
 # GREYWARD repository map
 
+File manager/desktop migration ownership: `environment/session/desktop/`,
+`environment/session/greyward-desktop-shortcut`, `greyward-files-seed`,
+`greyward-desktop-icons.service` and `packaging/greyward-files/`;
+`python -m unittest discover -s tests -p 'test_desktop_*.py'` and
+[file manager desktop integration](architecture/FILE_MANAGER_DESKTOP.md).
+The current ordinary-user Strata/PCManFM proof is separate from the earlier rolled-back
+experiment below. Packaged startup and real DMS shortcut creation pass; broader
+workflow and ISO integration remain pending. The canonical file-manager icon is
+`branding/source/greyward-files.svg`, owned by `packaging/greyward-files/` and
+registered in `branding/manifest.json`. Earlier entries below are historical.
+
 10 October: the user accepts the R5 installation/login fix. R6 is built, hash-verified on Windows and mounted in the existing R5 VM with the output-management commit 8c130a662b047a33406c695d54adf524cc302d99 and a greeter-only CPU OpenGL renderer correction for the canonical wallpaper. Private compiled-protocol and actual embedded-greeter rendering checks pass; installed R6 greeter and DMS apply remain pending. See the candidate evidence (private development evidence).
 
 Earlier entries below are dated evidence, not current acceptance claims.

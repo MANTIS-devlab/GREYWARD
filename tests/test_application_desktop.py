@@ -16,12 +16,52 @@ SESSION_SPEC.loader.exec_module(session)
 
 
 class DesktopLifetime(unittest.TestCase):
+    @unittest.skipUnless(__import__('os').name == 'posix', 'POSIX descriptor replacement')
+    def test_readiness_reopens_an_atomically_replaced_record(self):
+        import os
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / 'ready.json'
+            path.write_bytes(b'old')
+            replacement = path.with_name('next.json')
+            replacement.write_bytes(b'new')
+            real_fstat = os.fstat
+            replaced = False
+
+            def replace_before_stat(fd):
+                nonlocal replaced
+                if not replaced:
+                    os.replace(replacement, path)
+                    replaced = True
+                return real_fstat(fd)
+
+            with mock.patch.object(session.os, 'fstat', side_effect=replace_before_stat):
+                self.assertEqual(session.private_file(path, owner=os.getuid(), retry_replaced=True), b'new')
+
+    @unittest.skipUnless(__import__('os').name == 'posix', 'POSIX descriptor checks')
+    def test_readiness_retry_does_not_accept_hardlinks_or_symlinks(self):
+        import os
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / 'ready.json'
+            path.write_bytes(b'heartbeat')
+            alias = path.with_name('alias.json')
+            os.link(path, alias)
+            with self.assertRaisesRegex(RuntimeError, 'Unsafe fixed input'):
+                session.private_file(path, owner=os.getuid(), retry_replaced=True)
+            alias.unlink()
+            alias.symlink_to(path)
+            with self.assertRaises(OSError):
+                session.private_file(alias, owner=os.getuid(), retry_replaced=True)
+
+    def test_invalid_readiness_fails_closed_without_escaping_the_monitor(self):
+        with mock.patch.object(session, 'private_file', side_effect=RuntimeError('Unsafe fixed input')):
+            self.assertFalse(session.authentication_ready(1001))
+
     def test_admitted_scope_is_retired_even_when_logind_termination_times_out(self):
         import subprocess
         state = mock.Mock()
         with mock.patch.object(session, 'process', return_value=42), \
              mock.patch.object(session.select, 'select', return_value=([42], [], [])), \
-             mock.patch.object(session.os, 'setxattr'), \
+             mock.patch.object(session.os, 'setxattr', create=True), \
              mock.patch.object(session.subprocess, 'run', side_effect=[subprocess.TimeoutExpired('loginctl', 3), mock.Mock()]) as run:
             with self.assertRaises(subprocess.TimeoutExpired):
                 session.monitor(1001, 123, 456, '815', [], state, '/dev/tty1', 'original')

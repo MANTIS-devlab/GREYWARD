@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+  <title>GREYWARD Files</title>
+  <defs>
+    <linearGradient id="back" x1="0" y1="0" x2="0.9" y2="1">
+      <stop stop-color="#56636d"/>
+      <stop offset="1" stop-color="#17212a"/>
+    </linearGradient>
+    <linearGradient id="platinum" x1="0" y1="0" x2="0.85" y2="1">
+      <stop stop-color="#f0f2f1"/>
+      <stop offset="0.48" stop-color="#c4cdd1"/>
+      <stop offset="1" stop-color="#8797a2"/>
+    </linearGradient>
+    <linearGradient id="obsidian" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#2c3943"/>
+      <stop offset="0.5" stop-color="#16232e"/>
+      <stop offset="1" stop-color="#09131d"/>
+    </linearGradient>
+  </defs>
+  <path d="M14 97V36c0-5 4-9 9-9h24l10 11h47c6 0 10 4 10 10v49c0 6-5 11-11 11H25c-6 0-11-5-11-11Z" fill="#040b10" opacity="0.5" transform="translate(0 4)"/>
+  <path d="M14 92V32c0-5 4-9 9-9h24l10 11h47c6 0 10 4 10 10v48c0 6-5 11-11 11H25c-6 0-11-5-11-11Z" fill="url(#back)" stroke="#8d9ca5" stroke-width="2"/>
+  <path d="M25 44h76v43H25Z" fill="url(#platinum)"/>
+  <path d="M25 43h76M29 50h68" stroke="#f7f8f5" stroke-width="2" opacity="0.75"/>
+  <path d="M14 58c0-4 3-7 7-7h86c4 0 7 3 7 7v34c0 6-5 11-11 11H25c-6 0-11-5-11-11Z" fill="url(#obsidian)" stroke="#a5b1b9" stroke-width="2"/>
+  <path d="M22 53h84" stroke="#e4e9ea" stroke-width="2" stroke-linecap="round" opacity="0.85"/>
+  <path d="M22 93c0 2 2 3 4 3h76" fill="none" stroke="#536774" stroke-width="1.5" stroke-linecap="round" opacity="0.6"/>
+  <path d="M75 74h22M75 81h16" stroke="#cbd4d9" stroke-width="3" stroke-linecap="round"/>
+  <path d="M75 87h10" stroke="#738a99" stroke-width="3" stroke-linecap="round"/>
+</svg>
