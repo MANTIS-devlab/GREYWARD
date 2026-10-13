@@ -26,8 +26,18 @@ FileManager1 routes to confined Strata, the desktop startup probe reports only
 `SHELL_READY`, and real clipboard copy to the desktop preserves the original's
 digest. Strata replaces Files in the taskbar. A later guardian-driven spontaneous
 session closure remains unresolved; the approved repeat did not reproduce it or
-complete drag/drop. Source exit diagnostics pass eleven Fedora tests but are not
-deployed. This remains an incomplete migration, not image/security acceptance.
+complete drag/drop. Exit diagnostics pass eleven Fedora tests and are activated
+through an approved logout as runtime 49/Enrollment 30; normal login succeeds.
+Desktop-to-Strata paste then reproduces the closure: `readiness-io`, with the
+authentication UI PID gone before seat teardown. Its exit cause and the reverse
+clipboard transfer remain unresolved. The approved monitored repeat captures a
+fatal private-backend Wayland EOF and `authentication-owner-exited`. Runtime
+50/Enrollment 31 now disable only that private backend's unnecessary clipboard
+collector using its native configuration; three Fedora tests and offline builds
+pass. The real post-correction paste succeeds with matching SHA-256 and the same
+protected authentication PID. Automated drag/drop is inconclusive, but the user's
+manual transfer succeeds and real destination/digest/session checks pass. Ordinary
+protected mock-file access remains denied. This is not image/security acceptance.
 
 ## Source publication audit — 11 October
 

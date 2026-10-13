@@ -17,7 +17,15 @@ preimage in `source.json`. The existing `greyward-dms-runtime-check
 --desktop-only` orders surfaces without asserting native-lock security;
 `tests/test_dms_runtime.py` preserves the separate full-check contract.
 Guardian exit diagnostics belong to the existing protected `desktop/session.py`
-and `tests/test_application_desktop.py`; that source change is not yet activated.
+and `tests/test_application_desktop.py`; runtime 49/Enrollment 30 activate them
+after the approved logout. Real paste reproduces an authentication-UI exit,
+so the migration's stability acceptance remains pending. The subsequent native
+private-clipboard configuration correction belongs to `desktop/materialize.py`
+and `tests/test_authentication_clipboard.py`; ordinary clipboard settings and
+mandatory guardian teardown remain unchanged. Runtime 50/Enrollment 31 activate
+the configuration; real reverse paste passes without losing authentication.
+Manual drag/drop passes with user confirmation and real-file/session checks;
+the automated gesture is inconclusive and broader acceptance is pending.
 
 10 October: the user accepts the R5 installation/login fix. R6 is built, hash-verified on Windows and mounted in the existing R5 VM with the output-management commit 8c130a662b047a33406c695d54adf524cc302d99 and a greeter-only CPU OpenGL renderer correction for the canonical wallpaper. Private compiled-protocol and actual embedded-greeter rendering checks pass; installed R6 greeter and DMS apply remain pending. See the candidate evidence (private development evidence).
 
