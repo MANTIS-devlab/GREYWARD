@@ -54,18 +54,48 @@ class DesktopLifetime(unittest.TestCase):
 
     def test_invalid_readiness_fails_closed_without_escaping_the_monitor(self):
         with mock.patch.object(session, 'private_file', side_effect=RuntimeError('Unsafe fixed input')):
-            self.assertFalse(session.authentication_ready(1001))
+            failure = []
+            self.assertFalse(session.authentication_ready(1001, failure))
+            self.assertEqual(failure, ['readiness-input'])
+
+    def test_malformed_readiness_reports_only_a_fixed_reason(self):
+        with mock.patch.object(session, 'private_file', return_value=b'[]'):
+            failure = []
+            self.assertFalse(session.authentication_ready(1001, failure))
+            self.assertEqual(failure, ['readiness-format'])
+
+    def test_guardian_records_readiness_loss_before_retiring_scope(self):
+        state = mock.Mock()
+
+        def not_ready(_uid, failure):
+            failure.append('heartbeat-age')
+            return False
+
+        with mock.patch.object(session, 'process', return_value=42), \
+             mock.patch.object(session.select, 'select', return_value=([], [], [])), \
+             mock.patch.object(session, 'authentication_ready', side_effect=not_ready), \
+             mock.patch.object(session, 'record_guardian_event') as record, \
+             mock.patch.object(session.os, 'setxattr', create=True), \
+             mock.patch.object(session.subprocess, 'run') as run:
+            session.monitor(1001, 123, 456, '815', [], state, '/dev/tty1', 'original')
+        record.assert_called_once_with('815', 'heartbeat-age')
+        self.assertEqual(run.call_args_list[0].args[0],
+                         ['/usr/bin/loginctl', 'terminate-session', '815'])
+        self.assertEqual(run.call_args_list[1].args[0],
+                         ['/usr/bin/systemctl', 'stop', '--no-block', 'session-815.scope'])
 
     def test_admitted_scope_is_retired_even_when_logind_termination_times_out(self):
         import subprocess
         state = mock.Mock()
         with mock.patch.object(session, 'process', return_value=42), \
              mock.patch.object(session.select, 'select', return_value=([42], [], [])), \
+             mock.patch.object(session, 'record_guardian_event') as record, \
              mock.patch.object(session.os, 'setxattr', create=True), \
              mock.patch.object(session.subprocess, 'run', side_effect=[subprocess.TimeoutExpired('loginctl', 3), mock.Mock()]) as run:
             with self.assertRaises(subprocess.TimeoutExpired):
                 session.monitor(1001, 123, 456, '815', [], state, '/dev/tty1', 'original')
         state.unlink.assert_called_once_with(missing_ok=True)
+        record.assert_called_once_with('815', 'session-owner-exited')
         self.assertEqual(run.call_args_list[1].args[0],
                          ['/usr/bin/systemctl', 'stop', '--no-block', 'session-815.scope'])
 

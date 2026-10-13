@@ -289,20 +289,59 @@ def start(uid, pid, ticks):
         os.close(handle)
 
 
-def authentication_ready(uid):
+def authentication_ready(uid, failure=None):
+    def unavailable(reason):
+        if failure is not None:
+            failure.append(reason)
+        return False
+
     try:
         path = STATE / f'auth-{uid}/runtime/authentication-ready.json'
         ready = json.loads(private_file(path, 4096, owner=uid, retry_replaced=True))
-        return ready['schema'] == 'greyward.authentication-readiness/v1' and ready['polkitRegistered'] is True and -1 <= time.time() - path.stat().st_mtime <= 4 and Path(f"/proc/{ready['pid']}/attr/current").read_text().strip('\0\n') == AUTH_CONTEXT
-    except (OSError, RuntimeError, ValueError, KeyError):
-        return False
+        if ready['schema'] != 'greyward.authentication-readiness/v1':
+            return unavailable('readiness-schema')
+        if ready['polkitRegistered'] is not True:
+            return unavailable('polkit-registration')
+        if not -1 <= time.time() - path.stat().st_mtime <= 4:
+            return unavailable('heartbeat-age')
+        if Path(f"/proc/{ready['pid']}/attr/current").read_text().strip('\0\n') != AUTH_CONTEXT:
+            return unavailable('authentication-context')
+        return True
+    except OSError:
+        return unavailable('readiness-io')
+    except RuntimeError:
+        return unavailable('readiness-input')
+    except (ValueError, KeyError, TypeError):
+        return unavailable('readiness-format')
+
+
+def record_guardian_event(sid, reason):
+    # stdout/stderr are detached in the guardian. Keep a bounded reason in
+    # the system journal, without logging credential or readiness contents.
+    # Logging must never prevent the mandatory scope teardown.
+    try:
+        import syslog
+        syslog.openlog('greyward-seat-guardian', facility=syslog.LOG_AUTHPRIV)
+        syslog.syslog(syslog.LOG_ERR, f'Admitted session {sid} closed: {reason}')
+    except (ImportError, OSError):
+        pass
 
 
 def monitor(uid, pid, ticks, sid, children, state, tty_path, original_tty):
     handles = [process(pid, uid, ticks)] + [os.pidfd_open(c.pid) for c in children]
     try:
-        while not select.select(handles, [], [], 1)[0] and authentication_ready(uid):
-            pass
+        while True:
+            exited = select.select(handles, [], [], 1)[0]
+            if exited:
+                roles = ['session-owner-exited', 'display-owner-exited', 'authentication-owner-exited']
+                index = next(i for i, handle in enumerate(handles) if handle in exited)
+                reason = roles[index] if index < len(roles) else 'protected-worker-exited'
+                record_guardian_event(sid, reason)
+                break
+            failure = []
+            if not authentication_ready(uid, failure):
+                record_guardian_event(sid, failure[0] if failure else 'authentication-unavailable')
+                break
     finally:
         # logind/PID 1 terminates the admitted scope and ordinary UWSM lifetime;
         # no unlocked desktop survives loss of protected authentication.
