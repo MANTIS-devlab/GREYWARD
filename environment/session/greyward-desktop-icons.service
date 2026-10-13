@@ -1,0 +1,22 @@
+[Unit]
+Description=GREYWARD transparent desktop icons
+# A wanted service is otherwise ordered before the graphical target, while
+# DMS is ordered after it. Keep the desktop surface after both without a cycle.
+DefaultDependencies=no
+PartOf=graphical-session.target
+After=graphical-session.target greyward-dms.service
+ConditionEnvironment=WAYLAND_DISPLAY
+ConditionEnvironment=XDG_SESSION_DESKTOP=greyward-labwc
+
+[Service]
+Type=exec
+# DMS's simple service starts before its QML wallpaper surface exists. Use the
+# existing bounded shell readiness probe so native background-layer icons map
+# afterwards, rather than being covered by a later wallpaper surface.
+ExecStartPre=/usr/local/libexec/greyward-dms-runtime-check
+ExecStart=/usr/local/libexec/greyward-desktop-icons
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=graphical-session.target

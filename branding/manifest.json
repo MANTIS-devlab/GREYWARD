@@ -4,9 +4,11 @@
     "symbol": "branding/source/greyward-symbol.svg",
     "wordmark": "branding/source/greyward-wordmark.svg",
     "lockup": "branding/source/greyward-lockup.svg",
-    "securityCenter": "branding/source/greyward-security-status.svg"
+    "securityCenter": "branding/source/greyward-security-status.svg",
+    "fileManager": "branding/source/greyward-files.svg"
   },
   "consumers": [
+    {"surface":"file-manager","consumer":"packaging/greyward-files/greyward-files.spec","source":"branding/source/greyward-files.svg","outputs":[],"validation":"canonical SVG packaged as greyward-files and upstream Strata alias; installed desktop/taskbar rendering"},
     {"surface":"protected-administration","consumer":"security-center/packaging/application-security/administration/embed-logo.py","source":"branding/source/greyward-symbol.svg","outputs":[],"validation":"canonical symbol embedded in the generation-verified native binary; no runtime asset loading"},
     {"surface":"security-shell","consumer":"security-center/packaging/greyward-security-context.spec","source":"branding/source/greyward-security-status.svg","outputs":["security-center/data/greyward-security-status.svg"],"validation":"canonical SVG equality; widget and notification runtime"},
     {"surface":"security-launcher-taskbar","consumer":"security-center/packaging/greyward-security-center.spec","source":"branding/source/greyward-security-status.svg","outputs":["security-center/data/greyward-security-center.svg","security-center/data/greyward-security-center.png","security-center/tauri/frontend/greyward-security-center.svg"],"validation":"canonical SVG equality; 64-pixel raster fallback; launcher and running-app taskbar runtime"},

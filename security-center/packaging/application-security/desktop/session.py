@@ -27,15 +27,25 @@ DISPLAY_XKB_DEFAULTS = {
 }
 
 
-def private_file(path, maximum=65536, owner=0):
-    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC)
-    try:
-        st = os.fstat(fd)
-        if st.st_uid != owner or st.st_mode & 0o022 or st.st_nlink != 1 or st.st_size > maximum:
-            raise RuntimeError('Unsafe fixed input')
-        return os.read(fd, maximum + 1)
-    finally:
-        os.close(fd)
+def private_file(path, maximum=65536, owner=0, retry_replaced=False):
+    # Quickshell atomically replaces the mutable readiness record. An open
+    # descriptor can lose its final link before fstat even though the new
+    # record is healthy. Retry only that demonstrated replacement race; never
+    # relax immutable input checks or reuse a previously accepted heartbeat.
+    for _attempt in range(3 if retry_replaced else 1):
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC)
+        try:
+            st = os.fstat(fd)
+            if retry_replaced and st.st_nlink == 0:
+                current = os.stat(path, follow_symlinks=False)
+                if (current.st_dev, current.st_ino) != (st.st_dev, st.st_ino):
+                    continue
+            if st.st_uid != owner or st.st_mode & 0o022 or st.st_nlink != 1 or st.st_size > maximum:
+                raise RuntimeError('Unsafe fixed input')
+            return os.read(fd, maximum + 1)
+        finally:
+            os.close(fd)
+    raise RuntimeError('Readiness input keeps changing')
 
 
 def generation():
@@ -282,9 +292,9 @@ def start(uid, pid, ticks):
 def authentication_ready(uid):
     try:
         path = STATE / f'auth-{uid}/runtime/authentication-ready.json'
-        ready = json.loads(private_file(path, 4096, owner=uid))
+        ready = json.loads(private_file(path, 4096, owner=uid, retry_replaced=True))
         return ready['schema'] == 'greyward.authentication-readiness/v1' and ready['polkitRegistered'] is True and -1 <= time.time() - path.stat().st_mtime <= 4 and Path(f"/proc/{ready['pid']}/attr/current").read_text().strip('\0\n') == AUTH_CONTEXT
-    except (OSError, ValueError, KeyError):
+    except (OSError, RuntimeError, ValueError, KeyError):
         return False
 
 

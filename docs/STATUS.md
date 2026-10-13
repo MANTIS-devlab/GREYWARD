@@ -1,5 +1,26 @@
 # GREYWARD current status
 
+## 13 October Strata and transparent desktop proof
+
+Strata 1.0.0 (verified checksum and upstream build attestation) and Fedora
+PCManFM-Qt 2.4.1 are installed for a reversible ordinary-user experiment.
+Both use `greyward_guard_t`; the real desktop displays PCManFM icons over the
+unchanged DMS wallpaper and keeps the taskbar. A synthetic original folder opens
+in Strata. Nautilus remains available, the folder MIME preference is backed up,
+and no compositor, authentication or SELinux policy was changed. The shortcut
+helper verifies installed launchers and preserves explicit executable trust review.
+The Obsidian theme and scoped icon-free desktop menu now render on the real
+desktop. The verified Strata payload, native wrappers and desktop user unit are
+packaged as `greyward-files` 1.0.0-6 and installed; RPM verification is clean.
+Real reconnects exposed and corrected a systemd cycle and wallpaper/icon startup
+ordering. Approved matched activation installs DMS 17, runtime 47 and Enrollment
+28; the real login and automatic icons work. The native taskbar creates verified
+shortcuts. Their existing warnings were removed at the user's request through
+native launcher approval, and Strata now has the canonical Obsidian/Platinum
+folder icon. Remaining security/workflow acceptance and offline ISO integration
+are not complete. Earlier entries below are historical snapshots. See
+[the owning implementation record](architecture/FILE_MANAGER_DESKTOP.md).
+
 ## Source publication audit — 11 October
 
 The earlier per-account DMS keyboard preference implementation is preserved as

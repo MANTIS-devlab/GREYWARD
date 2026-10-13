@@ -18,6 +18,7 @@ rights. Generated files inherit the status of their canonical source.
 | `source/greyward-wordmark.png` | `3e5bc969e59d3314cc3641f5077aeb1bee9389b281cf9612413dbd7bee54752e` | raster wordmark |
 | `source/greyward-security-status.svg` | `db8498f6928b58a8b1962bb68af9c60f671747f2da73bec4e0d8c85c8ed97411` | shared Security Center shield-G emblem |
 | `source/greyward-terminal.svg` | `9107af619b980da9d00071159ddcc7fd8ca602b598b1b9236eeab513ecbe4817` | terminal identity icon |
+| `source/greyward-files.svg` | `a19431fda8cf7bded368da790c0ed8c282dae0b7c6ae6a6b0bfdb8dc57c4f122` | original GREYWARD Obsidian/Platinum file-manager folder, 13 October 2026 |
 | `wallpaper/greyward-wallpaper.svg` | `f7bcb113e6116897c601ba1328811ccf62e94f44b08cd4d63c428fc4cee83a16` | canonical environmental source |
 | `wallpaper/greyward-wallpaper-black-art-4k.jpg` | `30f33a7f347c53e29dab65e8b6ef49345063d2ae674bcf102bed693c7db431c7` | desktop wallpaper |
 | `wallpaper/greyward-wallpaper-2109-4k.jpg` | `5b05020838a7a7f661f17be715470af4860253d2f23ea530d311ba123c15bd67` | desktop wallpaper |

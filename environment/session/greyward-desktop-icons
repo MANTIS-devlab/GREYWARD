@@ -1,0 +1,8 @@
+#!/usr/bin/sh
+set -eu
+# Per-process settings: do not export a theme into the user manager or other apps.
+/usr/local/libexec/greyward-files-seed desktop
+export QT_QPA_PLATFORM=wayland
+export QT_PLUGIN_PATH=/usr/lib64/greyward/desktop/qt
+export QT_STYLE_OVERRIDE=GreywardDesktop
+exec /usr/bin/pcmanfm-qt --desktop --profile=greyward

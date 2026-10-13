@@ -1,0 +1,4 @@
+#!/usr/bin/sh
+set -eu
+/usr/local/libexec/greyward-files-seed strata
+exec /usr/libexec/greyward/files/strata "$@"
