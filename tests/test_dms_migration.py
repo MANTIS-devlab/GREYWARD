@@ -31,6 +31,27 @@ locker = load('dms_locker', ROOT / 'environment/session/greyward-session-lock')
 
 
 class NativeLockTests(unittest.TestCase):
+    def test_enrolled_routing_uses_native_broker_handoff_and_preserves_user_choices(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp); config = root/'config'; config.mkdir()
+            before = {'barPinnedApps':['user-app'], 'iconThemeDark':'Greyward', 'wallpaperPath':'/Pictures/custom.jpg'}
+            (config/'settings.json').write_text(json.dumps(before))
+            migration.migrate(config, root/'state', root/'cache', root/'plugins',
+                              'v1.6.2-17', protected_authentication=True)
+            actual = json.loads((config/'settings.json').read_text())
+            self.assertEqual(actual['customPowerActionLock'],'/usr/bin/greyward-guard lock')
+            for key,value in before.items(): self.assertEqual(actual[key],value)
+            self.assertEqual(actual['lockPamPath'],'/etc/pam.d/greyward-dms-lock')
+
+    def test_only_the_kernel_ordinary_guard_subject_selects_the_handoff(self):
+        for subject, expected in [
+            ('greyward_guard_u:greyward_guard_r:greyward_guard_t:s0\0\n',True),
+            ('system_u:system_r:greyward_as_auth_t:s0',False),
+            ('unconfined_u:unconfined_r:unconfined_t:s0',False),
+            ('greyward_guard_u:greyward_guard_r:unconfined_t:s0',False)]:
+            with patch.object(migration.Path,'read_text',return_value=subject):
+                self.assertEqual(migration.uses_protected_authentication(),expected)
+
     def test_waits_for_secure_wayland_confirmation(self):
         with patch.object(locker.subprocess, 'run') as request, \
              patch.object(locker.subprocess, 'check_output', side_effect=['false', 'true']) as status, \
@@ -38,6 +59,15 @@ class NativeLockTests(unittest.TestCase):
             locker.lock()
         self.assertEqual(status.call_count, 2)
         self.assertEqual(request.call_args.args[0][-2:], ['lock', 'lock'])
+
+    def test_enrolled_lock_waits_for_root_verified_confirmation_instead_of_local_shell(self):
+        with patch.object(locker.subprocess,'run') as request, \
+             patch.object(locker.subprocess,'check_output',side_effect=['false','true']) as status, \
+             patch.object(locker.time,'sleep'):
+            locker.lock(protected_authentication=True)
+        self.assertEqual(request.call_args.args[0],['/usr/bin/greyward-guard','lock'])
+        self.assertEqual(status.call_count,2)
+        self.assertEqual(status.call_args.args[0],['/usr/bin/greyward-guard','lock-status'])
 
     def test_unconfirmed_request_fails_instead_of_claiming_locked(self):
         with patch.object(locker.subprocess, 'run'), \

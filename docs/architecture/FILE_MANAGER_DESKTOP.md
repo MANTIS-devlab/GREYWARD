@@ -2,6 +2,50 @@
 
 ## Current development proof — 14 October
 
+The shared icon family is installed as Files 11; the dated Files 8 notes below
+record the earlier routing/startup proof. Native locking and broader stability
+remain a blocking migration gate after the later automatic-lock closure.
+
+### Native-lock correction candidate — not activated
+
+The ordinary DMS profile still uses its local lock despite the compositor
+reserving that protocol for protected authentication. The 00:15 journal shows
+the ordinary shell's unsupported-lock error and a protected clipboard-pipe
+descriptor denial, followed by guardian teardown. This establishes an actual
+integration defect and a remaining clipboard path; it does not prove the final
+exit cause without an instrumented normal-session retry.
+
+The candidate uses existing native configuration rather than another locker:
+enrolled ordinary DMS routes `customPowerActionLock` to the fixed
+`/usr/bin/greyward-guard lock` request. Its kernel SELinux subject selects the
+route; unconfined sessions retain normal local DMS locking. The session-lock
+helper waits for the existing broker's root-verified `lock-status`. Surface
+startup may report `SHELL_READY`, but the ordinary full check refuses to claim
+protected native-lock security from its local surface or the routing setting.
+
+The root-prepared authentication worker also supplies Qt's native
+`QT_WAYLAND_DISABLED_INTERFACES` for clipboard/primary-selection/data-control
+only. This complements the backend's disabled collector; it preserves `wl_seat`
+and the native session-lock protocol. Installed Qt 6.11.2 registry-only probes
+confirm normal clipboard bindings versus no clipboard bindings with this option,
+while both retain the seat. No window or clipboard content is used in that test;
+it is not a successful native-lock test. SELinux descriptor denials remain intact.
+
+Runtime 51, Enrollment 32 and Session 18 build offline. Twelve desktop, twenty-three
+DMS migration and seven readiness tests pass on Fedora. Existing-package checks,
+private matched rollback copies and the three-package dependency dry run pass.
+These packages have not been installed or activated. The active graphical session
+and SSH remain running. Explicit user approval is required before ending that
+session; real native lock/PAM unlock, clipboard and stability acceptance follow
+activation. No reboot, PAM/greetd change or policy allowance is part of this fix.
+
+During preparation, the unmodified Runtime 50 session subsequently auto-locks
+without losing its protected authentication PID or admitted session. The real
+VM console displays the native lock, and the existing broker's `lock-status`
+returns `true` after root verification. This is an observed secure acquisition,
+not a PAM-unlock pass or proof that the intermittent clipboard-dependent exit
+is resolved. The pending candidate remains unactivated.
+
 Runtime 50/Enrollment 31 disable only the private authentication backend's
 clipboard collector through DMS's native configuration. The same desktop-to-Strata
 paste that closed two earlier sessions now succeeds in the normal desktop, with
@@ -54,8 +98,8 @@ aliases; offline builds and package/receipt checks pass. The real post-correctio
 paste passes as recorded above. No descriptor-policy allowance or guardian grace
 period was added. Remaining interaction/security gates are still explicit.
 
-Current installed file integration is `greyward-files` 1.0.0-8 with Session 17.
-Both verify cleanly. FileManager1 selects the synthetic original in Strata on
+At the earlier routing/startup validation, file integration was Files 8 with
+Session 17. Both verified cleanly. FileManager1 selected the synthetic original in Strata on
 the actual desktop; D-Bus owner/PID readback resolves the packaged Strata ELF in
 `greyward_guard_t`. PCManFM retains its private desktop interface and no longer
 claims FileManager1 in desktop mode. The icon service is active over the unchanged

@@ -1,5 +1,17 @@
 # GREYWARD repository map
 
+Native lock handoff ownership: `environment/session/greyward-dms-state-migrate`,
+`greyward-session-lock`, `greyward-dms-runtime-check` and `packaging/greyward-session/`.
+The kernel subject selects the existing broker handoff; surface ordering never
+claims private lock security. Private Qt clipboard suppression belongs to
+`security-center/packaging/application-security/desktop/session.py`. Validation:
+`python -m unittest discover -s tests -p 'test_dms_migration.py'`,
+`test_dms_runtime.py`, `test_application_desktop.py`, installed Qt registry probes
+and the pending real lock/PAM retry. Authority:
+[file manager desktop integration](architecture/FILE_MANAGER_DESKTOP.md).
+The matched candidate is built; activation and intermittent-stability acceptance
+are pending user approval. No new locker, daemon or policy allowance is introduced.
+
 Shared icon-family ownership: `branding/source/greyward-icon-family.json`,
 `tools/generate-file-icons.py`, desktop-only QIcon selection in
 `environment/session/desktop/style/obsidian.cpp`, and the icon-only Strata
