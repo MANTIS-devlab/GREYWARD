@@ -5,4 +5,4 @@ set -eu
 export QT_QPA_PLATFORM=wayland
 export QT_PLUGIN_PATH=/usr/lib64/greyward/desktop/qt
 export QT_STYLE_OVERRIDE=GreywardDesktop
-exec /usr/bin/pcmanfm-qt --desktop --profile=greyward
+exec /usr/libexec/greyward/files/pcmanfm-qt --desktop --profile=greyward

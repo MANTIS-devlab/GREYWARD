@@ -21,6 +21,14 @@ folder icon. Remaining security/workflow acceptance and offline ISO integration
 are not complete. Earlier entries below are historical snapshots. See
 [the owning implementation record](architecture/FILE_MANAGER_DESKTOP.md).
 
+Further installed validation advances Files to revision 8 and Session to 17:
+FileManager1 routes to confined Strata, the desktop startup probe reports only
+`SHELL_READY`, and real clipboard copy to the desktop preserves the original's
+digest. Strata replaces Files in the taskbar. A later guardian-driven spontaneous
+session closure remains unresolved; the approved repeat did not reproduce it or
+complete drag/drop. Source exit diagnostics pass eleven Fedora tests but are not
+deployed. This remains an incomplete migration, not image/security acceptance.
+
 ## Source publication audit — 11 October
 
 The earlier per-account DMS keyboard preference implementation is preserved as

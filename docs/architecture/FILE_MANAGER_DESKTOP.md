@@ -2,15 +2,53 @@
 
 ## Current development proof — 13 October
 
+Further live validation: the native DMS menu replaced the old Files taskbar pin
+with Strata; Brave and Terminal retained their positions. The persisted taskbar
+list survives the subsequent user reconnect. The real Strata shortcut opens
+normally with its new folder icon. Copying the synthetic text from Strata to
+PCManFM's desktop succeeds and both files have the same SHA-256.
+
+A later spontaneous closure during drag/drop remains an unresolved blocking
+stability regression. The user confirms it was not a deliberate logout. The
+journal shows the guardian retiring the admitted scope while Labwc was still
+alive, not an established compositor crash. An explicitly approved repeat with
+read-only readiness/process-lifetime observation did not immediately reproduce
+the closure; it also did not complete the file drop, so drag/drop is not passed.
+The new session's initial three-minute observation records 34,383 readiness
+checks without rejection. Short successful observations do not prove this
+issue is fixed; a subsequent ten-minute observation records 114,233 further
+checks without rejection or worker exit. Source records a bounded guardian exit
+reason in the system journal, without credential/readiness contents and without
+changing teardown, authentication or freshness requirements. Eleven focused
+Fedora tests pass. This diagnostic change is not yet deployed; another matched
+activation requires approval.
+
+Current installed file integration is `greyward-files` 1.0.0-8 with Session 17.
+Both verify cleanly. FileManager1 selects the synthetic original in Strata on
+the actual desktop; D-Bus owner/PID readback resolves the packaged Strata ELF in
+`greyward_guard_t`. PCManFM retains its private desktop interface and no longer
+claims FileManager1 in desktop mode. The icon service is active over the unchanged
+wallpaper, and the same graphical session and DMS process remain running.
+
+Restart validation exposed a startup-probe mistake: the full DMS check rejects
+the ordinary shell's `shouldLock=true/sessionLockSecure=false` while the separate
+protected authentication process reports no lock request and logind's LockedHint
+is false. Icons need shell/surface readiness, not this ordinary lock assertion.
+Session 17 adds `--desktop-only` to the existing probe, returning `SHELL_READY`
+without a security claim. The default full lock check is unchanged and still
+rejects that ordinary state. Five focused tests pass, including that distinction.
+No native-lock failure is declared fixed by changing icon ordering. The same
+protected authentication and guardian remain active, with no policy changes.
+
 The initial installed baseline was DMS 1.6.2-15, Application Security 45,
 Enrollment 22, Center 100 and Context 92. Earlier notes listing Enrollment 26,
 Center 90 and Context 81 describe the tuple before the separately installed ISO
 component update, not the baseline used for this migration.
 
-Revision 6 of `greyward-files` is installed and verifies cleanly. A real fresh
+Revision 6 of `greyward-files` was installed and verified cleanly. A real fresh
 login revealed a second startup problem: DMS's simple service was active before
 its QML wallpaper mapped, covering the earlier native background-layer icons.
-The desktop unit now uses the existing bounded DMS shell readiness check before
+The desktop unit uses the existing bounded DMS shell readiness check before
 mapping PCManFM. Restarting only that ordinary desktop unit restores visible
 icons over the unchanged wallpaper. Automatic icon startup also passes in the
 approved real logout/login: one bounded readiness retry, then visible icons
@@ -74,6 +112,16 @@ Packaged desktop icons now run in the normal user manager, and the real desktop
 opens Strata through its installed launcher. The folder MIME preference is backed up before selecting
 Strata. Nautilus remains installed for rollback. No file manager runs as root.
 
+The real `FileManager1.ShowItems` probe exposed another integration failure:
+PCManFM's desktop instance claimed the shared file-manager name before Strata,
+and opened its own manager window. Its pinned 2.4.1 constructor registers this
+name before loading settings and has no native opt-out. Revision 7 therefore
+builds the exact source archive recovered from Fedora's SRPM with a three-line
+desktop-mode registration guard. Only the desktop wrapper selects this binary;
+the original Fedora program and native desktop-control interface remain intact.
+This is a narrow routing correction, not a portal replacement or new D-Bus
+broker. Installed FileManager1 routing and icon startup pass with revision 8.
+
 ## Shortcut boundary
 
 `environment/session/greyward-desktop-shortcut` resolves an application ID only
@@ -114,15 +162,17 @@ an integrated release feature or remove Nautilus from the production baseline.
 | Transparent desktop | PASS: real PCManFM icons, unchanged DMS wallpaper and taskbar |
 | Synthetic folder open | PASS: confined Strata command opens the original test folder |
 | Desktop double-click into Strata | PASS: VMConnect double-click opens the synthetic folder and its original Read-me.txt |
+| FileManager1 routing | PASS: ordinary D-Bus ShowItems opens/selects the synthetic original in packaged confined Strata; desktop PCManFM does not capture the request |
 | Shortcut verification | PASS: confined helper resolves installed Strata desktop entry |
 | Desktop menus and premium application theme | PASS: native Strata custom Obsidian tokens; scoped Qt Fusion proxy style renders dark icon-free desktop menus on the real desktop |
 | Synthetic folder creation and rename | PASS: real Strata New Folder action and inline rename; original document preserved |
 | Synthetic text preview | PASS: original test text visibly rendered in Strata; binary/document sandbox coverage remains NON VÉRIFIÉ |
 | DMS shortcut package | PASS: exact assembly, offline RPM/Go checks, matched installation and successful real login for 1.6.2-17 |
-| Taskbar shortcut creation, native and Flatpak | PASS: real menu creation and original launcher hashes for Brave Flatpak, Black Box and Strata; shortcut launch and another Flatpak case remain NON VÉRIFIÉ |
-| Drag/drop, clipboard, trash, previews, USB, SMB/SFTP | NON VÉRIFIÉ |
+| Taskbar shortcut creation, native and Flatpak | PASS: real menu creation and original launcher hashes for Brave Flatpak, Black Box and Strata; Strata shortcut launch passes; other shortcut launches and another Flatpak case remain NON VÉRIFIÉ |
+| Clipboard Strata to desktop | PASS: real Ctrl+C/Ctrl+V, immediate native icon and identical synthetic-file SHA-256 |
+| Drag/drop, reverse clipboard, trash, binary previews, USB, SMB/SFTP | NON VÉRIFIÉ: drop did not complete; a guardian-driven session closure blocks stability acceptance |
 | Protected Data and Administration regressions | NON VÉRIFIÉ: no policy relaxation performed |
-| Restart and reconnect | PASS: approved matched migration and real login, automatic transparent desktop icons; broader crash recovery remains NON VÉRIFIÉ |
+| Restart and reconnect | PASS only for approved matched migration, real login and automatic transparent icons; intermittent spontaneous closure remains unresolved, broader crash recovery NON VÉRIFIÉ |
 | Resolution changes and multiple monitors | NON VÉRIFIÉ |
 | Offline package/ISO closure and fresh installation | NON VÉRIFIÉ |
 

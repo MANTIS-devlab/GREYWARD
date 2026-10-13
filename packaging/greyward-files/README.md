@@ -29,3 +29,13 @@ clean-image acceptance remains pending.
 icon, packaged with the GREYWARD branding notice. The upstream attested binary
 remains unchanged. Its launcher uses the root-owned SVG directly, avoiding stale
 negative theme-icon cache entries in an already-running desktop.
+
+Revision 7 also builds the pinned PCManFM-Qt 2.4.1 source archive recorded in
+`source.json`. The Fedora SRPM's digests were checked; no SRPM signature is
+claimed. Its three-line `pcmanfm-desktop-only.patch` prevents desktop mode from
+claiming `org.freedesktop.FileManager1`, which otherwise captures requests meant
+for Strata. This registration precedes PCManFM's configuration loading and has
+no native opt-out. The original Fedora executable and shared translation assets
+remain installed. Only the desktop wrapper selects the corrected binary; private
+PCManFM desktop control, file actions and default-manager folder opening remain
+native. Package build and installed D-Bus validation are separate gates.

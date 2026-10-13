@@ -13,7 +13,7 @@ Type=exec
 # DMS's simple service starts before its QML wallpaper surface exists. Use the
 # existing bounded shell readiness probe so native background-layer icons map
 # afterwards, rather than being covered by a later wallpaper surface.
-ExecStartPre=/usr/local/libexec/greyward-dms-runtime-check
+ExecStartPre=/usr/local/libexec/greyward-dms-runtime-check --desktop-only
 ExecStart=/usr/local/libexec/greyward-desktop-icons
 Restart=on-failure
 RestartSec=3

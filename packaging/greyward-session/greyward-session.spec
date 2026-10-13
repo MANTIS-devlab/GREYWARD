@@ -1,6 +1,6 @@
 Name: greyward-session
 Version: 0.1.0
-Release: 16%{?dist}
+Release: 17%{?dist}
 Summary: GREYWARD static desktop session policy and factory defaults
 License: GPL-3.0-only
 BuildArch: noarch
@@ -65,6 +65,9 @@ done
 /usr/share/greyward/defaults
 
 %changelog
+* Tue Oct 13 2026 MANTIS SYSTEMS - 0.1.0-17
+- Distinguish ordinary shell surface readiness from the full native-lock check.
+
 * Sun Oct 11 2026 MANTIS SYSTEMS - 0.1.0-16
 - Finalize the VM display fallback with byte-identical source packaging.
 

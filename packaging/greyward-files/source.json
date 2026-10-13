@@ -11,6 +11,16 @@
       "url": "https://github.com/lgse/strata/releases/download/v1.0.0/strata-1.0.0-x86_64-unknown-linux-gnu.tar.gz",
       "attestation": "GitHub Actions provenance verified against lgse/strata before development installation"
     },
+    "desktop": {
+      "file": "pcmanfm-qt-2.4.1.tar.xz",
+      "sha256": "f17f336072993855d92af40052f8f9ddb736df28b538b71a2925a56a038af1db",
+      "root": "pcmanfm-qt-2.4.1",
+      "url": "https://github.com/lxqt/pcmanfm-qt/releases/download/2.4.1/pcmanfm-qt-2.4.1.tar.xz",
+      "provenance": "Source archive extracted from Fedora pcmanfm-qt-2.4.1-1.fc44.src.rpm; RPM digests verified, no SRPM signature claimed",
+      "patchPreimage": {
+        "pcmanfm/application.cpp": "f289df0777b4e989bc6a6dab5baf508c96bc2e00fbc1b58afed6ff58f6a958ba"
+      }
+    },
     "source": {
       "file": "strata-source.tar.gz",
       "sha256": "0c802c3ab03241df8a1798bc6c2d39d22c530d2142234a6103b7d62406f1ef67",

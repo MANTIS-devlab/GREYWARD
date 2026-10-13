@@ -1,17 +1,24 @@
 Name: greyward-files
 Version: 1.0.0
-Release: 6%{?dist}
+Release: 8%{?dist}
 Summary: GREYWARD Strata file manager and transparent desktop integration
-License: MIT AND GPL-3.0-only AND Apache-2.0 AND OFL-1.1 AND ISC AND LGPL-2.0-or-later AND LicenseRef-UnRAR AND LicenseRef-GREYWARD-Branding
+License: MIT AND GPL-3.0-only AND GPL-2.0-or-later AND Apache-2.0 AND OFL-1.1 AND ISC AND LGPL-2.0-or-later AND LicenseRef-UnRAR AND LicenseRef-GREYWARD-Branding
 URL: https://github.com/lgse/strata
 ExclusiveArch: x86_64
 Source0: strata-1.0.0-x86_64-unknown-linux-gnu.tar.gz
 Source1: strata-source.tar.gz
 Source2: greyward-files-inputs.tar.gz
+Source3: pcmanfm-qt-2.4.1.tar.xz
 BuildRequires: cmake
 BuildRequires: gcc-c++
 BuildRequires: qt6-qtbase-devel
 BuildRequires: python3
+BuildRequires: patch
+BuildRequires: cmake(fm-qt6) >= 2.4.0
+BuildRequires: cmake(lxqt2-build-tools) >= 2.4.0
+BuildRequires: cmake(LayerShellQt)
+BuildRequires: cmake(Qt6LinguistTools)
+BuildRequires: qt6-qtbase-private-devel
 Requires: pcmanfm-qt >= 2.4.1
 Requires: python3
 Requires: bubblewrap
@@ -20,7 +27,7 @@ Requires: gvfs-smb
 Requires: gvfs-fuse
 Requires: udisks2
 Requires: breeze-icon-theme
-Requires: greyward-session >= 0.1.0-16
+Requires: greyward-session >= 0.1.0-17
 %global debug_package %{nil}
 # Keep the upstream attested ELF intact rather than stripping it a second time.
 %global __brp_strip %{nil}
@@ -36,25 +43,32 @@ Candidate package: installed workflow and clean-image validation remain pending.
 %prep
 %setup -q -c -T
 tar -xzf %{SOURCE2}
-python3 - %{SOURCE0} %{SOURCE1} <<'PY'
+python3 - %{SOURCE0} %{SOURCE1} %{SOURCE3} <<'PY'
 import hashlib,json,pathlib,sys,tarfile
 m=json.loads(pathlib.Path('packaging/greyward-files/source.json').read_text())
-for key,path in zip(('binary','source'),sys.argv[1:]):
+for key,path in zip(('binary','source','desktop'),sys.argv[1:]):
     if hashlib.sha256(pathlib.Path(path).read_bytes()).hexdigest()!=m['inputs'][key]['sha256']:
         raise SystemExit('Input digest mismatch')
     with tarfile.open(path) as archive:
         archive.extractall(key,filter='data')
 if pathlib.Path('binary/strata-1.0.0-x86_64-unknown-linux-gnu/SOURCE_COMMIT').read_text().strip()!=m['commit']:
     raise SystemExit('Binary generation mismatch')
+for name,digest in m['inputs']['desktop']['patchPreimage'].items():
+    if hashlib.sha256((pathlib.Path('desktop')/m['inputs']['desktop']['root']/name).read_bytes()).hexdigest()!=digest:
+        raise SystemExit('Desktop patch preimage changed')
 PY
+patch --directory=desktop/pcmanfm-qt-2.4.1 -p1 --fuzz=0 < packaging/greyward-files/pcmanfm-desktop-only.patch
 
 %build
 cmake -S environment/session/desktop/style -B style-build -DCMAKE_BUILD_TYPE=Release
 cmake --build style-build --parallel 2
+cmake -S desktop/pcmanfm-qt-2.4.1 -B desktop-build -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_INSTALL_LIBDIR=lib64
+cmake --build desktop-build --parallel 2
 
 %install
 binary=binary/strata-1.0.0-x86_64-unknown-linux-gnu
 install -Dm0755 "$binary/strata" %{buildroot}/usr/libexec/greyward/files/strata
+install -Dm0755 desktop-build/pcmanfm/pcmanfm-qt %{buildroot}/usr/libexec/greyward/files/pcmanfm-qt
 install -Dm0755 environment/session/desktop/strata-launcher %{buildroot}/usr/bin/strata
 install -Dm0755 style-build/libgreywarddesktop.so %{buildroot}%{_libdir}/greyward/desktop/qt/styles/libgreywarddesktop.so
 for helper in greyward-files-seed greyward-desktop-icons greyward-desktop-shortcut; do
@@ -77,6 +91,7 @@ mkdir -p %{buildroot}%{_licensedir}/%{name}
 cp "$binary/LICENSE" "$binary/THIRD_PARTY_LICENSES.md" "$binary/UnRAR.txt" %{buildroot}%{_licensedir}/%{name}/
 cp -a source/lgse-strata-6662d8d/data/licenses %{buildroot}%{_licensedir}/%{name}/upstream
 install -m0644 branding/LICENSE %{buildroot}%{_licensedir}/%{name}/GREYWARD-Branding-NOTICE
+install -m0644 desktop/pcmanfm-qt-2.4.1/LICENSE %{buildroot}%{_licensedir}/%{name}/PCManFM-LICENSE
 
 %check
 python3 - <<'PY'
@@ -91,6 +106,7 @@ PY
 %files
 /usr/bin/strata
 /usr/libexec/greyward/files/strata
+/usr/libexec/greyward/files/pcmanfm-qt
 %{_libdir}/greyward/desktop/qt/styles/libgreywarddesktop.so
 /usr/local/libexec/greyward-files-seed
 /usr/local/libexec/greyward-desktop-icons
@@ -105,6 +121,12 @@ PY
 %license %{_licensedir}/%{name}
 
 %changelog
+* Tue Oct 13 2026 MANTIS SYSTEMS - 1.0.0-8
+- Use ordinary shell readiness for icon ordering while retaining the full native-lock health check.
+
+* Tue Oct 13 2026 MANTIS SYSTEMS - 1.0.0-7
+- Keep FileManager1 ownership with the default file manager in desktop-only mode.
+
 * Tue Oct 13 2026 MANTIS SYSTEMS - 1.0.0-6
 - Resolve the canonical SVG directly so an active desktop cannot retain a missing theme-icon cache entry.
 
