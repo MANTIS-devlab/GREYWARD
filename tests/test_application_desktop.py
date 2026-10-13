@@ -16,6 +16,31 @@ SESSION_SPEC.loader.exec_module(session)
 
 
 class DesktopLifetime(unittest.TestCase):
+    def test_qt_clipboard_protocol_suppression_is_private_and_keeps_native_authentication(self):
+        captured = {}
+        def capture(command, args, env): captured.update(env)
+        library = SimpleNamespace(setexeccon=lambda value: 0)
+        for kind in ('authentication','display'):
+            captured.clear()
+            with mock.patch.object(session,'generation',return_value={'accounts':{'1001':{'name':'user','home':'/home/user'}}}), \
+                 mock.patch.object(session.os,'read',return_value=b'G'), \
+                 mock.patch.object(session.os,'close'), \
+                 mock.patch.object(session.os,'setgroups',create=True), \
+                 mock.patch.object(session.os,'setgid',create=True), \
+                 mock.patch.object(session.os,'setuid',create=True), \
+                 mock.patch.object(session.ctypes,'CDLL',return_value=library), \
+                 mock.patch.object(session.os,'execve',side_effect=capture):
+                session.worker(kind,1001,1001,'test-session')
+            if kind=='authentication':
+                disabled = captured['QT_WAYLAND_DISABLED_INTERFACES'].split(',')
+                self.assertIn('wl_data_device_manager',disabled)
+                self.assertIn('zwp_primary_selection_device_manager_v1',disabled)
+                self.assertNotIn('wl_seat',disabled)
+                self.assertNotIn('ext_session_lock_manager_v1',disabled)
+                self.assertTrue(Path(captured['XDG_RUNTIME_DIR']).as_posix().endswith('/auth-1001/runtime'))
+            else:
+                self.assertNotIn('QT_WAYLAND_DISABLED_INTERFACES',captured)
+
     @unittest.skipUnless(__import__('os').name == 'posix', 'POSIX descriptor replacement')
     def test_readiness_reopens_an_atomically_replaced_record(self):
         import os

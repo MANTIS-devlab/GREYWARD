@@ -15,7 +15,17 @@ def file_map(path):
             for p in path.rglob('*') if p.is_file() and not p.is_symlink()}
 
 
-def migrate(config, state, cache, system_plugins, release, default_monitors=None):
+def uses_protected_authentication():
+    # Kernel subject selects routing, never a caller-supplied desktop/env name.
+    try:
+        subject = Path('/proc/self/attr/current').read_text().strip('\0\n')
+    except OSError:
+        return False
+    return subject == 'greyward_guard_u:greyward_guard_r:greyward_guard_t:s0'
+
+
+def migrate(config, state, cache, system_plugins, release, default_monitors=None,
+            protected_authentication=False):
     marker = config / '.changelog-1.6'
     first_session = not marker.exists()
     backup = state.parent / 'greyward/dms-migration' / release
@@ -74,7 +84,9 @@ def migrate(config, state, cache, system_plugins, release, default_monitors=None
             stream.write(json.dumps({'wallpaperPath': wallpaper}) + '\n')
         session_file.chmod(0o600)
     # These are GREYWARD session ownership policy; other preferences remain user-owned.
-    settings.update(customPowerActionLock='',
+    # Native DMS handoff requests the SAME native DMS lock from the root-admitted
+    # authentication owner. It does not run a replacement locker.
+    settings.update(customPowerActionLock='/usr/bin/greyward-guard lock' if protected_authentication else '',
                     lockBeforeSuspend=True, loginctlLockIntegration=True,
                     lockPamPath='/etc/pam.d/greyward-dms-lock', lockPamExternallyManaged=True,
                     fadeToLockEnabled=False, fadeToDpmsEnabled=False,
@@ -121,4 +133,5 @@ if __name__ == '__main__':
     if not re.fullmatch(r'v1\.6\.2-[1-9][0-9]*', release):
         raise SystemExit('Unsupported migration release')
     migrate(config, state, cache, Path('/etc/xdg/quickshell/dms-plugins'), release,
-            Path('/usr/share/greyward/defaults/dankmaterialshell/monitors.json'))
+            Path('/usr/share/greyward/defaults/dankmaterialshell/monitors.json'),
+            protected_authentication=uses_protected_authentication())

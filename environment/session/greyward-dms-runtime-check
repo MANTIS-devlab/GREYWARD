@@ -64,7 +64,14 @@ def check(desktop_only=False):
         output = subprocess.check_output(['/usr/local/bin/greyward-dms', 'ipc', 'call', 'settings', 'get', 'customPowerActionLock'], text=True, timeout=12)
     except subprocess.TimeoutExpired as error:
         raise ValueError('Shell IPC readiness timed out') from error
-    if json.loads(output.strip()) != '':
+    routing = json.loads(output.strip())
+    protected_route = routing == '/usr/bin/greyward-guard lock'
+    if protected_route:
+        # Routing is not evidence of a secure surface. Only the enrolled
+        # ordinary subject uses this fixed handoff; private auth owns the lock.
+        if Path('/proc/self/attr/current').read_text().strip('\0\n') != 'greyward_guard_u:greyward_guard_r:greyward_guard_t:s0':
+            raise ValueError('Protected lock routing outside the enrolled subject')
+    elif routing != '':
         raise ValueError('Shell IPC/lock routing is not ready')
     if desktop_only:
         # Surface ordering is not a security/lock readiness claim. In enrolled
@@ -73,6 +80,8 @@ def check(desktop_only=False):
         print(json.dumps({'state': 'SHELL_READY', 'apiVersion': data['apiVersion'],
                           'shellIpc': True, 'pong': True}))
         return
+    if protected_route:
+        raise ValueError('Protected native-lock readback belongs to the authentication owner')
     lock = json.loads(subprocess.check_output(
         ['/usr/local/bin/greyward-dms', 'ipc', 'call', 'lock', 'status'], text=True, timeout=12))
     validate_lock_status(lock)

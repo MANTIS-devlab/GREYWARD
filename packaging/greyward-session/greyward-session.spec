@@ -1,6 +1,6 @@
 Name: greyward-session
 Version: 0.1.0
-Release: 17%{?dist}
+Release: 18%{?dist}
 Summary: GREYWARD static desktop session policy and factory defaults
 License: GPL-3.0-only
 BuildArch: noarch
@@ -65,6 +65,9 @@ done
 /usr/share/greyward/defaults
 
 %changelog
+* Wed Oct 14 2026 MANTIS SYSTEMS - 0.1.0-18
+- Route enrolled desktop lock requests to the existing protected native DMS owner; preserve ordinary-session native locking.
+
 * Tue Oct 13 2026 MANTIS SYSTEMS - 0.1.0-17
 - Distinguish ordinary shell surface readiness from the full native-lock check.
 

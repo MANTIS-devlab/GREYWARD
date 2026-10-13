@@ -1,5 +1,22 @@
 # GREYWARD current status
 
+## 14 October native-lock correction awaiting activation
+
+Runtime 51, Enrollment 32 and Session 18 are built, not installed. The existing
+native DMS custom action routes enrolled ordinary lock requests to Guard;
+unconfined sessions retain local native locking. The helper waits for root-verified
+lock status. The private authentication worker disables only Qt clipboard
+interfaces, complementing its already disabled backend collector. Installed Qt
+registry probes preserve the seat while suppressing clipboard bindings. Forty-two
+focused Python tests pass on Fedora; package checks, rollback preparation and
+the three-package dependency dry run pass. Actual activation/PAM unlock and
+post-correction stability remain pending. No policy, PAM or greetd change is made.
+
+The old Runtime 50 later acquires a real native lock without retiring its session;
+the console and broker confirm it. This is acquisition evidence only, and does
+not disprove the earlier intermittent exit or validate the new candidate. See
+[the owning record](architecture/FILE_MANAGER_DESKTOP.md).
+
 ## 14 October shared icon family
 
 Files 1.0.0-11 is installed on the development desktop. The native theme and

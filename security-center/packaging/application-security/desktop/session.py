@@ -127,6 +127,13 @@ def worker(kind, uid, gid, sid):
            'QV4_FORCE_INTERPRETER': '1', 'QML_DISABLE_DISK_CACHE': '1',
            'DMS_DISABLE_HOT_RELOAD': '1'}
     if kind == 'authentication':
+        # Qt's implicit clipboard is separate from DMS's disabled collector.
+        # Keep focus/lock surfaces out of ordinary clipboard FD transfers.
+        # Only this root-prepared process tree receives this native Qt option;
+        # wl_seat and ext_session_lock_manager_v1 remain available.
+        env['QT_WAYLAND_DISABLED_INTERFACES'] = (
+            'wl_data_device_manager,zwp_primary_selection_device_manager_v1,'
+            'zwlr_data_control_manager_v1,ext_data_control_manager_v1')
         env.update({f'XDG_{n}_HOME': str(auth / n.lower()) for n in ['CONFIG', 'STATE', 'CACHE']})
         command = [str(BASE / 'bin/auth-python'), '-I', str(BASE / 'authentication.py')]
     elif kind == 'display':
