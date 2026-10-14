@@ -31,7 +31,7 @@ the publication candidate rather than making an unsupported rights claim.
 Do not add third-party material to this table.
 
 The file/object family catalog `source/greyward-icon-family.json` has SHA-256
-`03f8d1c6525539bded8e9180745b72583f2e7992d8f0f9514e5417850f57ca0f`.
+`51bebf9834052729d3fb8671d192ad0d4b011ba09188a7d74c61787fdb44848f`.
 Its folder/page/material geometry is GREYWARD artwork; its separately attributed
 action and extension glyphs are derived from Lucide/Feather and Catppuccin in
 the pinned Strata source archive recorded in `packaging/greyward-files/source.json`.

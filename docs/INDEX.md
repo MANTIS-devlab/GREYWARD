@@ -1,5 +1,12 @@
 # GREYWARD documentation index
 
+14 October native-icon candidate: Files 17 is installed in development,
+retaining the source-built revision-15 executable. The normal desktop review
+confirms shared icon silhouettes, balanced semantic accents and SVG thumbnails.
+Three Rust and twelve Fedora Python checks pass; installed PDF/video and renewed
+helper/security acceptance remain pending. Build-pressure session loss during
+revision 15 is recorded separately. See [file manager integration](architecture/FILE_MANAGER_DESKTOP.md).
+
 14 October preview dependencies: Files 14 now declares external renderer
 commands that were previously present only by coincidence on the development
 host. Installed sandbox-helper image/PDF/video checks pass and the registered

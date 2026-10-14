@@ -1,0 +1,248 @@
+--- a/src/assets.rs
++++ b/src/assets.rs
+@@ -12,6 +12,7 @@
+ use gtk::{gdk, gio, glib, prelude::*};
+ 
+ mod vector;
++pub(crate) mod native_icons;
+ 
+ pub mod icons {
+     pub const ARROW_DOWN: &str = "strata-arrow-down";
+@@ -274,6 +275,7 @@
+ }
+ 
+ pub fn register_icon_theme() {
++    native_icons::register();
+     if let Some(display) = gdk::Display::default() {
+         gtk::IconTheme::for_display(&display).add_resource_path("/io/github/lgse/Strata/icons");
+     }
+--- a/src/ui/thumbnail.rs
++++ b/src/ui/thumbnail.rs
+@@ -1328,6 +1328,11 @@
+     let custom_icon = preference_manager.custom_icon(path);
+     let color = preference_manager.folder_color(path);
+     let customized = custom_icon.is_some() || color.is_some();
++    if !customized && fallback_icon != crate::assets::icons::FOLDER
++        && let Some(texture) = crate::assets::native_icons::file_icon(path, size, scale_factor)
++    {
++        return (Some(texture), false);
++    }
+     let texture = if fallback_icon == crate::assets::icons::FOLDER
+         && let Some(decoration) = custom_icon.as_deref()
+     {
+--- /dev/null
++++ b/src/assets/native_icons.rs
+@@ -0,0 +1,104 @@
++// SPDX-License-Identifier: MIT
++//! Native file icons are display metadata, never launcher authorization.
++use gtk::{gdk, gio, prelude::*};
++use gdk_pixbuf::prelude::PixbufLoaderExt;
++use std::{
++    cell::RefCell,
++    io::Read,
++    os::unix::fs::MetadataExt,
++    path::Path,
++};
++
++mod input;
++use input::{bounded_open, bounded_png, launcher_icon};
++
++thread_local! {
++    static THEME: RefCell<Option<gtk::IconTheme>> = const { RefCell::new(None) };
++}
++
++pub(super) fn register() {
++    let Ok(name) = std::env::var("STRATA_NATIVE_ICON_THEME") else {
++        return;
++    };
++    if name.is_empty() || name.len() > 128 || name.contains('/') {
++        return;
++    }
++    let theme = gtk::IconTheme::new();
++    theme.set_theme_name(Some(&name));
++    // GTK may inspect themed icons during lookup. Keep that lookup restricted
++    // to administrator-owned themes; arbitrary FileIcon hints go directly
++    // through our bounded renderer below, without GTK opening them first.
++    theme.set_search_path(&[
++        Path::new("/usr/share/icons"),
++        Path::new("/usr/local/share/icons"),
++        Path::new("/usr/share/pixmaps"),
++        Path::new("/var/lib/flatpak/exports/share/icons"),
++    ]);
++    THEME.with_borrow_mut(|current| *current = Some(theme));
++}
++
++pub(crate) fn file_icon(path: &Path, size: i32, scale: i32) -> Option<gdk::Texture> {
++    let theme = THEME.with_borrow(Clone::clone)?;
++    let icon = if path.extension().is_some_and(|ext| ext == "desktop") {
++        launcher_icon(path)?
++    } else {
++        let (mime, _) = gio::content_type_guess(Some(path), None::<&[u8]>);
++        gio::content_type_get_icon(&mime)
++    };
++    let file = if let Some(file_icon) = icon.downcast_ref::<gio::FileIcon>() {
++        file_icon.file().path()?
++    } else {
++        theme
++            .lookup_by_gicon(
++                &icon,
++                size.max(16),
++                scale.max(1),
++                gtk::TextDirection::None,
++                gtk::IconLookupFlags::FORCE_REGULAR,
++            )
++            .file()?
++            .path()?
++    };
++    let (input, stat) = bounded_open(&file, 512 * 1024)?;
++    // Direct interface artwork is trusted system data, not arbitrary browser
++    // content. Personal SVG/PNG files must retain the isolated preview path.
++    if stat.uid() != 0 || stat.mode() & 0o022 != 0 {
++        return None;
++    }
++    let pixels = size.saturating_mul(scale).clamp(16, 768);
++    let key = (
++        format!(
++            "native:{}:{}:{}:{}:{}",
++            file.display(),
++            stat.dev(),
++            stat.ino(),
++            stat.mtime(),
++            stat.mtime_nsec()
++        ),
++        stat.len().to_string(),
++        pixels,
++    );
++    if let Some(texture) = super::cached_icon_texture(&key) {
++        return Some(texture);
++    }
++    let mut bytes = Vec::new();
++    input.take(512 * 1024 + 1).read_to_end(&mut bytes).ok()?;
++    if bytes.len() > 512 * 1024 {
++        return None;
++    }
++    let texture = if file.extension().is_some_and(|ext| ext == "svg") {
++        // The existing bounded vector renderer disables every image href resolver.
++        let surface = super::vector::surface(std::str::from_utf8(&bytes).ok()?, pixels)?;
++        super::texture_from_surface(&surface)?
++    } else if bounded_png(&bytes) {
++        let loader = gdk_pixbuf::PixbufLoader::with_type("png").ok()?;
++        loader.set_size(pixels, pixels);
++        loader.write(&bytes).ok()?;
++        loader.close().ok()?;
++        gdk::Texture::for_pixbuf(&loader.pixbuf()?)
++    } else {
++        return None;
++    };
++    Some(super::cache_icon_texture(key, texture))
++}
++
+--- /dev/null
++++ b/src/assets/native_icons/input.rs
+@@ -0,0 +1,100 @@
++// SPDX-License-Identifier: MIT
++//! Bounded display metadata; no launcher command is evaluated.
++use gtk::{gio, glib, prelude::*};
++use std::{fs::OpenOptions, io::Read, os::unix::fs::OpenOptionsExt, path::Path};
++
++pub(super) fn bounded_open(path: &Path, limit: usize) -> Option<(std::fs::File, std::fs::Metadata)> {
++    let file = OpenOptions::new()
++        .read(true)
++        .custom_flags(libc::O_NONBLOCK | libc::O_CLOEXEC)
++        .open(path)
++        .ok()?;
++    let stat = file.metadata().ok()?;
++    if !stat.is_file() || stat.len() > limit as u64 {
++        return None;
++    }
++    Some((file, stat))
++}
++
++fn bounded_file(path: &Path, limit: usize) -> Option<Vec<u8>> {
++    let (file, _) = bounded_open(path, limit)?;
++    let mut bytes = Vec::new();
++    file.take(limit as u64 + 1).read_to_end(&mut bytes).ok()?;
++    (bytes.len() <= limit).then_some(bytes)
++}
++
++pub(super) fn launcher_icon(path: &Path) -> Option<gio::Icon> {
++    let bytes = bounded_file(path, 65536)?;
++    let key = glib::KeyFile::new();
++    key.load_from_data(std::str::from_utf8(&bytes).ok()?, glib::KeyFileFlags::NONE)
++        .ok()?;
++    let kind = key.string("Desktop Entry", "Type").ok()?;
++    if kind != "Application" && kind != "Link" {
++        return None;
++    }
++    let name = key.string("Desktop Entry", "Icon").ok()?;
++    if name.is_empty() || name.len() > 512 {
++        return None;
++    }
++    if name.starts_with('/') {
++        Some(gio::FileIcon::new(&gio::File::for_path(name.as_str())).upcast())
++    } else if !name.contains('/') && !name.contains(':') {
++        Some(gio::ThemedIcon::new(&name).upcast())
++    } else {
++        None
++    }
++}
++
++pub(super) fn bounded_png(bytes: &[u8]) -> bool {
++    if bytes.len() < 33
++        || &bytes[..8] != b"\x89PNG\r\n\x1a\n"
++        || bytes[8..12] != [0, 0, 0, 13]
++        || &bytes[12..16] != b"IHDR"
++    {
++        return false;
++    }
++    let width = u32::from_be_bytes(bytes[16..20].try_into().expect("checked PNG header"));
++    let height = u32::from_be_bytes(bytes[20..24].try_into().expect("checked PNG header"));
++    (1..=1024).contains(&width) && (1..=1024).contains(&height)
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++    #[test]
++    fn icon_inputs_refuse_directories_and_oversized_files() {
++        let dir = tempfile::tempdir().expect("temporary icon input");
++        let path = dir.path().join("large");
++        std::fs::write(&path, [0u8; 65]).expect("synthetic file");
++        assert!(bounded_file(&path, 64).is_none());
++        assert!(bounded_file(dir.path(), 64).is_none());
++    }
++    #[test]
++    fn raster_icons_require_bounded_png_dimensions() {
++        let mut bytes = vec![0u8; 33];
++        bytes[..8].copy_from_slice(b"\x89PNG\r\n\x1a\n");
++        bytes[8..12].copy_from_slice(&13u32.to_be_bytes());
++        bytes[12..16].copy_from_slice(b"IHDR");
++        bytes[16..20].copy_from_slice(&64u32.to_be_bytes());
++        bytes[20..24].copy_from_slice(&64u32.to_be_bytes());
++        assert!(bounded_png(&bytes));
++        bytes[16..20].copy_from_slice(&100000u32.to_be_bytes());
++        assert!(!bounded_png(&bytes));
++        assert!(!bounded_png(b"not a PNG"));
++    }
++    #[test]
++    fn launcher_metadata_never_executes_or_establishes_trust() {
++        let dir = tempfile::tempdir().expect("temporary launcher");
++        let path = dir.path().join("example.desktop");
++        let marker = dir.path().join("must-not-exist");
++        std::fs::write(&path, format!("[Desktop Entry]\nType=Application\nName=Example\nIcon=com.example.App\nExec=/usr/bin/touch {}\n", marker.display())).expect("launcher fixture");
++        assert!(launcher_icon(&path).is_some());
++        assert!(!marker.exists());
++        std::fs::write(
++            &path,
++            "[Desktop Entry]\nType=Application\nIcon=https://example.invalid/icon.svg\n",
++        )
++        .expect("unsupported icon hint");
++        assert!(launcher_icon(&path).is_none());
++    }
++}
+--- /dev/null
++++ b/tests/greyward_native_icons.rs
+@@ -0,0 +1,3 @@
++// Exercise the production metadata module, without the whole application test suite.
++#[path = "../src/assets/native_icons/input.rs"]
++mod input;

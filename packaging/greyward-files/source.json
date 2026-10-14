@@ -26,6 +26,17 @@
       "sha256": "0c802c3ab03241df8a1798bc6c2d39d22c530d2142234a6103b7d62406f1ef67",
       "root": "lgse-strata-6662d8d",
       "url": "https://api.github.com/repos/lgse/strata/tarball/6662d8d4bd4cb3cdec3f10f918f3b4c92b18cdcc"
+    },
+    "vendor": {
+      "file": "strata-vendor-1.0.0.tar.gz",
+      "sha256": "0bc6457206111fee023ca11880657d5f0af10a70657540fa26ccbffd8a80658d",
+      "provenance": "Cargo vendor --locked --offline against the pinned upstream Cargo.lock; package and file checksums verified again by Cargo during the offline source build"
     }
-  }
+  },
+  "cargoLockSha256": "33d6ffddcd5a4be037ff5b0856cf1ad8f8e13229c9d4d339451ec5939e9b6f55",
+  "sourcePatches": {
+    "strata-preview-mode.patch": "b8a2a5fa4444ed8135480c13211ec3364f0894522ecd8b09465a6e486ace4952",
+    "strata-native-icons.patch": "a6eeb530b072da846c46b885c6792d399a30bd905f48c593d246fa5b7b70197f"
+  },
+  "executableProvenance": "Derived source build with the listed patches. The upstream Actions attestation applies only to inputs.binary, retained as a verified baseline, not to the derived executable."
 }

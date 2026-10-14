@@ -1,0 +1,20 @@
+diff --git a/src/sandbox/browser.rs b/src/sandbox/browser.rs
+--- a/src/sandbox/browser.rs
++++ b/src/sandbox/browser.rs
+@@ -422,9 +422,16 @@ fn workers_supported() -> bool {
+     static SUPPORTED: OnceLock<bool> = OnceLock::new();
+     *SUPPORTED.get_or_init(|| {
++        // Reuse the existing one-shot bubblewrap boundary when nested worker
++        // namespaces are incompatible with a mandatory host policy. This never
++        // enables an unsandboxed decoder or changes SELinux enforcement.
++        if std::env::var("STRATA_PREVIEW_SANDBOX").as_deref() == Ok("oneshot") {
++            tracing::info!("using one-shot bubblewrap preview sandboxes");
++            return false;
++        }
+         let supported = worker::supported();
+         if !supported {
+             tracing::warn!("Landlock ABI 3 unavailable; retaining one-shot sandboxes");
+         }
+         supported
+     })
+ }
