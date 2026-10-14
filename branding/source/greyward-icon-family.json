@@ -5,8 +5,8 @@
     "edge": "#9eafb9", "highlight": "#edf2f3", "paper": "#d7dfe2",
     "paperShade": "#95a5b0", "obsidian": "#15212b", "obsidianShade": "#070e15",
     "slate": "#3d505f", "text": "#e0e7ea", "muted": "#8a9ca9",
-    "blue": "#4da6ff", "green": "#3ed69a", "violet": "#b28aff",
-    "amber": "#f2b65b", "red": "#ff7183"
+    "blue": "#739ebf", "green": "#70b395", "violet": "#a292bf",
+    "amber": "#c3a06d", "red": "#bd8290"
   },
   "folderBadges": {
     "folder": null, "inode-directory": null, "folder-open": null, "user-home": "house", "folder-home": "house",
@@ -18,7 +18,7 @@
     "folder-git": "code-xml", "folder-temp": "clock", "folder-drag-accept": "folder-input"
   },
   "mimeTypes": {
-    "text-x-generic": ["file-text", "blue"], "text-plain": ["file-text", "blue"],
+    "text-x-generic": ["file-text", "muted"], "text-plain": ["file-text", "muted"],
     "application-octet-stream": ["file", "muted"], "unknown": ["file", "muted"],
     "application-x-zerosize": ["file", "muted"], "empty": ["file", "muted"],
     "application-pdf": ["pdf", "red"], "application-msword": ["file-text", "blue"],
@@ -39,7 +39,7 @@
     "application-x-shellscript": ["file-terminal", "amber"], "text-x-script": ["file-terminal", "amber"],
     "text-x-python": ["file-code", "amber"], "text-x-csrc": ["file-code", "amber"],
     "text-x-c++src": ["file-code", "amber"], "text-html": ["code-xml", "amber"],
-    "application-json": ["cog", "blue"], "text-markdown": ["file-text", "blue"],
+    "application-json": ["cog", "blue"], "text-markdown": ["file-text", "muted"],
     "text-x-generic-template": ["file-text", "muted"], "application-x-desktop": ["app-window", "blue"],
     "package-x-generic": ["file-archive", "amber"], "application-zip": ["file-archive", "amber"],
     "application-x-compressed-tar": ["file-archive", "amber"], "application-x-tar": ["file-archive", "amber"],
@@ -99,10 +99,10 @@
     "application-zstd": ["file-archive", "amber"],
     "application-x-zstd-compressed-tar": ["file-archive", "amber"],
     "application-epub+zip": ["file-text", "blue"],
-    "text-x-markdown": ["file-text", "blue"],
-    "text-x-rst": ["file-text", "blue"],
-    "text-x-readme": ["file-text", "blue"],
-    "text-x-log": ["file-text", "blue"]
+    "text-x-markdown": ["file-text", "muted"],
+    "text-x-rst": ["file-text", "muted"],
+    "text-x-readme": ["file-text", "muted"],
+    "text-x-log": ["file-text", "muted"]
   },
   "objects": {
     "user-trash": ["trash", "muted"], "user-trash-full": ["trash", "amber"],

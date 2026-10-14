@@ -2,14 +2,14 @@
 
 ## 14 October native-icon and preview candidate
 
-Files 16 is installed in development, retaining revision 15's pinned-source
-executable and strengthening the shared icon accents. The normal desktop review
+Files 17 is installed in development, retaining revision 15's pinned-source
+executable and balancing the shared icon accents. The normal desktop review
 confirms matching silhouettes, visibly blue DOCX/ODT and green XLSX/CSV badges,
 plus SVG thumbnail rendering. Three Rust metadata checks and twelve Fedora
-Python checks pass for revision 15; revision 16's incremental offline RPM build
+Python checks pass for revision 15; revisions 16–17's incremental offline RPM builds
 repeats the three Rust checks and preserves the release ELF. Package integrity,
 SSH and SELinux Enforcing checks pass; the active normal session remains open
-through revision-16 build/install. Matched rollback packages are retained.
+through revisions 16–17 build/install. Matched rollback packages are retained.
 Installed PDF/video and renewed helper/security checks remain NON VÉRIFIÉ.
 Revision-15 construction previously coincided with guardian heartbeat expiry,
 loss of the desktop and compiler OOM; that incident is recorded separately and

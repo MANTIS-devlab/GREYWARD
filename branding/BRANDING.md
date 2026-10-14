@@ -14,7 +14,7 @@ Platinum paper edge, Obsidian front and silver outlines. `greyward-files` packag
 this canonical SVG under its own icon name and the upstream Strata alias. The
 revision-15 integration derives the executable from pinned source with verified
 offline dependencies; the original upstream binary remains the attested baseline.
-Revision 16 changes the shared artwork while preserving that executable. The artwork
+Revisions 16–17 change the shared artwork while preserving that executable. The artwork
 identifies the file manager; other applications keep their recognizable logos.
 
 The shared file/desktop family is defined by
@@ -32,9 +32,11 @@ editable design source. Validation includes real desktop rendering at small and
 large icon sizes; source tests alone do not prove the result is deployed.
 
 Document badges use the semantic color in the glyph, border and a translucent
-inset: blue for text documents, green for spreadsheets, red for PDFs and violet
+inset: blue for office text documents, green for spreadsheets, red for PDFs and violet
 for image types. This keeps the Obsidian/Platinum frame while making file types
 recognizable at normal desktop sizes; color is reinforced by distinct glyphs.
+Revision 17 balances the accents after review: lower saturation and badge tint,
+with plain text, Markdown and generic documents returning to neutral Platinum.
 
 ## Security Center application identity
 

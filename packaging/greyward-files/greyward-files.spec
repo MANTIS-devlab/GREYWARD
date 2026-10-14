@@ -1,6 +1,6 @@
 Name: greyward-files
 Version: 1.0.0
-Release: 16%{?dist}
+Release: 17%{?dist}
 Summary: GREYWARD Strata file manager and transparent desktop integration
 License: MIT AND GPL-3.0-only AND GPL-2.0-or-later AND Apache-2.0 AND OFL-1.1 AND ISC AND LGPL-2.0-or-later AND LicenseRef-UnRAR AND LicenseRef-GREYWARD-Branding
 URL: https://github.com/lgse/strata
@@ -182,6 +182,9 @@ PY
 %license %{_licensedir}/%{name}
 
 %changelog
+* Wed Oct 14 2026 MANTIS SYSTEMS - 1.0.0-17
+- Balance semantic accents with darker badges and neutral plain-text icons after visual review.
+
 * Wed Oct 14 2026 MANTIS SYSTEMS - 1.0.0-16
 - Strengthen shared semantic icon colors, tinted badges and type glyph contrast; preserve the validated application code generation.
 

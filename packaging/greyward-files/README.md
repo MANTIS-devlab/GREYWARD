@@ -4,8 +4,9 @@ Candidate only; production package closure and real workflow acceptance remain
 pending. The owning evidence and rollout gates are in
 [file manager and desktop integration](../../docs/architecture/FILE_MANAGER_DESKTOP.md).
 
-Revision 16 retains revision 15's source-built executable and strengthens the
-shared semantic icon colors, glyphs and tinted badges. Revision 15 builds the pinned Strata source with two bounded integration patches
+Revision 17 retains revision 15's source-built executable and strengthens the
+shared semantic icon glyphs with balanced colors and darker tinted badges;
+plain-text icons remain neutral. Revision 15 builds the pinned Strata source with two bounded integration patches
 and an offline Cargo vendor archive. The original attested Strata 1.0.0 archive
 remains a verified baseline and supplies launcher/license assets; its Actions
 attestation does not apply to the derived executable. The package also builds a

@@ -2,9 +2,25 @@
 
 ## Current development proof — 14 October
 
-### Native file icons and preview correction — candidate 16
+### Balanced accents — candidate 17
 
-Revision 16 is built and installed in development. It retains revision 15's
+Revision 16's saturated badges are rejected by the user as too colorful.
+Revision 17 keeps the same executable and shared silhouettes, reduces semantic
+color saturation and badge tint (10–3% rather than 24–8%), and restores neutral
+plain-text/Markdown icons. Office documents retain distinct blue/green glyphs.
+The artwork-only incremental offline RPM build passes its three Rust checks;
+it peaks at 323 MiB and takes 36 seconds without rebuilding Rust. Installed
+package verification, unchanged release ELF, SSH, active desktop and SELinux
+Enforcing checks pass. The revision-16 rollback is retained. RPM SHA-256:
+`b78552cd93208b763f30a47bf326c26bbe9f6cd0986b97897ce1735203e720aa`.
+Normal-window VMConnect verification confirms the darker badges, restrained
+office accents and neutral plain-text icons in Strata and on the native desktop.
+Strata remains open for user review; this is technical visual verification,
+not a claim that the user has accepted the revised aesthetic.
+
+### Native file icons and preview correction — preceding revision 16 evidence
+
+Revision 16 was built and installed in development. It retains revision 15's
 derived executable and strengthens the shared semantic icon artwork. Revision 15 compiles the pinned Strata source
 with an offline Cargo vendor archive and two bounded patches. The upstream
 binary remains the attested baseline; that attestation does not apply to the

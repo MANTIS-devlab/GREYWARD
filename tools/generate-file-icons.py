@@ -77,12 +77,12 @@ def folder(palette, badge=''):
 
 def document(palette, badge, accent):
     p=palette
-    return svg(f'''<defs><linearGradient id="gw-page" x2=".8" y2="1"><stop stop-color="{p['paper']}"/><stop offset="1" stop-color="{p['paperShade']}"/></linearGradient><linearGradient id="gw-accent" x2="0" y2="1"><stop stop-color="{accent}" stop-opacity=".24"/><stop offset="1" stop-color="{accent}" stop-opacity=".08"/></linearGradient></defs>
+    return svg(f'''<defs><linearGradient id="gw-page" x2=".8" y2="1"><stop stop-color="{p['paper']}"/><stop offset="1" stop-color="{p['paperShade']}"/></linearGradient><linearGradient id="gw-accent" x2="0" y2="1"><stop stop-color="{accent}" stop-opacity=".10"/><stop offset="1" stop-color="{accent}" stop-opacity=".03"/></linearGradient></defs>
 <path d="M6 3.5h8l4 4V21H6Z" fill="#00060b" opacity=".5" transform="translate(0 .6)"/>
 <path d="M6 3h8l4 4v13.5H6Z" fill="url(#gw-page)" stroke="{p['edge']}" stroke-width=".4"/>
 <path d="M14 3v4h4" fill="{p['highlight']}" stroke="{p['edge']}" stroke-width=".35"/>
 <rect x="4.5" y="10" width="15" height="10.5" rx="1.6" fill="{p['obsidian']}"/>
-<rect x="4.5" y="10" width="15" height="10.5" rx="1.6" fill="url(#gw-accent)" stroke="{accent}" stroke-width=".65"/>
+<rect x="4.5" y="10" width="15" height="10.5" rx="1.6" fill="url(#gw-accent)" stroke="{accent}" stroke-width=".5"/>
 <g transform="translate(7.6 10.6) scale(.37)">{badge}</g>
 <path d="M6.1 10.4h11.8" stroke="{accent}" stroke-width=".55"/>
 ''')
@@ -124,7 +124,7 @@ def generate(catalog, upstream, destination):
 
     # Shared upstream action shapes; neutral Platinum treatment. Rich folder/file
     # assets replace only object icons; each unrelated action keeps its own glyph.
-    document_kinds={'file-text':'blue','file-code':'amber','file-terminal':'amber',
+    document_kinds={'file-text':'muted','file-code':'amber','file-terminal':'amber',
         'file-spreadsheet':'green','file-archive':'amber','file-type':'blue',
         'image':'violet','audio-lines':'green','video':'violet','presentation':'amber'}
     folder_names={'folder':None,'folder-open':None,'folder-archive':'file-archive',
