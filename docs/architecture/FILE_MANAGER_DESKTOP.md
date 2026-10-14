@@ -2,6 +2,32 @@
 
 ## Current development proof — 14 October
 
+### Preview dependency closure
+
+Files 14 is installed. It adds explicit RPM file dependencies for the external
+programs used by the pinned sandbox helper: `magick`, `ffmpeg`, `ffprobe`,
+`prlimit`, `nice`, `fc-list` and `unsquashfs`. These were already installed on
+the development system but were absent from the package requirements; ELF
+dependency generation only covered libraries. PDF rendering uses linked
+Poppler, so no redundant `poppler-utils` requirement is added. Optional RAW
+tools and the faster video-thumbnail frontend retain their upstream fallbacks.
+
+The offline build, seven packaged requirements, single-package dependency dry
+run and installed RPM verification pass. The Strata ELF and all icon assets
+remain unchanged from Files 13; its matched RPM rollback is retained. No new
+services, policy permissions, codecs or graphical-session restart are involved.
+This fixes package metadata; full offline ISO closure and fresh installation
+remain NON VÉRIFIÉ and are not inferred from the development host's packages.
+
+The real installed helper runs under `greyward_guard_t` with the pinned bwrap
+template: all namespaces unshared, read-only input, private temporary/output
+storage, clean environment and bounded resources. Synthetic SVG rendering,
+PDF/video thumbnails and FFprobe metadata succeed in approximately 83/59/148/161
+milliseconds respectively. A registered synthetic secret remains denied with
+`Permission denied` and no preview output. These are helper-level mechanism
+checks, not successful GUI preview or overall performance acceptance. The
+normal desktop is still locked; visual checks remain NON VÉRIFIÉ.
+
 ### Icon consistency correction after user review
 
 The user rejects Files 11's remaining mixed appearance. Its resource-count and
@@ -20,7 +46,8 @@ Platinum glyphs; third-party logos and actual thumbnails retain their meaning.
 The upstream executable and all non-icon resources remain unchanged. Automated
 asset checks do not substitute for normal-session visual acceptance.
 
-Files 13 is installed on the development system. Six focused tests and the
+Files 13 was installed for the icon correction; Files 14 retains its artwork.
+Six focused tests and the
 repository checks pass. All 821 installed icon assets match their generated
 digests; all 455 embedded icon paths are covered, including the application
 identity. Every extension resource matches its selected native MIME SVG exactly.

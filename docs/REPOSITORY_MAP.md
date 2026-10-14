@@ -1,5 +1,12 @@
 # GREYWARD repository map
 
+Preview runtime dependency ownership: `packaging/greyward-files/greyward-files.spec`
+declares the pinned upstream helper's external commands as RPM file requirements.
+Validation combines offline RPM construction/readback, installed sandbox-helper
+operations and the separate pending normal-window acceptance. No new parser,
+daemon or policy allowance is introduced. Authority:
+[file manager desktop integration](architecture/FILE_MANAGER_DESKTOP.md).
+
 Icon consistency correction ownership remains the canonical family catalog,
 `tools/generate-file-icons.py` and `packaging/greyward-files/`. Extension names
 map to whole native MIME assets; the icon-only overlay includes the embedded
