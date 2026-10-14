@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="274" viewBox="0 0 1080 274" role="img" aria-labelledby="t d">
+<title id="t">GREYWARD evidence before reassurance</title><desc id="d">Different status categories: Protected, Review Needed, Action Required, Unknown, Unavailable. A visible status is only as good as its measured coverage and freshness.</desc>
+<defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#19212A"/><stop offset="1" stop-color="#0D1218"/></linearGradient></defs>
+<rect width="1080" height="274" rx="18" fill="url(#bg)"/><rect x="1" y="1" width="1078" height="272" rx="17" fill="none" stroke="#354251" stroke-width="1.5"/>
+<g font-family="Inter,Segoe UI,Arial,sans-serif"><text x="41" y="40" fill="#8DB4C3" font-size="13" font-weight="700" letter-spacing="2.5">SECURITY CENTER / STATUS LANGUAGE</text><text x="41" y="79" fill="#F5F7F9" font-size="30" font-weight="650">Evidence before reassurance.</text><text x="41" y="107" fill="#A8B5C2" font-size="15">A control is not a guarantee. Posture must reflect what is actually verified.</text></g>
+<g font-family="Inter,Segoe UI,Arial,sans-serif" font-size="13" font-weight="650" text-anchor="middle">
+ <rect x="41" y="135" width="174" height="49" rx="9" fill="#243E3D" stroke="#639A92"/><circle cx="61" cy="159" r="5" fill="#81BBAE"/><text x="135" y="164" fill="#CFF2E9">PROTECTED</text>
+ <rect x="229" y="135" width="197" height="49" rx="9" fill="#443B2B" stroke="#A98F5C"/><circle cx="249" cy="159" r="5" fill="#D4AE65"/><text x="338" y="164" fill="#F3D6A3">REVIEW_NEEDED</text>
+ <rect x="440" y="135" width="207" height="49" rx="9" fill="#432A32" stroke="#B97A83"/><circle cx="460" cy="159" r="5" fill="#D8868D"/><text x="548" y="164" fill="#F2C0C5">ACTION_REQUIRED</text>
+ <rect x="661" y="135" width="172" height="49" rx="9" fill="#2B3440" stroke="#63788C"/><circle cx="681" cy="159" r="5" fill="#94A8BF"/><text x="756" y="164" fill="#D0DBE6">UNKNOWN</text>
+ <rect x="847" y="135" width="191" height="49" rx="9" fill="#292E36" stroke="#68717D"/><circle cx="867" cy="159" r="5" fill="#929CA8"/><text x="955" y="164" fill="#CDD4DC">UNAVAILABLE</text>
+ <path d="M41 209 H1038" stroke="#374554" stroke-width="1"/>
+ <text x="42" y="237" fill="#B8C5D0" text-anchor="start" font-size="14" font-weight="450">Measured scope</text><circle cx="178" cy="232" r="2" fill="#6F91A0"/><text x="197" y="237" fill="#B8C5D0" text-anchor="start" font-size="14" font-weight="450">Evidence freshness</text><circle cx="362" cy="232" r="2" fill="#6F91A0"/><text x="381" y="237" fill="#B8C5D0" text-anchor="start" font-size="14" font-weight="450">Applicability</text>
+ <text x="1038" y="241" fill="#90A5B2" text-anchor="end" font-size="12">Illustration of labels, not live telemetry</text>
+</g></svg>

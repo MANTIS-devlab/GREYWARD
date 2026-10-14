@@ -51,7 +51,9 @@
   <img src="docs/assets/screenshots/greyward-desktop-overview.gif" alt="GREYWARD desktop, Security Center and security notifications" width="960">
 </p>
 
----
+<p align="center">
+  <img src="docs/assets/readme/section-divider.svg" width="860" alt="GREYWARD section divider">
+</p>
 
 GREYWARD is an experimental Linux distribution built around an uncomfortable compromise:
 
@@ -102,43 +104,9 @@ The distribution model is a hypothesis, not a sacred architectural decision. Som
 
 GREYWARD builds on Fedora rather than replacing the kernel's security model with a custom one. It separates **presentation**, **evidence**, **privileged decisions** and **kernel enforcement**.
 
-```mermaid
-flowchart TB
-    subgraph UX["Desktop and user-facing surfaces"]
-        DMS["Labwc + GREYWARD / DMS"]
-        UI["Security Center · Tauri frontend"]
-    end
-
-    subgraph Observation["Evidence and coordination"]
-        CTX["Security Context · typed D-Bus API"]
-        COL["System collectors and existing providers"]
-        EVT["Findings · history · notifications"]
-    end
-
-    subgraph Authority["Privileged security boundary"]
-        BR["Application Security broker"]
-        ADM["Protected Administration / authentication"]
-        POL["Root-owned policy · resource identity · reviewed grants"]
-    end
-
-    subgraph Kernel["Operating-system enforcement"]
-        SE["SELinux domains and resource labels"]
-        ISO["Namespaces · Landlock · seccomp\nfor supported managed workloads"]
-        OS["Fedora / kernel / LUKS / firewall"]
-    end
-
-    UI -->|"read evidence / request typed operations"| CTX
-    COL --> CTX
-    CTX --> EVT
-    EVT --> DMS
-    CTX -->|"supported security requests"| BR
-    BR --> POL
-    ADM -->|"protected authorization"| BR
-    POL --> SE
-    BR --> ISO
-    SE --> OS
-    ISO --> OS
-```
+<p align="center">
+  <img src="docs/assets/readme/greyward-system-overview.svg" width="520" alt="GREYWARD system overview diagram">
+</p>
 
 *Conceptual diagram, not a claim that every feature is active or that every D-Bus operation takes exactly this route. In particular, Security Center is a user interface; SELinux enforces protected-file access in the kernel, not in the window displaying the decision.*
 
@@ -187,20 +155,9 @@ This is **access control**, not encryption at rest, a hidden folder, a universal
 
 ### How the boundary works
 
-```mermaid
-flowchart TD
-    A["Application or script"] --> Q{"Which resource and\nexecution context?"}
-    Q -->|"Ordinary file"| N["Normal filesystem permissions apply"]
-    Q -->|"Registered Protected Data"| K{"SELinux access check"}
-    K -->|"Ordinary, unauthorized domain"| X["Access denied"]
-    K -->|"Specifically prepared and\nauthorized supported workflow"| Y["Only its permitted operation"]
-
-    R["Protected review + trusted broker"] -->|"Establish supported grant / workload"| Y
-    P["Root policy + resource labels"] -.-> K
-
-    classDef deny fill:#49272d,stroke:#9a5b65,color:#fff
-    class X deny
-```
+<p align="center">
+  <img src="docs/assets/readme/protected-data-boundary.svg" width="700" alt="GREYWARD Protected Data boundary diagram">
+</p>
 
 The critical distinction: **the kernel denies unauthorized access even when an application never opens Security Center**. Policy review is relevant when a supported access workflow exists; it is not a generic interception prompt for every failed file open.
 
@@ -274,17 +231,9 @@ UNKNOWN · UNAVAILABLE · NOT_APPLICABLE
 
 The visual status must reflect the **scope of the measurement**. A running VPN interface does not prove a kill switch or absence of DNS leaks. Available ClamAV definitions do not prove real-time scanning. A user-accepted missing control does not mean that the control has become active.
 
-```mermaid
-flowchart LR
-    SRC["Kernel and service evidence"] --> VAL{"Fresh, attributable\nand applicable?"}
-    VAL -->|"No evidence"| UNK["UNKNOWN / UNAVAILABLE"]
-    VAL -->|"Yes"| COV{"What was actually\nverified?"}
-    COV -->|"Enforced and verified"| GOOD["Relevant protected state"]
-    COV -->|"Partial or degraded"| WARN["REVIEW_NEEDED / ACTION_REQUIRED"]
-    COV -->|"Outside scope"| NA["NOT_APPLICABLE"]
-    ACC["User accepts a deviation"] -.-> WARN
-    ACC -.-> NOTE["Record acknowledgement,\nnot a new protection"]
-```
+<p align="center">
+  <img src="docs/assets/readme/evidence-not-reassurance.svg" width="860" alt="GREYWARD evidence before reassurance">
+</p>
 
 These are conceptual state transitions. Individual collectors use their own evidence and evaluation rules; the diagram does not assign a universal status to every feature.
 
@@ -297,15 +246,7 @@ Individual controls are often straightforward. Their interactions are not.
 
 Consider DNS protection during a VPN connection:
 
-```mermaid
-flowchart LR
-    NM["NetworkManager: link / VPN state"] --> REC["GREYWARD DNS reconciliation"]
-    RES["systemd-resolved: active resolver"] --> REC
-    REC --> FW["Scoped DNS policy / OpenSnitch rules"]
-    FW --> OUT["Permitted resolver traffic"]
-    REC --> EVID["Measured state to Security Context"]
-    EVID --> UI["Security Center"]
-```
+
 
 Blocking all unexpected DNS traffic can break legitimate VPN operation. Allowing DNS globally makes a bypass restriction ineffective. GREYWARD attempts to reconcile policy with observed network state and use narrow allowances where possible.
 
@@ -320,6 +261,10 @@ GREYWARD is meant to feel like GREYWARD.
 Its shell, settings, Security Center, notifications and interaction patterns share a deliberate visual direction. The current language is dark and restrained: graphite, silver accents, controlled transparency and relatively low visual noise.
 
 ![GREYWARD Security Center](docs/assets/screenshots/greyward-desktop-security-center.png)
+
+<p align="center">
+  <img src="docs/assets/screenshots/greyward-desktop-workflow.png" width="920" alt="GREYWARD development desktop workflow">
+</p>
 
 | Layer | Current implementation |
 | --- | --- |
