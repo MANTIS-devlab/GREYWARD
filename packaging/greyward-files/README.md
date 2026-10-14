@@ -37,8 +37,11 @@ overwriting user preferences.
 Strata's launcher selects only its root-owned icon resource subtree through
 GLib's supported G_RESOURCE_OVERLAYS mechanism. The attested ELF, application
 code and authentication resources are unchanged. All embedded action and
-Catppuccin file SVGs receive the shared treatment; Lucide/Feather and Catppuccin
-notices are retained. Third-party application logos and real content thumbnails
+extension SVG names resolve to the same complete semantic file artwork used by
+the native MIME theme. The former Catppuccin marks are not embedded inside a
+second document frame. The embedded Strata application-icon resource also uses
+the canonical GREYWARD Files SVG. Lucide/Feather and upstream notices are
+retained. Third-party application logos and real content thumbnails
 remain their own identity/content rather than synthetic file icons. This is an
 icon-family change, not a global GTK/Qt interface theme.
 

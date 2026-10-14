@@ -42,6 +42,7 @@ def glyph(source, name, color='#e0e7ea'):
         'file-terminal':'<path d="m4 5 6 6-6 6m9 1h7"/>',
         'file-spreadsheet':'<rect x="4" y="4" width="16" height="16" rx="1"/><path d="M4 10h16M10 4v16M4 15h16"/>',
         'file-archive':'<path d="M9 3h6v4H9v4h6v4H9v5h6v-5M12 3v17"/>',
+        'database':'<ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v13c0 4 16 4 16 0V5M4 11c0 4 16 4 16 0"/>',
         'pdf':'<path d="M2 18V6h4a3 3 0 0 1 0 6H2m8 6V6h2c5 0 5 12 0 12Zm10 0V6h4m-4 6h3"/>',
     }
     if name in marks:
@@ -151,25 +152,30 @@ def generate(catalog, upstream, destination):
         write(theme/'scalable/actions'/f'{name}.svg',content)
         write(theme/'scalable/actions'/f'{name}-symbolic.svg',svg(glyph(upstream,name)))
 
-    # Keep extension-specific Catppuccin glyphs recognizable, with one common
-    # document silhouette instead of several unrelated standalone icon styles.
+    # Strata resolves many filenames through its own extension catalog instead
+    # of the native MIME theme. Resolve those names to the SAME complete asset;
+    # framing the old Catppuccin logos still produced a second visual language.
+    kinds=model['strataFileKinds']
     for path in sorted((upstream/'data/icons/catppuccin').glob('*.svg')):
-        root,body=svg_body(path)
-        viewbox=root.get('viewBox','0 0 16 16').split()
-        scale=24/float(viewbox[2])
-        colors={'blue':p['blue'],'sapphire':p['blue'],'sky':p['blue'],'teal':p['green'],
-            'green':p['green'],'yellow':p['amber'],'peach':p['amber'],'red':p['red'],
-            'maroon':p['red'],'pink':p['violet'],'mauve':p['violet'],'lavender':p['violet'],
-            'text':p['text'],'overlay1':p['muted'],'rosewater':p['paper'],'flamingo':p['red']}
-        for key,value in colors.items():
-            body=body.replace(f'var(--vscode-ctp-{key})',value)
-        content=document(p,f'<g transform="scale({scale:g})">{body}</g>',p['muted'])
+        svg_body(path)
+        name=path.stem.removeprefix('strata-ctp-')
+        kind=kinds['overrides'].get(name,kinds['default'])
+        badge,color=model['mimeTypes'][kind]
+        content=document(p,glyph(upstream,badge),p[color])
         write(overlay/'icons/catppuccin'/path.name,content)
 
-    directories=['scalable/'+x for x in ('places','mimetypes','devices','actions')]
+    # GTK can resolve the embedded application icon before the installed theme.
+    # Cover that resource too; the previous overlay left Strata's old logo here.
+    identity=catalog.parent/'greyward-files.svg'
+    svg_body(identity)
+    write(overlay/'icons/scalable/apps/io.github.lgse.Strata.svg',identity.read_bytes())
+    write(theme/'scalable/apps/io.github.lgse.Strata.svg',identity.read_bytes())
+    write(theme/'scalable/apps/greyward-files.svg',identity.read_bytes())
+
+    directories=['scalable/'+x for x in ('places','mimetypes','devices','actions','apps')]
     index='[Icon Theme]\nName=Greyward\nComment=GREYWARD Obsidian / Platinum\nInherits=breeze-dark,Adwaita,hicolor\nDirectories='+','.join(directories)+'\n'
     for directory in directories:
-        context={'places':'Places','mimetypes':'MimeTypes','devices':'Devices','actions':'Actions'}[directory.rsplit('/',1)[1]]
+        context={'places':'Places','mimetypes':'MimeTypes','devices':'Devices','actions':'Actions','apps':'Applications'}[directory.rsplit('/',1)[1]]
         index+=f'\n[{directory}]\nSize=48\nMinSize=16\nMaxSize=512\nType=Scalable\nContext={context}\n'
     write(theme/'index.theme',index)
     write(destination/'LICENSES/Lucide-Feather.txt',(upstream/'data/licenses/Lucide-ISC.txt').read_bytes())

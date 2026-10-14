@@ -1,5 +1,12 @@
 # GREYWARD documentation index
 
+14 October icon review correction: Files 13 replaces the remaining mixed
+extension artwork and embedded Strata application icon. Installed resource
+checks and six focused tests pass; the locked desktop prevents final visual
+acceptance and existing Strata cache reload. The user's rejection of revision
+11 supersedes any whole-interface acceptance interpretation of the earlier
+folder/text checks. See [file manager integration](architecture/FILE_MANAGER_DESKTOP.md).
+
 14 October native-lock candidate: ordinary DMS lock routing is prepared for
 the existing protected owner, and its private Qt clipboard interfaces are
 suppressed through native configuration. Runtime 51 / Enrollment 32 / Session

@@ -2,7 +2,35 @@
 
 ## Current development proof — 14 October
 
-The shared icon family is installed as Files 11; the dated Files 8 notes below
+### Icon consistency correction after user review
+
+The user rejects Files 11's remaining mixed appearance. Its resource-count and
+folder/text comparisons establish only partial coverage, not whole-interface
+visual acceptance. Strata's independent extension catalog still wrapped old
+Catppuccin marks, while native MIME icons used different symbols. The overlay
+also omitted the embedded application icon, allowing the original Strata icon
+to remain alongside the installed GREYWARD Files identity.
+
+Revision 13 maps extension resources to complete native MIME artwork and covers
+the embedded application-icon path. Common code, text, configuration, shell and
+database icons share their actual SVG assets, not only an outer frame. Native
+MIME aliases cover common source languages, office files, fonts and archives.
+Revision 12 is an undeployed intermediate build. Interface actions remain distinct
+Platinum glyphs; third-party logos and actual thumbnails retain their meaning.
+The upstream executable and all non-icon resources remain unchanged. Automated
+asset checks do not substitute for normal-session visual acceptance.
+
+Files 13 is installed on the development system. Six focused tests and the
+repository checks pass. All 821 installed icon assets match their generated
+digests; all 455 embedded icon paths are covered, including the application
+identity. Every extension resource matches its selected native MIME SVG exactly.
+The attested Strata ELF is unchanged and RPM verification is clean. Only the
+desktop-icon user unit is refreshed; SSH, SELinux Enforcing and the admitted
+graphical session remain intact. The desktop is locked, so final visual review
+and reloading the existing Strata process remain pending user unlock. No claim
+of complete visual acceptance is made. Matched Files 11 rollback is preserved.
+
+The dated Files 8/11 notes below
 record the earlier routing/startup proof. Native locking and broader stability
 remain a blocking migration gate after the later automatic-lock closure.
 

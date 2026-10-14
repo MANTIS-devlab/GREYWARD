@@ -14,6 +14,42 @@ CATALOG=ROOT/'branding/source/greyward-icon-family.json'
 
 
 class FileIconFamily(unittest.TestCase):
+    def test_extension_resources_and_native_mime_icons_use_identical_artwork(self):
+        model=json.loads(CATALOG.read_text())
+        with tempfile.TemporaryDirectory() as directory:
+            upstream=Path(directory)/'upstream'
+            actions=upstream/'data/icons/scalable/actions'
+            actions.mkdir(parents=True)
+            # Non-original geometry makes any old-extension carryover visible.
+            simple=icons.svg('<path d="M1 1h2"/>')
+            required={x for x in model['folderBadges'].values() if x}
+            required.update(x[0] for x in model['mimeTypes'].values())
+            required.update(x[0] for x in model['objects'].values())
+            required.add('folder')
+            required.update(('arrow-down','arrow-up','plus'))
+            for name in required:
+                (actions/f'strata-{name}.svg').write_text(simple)
+            extensions=upstream/'data/icons/catppuccin'
+            extensions.mkdir()
+            names=('python','rust','markdown','readme','config','bash','database','unfamiliar-language')
+            for name in names:
+                (extensions/f'strata-ctp-{name}.svg').write_text(icons.svg('<circle cx="2" cy="2" r="1" fill="#ff00ff"/>'))
+            licenses=upstream/'data/licenses'
+            licenses.mkdir()
+            for name in ('Lucide-ISC.txt','Catppuccin-VSCode-Icons-MIT.txt'):
+                (licenses/name).write_text('Synthetic test notice')
+            destination=Path(directory)/'generated'
+            icons.generate(CATALOG,upstream,destination)
+            for name in names:
+                kind=model['strataFileKinds']['overrides'].get(name,model['strataFileKinds']['default'])
+                native=destination/'theme/Greyward/scalable/mimetypes'/f'{kind}.svg'
+                resource=destination/'strata/icons/catppuccin'/f'strata-ctp-{name}.svg'
+                self.assertEqual(native.read_bytes(),resource.read_bytes(),name)
+                self.assertNotIn(b'#ff00ff',resource.read_bytes())
+            original=(ROOT/'branding/source/greyward-files.svg').read_bytes()
+            self.assertEqual(original,(destination/'strata/icons/scalable/apps/io.github.lgse.Strata.svg').read_bytes())
+            self.assertEqual(original,(destination/'theme/Greyward/scalable/apps/io.github.lgse.Strata.svg').read_bytes())
+
     def test_shared_folder_and_document_frames_are_bounded_valid_vectors(self):
         model=json.loads(CATALOG.read_text())
         palette=model['palette']
