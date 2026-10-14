@@ -11,8 +11,10 @@ Icon consistency correction ownership remains the canonical family catalog,
 `tools/generate-file-icons.py` and `packaging/greyward-files/`. Extension names
 map to whole native MIME assets; the icon-only overlay includes the embedded
 application icon. `test_file_icon_family.py` checks exact cross-consumer artwork
-and removal of legacy extension marks. Files 13 is installed; actual final
-visual review is pending unlock. Authority:
+and removal of legacy extension marks. Files 14 retains those assets. Reopened
+normal-window folder/text comparison passes; launcher GIcon resolution and ODT
+thumbnails are outside the icon-only overlay and remain unsupported by the
+pinned Strata renderer. Whole-interface acceptance is pending. Authority:
 [file manager desktop integration](architecture/FILE_MANAGER_DESKTOP.md).
 
 Native lock handoff ownership: `environment/session/greyward-dms-state-migrate`,

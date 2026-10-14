@@ -8,8 +8,9 @@ NON VÉRIFIÉ. See [file manager integration](architecture/FILE_MANAGER_DESKTOP.
 
 14 October icon review correction: Files 13 replaces the remaining mixed
 extension artwork and embedded Strata application icon. Installed resource
-checks and six focused tests pass; the locked desktop prevents final visual
-acceptance and existing Strata cache reload. The user's rejection of revision
+checks and six focused tests pass. After user unlock, the reopened Strata grid
+confirms shared folder/text artwork and launcher identity. Launcher-file icons
+and ODT thumbnail differences remain; full visual acceptance is not claimed. The user's rejection of revision
 11 supersedes any whole-interface acceptance interpretation of the earlier
 folder/text checks. See [file manager integration](architecture/FILE_MANAGER_DESKTOP.md).
 
