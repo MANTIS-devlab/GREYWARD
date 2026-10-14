@@ -11,7 +11,11 @@ Python checks pass for revision 15; revisions 16–17's incremental offline RPM 
 repeat the three Rust checks and preserve the release ELF. Package integrity,
 SSH and SELinux Enforcing checks pass; the active normal session remains open
 through revisions 16–17 build/install. Matched rollback packages are retained.
-Installed PDF/video and renewed helper/security checks remain NON VÉRIFIÉ.
+Installed ordinary-domain SVG/PDF/video helpers and registered-secret denials
+pass, confirmed by enforcing AVCs. Actual Strata previews, one-second video
+playback, duplicate/rename and approved Trash/restore pass with unchanged data.
+USB, SMB/SFTP, multimonitor, renewed Administration/lock and clean-image gates
+remain NON VÉRIFIÉ; keyboard Space/Delete injection remains inconclusive.
 Revision-15 construction previously coincided with guardian heartbeat expiry,
 loss of the desktop and compiler OOM; that incident is recorded separately and
 is not evidence that native locking is fixed. See

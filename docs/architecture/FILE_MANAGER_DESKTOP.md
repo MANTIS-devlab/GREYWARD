@@ -2,6 +2,34 @@
 
 ## Current development proof — 14 October
 
+### Installed preview, file and Protected Data checks — Files 17
+
+A temporary root-owned test launcher is started through the real DMS desktop.
+It verifies UID and `greyward_guard_t` before using the installed Strata ELF;
+no root file manager or diagnostic context transition substitutes for this run.
+The ordinary synthetic file opens; the registered mock secret refuses open.
+The existing isolated helpers render SVG, PDF and video thumbnails and read
+video metadata. Attempting to preview the same registered mock secret fails
+without producing output; enforcing kernel AVCs independently confirm denial.
+No policy, authorization, resource label or grant is changed.
+
+Real VMConnect interaction then confirms normal-window PDF and SVG previews,
+video thumbnails, metadata and playback through the end of a one-second FFV1
+fixture. Strata duplicates the synthetic SVG, renames its copy, and, with user
+approval, moves only that copy to Trash and restores it to the original path.
+SHA-256 remains identical throughout; the original is preserved. FileManager1
+opens the synthetic folder in the ordinary installed Strata. The same graphical
+session, SSH and SELinux Enforcing remain active. The temporary test entry and
+helper are removed after validation; private receipts and synthetic files remain.
+
+Single helper invocations take 47 ms (SVG), 56 ms (PDF), 180 ms (video thumbnail)
+and 192 ms (metadata). These are mechanism observations, not performance budgets
+or a startup/memory benchmark. Space/Delete injection does not activate those
+actions in this VMConnect run; the visible native menu actions succeed. Keyboard
+shortcut acceptance therefore remains inconclusive rather than being marked PASS.
+USB, SMB/SFTP, multimonitor, renewed Administration/lock and clean-image acceptance
+remain NON VÉRIFIÉ. The pending native-lock candidate is not activated.
+
 ### Balanced accents — candidate 17
 
 Revision 16's saturated badges are rejected by the user as too colorful.
@@ -476,13 +504,14 @@ precedes icon installation. No guardian or authentication permission was relaxed
 | Shortcut verification | PASS: confined helper resolves installed Strata desktop entry |
 | Desktop menus and premium application theme | PASS: native Strata custom Obsidian tokens; scoped Qt Fusion proxy style renders dark icon-free desktop menus on the real desktop |
 | Synthetic folder creation and rename | PASS: real Strata New Folder action and inline rename; original document preserved |
-| Synthetic text preview | PASS: original test text visibly rendered in Strata; binary/document sandbox coverage remains NON VÉRIFIÉ |
+| Synthetic previews | PASS: real text/PDF/SVG previews, video thumbnail/metadata and one-second FFV1 playback on Files 17; installed isolated helpers also pass in the ordinary Guard domain |
 | DMS shortcut package | PASS: exact assembly, offline RPM/Go checks, matched installation and successful real login for 1.6.2-17 |
 | Taskbar shortcut creation, native and Flatpak | PASS: real menu creation and original launcher hashes for Brave Flatpak, Black Box and Strata; Strata shortcut launch passes; other shortcut launches and another Flatpak case remain NON VÉRIFIÉ |
 | Clipboard in both directions | PASS: real Ctrl+C/Ctrl+V, native desktop/Strata display and identical synthetic-file SHA-256; reverse paste passes after runtime 50's private clipboard correction |
 | Drag/drop | PASS for the user's manual synthetic transfer, real destination SHA-256 and unchanged protected session; the VMConnect automated gesture remains inconclusive |
-| Trash, binary previews, USB, SMB/SFTP | NON VÉRIFIÉ |
-| Protected Data and Administration regressions | PASS only for an ordinary-domain open/close of the synthetic normal file and denial of the existing registered mock key, without content reads; Strata/Safe Open and Administration interaction regressions remain NON VÉRIFIÉ |
+| Duplicate, rename, Trash and restore | PASS on the synthetic SVG copy through actual Strata UI; original preserved and restored SHA-256 unchanged |
+| USB, SMB/SFTP | NON VÉRIFIÉ; no USB device or network-share test endpoint used |
+| Protected Data and Administration regressions | PASS for ordinary open/close and installed Strata helper denial of the registered mock secret, confirmed by enforcing AVCs; Safe Open and Administration interaction regressions remain NON VÉRIFIÉ |
 | Restart and reconnect | PASS only for approved matched migration, real login and automatic transparent icons; intermittent spontaneous closure remains unresolved, broader crash recovery NON VÉRIFIÉ |
 | Resolution changes and multiple monitors | NON VÉRIFIÉ |
 | Offline package/ISO closure and fresh installation | NON VÉRIFIÉ |
