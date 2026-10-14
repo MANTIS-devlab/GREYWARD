@@ -1,5 +1,15 @@
 # GREYWARD current status
 
+## 14 October preview runtime requirements
+
+Files 14 is installed with explicit dependencies for seven external helper
+programs. Offline build, package metadata and integrity checks pass; the
+existing executable and shared icon assets are unchanged. Installed helpers
+render synthetic image/PDF/video previews and reject the registered mock secret.
+These are backend mechanism checks; GUI preview, visual icon acceptance,
+native-lock activation and full offline ISO/fresh-install gates remain pending.
+See [the owning record](architecture/FILE_MANAGER_DESKTOP.md).
+
 ## 14 October icon consistency review correction
 
 Files 13 is installed. Strata extension resources now resolve to the same full

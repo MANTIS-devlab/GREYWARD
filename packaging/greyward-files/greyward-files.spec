@@ -1,6 +1,6 @@
 Name: greyward-files
 Version: 1.0.0
-Release: 13%{?dist}
+Release: 14%{?dist}
 Summary: GREYWARD Strata file manager and transparent desktop integration
 License: MIT AND GPL-3.0-only AND GPL-2.0-or-later AND Apache-2.0 AND OFL-1.1 AND ISC AND LGPL-2.0-or-later AND LicenseRef-UnRAR AND LicenseRef-GREYWARD-Branding
 URL: https://github.com/lgse/strata
@@ -22,6 +22,14 @@ BuildRequires: qt6-qtbase-private-devel
 Requires: pcmanfm-qt >= 2.4.1
 Requires: python3
 Requires: bubblewrap
+# External helper programs are not found by ELF dependency generation.
+Requires: /usr/bin/prlimit
+Requires: /usr/bin/nice
+Requires: /usr/bin/magick
+Requires: /usr/bin/ffmpeg
+Requires: /usr/bin/ffprobe
+Requires: /usr/bin/fc-list
+Requires: /usr/bin/unsquashfs
 Requires: gvfs
 Requires: gvfs-smb
 Requires: gvfs-fuse
@@ -128,6 +136,9 @@ PY
 %license %{_licensedir}/%{name}
 
 %changelog
+* Wed Oct 14 2026 MANTIS SYSTEMS - 1.0.0-14
+- Declare the pinned preview helper's external tool dependencies explicitly instead of relying on development-host packages.
+
 * Wed Oct 14 2026 MANTIS SYSTEMS - 1.0.0-13
 - Cover native generic office, font and compressed-file aliases to avoid mixed fallback artwork.
 

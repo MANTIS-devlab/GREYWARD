@@ -17,6 +17,13 @@ and RPM construction must run as an unprivileged builder. Do not install or
 promote this package into production until the documented prototype gates pass.
 Development installation is needed to validate its real packaged workflows.
 
+External preview commands are explicit RPM file dependencies: ImageMagick's
+`magick`, FFmpeg/FFprobe, `prlimit`, `nice`, Fontconfig's `fc-list` and
+`unsquashfs`. ELF dependency detection alone does not discover these programs.
+PDF rendering uses the linked Poppler library, not `poppler-utils`; optional
+RAW identification tools and `ffmpegthumbnailer` are not required because the
+pinned helpers have supported fallbacks. Codec availability remains Fedora's.
+
 Defaults are seeded only when missing. User MIME choices, Strata settings and
 PCManFM layout/preferences are preserved. Only this desktop process selects the
 Qt style; all other Qt/GTK applications retain their current theme. The user unit

@@ -1,5 +1,11 @@
 # GREYWARD documentation index
 
+14 October preview dependencies: Files 14 now declares external renderer
+commands that were previously present only by coincidence on the development
+host. Installed sandbox-helper image/PDF/video checks pass and the registered
+mock secret stays denied. Normal-window preview and full ISO closure remain
+NON VÉRIFIÉ. See [file manager integration](architecture/FILE_MANAGER_DESKTOP.md).
+
 14 October icon review correction: Files 13 replaces the remaining mixed
 extension artwork and embedded Strata application icon. Installed resource
 checks and six focused tests pass; the locked desktop prevents final visual
