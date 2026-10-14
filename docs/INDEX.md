@@ -25,9 +25,10 @@ folder/text checks. See [file manager integration](architecture/FILE_MANAGER_DES
 14 October native-lock candidate: ordinary DMS lock routing is prepared for
 the existing protected owner, and its private Qt clipboard interfaces are
 suppressed through native configuration. Runtime 51 / Enrollment 32 / Session
-18 build and focused tests pass; activation and post-correction lock/PAM checks
-remain pending explicit session-closure approval. A later natural native lock
-on the old runtime is verified; intermittent stability remains unresolved. See
+18 build and focused tests pass. After explicit user approval, all three packages
+are installed and the protected runtime refreshed; SSH, Enforcing and greetd
+remain available. New-session lock/PAM and stability checks remain pending.
+A later natural native lock on the old runtime is verified; intermittent stability remains unresolved. See
 [file manager integration](architecture/FILE_MANAGER_DESKTOP.md).
 
 14 October icon unification: the native Greyward theme and icon-only Strata

@@ -28,7 +28,8 @@ or a startup/memory benchmark. Space/Delete injection does not activate those
 actions in this VMConnect run; the visible native menu actions succeed. Keyboard
 shortcut acceptance therefore remains inconclusive rather than being marked PASS.
 USB, SMB/SFTP, multimonitor, renewed Administration/lock and clean-image acceptance
-remain NON VÉRIFIÉ. The pending native-lock candidate is not activated.
+remain NON VÉRIFIÉ. Native-lock activation is complete as recorded below; its
+new-session acceptance remains pending.
 
 ### Balanced accents — candidate 17
 
@@ -258,17 +259,21 @@ it is not a successful native-lock test. SELinux descriptor denials remain intac
 Runtime 51, Enrollment 32 and Session 18 build offline. Twelve desktop, twenty-three
 DMS migration and seven readiness tests pass on Fedora. Existing-package checks,
 private matched rollback copies and the three-package dependency dry run pass.
-These packages have not been installed or activated. The active graphical session
-and SSH remain running. Explicit user approval is required before ending that
-session; real native lock/PAM unlock, clipboard and stability acceptance follow
-activation. No reboot, PAM/greetd change or policy allowance is part of this fix.
+After explicit user approval, the graphical session ends and these three exact
+packages are installed. The protected runtime is refreshed while the desktop is
+quiescent, and the workflow broker is restarted. RPM verification is clean; SSH,
+greetd and the broker remain active with SELinux Enforcing. The real console
+confirms return to greetd. User reconnection, real native lock/PAM unlock and
+post-correction stability remain pending. Matched previous packages and protected
+runtime backup are retained. No reboot, PAM/greetd change or policy allowance
+is part of this fix.
 
 During preparation, the unmodified Runtime 50 session subsequently auto-locks
 without losing its protected authentication PID or admitted session. The real
 VM console displays the native lock, and the existing broker's `lock-status`
 returns `true` after root verification. This is an observed secure acquisition,
 not a PAM-unlock pass or proof that the intermittent clipboard-dependent exit
-is resolved. The pending candidate remains unactivated.
+is resolved. This observation precedes the approved activation recorded above.
 
 Runtime 50/Enrollment 31 disable only the private authentication backend's
 clipboard collector through DMS's native configuration. The same desktop-to-Strata

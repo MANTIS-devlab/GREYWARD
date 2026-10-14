@@ -37,8 +37,9 @@ claims private lock security. Private Qt clipboard suppression belongs to
 `test_dms_runtime.py`, `test_application_desktop.py`, installed Qt registry probes
 and the pending real lock/PAM retry. Authority:
 [file manager desktop integration](architecture/FILE_MANAGER_DESKTOP.md).
-The matched candidate is built; activation and intermittent-stability acceptance
-are pending user approval. No new locker, daemon or policy allowance is introduced.
+The matched candidate is installed and its protected runtime refreshed after
+approved session closure. New-session lock/PAM and stability acceptance remain
+pending. No new locker, daemon or policy allowance is introduced.
 
 Shared icon-family ownership: `branding/source/greyward-icon-family.json`,
 `tools/generate-file-icons.py`, desktop-only QIcon selection in

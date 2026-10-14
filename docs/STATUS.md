@@ -46,16 +46,20 @@ by truncated VMConnect capture. Revision 11's folder/text checks were partial;
 the user rejects its overall consistency. Native-lock activation remains pending.
 See [the owning record](architecture/FILE_MANAGER_DESKTOP.md).
 
-## 14 October native-lock correction awaiting activation
+## 14 October native-lock correction activated; live acceptance pending
 
-Runtime 51, Enrollment 32 and Session 18 are built, not installed. The existing
+Runtime 51, Enrollment 32 and Session 18 are installed after explicit approval
+to end the graphical session. Protected runtime migration and RPM verification
+pass; SSH, workflow broker and greetd are active, and SELinux remains Enforcing.
+The console confirms return to greetd; user reconnection and live lock/PAM
+acceptance remain pending. No reboot occurs. The existing
 native DMS custom action routes enrolled ordinary lock requests to Guard;
 unconfined sessions retain local native locking. The helper waits for root-verified
 lock status. The private authentication worker disables only Qt clipboard
 interfaces, complementing its already disabled backend collector. Installed Qt
 registry probes preserve the seat while suppressing clipboard bindings. Forty-two
 focused Python tests pass on Fedora; package checks, rollback preparation and
-the three-package dependency dry run pass. Actual activation/PAM unlock and
+the three-package dependency dry run pass. Real post-activation PAM unlock and
 post-correction stability remain pending. No policy, PAM or greetd change is made.
 
 The old Runtime 50 later acquires a real native lock without retiring its session;
