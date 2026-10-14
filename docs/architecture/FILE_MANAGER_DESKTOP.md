@@ -2,6 +2,95 @@
 
 ## Current development proof — 14 October
 
+### Native file icons and preview correction — candidate 16
+
+Revision 16 is built and installed in development. It retains revision 15's
+derived executable and strengthens the shared semantic icon artwork. Revision 15 compiles the pinned Strata source
+with an offline Cargo vendor archive and two bounded patches. The upstream
+binary remains the attested baseline; that attestation does not apply to the
+derived executable. Source, Cargo.lock, vendor and patch digests are checked.
+
+The native-icons patch uses a separate GIO/GTK theme instance for file MIME
+artwork and launcher logos. Per-file customizations remain preferred. Direct
+artwork is limited to root-owned, non-writable system assets; arbitrary personal
+images retain isolated preview handling. Inputs are bounded, external SVG
+references remain disabled, and PNGs are resized before entering the existing
+bounded texture cache. Launcher metadata never executes a command or establishes
+trust. Private user-only named icons and unsupported formats may use the shared
+fallback; ODT content thumbnails remain unsupported.
+
+The preview patch selects Strata's existing per-operation bubblewrap renderer.
+Actual normal-window testing confirms the old PDF preview works, while SVG and
+browser thumbnails encounter denied nested `/proc` mounts in reusable workers.
+No generic mount allowance, unsandboxed decoder, new service or portal is added.
+The normal offline RPM build passes all phases, including three Rust metadata
+tests through the dedicated integration target. Twelve focused Python tests
+pass on Fedora. The dependency dry run and installation replace only Files 14;
+there are no scriptlets. RPM verification is clean, SELinux stays Enforcing,
+SSH remains active and the matched Files 14 rollback is retained. The installed
+release ELF SHA-256 is
+`0206955547f80f6cc5955a28a50fb6ed3c4304670a6f1f5491eec5cbcaedc136`.
+
+The user reconnects to the normal desktop. Real VMConnect review confirms SVG
+thumbnail rendering and the shared native/Strata folder and document silhouettes.
+After the user rejects washed-out accents, revision 16 colors the glyph itself,
+strengthens its border and adds a tinted inset. A reopened normal Strata grid
+shows blue DOCX/ODT, green XLSX/CSV, red PDF and amber archive/code marks; desktop
+text-file icons show the same blue treatment. No whole-session restart occurs.
+The Desktop folder in Strata also resolves the real Brave, Black Box, home and
+Files launcher icons consistently with the native desktop instead of generic
+document icons.
+Content thumbnails retain their original appearance; ODT thumbnails in Strata
+and private user-only named icons remain unsupported as stated above.
+
+Revision 16 uses generation-checked incremental compilation with the same
+source/patch/lock inputs and release ELF, not a new cold Rust build. Its normal
+RPM build/check phases and three Rust checks pass after the verified prep step.
+An initial 1 GiB native-build cgroup runs out of memory; its partial native
+objects are discarded before the successful 2 GiB/no-swap retry (1.5 GiB peak).
+The normal desktop stays active throughout this revision-16 build/install.
+RPM verification is clean, SSH remains active, and SELinux remains Enforcing.
+The matched revision-15 rollback is retained. Revision-16 RPM SHA-256:
+`c07cc50fc2fa1a07feac84de0330ce653b245f3c573b40b07bc40434b5ac7f6c`.
+
+A direct diagnostic launch is refused at its SELinux context transition, before
+running the helper. That is not a passed or failed preview operation and prompts
+no policy relaxation. Revision-15/16 automated installed helper/security checks,
+PDF/video normal-window checks and full migration acceptance remain NON VÉRIFIÉ;
+earlier revision-14 helper evidence below is historical. No compiler or build
+safety service remains running.
+
+### Build resource incident — historical construction failures
+
+The ordinary session closes at 08:55:59 with guardian reason `heartbeat-age`.
+At 08:57:30 the kernel reports global OOM and kills the Rust compiler. The build
+unit reaches approximately 4.6 GiB memory and 7.3 GiB swap peak. This
+establishes dangerous build pressure concurrent with the heartbeat failure;
+it does not establish the earlier clipboard/native-lock defect as its cause.
+No logout or reboot is requested and no Files 15 package is installed at that time. SSH
+remains available and SELinux Enforcing. The admitted session is nevertheless
+lost; it must not be reported as preserved or visually validated afterward.
+
+The RPM environment adds full `-Cdebuginfo=2`, unlike the initial successful
+source build. The candidate now appends `-C debuginfo=0` while retaining the
+other Fedora compiler flags; no debug subpackage is produced. Full LTO also
+reaches the bounded builder's memory limit, so the release profile uses standard
+ThinLTO instead. The replacement build has a 6 GiB hard memory cap, zero permitted
+swap, and stops if an ordinary graphical login appears. Do not repeat uncontrolled
+memory pressure or relax guardian checks to keep a desktop alive. Remaining
+source/package tests and a fresh user login are required before visual acceptance.
+The isolated SDK also exposed PCManFM's exported link dependency on
+`libexif-devel`; it is now an explicit build requirement. SDK correction does
+not install or upgrade libraries on the running desktop system.
+
+The whole-application test harness separately reaches the build cgroup limit,
+even when only three tests are selected. The final patch separates the bounded
+metadata functions into a leaf module. A standard Cargo integration target
+imports that production module directly and runs its three checks without
+compiling unrelated internal tests. Packaging checks that the release ELF is
+preserved. A fresh normal RPM build passes after this correction; installed
+desktop acceptance remains pending as recorded above.
+
 ### Resumed normal-desktop icon review
 
 After the user unlocks the real development desktop, Strata is closed and
@@ -22,12 +111,12 @@ asset digests prove identical rendering for these cases. Native integration
 would require a separately validated upstream source change and derived-build
 provenance, rather than silently modifying the attested executable.
 
-Further real-window comparison and GUI preview checks are interrupted by a
-truncated VMConnect capture. This is a Windows-console observation limitation,
-not evidence of a Linux session closure. SSH verifies the same admitted session,
-the freshly launched Strata process and clean installed RPM integrity. Final
-whole-interface acceptance remains NON VÉRIFIÉ; no auth/runtime activation,
-logout or reboot is performed during this review.
+The user subsequently restores the truncated VMConnect console. The real grid
+confirms the common folder, archive, spreadsheet, text and source family, and
+normal-window PDF preview works. SVG preview is unavailable with enforcing
+nested-mount denials, motivating candidate 15 above. Final whole-interface
+acceptance remains NON VÉRIFIÉ. The later build-resource incident is separate
+from the earlier console limitation; no auth/runtime activation or reboot occurs.
 
 ### Preview dependency closure
 

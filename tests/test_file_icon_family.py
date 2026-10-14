@@ -1,5 +1,6 @@
 """Shared vector catalog and scoped launch boundaries, no desktop mutations."""
 import importlib.util
+import hashlib
 import json
 from pathlib import Path
 import tempfile
@@ -71,12 +72,20 @@ class FileIconFamily(unittest.TestCase):
         self.assertIn('application-vnd.oasis.opendocument.text',model['mimeTypes'])
         self.assertIn('drive-removable-media-usb',model['objects'])
 
-    def test_resource_overlay_is_icon_only_and_attested_elf_is_still_packaged(self):
+    def test_resource_overlay_is_icon_only_and_source_patch_closure_is_pinned(self):
         launcher=(ROOT/'environment/session/desktop/strata-launcher').read_text()
         self.assertIn('export G_RESOURCE_OVERLAYS=/io/github/lgse/Strata/icons=/usr/share/greyward/files/strata-resources/icons',launcher)
         self.assertNotIn('/io/github/lgse/Strata=',launcher)
         spec=(ROOT/'packaging/greyward-files/greyward-files.spec').read_text()
-        self.assertIn('Attested executable changed during packaging',spec)
+        self.assertIn('Built executable changed during packaging',spec)
+        self.assertIn('cargo build --release --frozen --offline',spec)
+        self.assertIn('--test greyward_native_icons',spec)
+        source=json.loads((ROOT/'packaging/greyward-files/source.json').read_text())
+        self.assertEqual(set(source['sourcePatches']),{'strata-preview-mode.patch','strata-native-icons.patch'})
+        for name,digest in source['sourcePatches'].items():
+            patch=(ROOT/'packaging/greyward-files'/name).read_bytes().replace(b'\r\n',b'\n')
+            self.assertEqual(hashlib.sha256(patch).hexdigest(),digest,name)
+        self.assertEqual(len(source['inputs']['vendor']['sha256']),64)
         self.assertIn('/usr/share/icons/Greyward',spec)
         self.assertIn('icons-build/LICENSES',spec)
 

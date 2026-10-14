@@ -1,5 +1,16 @@
 # GREYWARD repository map
 
+Native file-icon integration ownership: `packaging/greyward-files/strata-native-icons.patch`,
+`strata-preview-mode.patch`, pinned `source.json`, offline `prepare-vendor.py`
+and `environment/session/desktop/strata-launcher`. Shared semantic artwork is
+owned by `branding/source/greyward-icon-family.json` and
+`tools/generate-file-icons.py`. The derived executable uses native MIME/launcher
+artwork and the existing isolated per-operation renderer. Validation:
+`python -m unittest discover -s tests -p 'test_file_icon_family.py'`, offline
+RPM `%check` and separate installed desktop acceptance. Files 16 is installed;
+normal-window icon/ SVG checks pass, renewed helper/security acceptance remains
+pending. Authority: [file manager integration](architecture/FILE_MANAGER_DESKTOP.md).
+
 Preview runtime dependency ownership: `packaging/greyward-files/greyward-files.spec`
 declares the pinned upstream helper's external commands as RPM file requirements.
 Validation combines offline RPM construction/readback, installed sandbox-helper

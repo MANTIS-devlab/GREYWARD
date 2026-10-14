@@ -4,18 +4,36 @@ Candidate only; production package closure and real workflow acceptance remain
 pending. The owning evidence and rollout gates are in
 [file manager and desktop integration](../../docs/architecture/FILE_MANAGER_DESKTOP.md).
 
-The package reuses the attested upstream Strata 1.0.0 x86_64 archive, validates
-its SHA-256 and source commit before packaging, and builds a small desktop-only
-Qt style against Fedora Qt6. No upstream portal, udisks replacement or privileged
+Revision 16 retains revision 15's source-built executable and strengthens the
+shared semantic icon colors, glyphs and tinted badges. Revision 15 builds the pinned Strata source with two bounded integration patches
+and an offline Cargo vendor archive. The original attested Strata 1.0.0 archive
+remains a verified baseline and supplies launcher/license assets; its Actions
+attestation does not apply to the derived executable. The package also builds a
+small desktop-only Qt style against Fedora Qt6. No portal, udisks replacement or privileged
 file manager is installed. Native and third-party license notices are retained;
 the upstream archive includes the separately licensed UnRAR decoder.
 
 Run `build.sh VERIFIED-INPUTS NEW-OUTPUT` on Fedora 44. Inputs are the exact
-release archive and source archive recorded in `source.json`. Downloading and
-attestation verification happen before this offline packaging step. Compilation
+release/source/desktop/vendor archives recorded in `source.json`. Fetch locked
+Rust dependencies in the verified source with `cargo fetch --locked`, then run
+`cargo vendor --locked --offline vendor` and
+from the GREYWARD checkout,
+`python3 packaging/greyward-files/prepare-vendor.py VENDOR NEW-ARCHIVE`.
+The resulting digest must match the pinned vendor input; do not bypass a mismatch.
+Downloading and upstream attestation verification happen before the offline
+packaging step. The RPM verifies the source, Cargo.lock and patch digests and
+builds with `--frozen --offline`, including Cargo's dependency file checksums.
+Compilation
 and RPM construction must run as an unprivileged builder. Do not install or
 promote this package into production until the documented prototype gates pass.
 Development installation is needed to validate its real packaged workflows.
+Release compilation uses ThinLTO and omits debug information while preserving
+the remaining Fedora compiler flags. This bounds the optimizer's memory demand
+on small builders; it does not disable a runtime isolation mechanism.
+RPM checks use a dedicated Cargo integration target importing the production
+metadata module directly, without compiling Strata's unrelated internal tests.
+Packaging compares the release binary with the installed image before creating
+the RPM.
 
 External preview commands are explicit RPM file dependencies: ImageMagick's
 `magick`, FFmpeg/FFprobe, `prlimit`, `nice`, Fontconfig's `fc-list` and
@@ -42,19 +60,38 @@ and DMS icon selections require a deliberate targeted migration rather than
 overwriting user preferences.
 
 Strata's launcher selects only its root-owned icon resource subtree through
-GLib's supported G_RESOURCE_OVERLAYS mechanism. The attested ELF, application
-code and authentication resources are unchanged. All embedded action and
+GLib's supported G_RESOURCE_OVERLAYS mechanism. Authentication and non-icon
+resources are unchanged. All embedded action and
 extension SVG names resolve to the same complete semantic file artwork used by
 the native MIME theme. The former Catppuccin marks are not embedded inside a
 second document frame. The embedded Strata application-icon resource also uses
 the canonical GREYWARD Files SVG. Lucide/Feather and upstream notices are
 retained. Third-party application logos and real content thumbnails
 remain their own identity/content rather than synthetic file icons. This is an
-icon-family change, not a global GTK/Qt interface theme.
+icon-family change, not a global GTK/Qt interface theme. The native-icons patch
+uses a separate GIO/GTK theme instance for file MIME icons and launcher logos;
+it does not change global GTK settings. Custom per-file artwork remains preferred.
+Launcher fields are bounded display metadata, never proof of identity, trust or
+authority, and no `Exec` field is evaluated. SVG rendering retains the existing
+size limit and disabled external references; PNG dimensions and input size are
+bounded. Unsupported icon formats retain the bundled fallback.
+Named theme lookup is limited to administrator-owned system/theme and Flatpak
+export locations. Absolute file hints bypass GTK lookup and go through the
+bounded renderer directly. Direct artwork must be root-owned and not group- or
+world-writable; personal image content retains isolated preview handling. Named
+icons available only in a private user theme can retain the bundled fallback;
+no launcher trust is inferred from an icon.
+
+`STRATA_PREVIEW_SANDBOX=oneshot` selects Strata's existing per-operation
+bubblewrap renderer. The reusable worker's nested `/proc` mount is denied by
+the ordinary GREYWARD policy. This patch selects the existing isolated path;
+it grants no mount permission and never enables unsandboxed parsing. Native
+ODT content thumbnails remain unsupported; do not disable desktop thumbnails
+to manufacture identical rendering. Installed GUI acceptance is separate from
+source compilation; see the owning record for the current development state.
 
 `branding/source/greyward-files.svg` is the canonical Obsidian/Platinum folder
-icon, packaged with the GREYWARD branding notice. The upstream attested binary
-remains unchanged. Its launcher uses the root-owned SVG directly, avoiding stale
+icon, packaged with the GREYWARD branding notice. Its launcher uses the root-owned SVG directly, avoiding stale
 negative theme-icon cache entries in an already-running desktop.
 
 Revision 7 also builds the pinned PCManFM-Qt 2.4.1 source archive recorded in

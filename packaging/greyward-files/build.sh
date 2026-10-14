@@ -4,7 +4,11 @@ repo=$(cd "$(dirname "$0")/../.." && pwd)
 inputs=${1:?Usage: build.sh VERIFIED-INPUTS NEW-OUTPUT}
 output=${2:?Provide a new output directory}
 test ! -e "$output"
-mkdir -p "$output"/{BUILD,BUILDROOT,RPMS,SOURCES,SPECS,SRPMS}
+mkdir -p "$output"/{BUILD,BUILDROOT,RPMS,SOURCES,SPECS,SRPMS,TMP}
+# The spec can reuse a builder-owned cache, but a fresh documented invocation
+# must also work without a caller-supplied Cargo target directory.
+export CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$(realpath "$output")/cargo-target}"
+mkdir -p "$CARGO_TARGET_DIR"
 python3 - "$repo/packaging/greyward-files/source.json" "$inputs" "$output/SOURCES" <<'PY'
 import hashlib,json,pathlib,shutil,sys
 manifest=json.loads(pathlib.Path(sys.argv[1]).read_text())
@@ -19,7 +23,9 @@ tar -C "$repo" -czf "$output/SOURCES/greyward-files-inputs.tar.gz" \
   environment/session/greyward-desktop-icons environment/session/greyward-desktop-icons.service \
   environment/session/greyward-desktop-shortcut packaging/greyward-files/source.json \
   packaging/greyward-files/pcmanfm-desktop-only.patch \
+  packaging/greyward-files/strata-preview-mode.patch packaging/greyward-files/strata-native-icons.patch \
   branding/source/greyward-files.svg branding/source/greyward-icon-family.json \
   tools/generate-file-icons.py branding/LICENSE
 cp "$repo/packaging/greyward-files/greyward-files.spec" "$output/SPECS/"
-rpmbuild --define "_topdir $(realpath "$output")" -ba "$output/SPECS/greyward-files.spec"
+rpmbuild --define "_topdir $(realpath "$output")" \
+  --define "_tmppath $(realpath "$output")/TMP" -ba "$output/SPECS/greyward-files.spec"

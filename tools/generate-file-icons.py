@@ -77,13 +77,14 @@ def folder(palette, badge=''):
 
 def document(palette, badge, accent):
     p=palette
-    return svg(f'''<defs><linearGradient id="gw-page" x2=".8" y2="1"><stop stop-color="{p['paper']}"/><stop offset="1" stop-color="{p['paperShade']}"/></linearGradient></defs>
+    return svg(f'''<defs><linearGradient id="gw-page" x2=".8" y2="1"><stop stop-color="{p['paper']}"/><stop offset="1" stop-color="{p['paperShade']}"/></linearGradient><linearGradient id="gw-accent" x2="0" y2="1"><stop stop-color="{accent}" stop-opacity=".24"/><stop offset="1" stop-color="{accent}" stop-opacity=".08"/></linearGradient></defs>
 <path d="M6 3.5h8l4 4V21H6Z" fill="#00060b" opacity=".5" transform="translate(0 .6)"/>
 <path d="M6 3h8l4 4v13.5H6Z" fill="url(#gw-page)" stroke="{p['edge']}" stroke-width=".4"/>
 <path d="M14 3v4h4" fill="{p['highlight']}" stroke="{p['edge']}" stroke-width=".35"/>
-<rect x="4.5" y="10" width="15" height="10.5" rx="1.6" fill="{p['obsidian']}" stroke="{accent}" stroke-width=".4"/>
+<rect x="4.5" y="10" width="15" height="10.5" rx="1.6" fill="{p['obsidian']}"/>
+<rect x="4.5" y="10" width="15" height="10.5" rx="1.6" fill="url(#gw-accent)" stroke="{accent}" stroke-width=".65"/>
 <g transform="translate(7.6 10.6) scale(.37)">{badge}</g>
-<path d="M6.1 10.4h11.8" stroke="{accent}" stroke-width=".35" opacity=".7"/>
+<path d="M6.1 10.4h11.8" stroke="{accent}" stroke-width=".55"/>
 ''')
 
 
@@ -117,9 +118,9 @@ def generate(catalog, upstream, destination):
         write(theme/'scalable/places'/f'{name}.svg', folder(p,glyph(upstream,badge) if badge else ''))
         write(theme/'scalable/places'/f'{name}-symbolic.svg', svg(glyph(upstream,badge or 'folder')))
     for name,(badge,color) in model['mimeTypes'].items():
-        write(theme/'scalable/mimetypes'/f'{name}.svg',document(p,glyph(upstream,badge),p[color]))
+        write(theme/'scalable/mimetypes'/f'{name}.svg',document(p,glyph(upstream,badge,p[color]),p[color]))
     for name,(badge,color) in model['objects'].items():
-        write(theme/'scalable/devices'/f'{name}.svg',tile(p,glyph(upstream,badge),p[color]))
+        write(theme/'scalable/devices'/f'{name}.svg',tile(p,glyph(upstream,badge,p[color]),p[color]))
 
     # Shared upstream action shapes; neutral Platinum treatment. Rich folder/file
     # assets replace only object icons; each unrelated action keeps its own glyph.
@@ -135,7 +136,7 @@ def generate(catalog, upstream, destination):
             badge=folder_names[name]
             content=folder(p, glyph(upstream,badge) if badge else '')
         elif name in document_kinds:
-            content=document(p,glyph(upstream,name),p[document_kinds[name]])
+            content=document(p,glyph(upstream,name,p[document_kinds[name]]),p[document_kinds[name]])
         else:
             # Preserve upstream geometry and separate function identities.
             color=p['obsidian'] if name=='check-on-primary' else p['text']
@@ -161,7 +162,7 @@ def generate(catalog, upstream, destination):
         name=path.stem.removeprefix('strata-ctp-')
         kind=kinds['overrides'].get(name,kinds['default'])
         badge,color=model['mimeTypes'][kind]
-        content=document(p,glyph(upstream,badge),p[color])
+        content=document(p,glyph(upstream,badge,p[color]),p[color])
         write(overlay/'icons/catppuccin'/path.name,content)
 
     # GTK can resolve the embedded application icon before the installed theme.

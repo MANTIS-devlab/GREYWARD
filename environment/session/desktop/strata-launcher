@@ -1,7 +1,11 @@
 #!/usr/bin/sh
 set -eu
 /usr/local/libexec/greyward-files-seed strata
-# Root-packaged icon-only overlay: preserve the verified upstream executable
-# and all non-icon resources. Do not inherit an arbitrary resource overlay.
+# Root-packaged icon-only overlay. Preserve all non-icon resources rather
+# than inheriting an arbitrary resource overlay.
 export G_RESOURCE_OVERLAYS=/io/github/lgse/Strata/icons=/usr/share/greyward/files/strata-resources/icons
+export STRATA_NATIVE_ICON_THEME=Greyward
+# Preserve mandatory host policy: use Strata's existing per-operation bwrap
+# isolation instead of its nested persistent-worker /proc mount.
+export STRATA_PREVIEW_SANDBOX=oneshot
 exec /usr/libexec/greyward/files/strata "$@"
