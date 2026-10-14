@@ -30,6 +30,13 @@ graphical session remain intact. The desktop is locked, so final visual review
 and reloading the existing Strata process remain pending user unlock. No claim
 of complete visual acceptance is made. Matched Files 11 rollback is preserved.
 
+Installed-profile inspection also finds an earlier migration defect: removing
+an `IconThemeName` substring truncated `FallbackIconThemeName`, so PCManFM
+persisted its Oxygen default. The exact fallback field is restored to Greyward
+with every other preference retained, and the development migration now removes
+only whole matching lines. The packaged default was already correct. This
+explains another source of mixed fallback icons; visual acceptance stays pending.
+
 The dated Files 8/11 notes below
 record the earlier routing/startup proof. Native locking and broader stability
 remain a blocking migration gate after the later automatic-lock closure.
