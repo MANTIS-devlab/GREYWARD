@@ -15,8 +15,9 @@ Enforcing checks pass. The revision-16 rollback is retained. RPM SHA-256:
 `b78552cd93208b763f30a47bf326c26bbe9f6cd0986b97897ce1735203e720aa`.
 Normal-window VMConnect verification confirms the darker badges, restrained
 office accents and neutral plain-text icons in Strata and on the native desktop.
-Strata remains open for user review; this is technical visual verification,
-not a claim that the user has accepted the revised aesthetic.
+On 14 October the user explicitly accepts revision 17's icon color balance.
+This records visual acceptance of the palette; the remaining migration, preview
+and security gates retain their separate status.
 
 ### Native file icons and preview correction — preceding revision 16 evidence
 

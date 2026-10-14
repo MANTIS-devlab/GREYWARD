@@ -3,11 +3,12 @@
 ## 14 October native-icon and preview candidate
 
 Files 17 is installed in development, retaining revision 15's pinned-source
-executable and balancing the shared icon accents. The normal desktop review
+executable and balancing the shared icon accents. The user accepts revision 17's
+icon color balance on 14 October. The normal desktop review
 confirms matching silhouettes, visibly blue DOCX/ODT and green XLSX/CSV badges,
 plus SVG thumbnail rendering. Three Rust metadata checks and twelve Fedora
 Python checks pass for revision 15; revisions 16–17's incremental offline RPM builds
-repeats the three Rust checks and preserves the release ELF. Package integrity,
+repeat the three Rust checks and preserve the release ELF. Package integrity,
 SSH and SELinux Enforcing checks pass; the active normal session remains open
 through revisions 16–17 build/install. Matched rollback packages are retained.
 Installed PDF/video and renewed helper/security checks remain NON VÉRIFIÉ.
