@@ -2,6 +2,33 @@
 
 ## Current development proof — 14 October
 
+### Resumed normal-desktop icon review
+
+After the user unlocks the real development desktop, Strata is closed and
+reopened through its desktop shortcut. The new window loads the packaged icon
+overlay; its live application-bus owner is in the ordinary Guard domain. Folder
+and plain-text artwork match the native desktop in the observed grid view,
+and the Strata launcher/window identity uses the GREYWARD Files folder. The
+admitted graphical session stays running and SELinux remains Enforcing.
+
+This is partial visual acceptance. Two differences remain visible: Strata
+represents `.desktop` launchers as generic documents whereas the native desktop
+shows their application logos; the native desktop displays an ODT content
+thumbnail that Strata does not support. Source inspection confirms that the
+pinned Strata file-icon resolver does not resolve launcher GIcons, and its
+thumbnail dispatcher does not accept ODT. Icon-resource overlays cannot add
+either behavior. Do not disable useful native thumbnails or claim that matching
+asset digests prove identical rendering for these cases. Native integration
+would require a separately validated upstream source change and derived-build
+provenance, rather than silently modifying the attested executable.
+
+Further real-window comparison and GUI preview checks are interrupted by a
+truncated VMConnect capture. This is a Windows-console observation limitation,
+not evidence of a Linux session closure. SSH verifies the same admitted session,
+the freshly launched Strata process and clean installed RPM integrity. Final
+whole-interface acceptance remains NON VÉRIFIÉ; no auth/runtime activation,
+logout or reboot is performed during this review.
+
 ### Preview dependency closure
 
 Files 14 is installed. It adds explicit RPM file dependencies for the external
@@ -25,8 +52,8 @@ storage, clean environment and bounded resources. Synthetic SVG rendering,
 PDF/video thumbnails and FFprobe metadata succeed in approximately 83/59/148/161
 milliseconds respectively. A registered synthetic secret remains denied with
 `Permission denied` and no preview output. These are helper-level mechanism
-checks, not successful GUI preview or overall performance acceptance. The
-normal desktop is still locked; visual checks remain NON VÉRIFIÉ.
+checks, not successful GUI preview or overall performance acceptance. See the
+resumed review above for actual normal-window evidence and remaining limitations.
 
 ### Icon consistency correction after user review
 
@@ -53,9 +80,10 @@ digests; all 455 embedded icon paths are covered, including the application
 identity. Every extension resource matches its selected native MIME SVG exactly.
 The attested Strata ELF is unchanged and RPM verification is clean. Only the
 desktop-icon user unit is refreshed; SSH, SELinux Enforcing and the admitted
-graphical session remain intact. The desktop is locked, so final visual review
-and reloading the existing Strata process remain pending user unlock. No claim
-of complete visual acceptance is made. Matched Files 11 rollback is preserved.
+graphical session remain intact. Strata is subsequently reopened after user
+unlock; the resumed review above records partial visual acceptance and the
+remaining differences. No claim of complete visual acceptance is made. Matched
+Files 11 rollback is preserved.
 
 Installed-profile inspection also finds an earlier migration defect: removing
 an `IconThemeName` substring truncated `FallbackIconThemeName`, so PCManFM

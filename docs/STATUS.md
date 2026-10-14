@@ -16,8 +16,12 @@ Files 13 is installed. Strata extension resources now resolve to the same full
 native MIME artwork, and its embedded application icon uses the canonical Files
 identity. Six focused tests, repository gates, RPM verification and all 455
 embedded-icon/821 installed-asset checks pass. The desktop-icon unit is refreshed
-without ending the session. Final visual comparison and existing Strata cache
-reload are pending user unlock. Revision 11's folder/text checks were partial;
+without ending the session. After user unlock and Strata relaunch, the real grid
+shows shared folder/text artwork and the GREYWARD Files identity. Strata still
+shows launcher files as generic documents and lacks native ODT thumbnails; these
+require source integration, not additional icon overlays. Whole-interface visual
+acceptance remains pending, with further console checks currently interrupted
+by truncated VMConnect capture. Revision 11's folder/text checks were partial;
 the user rejects its overall consistency. Native-lock activation remains pending.
 See [the owning record](architecture/FILE_MANAGER_DESKTOP.md).
 
