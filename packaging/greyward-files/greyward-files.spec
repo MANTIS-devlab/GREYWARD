@@ -1,6 +1,6 @@
 Name: greyward-files
 Version: 1.0.0
-Release: 11%{?dist}
+Release: 13%{?dist}
 Summary: GREYWARD Strata file manager and transparent desktop integration
 License: MIT AND GPL-3.0-only AND GPL-2.0-or-later AND Apache-2.0 AND OFL-1.1 AND ISC AND LGPL-2.0-or-later AND LicenseRef-UnRAR AND LicenseRef-GREYWARD-Branding
 URL: https://github.com/lgse/strata
@@ -128,6 +128,12 @@ PY
 %license %{_licensedir}/%{name}
 
 %changelog
+* Wed Oct 14 2026 MANTIS SYSTEMS - 1.0.0-13
+- Cover native generic office, font and compressed-file aliases to avoid mixed fallback artwork.
+
+* Wed Oct 14 2026 MANTIS SYSTEMS - 1.0.0-12
+- Resolve Strata extension icons to the same semantic file assets as the native desktop and cover the embedded application icon.
+
 * Wed Oct 14 2026 MANTIS SYSTEMS - 1.0.0-11
 - Cover the native GIO inode-directory name so ordinary folders use the shared family instead of a fallback.
 

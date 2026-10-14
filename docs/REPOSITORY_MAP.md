@@ -1,5 +1,13 @@
 # GREYWARD repository map
 
+Icon consistency correction ownership remains the canonical family catalog,
+`tools/generate-file-icons.py` and `packaging/greyward-files/`. Extension names
+map to whole native MIME assets; the icon-only overlay includes the embedded
+application icon. `test_file_icon_family.py` checks exact cross-consumer artwork
+and removal of legacy extension marks. Files 13 is installed; actual final
+visual review is pending unlock. Authority:
+[file manager desktop integration](architecture/FILE_MANAGER_DESKTOP.md).
+
 Native lock handoff ownership: `environment/session/greyward-dms-state-migrate`,
 `greyward-session-lock`, `greyward-dms-runtime-check` and `packaging/greyward-session/`.
 The kernel subject selects the existing broker handoff; surface ordering never
