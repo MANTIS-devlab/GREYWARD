@@ -1,6 +1,6 @@
 Name: greyward-session
 Version: 0.1.0
-Release: 18%{?dist}
+Release: 21%{?dist}
 Summary: GREYWARD static desktop session policy and factory defaults
 License: GPL-3.0-only
 BuildArch: noarch
@@ -65,6 +65,15 @@ done
 /usr/share/greyward/defaults
 
 %changelog
+* Wed Oct 14 2026 MANTIS SYSTEMS - 0.1.0-21
+- Keep the packaged migration byte-identical by using Fedora's Bash interpreter path.
+
+* Wed Oct 14 2026 MANTIS SYSTEMS - 0.1.0-20
+- Rebuild the Strata taskbar default migration from the verified desktop source.
+
+* Wed Oct 14 2026 MANTIS SYSTEMS - 0.1.0-19
+- Pin GREYWARD Files in fresh DMS taskbars and migrate only the unchanged old default.
+
 * Wed Oct 14 2026 MANTIS SYSTEMS - 0.1.0-18
 - Route enrolled desktop lock requests to the existing protected native DMS owner; preserve ordinary-session native locking.
 

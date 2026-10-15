@@ -1,4 +1,5 @@
 [Default Applications]
+inode/directory=io.github.lgse.Strata.desktop;
 
 # GREYWARD default communication and web applications.
 x-scheme-handler/mailto=io.github.hkdb.Aerion.desktop;

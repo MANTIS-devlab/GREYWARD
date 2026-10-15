@@ -77,6 +77,8 @@ git
 zsh
 firefox
 nautilus
+# Strata is the normal file manager; Nautilus remains installed for Safe Open.
+pcmanfm-qt
 # Files integration: Windows/NAS shares, phones, cameras, and archive browsing.
 gvfs-smb
 gvfs-mtp

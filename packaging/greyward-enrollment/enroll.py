@@ -12,6 +12,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import secrets
 import shutil
 import sqlite3
 import stat
@@ -59,11 +60,11 @@ def trusted(path):
     return path.read_bytes()
 
 
-def write_json(path, value):
-    temporary = path.with_suffix('.pending')
-    fd = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
-    with os.fdopen(fd, 'w') as stream:
-        json.dump(value, stream, indent=2)
+def atomic_write(path, data, mode=0o600):
+    temporary = path.with_name(path.name + '.pending-' + secrets.token_hex(8))
+    fd = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, mode)
+    with os.fdopen(fd, 'wb') as stream:
+        stream.write(data)
         stream.flush()
         os.fsync(stream.fileno())
     os.replace(temporary, path)
@@ -72,6 +73,89 @@ def write_json(path, value):
         os.fsync(fd)
     finally:
         os.close(fd)
+
+
+def write_json(path, value):
+    atomic_write(path, (json.dumps(value, indent=2) + '\n').encode())
+
+
+def discard_partial_tree(path, parent):
+    """Remove only a root-owned, private-directory tree created by this transaction."""
+    if path.parent != parent:
+        raise RuntimeError('Invalid partial assembly path')
+    try:
+        root = path.lstat()
+    except FileNotFoundError:
+        return
+    if not stat.S_ISDIR(root.st_mode) or root.st_uid or root.st_mode & 0o022:
+        raise RuntimeError('Unsafe partial enrollment assembly: ' + str(path))
+    for item in path.rglob('*'):
+        info = item.lstat()
+        if (info.st_uid or info.st_mode & 0o022
+                or not (stat.S_ISDIR(info.st_mode) or stat.S_ISREG(info.st_mode))):
+            raise RuntimeError('Unsafe partial enrollment input: ' + str(item))
+    shutil.rmtree(path)
+
+
+def validate_preparing_transaction(accounts, receipt):
+    """Permit retry only before any account mapping or broker state was activated."""
+    names = {account['name'] for account in accounts}
+    previous = receipt.get('previous')
+    if (receipt.get('schema') != 'greyward.installer-enrollment/v1'
+            or receipt.get('phase') != 'PREPARING'
+            or receipt.get('accounts') != accounts
+            or receipt.get('inputs') != {}
+            or not isinstance(previous, dict) or set(previous) != names):
+        raise RuntimeError('Preparing enrollment receipt is incomplete; explicit repair required')
+    for name, value in previous.items():
+        if (not isinstance(value, dict) or set(value) != {'seuser', 'range'}
+                or not all(isinstance(part, str) and part for part in value.values())):
+            raise RuntimeError('Preparing enrollment mapping receipt is invalid')
+        if value['seuser'] == 'greyward_guard_u':
+            raise RuntimeError('Account was already enrolled before preparation')
+    quiescent(accounts)
+    for account in accounts:
+        if mapping(account['name']) != previous[account['name']]:
+            raise RuntimeError('Account mapping changed during preparation; explicit repair required')
+    try:
+        origins = ORIGINS.lstat()
+    except FileNotFoundError as error:
+        raise RuntimeError('Installer origin directory missing; explicit repair required') from error
+    if (not stat.S_ISDIR(origins.st_mode) or origins.st_uid
+            or stat.S_IMODE(origins.st_mode) != 0o700 or any(ORIGINS.iterdir())):
+        raise RuntimeError('Installer origin state changed during preparation; explicit repair required')
+    snapshot = STATE / 'previous-local-policy.txt'
+    if snapshot.exists() or snapshot.is_symlink():
+        info = snapshot.lstat()
+        if (not stat.S_ISREG(info.st_mode) or info.st_uid
+                or stat.S_IMODE(info.st_mode) != 0o600 or info.st_nlink != 1
+                or info.st_size > 1048576):
+            raise RuntimeError('Previous policy snapshot is unsafe; explicit repair required')
+
+
+def semanage_users():
+    """Read SELinux user definitions in the stable no-heading semanage form."""
+    users = {}
+    for line in run('/usr/sbin/semanage', 'user', '-l', '-n').splitlines():
+        fields = line.split()
+        if len(fields) >= 5:
+            users[fields[0]] = {
+                'prefix': fields[1], 'level': fields[2], 'range': fields[3],
+                'roles': set(fields[4:]),
+            }
+    return users
+
+
+def ensure_selinux_user(name, roles, mls_range, mls_level='s0'):
+    expected = {'prefix': 'user', 'level': mls_level, 'range': mls_range,
+                'roles': set(roles.split())}
+    actual = semanage_users().get(name)
+    if actual is None:
+        run('/usr/sbin/semanage', 'user', '-a', '-R', roles, '-r', mls_range,
+            '-L', mls_level, name)
+        actual = semanage_users().get(name)
+    if actual != expected:
+        raise RuntimeError('SELinux user definition changed; explicit repair required: ' + name)
 
 
 def finalize_program_directories():
@@ -179,6 +263,9 @@ def prepare():
         receipt = json.loads(trusted(STATE / 'transaction.json'))
         if receipt.get('phase') == 'PREPARED_INPUTS':
             return finish_preparation(accounts, receipt)
+        if receipt.get('phase') == 'PREPARING':
+            validate_preparing_transaction(accounts, receipt)
+            return prepare_inputs(accounts, receipt, resume=True)
         return check()
     if DESKTOP.exists() or ADMIN.exists():
         raise RuntimeError('Existing enrollment needs deliberate migration, not installer activation')
@@ -188,9 +275,29 @@ def prepare():
     receipt = {'schema': 'greyward.installer-enrollment/v1', 'phase': 'PREPARING',
                'accounts': accounts, 'previous': {a['name']: mapping(a['name']) for a in accounts}, 'inputs': {}}
     write_json(STATE / 'transaction.json', receipt)
+    return prepare_inputs(accounts, receipt)
+
+
+def prepare_inputs(accounts, receipt, resume=False):
+    if resume:
+        # PREPARING never changes account mappings or creates origin receipts.
+        # Rebuild the fixed generated trees from trusted package inputs so a
+        # power loss during assembly cannot strand first boot in PREPARING.
+        discard_partial_tree(STATE / 'ordinary', STATE)
+        discard_partial_tree(STATE / 'source', STATE)
+        discard_partial_tree(DESKTOP, DESKTOP.parent)
+        discard_partial_tree(ADMIN, ADMIN.parent)
+    private_directory(ORIGINS)
     export = run('/usr/sbin/semanage', 'export')
-    (STATE / 'previous-local-policy.txt').write_text(export)
-    (STATE / 'previous-local-policy.txt').chmod(0o600)
+    snapshot = STATE / 'previous-local-policy.txt'
+    if snapshot.exists() or snapshot.is_symlink():
+        info = snapshot.lstat()
+        if (not stat.S_ISREG(info.st_mode) or info.st_uid
+                or stat.S_IMODE(info.st_mode) != 0o600 or info.st_nlink != 1
+                or info.st_size > 1048576):
+            raise RuntimeError('Previous policy snapshot is unsafe')
+    else:
+        atomic_write(snapshot, export.encode())
     # No account is mapped while policy/closure inputs are assembled. The empty
     # attribute is replaced in one policy transaction with the actual closure.
     ordinary = STATE / 'greyward_ordinary.cil'
@@ -208,17 +315,21 @@ def prepare():
     for path in overlays:
         trusted(path)
     run('/usr/sbin/semodule', '-i', str(ordinary), *(str(p) for p in overlays))
-    run('/usr/sbin/semanage', 'user', '-a', '-R', 'greyward_guard_r', '-r', 's0', '-L', 's0', 'greyward_guard_u')
-    run('/usr/sbin/semanage', 'user', '-a', '-R', 'greyward_admin_r sysadm_r', '-r', 's0-s0:c0.c1023', '-L', 's0', 'greyward_admin_u')
+    ensure_selinux_user('greyward_guard_u', 'greyward_guard_r', 's0')
+    ensure_selinux_user('greyward_admin_u', 'greyward_admin_r sysadm_r', 's0-s0:c0.c1023')
     context = Path('/etc/selinux/targeted/contexts/users/greyward_guard_u')
-    if context.exists():
-        raise RuntimeError('Existing context requires deliberate migration')
     text = Path('/etc/selinux/targeted/contexts/users/user_u').read_text()
     for old, new in [('user_r:', 'greyward_guard_r:'), ('user_t:', 'greyward_guard_t:'), ('user_su_t:', 'greyward_guard_su_t:'), ('user_sudo_t:', 'greyward_guard_sudo_t:')]:
         text = text.replace(old, new)
-    context.write_text(text)
-    context.chmod(0o644)
-    run('/usr/sbin/restorecon', str(context))
+    if context.exists() or context.is_symlink():
+        info = context.lstat()
+        if (not stat.S_ISREG(info.st_mode) or info.st_uid
+                or info.st_mode & 0o022 or context.read_text() != text):
+            raise RuntimeError('Existing context requires deliberate migration')
+    else:
+        context.write_text(text)
+        context.chmod(0o644)
+        run('/usr/sbin/restorecon', str(context))
     source = STATE / 'source'
     shutil.copytree('/usr/share/greyward-application-security/desktop', source / 'desktop')
     shutil.copytree('/usr/share/greyward-application-security/authentication', source / 'authentication')

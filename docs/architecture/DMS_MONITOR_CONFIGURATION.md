@@ -63,6 +63,18 @@ DMS resolves the socket beneath that runtime instead of joining two absolute
 paths. The protected shell's private alias and the ordinary service's runtime
 path are separate connections to the same admitted compositor socket.
 
+### DMS16 renderer attempt — rolled back 13 October 2026
+
+The user reported that DMS 1.6.2-16 plus the Qt Quick RHI/softpipe override left
+only the wallpaper visible. These changes were rolled back on disk: DMS 1.6.2-14,
+Application Security 41, Enrollment 16 and Session 16 are installed, and the
+source candidate is back to DMS 1.6.2-15 with the software renderer. The active
+protected runtime is a separate root-owned copy, and its migrator refuses to
+replace files while Labwc/DMS are running. The running session therefore still
+uses its previous code. It was not terminated because the user cannot remotely
+authenticate; visual restoration remains pending a quiescent session and a
+successful login.
+
 `environment/patches/dms/greyward-wlr-output-readiness.patch` applies the
 response-based readiness change to the pinned DMS source. The API reply must
 contain an output list before Settings exposes monitor controls. A 5-second
@@ -80,14 +92,30 @@ session-only; the compositor patch does not add display-control privileges.
 ## First-session display defaults
 
 The production DMS defaults enable matching-profile auto-selection and package
-one unnamed output profile for exactly `Virtual-1` at 1920×1080, scale 1. The
-Labwc autostart also requests the standard 1920×1080 mode on that exact virtual
-output before DMS starts. This handles a greeter-selected 1024×768 compatibility
-mode even when 1920×1080 is advertised. The request is bounded to three seconds,
-uses only an advertised mode, and safely does nothing if that output or mode is
-unavailable. Physical connectors such as eDP, DP or HDMI are never changed;
-Labwc continues to reuse the mode selected for those displays. The user can
-choose another advertised mode in DMS Settings afterward.
+one unnamed output profile for exactly `Virtual-1` at 1920×1080, scale 1.
+
+The previous ISO put the 1920×1080 request only in the account's writable
+`labwc-autostart`. That file is not the active startup path for the protected
+session: `desktop/session.py` points Labwc at a root-owned configuration, and
+`desktop/prepare.py` had generated an empty autostart there. R6 therefore kept
+the greeter's 1024×768 mode after installation.
+
+The source correction puts the bounded request in the generated, root-owned
+protected-compositor autostart. It targets only `Virtual-1`, asks for
+1920×1080, and records success or failure in the protected display log. If the
+output or mode is unavailable, the request is a no-op; physical connectors
+such as eDP, DP or HDMI are not changed. Labwc continues to reuse the mode
+selected for those displays. Users can choose another advertised mode in DMS
+Settings afterward. The 12 October rebuilt 0.3.5 Dawn candidate used the
+matched Center 0.1.0-100, Context 0.1.0-92, Application Security 0.1.0-45 and
+Enrollment 0.1.0-22 RPM set. Current source retains the interrupted-enrollment
+retry guard as Enrollment 0.1.0-26, matched to Application Security 45 and DMS
+1.6.2-15; that package tuple has not been built into a new ISO. The candidate has
+SHA-256 `492493695ceeb8a60dfe4a742b0c4d9a9252a88de140330359e2bf02b3918867`.
+The protected autostart was confirmed inside AppSec 45, and the ISO's embedded
+production stage passed validation before and after extraction. The Windows
+media check passed. R6 installation and runtime resolution acceptance are still
+pending; the build receipt records `installed_system_tested=false`.
 
 The session migration copies that profile only before the first GREYWARD DMS
 session, only when `monitors.json` does not already exist, and never when the
@@ -95,9 +123,10 @@ DMS 1.6 migration marker shows an established session. It enables auto-select
 only as a default and preserves explicit settings, profiles and later user
 changes. On `<development-host>`, the existing marker and manually selected 2560×1440 mode
 remain untouched. Labwc's `reuseOutputMode` retains the mode selected by the
-greeter during compositor startup; the production autostart then corrects only
-the known virtual-output fallback before DMS starts. The protected Polkit
-readiness gate still must complete before the normal desktop is admitted.
+greeter during compositor startup; the generated root-owned protected-
+compositor autostart then corrects only the known virtual-output fallback
+before the ordinary desktop is admitted. The protected Polkit readiness gate
+still must complete before the normal desktop is admitted.
 
 ## ISO inclusion and validation
 

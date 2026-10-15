@@ -1,5 +1,17 @@
 # GREYWARD documentation index
 
+15 October native window placement: retain Labwc edge/corner snapping in the
+next ISO. Static defaults and actual Session RPM payload guards protect the
+configuration; real left-half and control-button checks are partial acceptance,
+not proof of every drag gesture. See [window placement](architecture/WINDOW_MANAGEMENT.md).
+
+14 October internal ISO candidate: `GREYWARD-0.4.0-Dawn-x86_64.iso` includes
+Files 17, DMS 17, Session 21, Application Security 51, Enrollment 32, Security
+Center 100, Security Context 92 and Branding 16. The canonical offline factory,
+29-path pre/post extraction checks, checksum, boot volume ID and independent
+Windows 39-path media validator pass. It is not installed or booted; acceptance
+gates remain open. See [current status](STATUS.md) and [ISO evidence](architecture/ISO_CREATION.md).
+
 14 October native-icon candidate: Files 17 is installed in development,
 retaining the source-built revision-15 executable. The normal desktop review
 confirms shared icon silhouettes, balanced semantic accents and SVG thumbnails.
@@ -46,6 +58,27 @@ for evidence, remaining implementation and rollback; this is not ISO acceptance.
 The installed proof now includes automatic icons, native taskbar shortcut
 creation and the canonical file-manager folder icon. Earlier entries below
 describe historical states.
+
+13 October rollback: `<development-host>` now has DMS 1.6.2-14, Application Security 41,
+Enrollment 16 and Session 16 on disk; PCManFM-Qt and Kvantum were removed, and
+desktop-icon test files were archived under the user's local state directory.
+RPM verification is clean and SELinux remains Enforcing. The already-running
+protected session still has the previous DMS 1.6.2-16/Application Security 48
+runtime loaded. Its migration explicitly refuses to replace the protected
+desktop while that session is active, so a logout/login is still needed before
+the visible desktop can use the restored packages. The user cannot currently
+authenticate remotely, so that session was left intact. Source now selects DMS
+1.6.2-15 with the stable software-renderer policy; no ISO was rebuilt. See
+[current status](STATUS.md) and the [DMS monitor/session record](architecture/DMS_MONITOR_CONFIGURATION.md).
+
+12 October: R6 still started at 1024×768 with the previous 0.3.5 Dawn image
+because its mode request was in the writable-user autostart, not the root-owned
+autostart used by the protected compositor. A replacement candidate now puts a
+bounded 1920×1080 request in that protected path for VM output `Virtual-1`.
+Build, payload and Windows media checks pass; installation on R6 and runtime
+resolution acceptance remain pending. See [current status](STATUS.md), the
+[monitor configuration record](architecture/DMS_MONITOR_CONFIGURATION.md) and
+[ISO build evidence](architecture/ISO_CREATION.md).
 
 10 October: the user accepts the R5 installation/login fix. R6 is built, hash-verified on Windows and mounted in the existing R5 VM with the output-management commit 8c130a662b047a33406c695d54adf524cc302d99 and a greeter-only CPU OpenGL renderer correction for the canonical wallpaper. Private compiled-protocol and actual embedded-greeter rendering checks pass; installed R6 greeter and DMS apply remain pending. See the candidate evidence (private development evidence).
 

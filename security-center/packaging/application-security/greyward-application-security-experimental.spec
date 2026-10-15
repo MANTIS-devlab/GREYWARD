@@ -1,6 +1,6 @@
 Name:           greyward-application-security-experimental
 Version:        0.1.0
-Release:        42%{?dist}
+Release:        51%{?dist}
 Summary:        Experimental GREYWARD application-security runtime and Guard CLI
 License:        GPL-3.0-only AND MIT
 Source0:        %{name}-%{version}.tar.gz
@@ -131,6 +131,18 @@ install -Dm0644 packaging/application-security/systems.mantis.greyward.Applicati
 %{_datadir}/dbus-1/system.d/systems.mantis.greyward.ApplicationSecurityDevelopment1.conf
 
 %changelog
+* Wed Oct 14 2026 MANTIS SYSTEMS - 0.1.0-51
+- Align the production RPM source revision with the validated installed runtime.
+
+* Mon Oct 12 2026 MANTIS SYSTEMS - 0.1.0-45
+- Align the runtime RPM source with the rebuilt Security Center manifest set.
+
+* Mon Oct 12 2026 MANTIS SYSTEMS - 0.1.0-44
+- Apply the VM display fallback in the protected compositor's root-owned autostart.
+
+* Mon Oct 12 2026 MANTIS SYSTEMS - 0.1.0-43
+- Accept DMS v1.6.2-15 only with the existing exact shell receipt and auth-input pins.
+
 * Sun Oct 11 2026 MANTIS SYSTEMS - 0.1.0-42
 - Rebuild from the integrated post-R6 application-security sources.
 

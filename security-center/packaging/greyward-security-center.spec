@@ -1,6 +1,6 @@
 Name:           greyward-security-center
 Version:        0.1.0
-Release:        97%{?dist}
+Release:        100%{?dist}
 Summary:        GREYWARD local security posture and control application
 License:        GPL-3.0-only AND Apache-2.0 AND OFL-1.1 AND CC0-1.0
 Source0:        %{name}-%{version}.tar.gz
@@ -106,6 +106,15 @@ install -Dm0755 greyward-safe-open.so \
 %postun
 /usr/bin/fc-cache -f >/dev/null 2>&1 || :
 %changelog
+* Mon Oct 12 2026 MANTIS SYSTEMS - 0.1.0-100
+- Rebuild the source-bound manifest after protected display setup changed.
+
+* Mon Oct 12 2026 MANTIS SYSTEMS - 0.1.0-99
+- Rebuild matched source manifest for the DMS 1.6.2-15 authentication receipt fix.
+
+* Mon Oct 12 2026 MANTIS SYSTEMS - 0.1.0-98
+- Rebuild the matched Security Center RPM from the current source tree.
+
 * Sun Oct 11 2026 MANTIS SYSTEMS - 0.1.0-97
 - Rebuild the matched Security Center RPM set for updated Guard package inputs.
 

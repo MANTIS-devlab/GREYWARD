@@ -17,6 +17,21 @@ partially applied mappings refuse continuation. The bounded r3 recovery helper
 is test evidence only; its locally patched installation does not establish
 revision-4 package or image acceptance.
 
+R6's 0.3.5 first-boot receipt was observed at phase `PREPARING`. The later
+retries failed with `Installation transaction incomplete` because the coordinator
+only resumed `PREPARED_INPUTS`; the original exception that first left the receipt
+in `PREPARING` was not captured. Revision 19 safely retries this stage only when
+the installer account identities and original SELinux mappings still match, the
+origin directory is empty, and every generated partial tree is root-owned and
+non-writable by group/other. It rebuilds those fixed trees from packaged inputs,
+reuses only exact existing SELinux user definitions, and preserves the original
+policy export. Changed mappings, unexpected origin state, or unsafe partial files
+still fail closed. This repairs the permanent retry dead end; clean-install
+acceptance is still required to identify any separate first-attempt failure.
+The RPM builder also stages a private copy and runs the repository's Linux text
+normalizer before compiling SELinux policy, so Windows checkout line endings do
+not change the policy meaning or break package construction.
+
 Anaconda records only its normal local accounts after account creation. The
 existing first-boot gate installs the matched packages, prepares policy and the
 ordinary-role closure, assembles authentication from verified DMS selection,

@@ -221,10 +221,15 @@ if [[ "$target_install" == 1 || "${GREYWARD_LOCAL_FINALIZE:-0}" != 1 ]]; then
   test "${#dms_rpms[@]}" -eq 1
   session_rpms=("$stage/rpms/greyward-session-"*.rpm)
   test "${#session_rpms[@]}" -eq 1
+  files_rpms=("$stage/rpms/greyward-files-"*.rpm)
+  test "${#files_rpms[@]}" -eq 1
   enrollment_rpms=("$stage/rpms/greyward-application-security-experimental-"*.rpm "$stage/rpms/greyward-application-enrollment-"*.rpm)
   test "${#enrollment_rpms[@]}" -eq 2
-  dnf -y install "${branding_rpms[0]}" "${security_rpms[@]}" "${dms_rpms[0]}" "${session_rpms[0]}" "${enrollment_rpms[@]}"
+  dnf -y install "${branding_rpms[0]}" "${security_rpms[@]}" "${dms_rpms[0]}" "${session_rpms[0]}" "${files_rpms[0]}" "${enrollment_rpms[@]}"
   rpm -q greyward-branding plymouth-plugin-script
+  rpm -q greyward-files pcmanfm-qt nautilus
+  test "$(rpm -qf --qf '%{NAME}' /usr/lib/systemd/user/greyward-desktop-icons.service)" = greyward-files
+  test -x /usr/bin/strata
   plymouth-set-default-theme greyward
   dracut --regenerate-all --force
   for branding_path in \
@@ -591,6 +596,7 @@ if [[ "$target_install" == 1 ]]; then
   ln -sfn /usr/lib/systemd/user/greyward-dms.service /etc/systemd/user/graphical-session.target.wants/greyward-dms.service
   ln -sfn /usr/lib/systemd/user/greyward-security-context-user.service /etc/systemd/user/graphical-session.target.wants/greyward-security-context-user.service
   ln -sfn /usr/lib/systemd/user/greyward-security-context-user.service /etc/systemd/user/default.target.wants/greyward-security-context-user.service
+  ln -sfn /usr/lib/systemd/user/greyward-desktop-icons.service /etc/systemd/user/graphical-session.target.wants/greyward-desktop-icons.service
   systemctl --global enable greyward-update-center.service 2>/dev/null || true
 
   # Do not mask Initial Setup while Anaconda is still configuring the target.
@@ -661,6 +667,7 @@ else
   systemctl disable --now gdm.service 2>/dev/null || true
   systemctl --global enable greyward-dms.service
   systemctl --global enable greyward-security-context-user.service
+  systemctl --global enable greyward-desktop-icons.service
   systemctl --global enable greyward-update-center.service
   # This branch runs from the first-boot finalizer after multi-user.target has
   # already been reached. `enable` alone only schedules these units for the

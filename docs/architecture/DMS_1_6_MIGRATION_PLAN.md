@@ -18,11 +18,10 @@ DankCommon `26396ce432d6c71c3f5367438f96f4a8d667e160`, and dankgo
 digests/preimages, shell digest, build inputs, and the development compatibility tuple.
 The backend API is 34; the release changelog's older API number is not authoritative.
 
-The image candidate advances the GREYWARD package identity to v1.6.2-14 and pins
-the currently signed Fedora 44 Go package, 1.26.9-1.fc44. The earlier 1.26.8
-build package is no longer available from the enabled signed repositories; the
-candidate does not use unsigned build artifacts. This changes the reproducible
-build input and package identity, not the upstream DMS source or security policy.
+The current GREYWARD DMS candidate is v1.6.2-15 and keeps the currently signed
+Fedora 44 Go package, 1.26.9-1.fc44. The unvalidated v1.6.2-16 taskbar-to-
+desktop shortcut experiment was removed after it coincided with a wallpaper-
+only desktop on `<development-host>`; its patch is no longer selected by the image builder.
 
 Keep Labwc/UWSM, Security Context's `greyward.security.experience/v1` contract,
 typed actions, freshness and route allowlists, Update Center/recovery authority,
@@ -81,7 +80,7 @@ payload, wrappers and state backups remain recoverable during candidate testing.
 
 ## Customization and adoption ledger
 
-The candidate has eleven patch files touching **twenty** upstream files. The original
+The candidate has twelve patch files touching **twenty-one** upstream files. The original
 target was eighteen. The SystemUpdateService hunk routes native update execution
 to Update Center. The external-lock handoff patch was removed when the user
 selected native DMS locking. A demonstrated restart regression requires a narrow
@@ -96,7 +95,7 @@ measured by assembly rather than manually maintained expectations.
 |---|---|
 | Palette, typography, logo, wallpaper and bottom bar | Supported defaults retained; visual/scaling parity pending |
 | Launcher target and blank-bar clicks | Narrow BasePill/launcher/BarCanvas patch; interaction gate pending |
-| AppsDock | Native pins/model; labels/spacing retained; only grouped focused-minimize patch remains |
+| AppsDock | Native pins/model, labels/spacing and same-dock long-press reorder remain; the desktop drag-and-drop experiment was rolled back after the desktop became wallpaper-only on `<development-host>` |
 | RunningApps alternate sizing | Obsolete patch removed; canonical desktop uses AppsDock |
 | Authentication surfaces | 720x420 Polkit geometry retained; long-text/scaling gate pending |
 | Settings and displays | Desktop/local-wallpaper wording, Labwc curation and config-path guard retained |
@@ -114,6 +113,16 @@ measured by assembly rather than manually maintained expectations.
 
 No security collector, notification router, recovery implementation or Update Center
 workflow is redundant simply because upstream names a similar surface.
+
+### Taskbar-to-desktop shortcut experiment — rolled back
+
+The experimental AppsDock drag patch and PCManFM-Qt desktop-icon setup were
+removed on 13 October after `<development-host>` showed only the wallpaper and then lost its
+taskbar. The current DMS candidate does not support dragging applications from
+the taskbar onto the desktop, and the production image does not install
+PCManFM-Qt or Kvantum. The archived test files on `<development-host>` are recovery evidence,
+not active configuration. Reconsider this feature only as a separately tested
+change after the ordinary desktop is stable again.
 
 ## Phases and gates
 

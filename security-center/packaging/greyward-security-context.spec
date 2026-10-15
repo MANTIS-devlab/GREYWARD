@@ -1,6 +1,6 @@
 Name:           greyward-security-context
 Version:        0.1.0
-Release:        89%{?dist}
+Release:        92%{?dist}
 Summary:        GREYWARD OpenSnitch control plane and Security Context session bus
 License:        GPL-3.0-only
 Source0:        %{name}-%{version}.tar.gz
@@ -173,6 +173,15 @@ install -Dm0644 security-context/tmpfiles.d/greyward-secure-dns.conf %{buildroot
 
 
 %changelog
+* Mon Oct 12 2026 MANTIS SYSTEMS - 0.1.0-92
+- Rebuild the source-bound manifest after protected display setup changed.
+
+* Mon Oct 12 2026 MANTIS SYSTEMS - 0.1.0-91
+- Rebuild matched source manifest for the DMS 1.6.2-15 authentication receipt fix.
+
+* Mon Oct 12 2026 MANTIS SYSTEMS - 0.1.0-90
+- Rebuild the matched Security Context RPM from the current source tree.
+
 * Sun Oct 11 2026 MANTIS SYSTEMS - 0.1.0-89
 - Rebuild the matched Security Context package set for current source inputs.
 

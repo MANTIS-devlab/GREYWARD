@@ -39,7 +39,7 @@ def sanitized_text(text, relative, excluded_files):
                 return match.group(1) + ' (private development evidence)'
             return match.group(0)
         text = re.sub(r'\[([^\]]+)\]\(([^)]+)\)', link, text)
-        text = re.sub(r'`(?:F:|C:)\\[^`]+`', '`<local workspace>`', text)
+        text = re.sub(r'`(?:F:|C:|D:)\\[^`]+`', '`<local workspace>`', text)
         text = re.sub(r'F:/GREYWARD[^\s)`]*', '<local workspace>', text)
         text = text.replace('192.168.1.149', '<development-host>')
         text = text.replace('`.149`', '`<development-host>`')

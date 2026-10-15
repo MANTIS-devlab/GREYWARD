@@ -8,19 +8,21 @@ set -euo pipefail
 
 usage() {
   cat <<'EOF'
-Usage: environment/image/build.sh [--output DIRECTORY] [--security-rpm FILE]... [--security-build-manifest FILE] [--dms-rpm FILE] [--production-rpm FILE]... [--enrollment-rpm FILE]... --branding-rpm FILE [--baseline FILE] [--require-complete]
+Usage: environment/image/build.sh [--output DIRECTORY] [--security-rpm FILE]... [--security-build-manifest FILE] [--security-source-root DIRECTORY] [--dms-rpm FILE] [--files-rpm FILE] [--production-rpm FILE]... [--enrollment-rpm FILE]... --branding-rpm FILE [--baseline FILE] [--require-complete]
 
 Without --security-rpm this prepares an incomplete development input set and
 marks the missing production RPMs in the manifest. A production image tool
-must supply exactly seven GREYWARD RPMs: greyward-branding, greyward-session,
-greyward-security-center, and
-greyward-security-context, greyward-dms, greyward-application-security-experimental,
-and greyward-application-enrollment, plus every pinned external production RPM listed in
+must supply exactly eight GREYWARD RPMs: greyward-branding, greyward-session,
+greyward-security-center, greyward-security-context, greyward-dms,
+greyward-application-security-experimental, greyward-application-enrollment,
+and greyward-files, plus every pinned external production RPM listed in
 environment/production/external-rpms.txt. Use
   --require-complete to reject an incomplete input set instead of preparing it
   for source inspection. Complete staging also requires the manifest emitted
   by environment/development/build-security-center.sh; it binds the RPMs to
-  the source tree that produced them and prevents stale package drift.
+  the source tree that produced them and prevents stale package drift. Pass
+  --security-source-root when selected cached Security Center RPMs were built
+  from a preserved source snapshot distinct from the current checkout.
 EOF
 }
 
@@ -32,7 +34,9 @@ enrollment_rpms=()
 branding_rpm=''
 dms_rpm=''
 session_rpm=''
+files_rpm=''
 security_build_manifest=''
+security_source_root=''
 baseline=''
 require_complete=false
 # Package-file inspection does not need the host RPM database. When the image
@@ -71,7 +75,20 @@ while (($#)); do
       production_rpms+=("$(realpath -e "$2")")
       shift 2
       ;;
-    --session-rpm) (($# >= 2)) || exit 2; session_rpm=$(realpath -e "$2"); test "$(rpm -qp --qf '%{NAME}' "$session_rpm")" = greyward-session; shift 2 ;;
+    --session-rpm)
+      (($# >= 2)) || exit 2
+      [[ -z "$session_rpm" ]] || { echo 'Provide exactly one GREYWARD session RPM.' >&2; exit 2; }
+      session_rpm=$(realpath -e "$2")
+      test "$(rpm_query -qp --qf '%{NAME}' "$session_rpm")" = greyward-session
+      shift 2
+      ;;
+    --files-rpm)
+      (($# >= 2)) || { usage >&2; exit 2; }
+      [[ -z "$files_rpm" ]] || { echo 'Provide exactly one GREYWARD Files RPM.' >&2; exit 2; }
+      files_rpm=$(realpath -e "$2")
+      test "$(rpm_query -qp --qf '%{NAME}' "$files_rpm")" = greyward-files || { echo 'Unexpected file-manager RPM.' >&2; exit 2; }
+      shift 2
+      ;;
     --dms-rpm)
       (($# >= 2)) || { usage >&2; exit 2; }
       [[ -z "$dms_rpm" ]] || { echo 'Duplicate DMS runtime RPM' >&2; exit 2; }
@@ -90,6 +107,12 @@ while (($#)); do
       (($# >= 2)) || { usage >&2; exit 2; }
       [[ -z "$security_build_manifest" ]] || { echo "Provide exactly one Security Center build manifest." >&2; exit 2; }
       security_build_manifest=$(realpath -e "$2")
+      shift 2
+      ;;
+    --security-source-root)
+      (($# >= 2)) || { usage >&2; exit 2; }
+      security_source_root=$(realpath -e "$2")
+      test -d "$security_source_root" || { echo 'Security source root must be a directory.' >&2; exit 2; }
       shift 2
       ;;
     --baseline)
@@ -163,6 +186,7 @@ for required in \
   "$session/dankmaterialshell/monitors.json" \
   "$production/labwc-autostart" \
   "$production/manifest.json" "$patches/dms/launcher-canonical-hitbox.patch" \
+  "$patches/dms/greyward-desktop-shortcuts.patch" \
   "$patches/dms/polkit-auth-dialog.patch" \
   "$patches/dms/greyward-settings-curation.patch" \
   "$patches/dms/greyward-labwc-runtime.patch" \
@@ -195,8 +219,10 @@ done
 if [[ -n "$session_rpm" ]]; then
   session_unit_path='./usr/lib/systemd/user/greyward-dms.service'
   session_migration_path='./usr/local/libexec/greyward-dms-state-migrate'
+  session_pin_migration_path='./usr/local/libexec/greyward-dms-session-migrate'
   session_monitors_path='./usr/share/greyward/defaults/dankmaterialshell/monitors.json'
   session_autostart_path='./usr/share/greyward/defaults/labwc/autostart'
+  session_labwc_path='./usr/share/greyward/defaults/labwc/rc.xml'
   if ! grep -Fqx 'Environment=WAYLAND_DISPLAY=wayland-0' "$session/greyward-dms.service"; then
     echo 'The source DMS unit must set WAYLAND_DISPLAY=wayland-0.' >&2
     exit 1
@@ -217,6 +243,46 @@ if [[ -n "$session_rpm" ]]; then
     echo 'The greyward-session RPM lacks the current VM display fallback; rebuild it from this checkout before ISO staging.' >&2
     exit 1
   fi
+  if ! rpm2cpio "$session_rpm" | cpio -i --quiet --to-stdout "$session_pin_migration_path" | cmp -s - "$session/greyward-dms-session-migrate"; then
+    echo 'The greyward-session RPM contains stale taskbar defaults; rebuild it from this checkout before ISO staging.' >&2
+    exit 1
+  fi
+  # Retain native edge/corner snapping in the actual packaged defaults, not
+  # just in the loose installer configuration or a development account.
+  if ! rpm2cpio "$session_rpm" | cpio -i --quiet --to-stdout "$session_labwc_path" | cmp -s - "$session/labwc/rc.xml"; then
+    echo 'The greyward-session RPM contains stale Labwc defaults (including window snapping); rebuild it before ISO staging.' >&2
+    exit 1
+  fi
+fi
+
+if [[ -n "$files_rpm" ]]; then
+  files_session_requirement='greyward-session >= 0.1.0-17'
+  if ! rpm_query -qp --requires "$files_rpm" | grep -Fqx "$files_session_requirement"; then
+    echo "The greyward-files RPM must retain its session compatibility requirement ($files_session_requirement)." >&2
+    exit 1
+  fi
+  for file_contract in \
+    './usr/bin/strata|/usr/bin/strata' \
+    './usr/lib/systemd/user/greyward-desktop-icons.service|/usr/lib/systemd/user/greyward-desktop-icons.service' \
+    './usr/local/libexec/greyward-desktop-icons|/usr/local/libexec/greyward-desktop-icons' \
+    './usr/local/libexec/greyward-desktop-shortcut|/usr/local/libexec/greyward-desktop-shortcut'; do
+    rpm_path=${file_contract%%|*}
+    source_path=${file_contract#*|}
+    rpm_query -qpl "$files_rpm" | awk -v expected="$source_path" '$0 == expected { found = 1 } END { exit !found }' || {
+      echo "The greyward-files RPM is missing required integration file $source_path." >&2
+      exit 1
+    }
+    case "$source_path" in
+      /usr/lib/systemd/user/greyward-desktop-icons.service) source_file="$repo_root/environment/session/greyward-desktop-icons.service" ;;
+      /usr/local/libexec/greyward-desktop-icons) source_file="$repo_root/environment/session/greyward-desktop-icons" ;;
+      /usr/local/libexec/greyward-desktop-shortcut) source_file="$repo_root/environment/session/greyward-desktop-shortcut" ;;
+      /usr/bin/strata) source_file="$repo_root/environment/session/desktop/strata-launcher" ;;
+    esac
+    if ! rpm2cpio "$files_rpm" | cpio -i --quiet --to-stdout "./${source_path#/}" | cmp -s - "$source_file"; then
+      echo "The greyward-files RPM contains stale integration code at $source_path." >&2
+      exit 1
+    fi
+  done
 fi
 
 if ((${#security_rpms[@]} > 2)); then
@@ -243,21 +309,58 @@ fi
 if $require_complete && [[ -z "$session_rpm" ]]; then
   echo "Complete staging requires a greyward-session RPM" >&2; exit 2
 fi
+if $require_complete && [[ -z "$files_rpm" ]]; then
+  echo "Complete production staging requires one greyward-files RPM." >&2; exit 2
+fi
 if $require_complete && [[ -z "$dms_rpm" ]]; then
   echo "Complete production staging requires a verified greyward-dms RPM." >&2
   exit 2
 fi
 if $require_complete; then
+  if [[ -z "$session_rpm" || -z "$files_rpm" ]]; then
+    echo "Complete production staging requires one greyward-session and one greyward-files RPM." >&2
+    exit 2
+  fi
+  if ((${#enrollment_rpms[@]} != 2)); then
+    echo "Complete production staging requires exactly one Application Security and one Enrollment RPM." >&2
+    exit 2
+  fi
+  enrollment_count=0
+  appsec_count=0
+  for candidate in "${enrollment_rpms[@]}"; do
+    case "$(rpm_query -qp --qf '%{NAME}' "$candidate")" in
+      greyward-application-enrollment) enrollment_count=$((enrollment_count + 1)) ;;
+      greyward-application-security-experimental) appsec_count=$((appsec_count + 1)) ;;
+      *) echo "Unexpected enrollment/runtime package: $candidate" >&2; exit 2 ;;
+    esac
+  done
+  if ((enrollment_count != 1 || appsec_count != 1)); then
+    echo "Complete production staging requires exactly one RPM of each enrollment/runtime package." >&2
+    exit 2
+  fi
   selected_dms_version=$(rpm_query -qp --qf '%{VERSION}-%{RELEASE}' "$dms_rpm")
   expected_dms_requirement="greyward-dms = $selected_dms_version"
   enrollment_rpm=''
+  appsec_rpm=''
   for candidate in "${enrollment_rpms[@]}"; do
     if [[ "$(rpm_query -qp --qf '%{NAME}' "$candidate")" == greyward-application-enrollment ]]; then
       enrollment_rpm=$candidate
+    elif [[ "$(rpm_query -qp --qf '%{NAME}' "$candidate")" == greyward-application-security-experimental ]]; then
+      appsec_rpm=$candidate
     fi
   done
   if [[ -z "$enrollment_rpm" ]] || ! rpm_query -qp --requires "$enrollment_rpm" | grep -Fqx "$expected_dms_requirement"; then
     echo "The enrollment RPM must require the selected DMS runtime exactly ($expected_dms_requirement)." >&2
+    exit 1
+  fi
+  if [[ -z "$appsec_rpm" ]]; then
+    echo 'The matching Application Security RPM is missing.' >&2
+    exit 1
+  fi
+  selected_appsec_version=$(rpm_query -qp --qf '%{VERSION}-%{RELEASE}' "$appsec_rpm")
+  expected_appsec_requirement="greyward-application-security-experimental = $selected_appsec_version"
+  if [[ -z "$appsec_rpm" ]] || ! rpm_query -qp --requires "$enrollment_rpm" | grep -Fqx "$expected_appsec_requirement"; then
+    echo "The enrollment RPM must require the selected Application Security runtime exactly ($expected_appsec_requirement)." >&2
     exit 1
   fi
 fi
@@ -269,6 +372,10 @@ if $require_complete && [[ -z "$security_build_manifest" ]]; then
   echo "Complete production staging requires the Security Center build manifest emitted by the canonical component builder." >&2
   exit 2
 fi
+if [[ -z "$security_source_root" ]]; then
+  security_source_root="$repo_root/security-center"
+fi
+test -d "$security_source_root" || { echo 'Security Center source snapshot is missing.' >&2; exit 2; }
 if [[ -n "$security_build_manifest" ]]; then
   test -r "$security_build_manifest"
 fi
@@ -357,6 +464,7 @@ cp -a "$kickstart" "$output/installer.ks.tmpl"
 
 if [[ -n "$dms_rpm" ]]; then cp -a "$dms_rpm" "$output/rpms/"; fi
 if [[ -n "$session_rpm" ]]; then cp -a "$session_rpm" "$output/rpms/"; fi
+if [[ -n "$files_rpm" ]]; then cp -a "$files_rpm" "$output/rpms/"; fi
 if [[ -n "$branding_rpm" ]]; then cp -a "$branding_rpm" "$output/rpms/"; fi
 for rpm in "${security_rpms[@]}"; do cp -a "$rpm" "$output/rpms/"; done
 for rpm in "${production_rpms[@]}"; do cp -a "$rpm" "$output/rpms/"; done
@@ -375,7 +483,7 @@ security_manifest_value() {
 
 security_source_tree_sha256() {
   (
-    cd "$repo_root/security-center"
+    cd "$security_source_root"
     LC_ALL=C find . -type f \
       ! -path '*/target/*' \
       ! -path '*/node_modules/*' \
@@ -400,13 +508,17 @@ for key in ('schema','releaseId','dms','inputs','patches','shell','build','compa
     elif expected[key] != actual.get(key): raise SystemExit('DMS runtime receipt mismatch: '+key)
 if not actual.get('binarySha256') or not actual.get('firstPartyFiles'): raise SystemExit('Incomplete DMS RPM receipt')
 PY
+  normalize_plugin_text() {
+    python3 -c 'import sys; data=sys.stdin.buffer.read(); sys.stdout.buffer.write(data if b"\0" in data else data.replace(b"\r\n", b"\n"))'
+  }
   plugin_source="$session/dankmaterialshell/plugins"
   plugin_count=0
   while IFS= read -r -d '' plugin_file; do
     plugin_count=$((plugin_count + 1))
     plugin_relative=${plugin_file#"$plugin_source"/}
     rpm_plugin_path="./etc/xdg/quickshell/dms-plugins/$plugin_relative"
-    if ! rpm2cpio "$dms_rpm" | cpio -i --quiet --to-stdout "$rpm_plugin_path" | cmp -s - "$plugin_file"; then
+    if ! rpm2cpio "$dms_rpm" | cpio -i --quiet --to-stdout "$rpm_plugin_path" | normalize_plugin_text | \
+      cmp -s - <(normalize_plugin_text < "$plugin_file"); then
       echo "The greyward-dms RPM contains a stale first-party plugin: $plugin_relative; rebuild it from this checkout before ISO staging." >&2
       exit 1
     fi
@@ -467,6 +579,15 @@ fi
   if [[ -n "$dms_rpm" ]]; then
     printf 'rpm\t%s\t%s\tGREYWARD_PACKAGE_INPUT\n' "$(basename "$dms_rpm")" "$(basename "$dms_rpm")"
   fi
+  if [[ -n "$session_rpm" ]]; then
+    printf 'rpm\t%s\t%s\tGREYWARD_PACKAGE_INPUT\n' "$(basename "$session_rpm")" "$(basename "$session_rpm")"
+  fi
+  if [[ -n "$files_rpm" ]]; then
+    printf 'rpm\t%s\t%s\tGREYWARD_PACKAGE_INPUT\n' "$(basename "$files_rpm")" "$(basename "$files_rpm")"
+  fi
+  for rpm in "${enrollment_rpms[@]}"; do
+    printf 'rpm\t%s\t%s\tGREYWARD_PACKAGE_INPUT\n' "$(basename "$rpm")" "$(basename "$rpm")"
+  done
   for rpm in "${security_rpms[@]}"; do
     printf 'rpm\t%s\t%s\tNEVRA_REQUIRES_FEDORA_QUERY\n' "$(basename "$rpm")" "$(basename "$rpm")"
   done
@@ -520,12 +641,14 @@ cat > "$output/build-manifest.json" <<EOF
   "artifact_policy_sha256": "$(sha256 "$production/artifact-policy.json")",
   "branding_rpm": "$(basename "${branding_rpm:-MISSING}")",
   "dms_rpm": "$(basename "${dms_rpm:-MISSING}")",
+  "session_rpm": "$(basename "${session_rpm:-MISSING}")",
+  "files_rpm": "$(basename "${files_rpm:-MISSING}")",
   "dms_release_manifest_sha256": "$(sha256 "$production/dms-release.json")",
   "security_rpm_count": ${#security_rpms[@]},
   "security_build_manifest": "$(if [[ -n "$security_build_manifest" ]]; then printf '%s' artifacts/security-center-build-manifest.tsv; else printf '%s' MISSING; fi)",
   "production_dependency_rpm_count": ${#production_rpms[@]},
   "enrollment_rpm_count": ${#enrollment_rpms[@]},
-  "production_inputs_complete": $([[ -n "$session_rpm" && -n "$dms_rpm" && -n "$branding_rpm" && $center_count -eq 1 && $context_count -eq 1 && ${#enrollment_rpms[@]} -eq 2 && ${#production_rpms[@]} -eq ${#expected_production_rpms[@]} ]] && printf true || printf false),
+  "production_inputs_complete": $([[ -n "$session_rpm" && -n "$files_rpm" && -n "$dms_rpm" && -n "$branding_rpm" && $center_count -eq 1 && $context_count -eq 1 && ${#enrollment_rpms[@]} -eq 2 && ${#production_rpms[@]} -eq ${#expected_production_rpms[@]} ]] && printf true || printf false),
   "security_rpms": [$security_rpm_json],
   "artifacts": {
     "package_inventory": "artifacts/package-inventory.txt",
@@ -538,8 +661,8 @@ cat > "$output/build-manifest.json" <<EOF
 }
 EOF
 
-if [[ -z "$branding_rpm" || -z "$dms_rpm" ]] || ((${#security_rpms[@]} != 2 || ${#production_rpms[@]} != ${#expected_production_rpms[@]})); then
-  echo "WARNING: staged inputs are incomplete; provide the GREYWARD branding and DMS RPMs, two Security Center RPMs, and every pinned external RPM for production image construction." >&2
+if [[ -z "$branding_rpm" || -z "$dms_rpm" || -z "$session_rpm" || -z "$files_rpm" ]] || ((${#security_rpms[@]} != 2 || ${#enrollment_rpms[@]} != 2 || ${#production_rpms[@]} != ${#expected_production_rpms[@]})); then
+  echo "WARNING: staged inputs are incomplete; provide all eight GREYWARD RPMs and every pinned external RPM for production image construction." >&2
 fi
 # cp preserves Windows checkout line endings. Normalize only the staged source
 # after provenance checks, before dependency building and payload hashing.

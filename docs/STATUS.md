@@ -1,5 +1,53 @@
 # GREYWARD current status
 
+## 15 October native window placement retained for the next ISO
+
+The existing production defaults enable Labwc edge/corner snapping and top-edge
+maximization. Static validation now protects those settings, and ISO staging
+rejects a Session RPM whose Labwc configuration differs from canonical source.
+Real left-half snapping and native maximize/restore controls pass; other drag
+gestures remain inconclusive. No ISO is generated for this change. See
+[window placement](architecture/WINDOW_MANAGEMENT.md).
+
+Publication reconciliation also checks the installed development tuple: Files
+17, DMS 17, Session 18, AppSec 51, Enrollment 32, Center 100, Context 92 and
+Branding 16 have clean RPM verification. Nineteen selected installed runtime,
+enrollment, plugin and file-manager source inputs match the checkout after text
+line-ending normalization. This is scoped source/integrity evidence, not a new
+binary build or security-acceptance claim. Session 21 remains the newer image
+default; it is not silently substituted for the installed Session 18.
+
+## 14 October GREYWARD 0.4.0 Dawn internal ISO candidate
+
+The canonical builder created `GREYWARD-0.4.0-Dawn-x86_64.iso` on `<development-host>` and
+copied it to `<local workspace>`. SHA-256 is
+`4ab9c4fc54cfdabceabb521378cae4dfcf81aa0bd778a4d29268c8ae9b717b10`.
+The sidecar matches, and the ISO volume ID is `GREYWARD-INSTALLER-44`.
+
+The candidate contains Files 1.0.0-17, DMS 1.6.2-17, session 0.1.0-21,
+Application Security 0.1.0-51, Enrollment 0.1.0-32, Security Center
+0.1.0-100, Security Context 0.1.0-92, Branding 0.1.0-16 and OpenSnitch
+1.8.0-1. Session 21 carries the Strata taskbar default from current source;
+it was built for this ISO and is not installed on `<development-host>` (which remains on
+Session 18). The DMS package's first-party plugin payload matches the selected
+source after CRLF normalization, including the Security Center launcher.
+
+Static and repository validation pass. Fedora image tests (67), the combined
+build/DMS/enrollment/authentication/display suite (63), and desktop tests (6)
+pass. Production stage checks pass before and after ISO extraction (29 declared
+paths); the offline Fedora media repository resolves; the independent Windows
+Rock Ridge validator passes all 39 required paths. The build reused the DNF and
+Flatpak cache and verified the six selected Flatpak commits. The receipt records
+`installation_requires_network=false`,
+`installer_dependency_resolution_tested=true` and
+`installed_system_tested=false`.
+
+This remains an internal candidate. It has not been installed or booted. Fresh
+installation, actual Security Center button interaction, protected lock/unlock,
+Administration/Safe Open regressions, USB, SMB/SFTP and multimonitor behavior
+remain unverified. See [ISO evidence](architecture/ISO_CREATION.md) and the
+[file-manager integration record](architecture/FILE_MANAGER_DESKTOP.md).
+
 ## 14 October native-icon and preview candidate
 
 Files 17 is installed in development, retaining revision 15's pinned-source
@@ -121,6 +169,71 @@ pass. The real post-correction paste succeeds with matching SHA-256 and the same
 protected authentication PID. Automated drag/drop is inconclusive, but the user's
 manual transfer succeeds and real destination/digest/session checks pass. Ordinary
 protected mock-file access remains denied. This is not image/security acceptance.
+
+## 13 October DMS plugin recovery (historical; superseded by the 14 October candidate)
+
+A rollback to DMS 1.6.2-14 had restored the old `greywardSecure` plugin, whose
+Security Center button had neither working launch behavior nor feedback. A
+manual file replacement was rejected by DMS's first-party integrity check, so
+it was not left as an untracked live override. `<development-host>` now has the matched DMS
+1.6.2-15, Application Security 0.1.0-45 and Enrollment 0.1.0-26 packages;
+Security Center 0.1.0-90, Security Context 0.1.0-81 and Session 0.1.0-16 were
+left in place. The DMS 15 plugin matches the last ISO's fixed launcher and
+opening/success/failure feedback. RPM verification is clean, the plugin hash
+matches the built RPM, the DMS user service is active and its journal records
+`greywardSecure` loaded. SELinux remains Enforcing. Only DMS was restarted; the
+VM and Labwc session were not restarted. The button has not yet been clicked by
+the user, so visible launch acceptance remains pending.
+
+DMS 14 must not be restored for the launcher-feedback fix: its plugin payload
+is the broken version, and installed Enrollment 16 requires exact DMS 14.
+Restoring DMS 15 requires its matched Application Security and Enrollment
+packages. The desktop
+icon experiment remains rolled back: PCManFM-Qt and Kvantum were removed, and
+its generated autostart, profiles, launchers and test shortcuts remain archived
+at `/home/example-user/.local/state/greyward-rollback/20261013-desktop/`. The source
+still selects DMS 1.6.2-15 and keeps the protected 1920×1080 fallback and safe
+interrupted-enrollment recovery. No ISO was rebuilt.
+
+## 12 October 0.3.5 Dawn protected-display candidate
+
+The replacement candidate was built at
+`/mnt/greyward-build/build-20261012-display-fallback-fix/output/GREYWARD-0.3.5-Dawn-x86_64.iso`;
+SHA-256 `492493695ceeb8a60dfe4a742b0c4d9a9252a88de140330359e2bf02b3918867`.
+Its matched inputs are DMS 1.6.2-15, session 0.1.0-16, Center 0.1.0-100,
+Context 0.1.0-92, branding 0.1.0-16, Application Security 0.1.0-45 and
+Enrollment 0.1.0-22. The latter requires AppSec 45 exactly. Application
+Security's installed RPM contains the protected-compositor autostart request
+for `Virtual-1` at 1920×1080. The candidate retains the launcher feedback and
+shared 30-second transient-alert filter.
+
+The canonical image builder passed the source/package guards, offline
+dependency resolution and both pre- and post-extraction production-stage checks
+(29 declared paths). The ISO sidecar SHA-256 matches, and the independent
+Windows media validator passed for 39 required paths. The build receipt says
+`installer_dependency_resolution_tested=true` and
+`installed_system_tested=false`. This image has not yet been installed or
+booted on R6, so its runtime resolution result is still pending. See [ISO
+creation evidence](architecture/ISO_CREATION.md).
+
+### Previous candidate display failure and source correction — 12 October
+
+The prior candidate at
+`output/iso/rebuild-20261012-r6-fix/GREYWARD-0.3.5-Dawn-x86_64.iso` (SHA-256
+`e69b923a6b4561e74bc1351d5e2f2030a07d07cbb3906112acbfe00317f2c421`) was
+installed on R6; the user reports that its session still started at 1024×768.
+The mode request was in the account's writable Labwc autostart, while the
+protected compositor loads a separate root-owned configuration whose generated
+autostart was empty. The source now puts the fixed `Virtual-1` 1920×1080 request
+in that protected autostart. The matched package tuple and validation for the
+replacement are recorded above; runtime resolution remains unverified until R6
+is installed and checked.
+
+The previous candidate at
+`/mnt/greyward-build/build-20261012-rebuild/output/GREYWARD-0.3.5-Dawn-x86_64.iso`
+is rejected: R6 reported `Matched DMS package shell/receipt required` because
+the exact release allowlist ended at DMS 1.6.2-14. Its authentication source
+hashes still matched the reviewed pins; the replacement above adds 1.6.2-15.
 
 ## Source publication audit — 11 October
 
@@ -680,7 +793,7 @@ replacement for the domain specifications listed in [INDEX.md](INDEX.md).
 
 - DMS 1.6.2 migration source/package integration is implemented as an unpromoted
   candidate: immutable source/vendor pins, offline unchanged distribution backend,
-  generated explicit shell, eleven patches across twenty upstream files, system
+  generated explicit shell, twelve patches across twenty-one upstream files, system
   plugins, restrictive state backups, explicit selected routing and production lock
   defaults. Offline Fedora package build/backend tests and source migration fixtures
   passed during development. The .149 candidate also passed installed integrity,

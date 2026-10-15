@@ -417,6 +417,26 @@ class OfflineTests(unittest.TestCase):
         self.assertIn('rpm2cpio "$session_rpm" | cpio -i --quiet --to-stdout "$session_monitors_path" | cmp -s - "$session/dankmaterialshell/monitors.json"', stager)
         self.assertIn("rebuild it from this checkout before ISO staging", stager)
 
+    def test_files_is_a_first_party_offline_package_and_desktop_default(self):
+        builder = (ROOT / "environment/image/build.sh").read_text()
+        iso_builder = (ROOT / "environment/image/build-iso.sh").read_text()
+        provision = (ROOT / "environment/production/provision.sh").read_text()
+        validator = (ROOT / "environment/image/validate-production-stage.sh").read_text()
+        packages = (ROOT / "environment/production/packages.txt").read_text()
+        mimeapps = (ROOT / "environment/flatpak/mimeapps.list").read_text()
+        session_defaults = (ROOT / "environment/session/greyward-dms-session-migrate").read_text()
+
+        self.assertIn("--files-rpm", builder)
+        self.assertIn("--files-rpm", iso_builder)
+        self.assertIn("greyward-files", validator)
+        self.assertIn('"${files_rpms[0]}"', provision)
+        self.assertIn("greyward-desktop-icons.service", provision)
+        self.assertIn("pcmanfm-qt", packages)
+        self.assertIn("nautilus", packages)
+        self.assertIn("inode/directory=io.github.lgse.Strata.desktop;", mimeapps)
+        self.assertIn('io.github.lgse.Strata', session_defaults)
+        self.assertIn('org.gnome.Nautilus', session_defaults)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -18,7 +18,7 @@ PREIMAGES = {
 
 # Revision 8 changes build receipts/desktop plugins; the authentication inputs
 # remain exact-pinned below. A new release still requires explicit review.
-SUPPORTED_RELEASES = frozenset({"v1.6.2-6", "v1.6.2-8", "v1.6.2-10", "v1.6.2-11", "v1.6.2-12", "v1.6.2-13", "v1.6.2-14"})
+SUPPORTED_RELEASES = frozenset({"v1.6.2-6", "v1.6.2-8", "v1.6.2-10", "v1.6.2-11", "v1.6.2-12", "v1.6.2-13", "v1.6.2-14", "v1.6.2-15", "v1.6.2-17"})
 
 SHELL = '''//@ pragma UseQApplication
 //@ pragma AppId com.danklinux.dms

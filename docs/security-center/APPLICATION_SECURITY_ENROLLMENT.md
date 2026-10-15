@@ -17,6 +17,57 @@ and stability evidence is recorded in
 
 ## Installer candidate integration — 10 October 2026
 
+### R6 installed display result — 12 October 2026
+
+The user reports that the installed 0.3.5 Dawn system still starts at
+1024×768. The ISO's mode request was in the account's writable Labwc
+autostart, but the enrolled session's compositor reads its root-owned
+configuration under `.../application-security/desktop/labwc`; its generated
+autostart was empty. The request therefore never reached the active compositor.
+
+`desktop/prepare.py` now generates a fixed protected autostart that requests
+1920×1080 only on the exact `Virtual-1` output. The request is bounded to three
+seconds and logs its result to the protected display log. Because the package
+manifest binds the whole Security Center source tree, the matched tuple is
+Center 0.1.0-100, Context 0.1.0-92, Application Security 0.1.0-45 and exact-
+dependent Enrollment 0.1.0-22. The 12 October ISO rebuild completed with that
+tuple and passed payload, offline dependency and Windows media checks. Its
+SHA-256 is `492493695ceeb8a60dfe4a742b0c4d9a9252a88de140330359e2bf02b3918867`.
+The final candidate has not been installed on R6; runtime resolution acceptance
+remains pending.
+
+### R6 first-boot retry diagnosis — 12 October 2026
+
+The user-provided recovery-console evidence from the 0.3.5 candidate shows the
+root-owned installation transaction stuck at `PREPARING`. The repeated first-boot
+attempts then reported `Installation transaction incomplete`: `prepare()` only
+resumed `PREPARED_INPUTS` and sent every other existing phase to the final
+`check()`. The initial exception that first interrupted preparation is not in the
+available journal, so that separate first-attempt cause is still unknown.
+
+A later R6 installation attempt reached first-boot finalization but failed while
+assembling the protected DMS authentication shell with
+`Matched DMS package shell/receipt required`. The image's DMS receipt identifies
+`v1.6.2-15`, while the packaged authentication assembler's exact release
+allowlist ended at `v1.6.2-14`. The actual v1.6.2-15 RPM's `Lock.qml` and
+`Pam.qml` hashes match the existing reviewed authentication preimages. The
+working-tree fix adds v1.6.2-15 to the allowlist while retaining the complete
+shell receipt and both file-hash checks; it does not relax the source pins.
+Application Security 0.1.0-43 and exact-dependent Enrollment 0.1.0-20 are
+included in the corrected 0.3.5 Dawn candidate. Its SHA-256 is
+`e69b923a6b4561e74bc1351d5e2f2030a07d07cbb3906112acbfe00317f2c421`.
+The ISO, package/source guards, offline dependency closure and extracted stage
+were validated, but the corrected candidate has not yet been installed on R6;
+first-boot acceptance remains pending.
+
+Enrollment 0.1.0-19 resumes `PREPARING` by rebuilding fixed generated trees only
+after it confirms the recorded installer identities and original SELinux mappings
+are unchanged, the account-origin directory is empty, and partial trees contain
+only safe root-owned files/directories. Existing SELinux user definitions must
+match the exact required role and MLS settings. It preserves the original policy
+export and remains fail-closed on unexpected state. The code-level retry dead end
+is fixed; a clean install is still required to validate first-attempt provisioning.
+
 Revision 4 installed login failed before the compositor could execute: the
 coordinator's umask 077 left its assembled `/usr/lib/greyward/application-security`
 program directories at mode 0700. The retained worker traceback and installed

@@ -50,7 +50,8 @@ class BuildInputVerificationTests(unittest.TestCase):
         source = IMAGE_BUILDER.read_text()
         self.assertIn('plugin_source="$session/dankmaterialshell/plugins"', source)
         self.assertIn('rpm_plugin_path="./etc/xdg/quickshell/dms-plugins/$plugin_relative"', source)
-        self.assertIn('cmp -s - "$plugin_file"', source)
+        self.assertIn('normalize_plugin_text', source)
+        self.assertIn('cmp -s - <(normalize_plugin_text < "$plugin_file")', source)
 
     def test_iso_builder_rejects_stale_virtual_display_fallback(self):
         source = IMAGE_BUILDER.read_text()
@@ -68,12 +69,28 @@ class BuildInputVerificationTests(unittest.TestCase):
         self.assertIn('wlr-randr', production_packages)
         self.assertIn('policycoreutils wlr-randr wlopm', acceptance)
 
+    def test_iso_builder_rejects_stale_taskbar_default_migration(self):
+        source = IMAGE_BUILDER.read_text()
+        self.assertIn("session_pin_migration_path='./usr/local/libexec/greyward-dms-session-migrate'", source)
+        self.assertIn('cmp -s - "$session/greyward-dms-session-migrate"', source)
+        self.assertIn('io.github.lgse.Strata', (ROOT / 'environment/session/greyward-dms-session-migrate').read_text())
+
     def test_iso_builder_rejects_enrollment_rpm_built_for_another_dms_version(self):
         source = IMAGE_BUILDER.read_text()
         enrollment_spec = (ROOT / 'packaging/greyward-enrollment/greyward-enrollment.spec').read_text()
         self.assertIn('expected_dms_requirement="greyward-dms = $selected_dms_version"', source)
         self.assertIn('rpm_query -qp --requires "$enrollment_rpm"', source)
-        self.assertIn('Requires: greyward-dms = 1.6.2-15%{?dist}', enrollment_spec)
+        self.assertIn('Requires: greyward-dms = 1.6.2-17%{?dist}', enrollment_spec)
+
+    def test_iso_builder_requires_exact_matched_runtime_pair_and_records_files_inputs(self):
+        source = IMAGE_BUILDER.read_text()
+        iso_source = (ROOT / 'environment/image/build-iso.sh').read_text()
+        self.assertIn('enrollment_count != 1 || appsec_count != 1', source)
+        self.assertIn('greyward-application-security-experimental = $selected_appsec_version', source)
+        self.assertIn('"session_rpm": "$(basename "${session_rpm:-MISSING}")"', source)
+        self.assertIn('"files_rpm": "$(basename "${files_rpm:-MISSING}")"', source)
+        self.assertIn('-n "$session_rpm" && -n "$files_rpm"', source)
+        self.assertIn('Provide exactly one GREYWARD Files RPM.', iso_source)
 
     def test_root_component_builder_drops_to_unprivileged_user_before_dms_build(self):
         command = COMPONENT_BUILDER.dms_build_command(Path('/repo'), Path('/inputs'), Path('/output'), 'stendev', True)

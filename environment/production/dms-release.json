@@ -1,7 +1,7 @@
 {
   "schema": "greyward.dms-release/v1",
   "status": "candidate-unpromoted",
-  "releaseId": "v1.6.2-15",
+  "releaseId": "v1.6.2-17",
   "dms": {
     "tag": "v1.6.2",
     "commit": "2db7646fe3ab47fddfdb8723f2da07d61a0d47ac",
@@ -151,11 +151,20 @@
       "preimages": {
         "Services/WlrOutputService.qml": "8d6c51c57f2bdd66e89518f5306d527f0a19167aa5ec762000d3801bf539a544"
       }
+    },
+    {
+      "file": "greyward-desktop-shortcuts.patch",
+      "sha256": "f12c30041f1ef9cbe57f045da9e3cd1366e39548d4d7568d896cf62f270c3eb3",
+      "reason": "Create ordinary-user desktop shortcuts from verified installed launchers.",
+      "preimages": {
+        "Modules/DankBar/Widgets/AppsDockContextMenu.qml": "10218fc7d14f60e102eea2566bc5fc7432137b3c3d8739c70815eb5cfe118b81",
+        "translations/poexports/fr.json": "3dcbc422e3cb56aed8a46f43fc369e5b8442971f9f1c1715f7f7ef872e7d9656"
+      }
     }
   ],
   "shell": {
-    "sha256": "68344e1b9e017c6d82ce232a44050e04fd6b7691a0f3dfb4d091997072dcd73a",
-    "patchedFiles": 21,
+    "sha256": "e4fff96681f7dbc2c12631f64d3ca44daa106fdacb66fd1fe2ca06cbabd728b0",
+    "patchedFiles": 22,
     "qmlFiles": 638,
     "commonQmlFiles": 74,
     "commonFiles": 111
