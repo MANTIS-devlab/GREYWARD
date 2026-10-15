@@ -5,7 +5,7 @@
 <h1 align="center">GREYWARD</h1>
 
 <p align="center">
-  <strong>A security-focused Linux distribution trying to make stronger defaults livable.</strong>
+  <strong>A Fedora-based desktop with integrated security controls and a distinct identity.</strong>
 </p>
 
 <p align="center">
@@ -59,165 +59,109 @@
   <img src="docs/assets/readme/section-divider.svg" width="860" alt="GREYWARD section divider">
 </p>
 
-GREYWARD is an experimental Linux distribution built around an uncomfortable compromise:
+GREYWARD is a Fedora-based Linux distribution that brings together a distinctive Wayland desktop, Fedora's security foundations and an integrated Security Center.
 
-**Raise the default security posture of a general-purpose desktop without making it miserable to use.**
+Its goal is practical: **keep everyday computing familiar while adding explicit boundaries around sensitive data and administrative authority.**
 
-It combines a distinctive desktop, Fedora's security foundations, GREYWARD-specific policy and privileged services, and a Security Center that tries to explain what the system can *actually* enforce.
+Security Center brings application permissions, protected resources, network activity, file scanning, updates and recovery into one interface. Behind it, GREYWARD combines existing Linux services with its own policy and narrowly scoped privileged operations.
 
-It is not a collection of security toggles. The interesting work happens where applications, identity, files, networking, the desktop session and administrative authority meet.
+Application Guard connects application identity, supported execution controls and security activity. Protected Data adds SELinux access restrictions to explicitly registered resources. A separate Administration workflow provides deliberate access to elevated commands.
 
-The goal is a machine you can eventually daily-drive without becoming its full-time security administrator.
-
-**GREYWARD is not there yet.** It remains pre-release software. Some controls have been exercised on a development machine; others are partial, experimental or waiting for clean-install and hardware validation.
+These capabilities have different scopes. Ordinary native applications are not universally isolated from one another, and general-purpose Allow once / Always allow permissions for arbitrary applications are not available.
 
 > [!WARNING]
-> **Do not treat GREYWARD as a mature, independently audited hardened distribution.** The architecture has important trusted components and known gaps. Development-build behavior is not a security guarantee for a released ISO.
+> **GREYWARD is pre-release software and has not received an independent security audit.** Development-system results do not establish equivalent behavior in every downloadable image or on every device. Read the [current limitations](#current-state-and-limitations) before testing.
 
 # Why GREYWARD?
 
-Linux already has more distributions than any ecosystem has a reasonable excuse for. GREYWARD should have to justify becoming another one.
+Linux already provides powerful security mechanisms. GREYWARD explores how to make them work together as a coherent desktop experience: understandable status, deliberate access to sensitive resources, practical administration and recoverable changes.
 
-The thesis is that a general-purpose desktop can offer:
+The aim is to reduce the security integration users must assemble themselves, while keeping the underlying system accessible and open to inspection.
 
-- **Stronger defaults:** real operating-system enforcement where it is useful, not just warnings.
-- **Explicit boundaries:** ordinary applications should not automatically inherit access to selected sensitive resources.
-- **Narrow exceptions:** legitimate access should not require disabling an entire protection.
-- **Visible evidence:** security claims should depend on observable state, freshness and coverage.
-- **Usable ownership:** the terminal, normal applications and administrative control remain available.
-- **One coherent environment:** desktop UX, policy, services, recovery and image construction developed together.
+The guiding principles are straightforward:
 
-The distribution model is a hypothesis, not a sacred architectural decision. Some components may ultimately be better upstream or as standalone projects. Open development is how that gets tested.
+- **Familiar computing:** everyday applications and ordinary files should retain normal Fedora behavior wherever an additional boundary is unnecessary.
+- **Meaningful protection:** registered sensitive resources receive operating-system access restrictions.
+- **Deliberate authority:** supported exceptions and elevated operations should be explicit and attributable.
+- **Visible evidence:** missing, stale or unavailable information must remain distinguishable from protection.
+- **Coherent design:** desktop interactions, security controls and maintenance belong to the same product experience.
 
 # What makes it different?
 
-| Area | GREYWARD's current direction | Important qualification |
-| --- | --- | --- |
-| **Application Guard** | Identifies applications and provides supported managed execution and security workflows. | Not all native processes are individually sandboxed. |
-| **Protected Data** | Registers selected sensitive resources for kernel-enforced SELinux access restrictions. | Protection applies to enrolled resources, not the entire home directory. |
-| **Application Security broker** | Privileged, typed operations with process/identity checks and narrow reviewed access paths. | Existing grant support is limited; this is not a universal permission broker. |
-| **Protected session boundaries** | Separate domains for sensitive authentication/display components and controlled Administration. | Trusted compositor, broker, kernel and providers remain important attack surfaces. |
-| **Security Center** | Unified status, findings and workflows with evidence and uncertainty. | A displayed control is not proof that every associated threat is mitigated. |
-| **Network & devices** | OpenSnitch, firewalld, managed DNS/VPN interactions and USBGuard integration. | Outbound network access is not default-deny; VPN leakage and physical USB cases need testing. |
-| **Files, updates & recovery** | ClamAV, Safe Open, quarantine, update preparation, Btrfs and Restic workflows. | Scan coverage and full recovery/rollback validation are incomplete. |
-| **GREYWARD desktop** | Labwc + a customized DankMaterialShell with a restrained graphite-and-silver identity. | Compatibility, screen sharing and hardware coverage remain active work. |
+| Feature | What it brings |
+| --- | --- |
+| **Security Center** | One place to understand security state, review activity and use supported controls. |
+| **Protected Data** | SELinux restrictions for explicitly registered sensitive resources, beyond ordinary Unix file permissions. |
+| **Application Guard** | Application identity, supported managed execution and application-related security activity. |
+| **Administration** | A protected workflow for reviewing and authenticating elevated commands. |
+| **Network & devices** | Integrated application networking, firewall zones, managed DNS and USBGuard visibility. |
+| **Files & maintenance** | Scanning, quarantine, Safe Open, updates, recovery points and personal backup workflows. |
+| **GREYWARD desktop** | Labwc, an adapted DankMaterialShell and GREYWARD Files, with a shared visual identity. |
 
-**Implementation status is intentionally more precise than a single “secure/not secure” label.** See [Current state and limitations](#current-state-and-limitations).
+These features have different implementation and validation levels; the [status table](#current-state-and-limitations) describes their limits.
 
 # Architecture at a glance
 
-GREYWARD builds on Fedora rather than replacing the kernel's security model with a custom one. It separates **presentation**, **evidence**, **privileged decisions** and **kernel enforcement**.
+GREYWARD builds on Fedora and separates **presentation, evidence, privileged decisions and kernel enforcement**.
 
 <p align="center">
   <img src="docs/assets/readme/greyward-system-overview.svg" width="520" alt="GREYWARD system overview diagram">
 </p>
 
-*Conceptual diagram, not a claim that every feature is active or that every D-Bus operation takes exactly this route. In particular, Security Center is a user interface; SELinux enforces protected-file access in the kernel, not in the window displaying the decision.*
+The diagram summarizes responsibilities; individual operations may take different paths.
 
-### Trust boundaries matter
+Security Center runs as the logged-in user. Its Tauri interface and Security Context call named operations rather than exposing a generic root shell. Privileged services validate supported requests; authoritative providers and the kernel apply the corresponding controls.
 
-An ordinary app is not trusted simply because it belongs to the logged-in user. At the same time, GREYWARD does not attempt to turn every desktop process into a fully isolated container.
-
-The trusted computing base still includes the kernel, loaded policy, privileged services, authentication and display components, and build/package inputs. Compromise of one of those components may defeat the protections it owns.
-
-The distinction between an **observed state**, an **enforced boundary** and a **tested end-to-end workflow** matters throughout the project.
+The kernel, loaded policy, broker, protected authentication/display components and package inputs remain trusted. A compromised provider can undermine the protection or evidence it owns. See the [architecture](ARCHITECTURE.md) and [privilege model](docs/security/privilege-model.md) for the detailed boundaries.
 
 # Application Guard
 
-Application Guard is the application-facing part of GREYWARD's new security architecture.
+Application Guard connects **application identity → protection → permissions → protected resources → activity**.
 
-The design connects application identity, effective permissions, controlled execution, protected resources and activity into a single model:
+Development builds include root-controlled policy, live requester checks and supported managed launches. The native managed runner uses namespaces, Landlock and seccomp; bounded script, AppImage and selected-file workflows reuse that infrastructure.
 
-**Application → Protection → Permissions → Protected Data → Activity**
-
-It is intended to answer practical questions: *What is this program? What can it reach? Which restrictions are active? What happens if it needs a protected resource? What evidence supports those answers?*
-
-### What exists in development
-
-- A privileged Application Security service and typed interfaces for supported operations.
-- Checks involving requester identity and process/security context, with root-controlled policy state.
-- SELinux-backed protections that ordinary workloads cannot simply override through the UI.
-- A **managed native execution path** using Linux mechanisms such as namespaces, Landlock and seccomp.
-- Bounded handling for supported scripts, AppImages and selected-file launch workflows.
-- Application-related status and activity integrated into the broader Security Center model.
-
-These mechanisms have different scopes. **Managed confinement is not automatically applied to every native program launched normally.** Upstream Flatpak sandboxes remain an independent layer whose permissions depend on the application's manifest and overrides.
-
-### What Application Guard is not
-
-It is **not** a complete Android-style permission system for Linux applications. A general “Allow once / Allow always / Deny” dialog that reliably authorizes arbitrary native applications, scripts and Flatpaks to read and edit protected resources has **not** been delivered.
-
-Nor does a successful launch prove a complex application's secondary workflows, such as document saving, printing, IDE helpers or screen sharing, are compatible.
+**Managed confinement does not automatically cover every normally launched native program.** Flatpaks retain their upstream sandbox, manifest and override permissions. Generic reviewed access for arbitrary applications, interpreters and Flatpaks remains unavailable.
 
 # Protected Data
 
-Protected Data adds explicit operating-system protection to **registered sensitive resources**.
-
-Ordinary Unix ownership and permissions are often too coarse for this problem: multiple applications running as the same user can normally reach the same home-directory files. GREYWARD adds a separate mandatory boundary for selected resources through SELinux labels and confined domains.
-
-This is **access control**, not encryption at rest, a hidden folder, a universal vault or data-loss prevention.
-
-### How the boundary works
+Applications sharing a Unix user normally share access to much of that user's data. Protected Data adds a mandatory SELinux boundary around **explicitly registered resources** in an enrolled session.
 
 <p align="center">
   <img src="docs/assets/readme/protected-data-boundary.svg" width="700" alt="GREYWARD Protected Data boundary diagram">
 </p>
 
-The critical distinction: **the kernel denies unauthorized access even when an application never opens Security Center**. Policy review is relevant when a supported access workflow exists; it is not a generic interception prompt for every failed file open.
+SELinux denies unauthorized access independently of Security Center. Registration is explicit: protecting one folder does not protect every credential or document on the machine.
 
-### Current access model
+A supported exception must identify the executable generation, resource, operation and workload. Historical denials, application-supplied names or forwarded portal identifiers cannot establish authorization by themselves.
 
-| Situation | Current behavior or limitation |
-| --- | --- |
-| Ordinary file outside Protected Data | Normal Linux/Flatpak permission behavior. |
-| Ordinary application reads registered protected material | Denied under the enforced policy for the enrolled context. |
-| Supported fixed-purpose credential inspection | A narrow, tested read-only, non-exporting inspection workflow exists. |
-| General SSH authentication, GPG signing or IDE key use | Not covered by that inspection grant. |
-| Generic editing and saving of a protected document | Not delivered as a general workflow. |
-| Flatpak opens protected material through its normal file chooser | No verified general-purpose original-file authorization/edit/save path. |
-| Application makes a copy after legitimate read access | Not prevented by resource-label continuity; this is not anti-exfiltration. |
+A narrow, read-only, non-exporting key-inspection workflow has been tested. It does **not** provide general SSH authentication, GPG signing, IDE key access or protected-document editing. Arbitrary denied file operations cannot be paused and resumed through a permission dialog.
 
-**Registration is explicit.** Protecting one sensitive directory does not magically protect every browser token, SSH key, cloud credential or document on the machine. The catalogue must be verified and expanded deliberately.
+Protected Data is access control, not encryption or data-loss prevention. Revocation cannot recover data already read or copied.
 
-### Why not just give the app an exception?
+# Protected authentication and Administration
 
-Because a useful exception must be tied to the correct executable, resource, operation and active workload. A file chooser or portal forwarding a request does not, by itself, prove which application originally requested it.
+Enrolled development sessions separate sensitive authentication and display components from ordinary applications. Routine product operations use bounded service actions; interactive administration follows a separate protected path.
 
-GREYWARD therefore prefers an honest **unsupported** result over an attractive permission dialog whose authority cannot be verified.
+An ordinary terminal's sudo request is handed to an Administration surface for review and authentication. Inside that terminal, packaged sudo supports familiar commands and root shells, with a **two-minute terminal-scoped authentication cache**. Cache expiry does not end an existing root shell.
 
-# A protected session, not a locked-down toy
-
-Application security is only part of the design. Development builds also include separate protection work around the desktop session, authentication and administrative operations.
-
-- SELinux Enforcing supplies the mandatory foundation for enrolled accounts and registered resources.
-- Sensitive desktop authentication/display components use dedicated policy boundaries.
-- Administration is a deliberate privileged workflow, not an invisible privilege increase available to arbitrary desktop code.
-- Selected D-Bus inspection/ptrace restrictions have been tested in development; their release packaging must be verified separately.
-
-These are meaningful additions, but the limits matter:
-
-- Ordinary native programs can still access much ordinary user data and, in many cases, interact with other ordinary processes.
-- A privileged administrator can change system policy; GREYWARD is not meant to take ownership away from the machine's owner.
-- The privileged broker and trusted services themselves require continued audit and hardening.
-- Some older privileged network-control interfaces have had weaker authorization boundaries than the newer protected workflow. Their closure must be verified, not assumed.
+Elevated commands can read protected data and change or disable security controls. Keeping this authority deliberate preserves ownership of the machine without making it available automatically to ordinary applications. Some older privileged interfaces still require authorization review; this is not a claim that every service follows the newer boundary.
 
 # Security Center
 
-Security Center is the interface through which GREYWARD makes security posture, supported controls and failures understandable.
+Security Center makes security state, supported actions and failures understandable in the context of everyday use.
 
 | Network Activity | Unified Updates |
 | :---: | :---: |
 | <img src="docs/assets/screenshots/security-center-network-activity.png" alt="Network Activity in GREYWARD Security Center" width="460"> | <img src="docs/assets/screenshots/security-center-updates.png" alt="Update Center in GREYWARD Security Center" width="460"> |
 
-| Area | Integration and scope |
+| Area | What users can inspect or manage |
 | --- | --- |
-| **System** | SELinux, Secure Boot, LUKS, TPM, firmware, administrative and recovery state. |
-| **Applications** | Application identity, supported Application Guard workflows, Flatpak permissions and effective access evidence. |
-| **Protected Data** | Registered-resource state and the supported reviewed access paths. |
-| **Network** | OpenSnitch, firewalld, NetworkManager, managed DNS and VPN-aware policy reconciliation. |
-| **Files** | ClamAV, selected-file scanning, provenance, quarantine/restore and Safe Open. |
-| **Updates** | DNF5, Flatpak, fwupd and ClamAV database update paths. |
-| **Devices** | USBGuard policy, device history and selected camera/microphone observations. |
+| **System & applications** | System posture, application identity, effective Flatpak permissions and supported Guard workflows. |
+| **Protected Data & activity** | Registered-resource status, supported reviews and application-related events. |
+| **Network** | OpenSnitch application policy, firewalld zones, NetworkManager connections, managed DNS and VPN-aware reconciliation. |
+| **Files & scans** | ClamAV scanning, file provenance, quarantine/restore and Safe Open. |
+| **Updates** | DNF5, Flatpak, fwupd and ClamAV database updates. |
+| **Devices** | USBGuard state/history and selected camera/microphone activity observations. |
 | **Recovery** | Btrfs recovery points and Restic-backed personal backup workflows. |
 
 
@@ -226,43 +170,27 @@ Security Center is the interface through which GREYWARD makes security posture, 
 
 ### Evidence before reassurance
 
-Security Center uses a posture vocabulary that keeps uncertainty visible:
-
-```text
-SECURE · PROTECTED · REVIEW_NEEDED · ACTION_REQUIRED
-UNKNOWN · UNAVAILABLE · NOT_APPLICABLE
-```
-
-The visual status must reflect the **scope of the measurement**. A running VPN interface does not prove a kill switch or absence of DNS leaks. Available ClamAV definitions do not prove real-time scanning. A user-accepted missing control does not mean that the control has become active.
+Status reflects the scope and freshness of available evidence. Unknown, unavailable and degraded states remain distinct from an active protection. Acknowledging a finding does not activate a missing control.
 
 <p align="center">
   <img src="docs/assets/readme/evidence-not-reassurance.svg" width="860" alt="GREYWARD evidence before reassurance">
 </p>
 
-These are conceptual state transitions. Individual collectors use their own evidence and evaluation rules; the diagram does not assign a universal status to every feature.
+The diagram illustrates the reporting principle; individual controls use their own evidence.
 
-> [!NOTE]
-> **Security Center describes evidence; it does not create the underlying guarantee.** Collectors, privileged providers and UI wording can be wrong. Validation includes testing the actual restriction, not merely checking for a green label.
+A running service or green label is not an end-to-end security test. ClamAV definitions do not establish real-time scanning; a connected VPN does not establish a working kill switch or absence of DNS leaks. Collectors and wording also need validation against actual behavior.
 
 # Security gets interesting when systems interact
 
-Individual controls are often straightforward. Their interactions are not.
+GREYWARD integrates existing providers instead of replacing their responsibilities. For example, DNS policy must accommodate legitimate VPN resolvers without allowing arbitrary resolver bypass. The current service reconciles observed network state with scoped policy; VPN failover and leak resistance require separate validation.
 
-Consider DNS protection during a VPN connection:
-
-
-
-Blocking all unexpected DNS traffic can break legitimate VPN operation. Allowing DNS globally makes a bypass restriction ineffective. GREYWARD attempts to reconcile policy with observed network state and use narrow allowances where possible.
-
-But **VPN detected** does not mean **encryption independently verified**, **leak-proof** or **kill switch tested**. Those require separate evidence and real failure testing.
-
-The same principle applies to application permissions, USB admission, malware response, updates and recovery. The important question is not just *“Is the switch on?”* but *“What does this protection still guarantee when the rest of the system changes?”*
+The same principle guides updates, device admission and recovery: report the provider's result, preserve uncertainty and verify the intended outcome.
 
 # A desktop of its own
 
-GREYWARD is meant to feel like GREYWARD.
+The desktop is part of GREYWARD's identity: obsidian and graphite surfaces, restrained silver accents, controlled transparency and readable typography.
 
-Its shell, settings, Security Center, notifications and interaction patterns share a deliberate visual direction. The current language is dark and restrained: graphite, silver accents, controlled transparency and relatively low visual noise.
+Labwc provides the Wayland compositor, UWSM manages the session and an adapted DankMaterialShell provides the shell and settings. GREYWARD Files integrates Strata with the shared file-icon family; PCManFM-Qt handles desktop icons, while DMS owns the wallpaper.
 
 ![GREYWARD Security Center](docs/assets/screenshots/greyward-desktop-security-center.png)
 
@@ -270,148 +198,59 @@ Its shell, settings, Security Center, notifications and interaction patterns sha
   <img src="docs/assets/screenshots/greyward-desktop-workflow.png" width="920" alt="GREYWARD development desktop workflow">
 </p>
 
-| Layer | Current implementation |
-| --- | --- |
-| **Foundation** | Fedora 44 |
-| **Compositor** | Labwc |
-| **Session** | UWSM-managed Wayland |
-| **Shell** | DankMaterialShell adapted for GREYWARD |
-| **Security UI** | GREYWARD Security Center and integrated notifications |
-| **Visual system** | GREYWARD branding, assets and interaction direction |
-
-The terminal remains available. Users are not locked out of the underlying operating system, and advanced users can inspect or change policy.
-
-Accessibility, multi-display behavior, suspend/resume, application compatibility and consistent session behavior still need work. The project values a visually coherent system, but aesthetics are not a substitute for reliability or enforcement.
+The terminal and underlying Fedora system remain accessible. Compatibility, accessibility, multiple displays and reliable session behavior remain development priorities alongside visual consistency.
 
 # Security and usability are a trade-off
 
-Some stronger defaults will break things. That is not automatically a reason to remove them.
+Normal desktop work should not require understanding SELinux. Additional restrictions need a meaningful benefit, an understandable explanation and a practical supported workflow. Accidental compatibility regressions should be fixed; intentional protected-resource boundaries should not be silently removed.
 
-The challenge is whether a restriction has a meaningful benefit and a workable legitimate path. A protection that cannot be explained, tested, recovered from or used with ordinary software is not automatically a good product decision.
-
-GREYWARD aims for a practical balance:
-
-1. Ordinary files and applications should remain ordinary wherever stronger treatment is unnecessary.
-2. Sensitive registered resources should have a meaningful mandatory boundary.
-3. Supported exceptions should be narrow, attributable and reviewable.
-4. An unsupported workflow should fail honestly rather than silently fall back to unrestricted access.
-5. Recovery must be tested as carefully as enforcement.
-
-This is why Application Guard and Protected Data are being developed alongside the normal desktop, rather than pretending one generic sandbox can safely cover every workload.
+Unsupported access remains denied rather than falling back to unrestricted execution. Recovery and administrative ownership must be considered alongside enforcement.
 
 # Current state and limitations
 
-GREYWARD is in **pre-release alpha/beta development**. The table below describes the reported development-system posture, **not a certification or validation of the linked downloadable ISO**.
+**The following describes development capabilities, not acceptance of the linked ISO.** Feature availability depends on image and component versions. Consult [development status](docs/STATUS.md), the [testing guide](TESTING.md) and the release information accompanying your download.
 
-| Capability | Development status | What remains |
-| --- | --- | --- |
-| Fedora base and GREYWARD desktop | Implemented | Wider bare-metal and multi-display acceptance. |
-| SELinux Enforcing and selected custom domains | Verified on the development environment | Clean-install policy/enrollment verification and broader user coverage. |
-| Protected Data registration and mandatory denials | Partially verified | Broader resource catalogue, lifecycle and legitimate-workflow coverage. |
-| Application Security broker and supported managed launches | Implemented with bounded tests | Broader native/Flatpak compatibility and independent security review. |
-| Fixed-purpose reviewed key-inspection grant | Narrow workflow tested | Not equivalent to general SSH/GPG/IDE access. |
-| Generic protected-file authorization and Flatpak editing | **Not delivered** | Verified original-file chooser, authorization, edit/save/reopen and attribution. |
-| Separate sensitive authentication/display boundaries | Tested in development | Release packaging, upgrade and recovery verification. |
-| Additional D-Bus inspection isolation | Tested development overlay | Packaging and clean-install acceptance. |
-| OpenSnitch, firewalld and managed DNS | Active integrations | Authorization hardening, VPN leak/failover tests, policy assurance. |
-| USBGuard | Configured | Physical USB-device admission and recovery tests. |
-| ClamAV and quarantine | Engine/workflows exercised | Correct ordinary-session status projection and full live acceptance. |
-| Updates, Btrfs snapshots and Restic | Partial workflows | End-to-end rollback, backup restore and offline-repair acceptance. |
-| Screen sharing | **Known broken/unavailable in audited environment** | Portal/compositor compatibility repair. |
-| Secure Boot and TPM | Not established in the audited VM | Hardware-specific verification, without assuming protection. |
-| ISO installation and first boot | Release pipeline exists | Fresh ISO build, clean VM install, first-boot and hardware validation. |
+| Capability | Current evidence and remaining limits |
+| --- | --- |
+| **Desktop & Security Center** | Implemented in development. Files integration has selected real-desktop checks; broader hardware and everyday compatibility remain incomplete. |
+| **SELinux & Protected Data** | Enforcing policy, registered-resource denials and bounded reviewed grants have development evidence. Resource coverage and legitimate access workflows remain limited. |
+| **Application Guard** | Broker and supported managed launches are implemented with bounded tests. Ordinary same-user applications are not universally separated. |
+| **Generic application permissions** | **Not delivered:** arbitrary native/script/Flatpak Allow once / Always allow, including normal protected-document open/edit/save/reopen. |
+| **Authentication & Administration** | Separate domains and administration workflows have development evidence. Package presence does not establish clean-install, upgrade, lock/unlock, stability or offline-recovery acceptance. |
+| **D-Bus inspection isolation** | Selected restrictions tested in a development overlay; release packaging and clean-install acceptance remain separate. |
+| **Network & devices** | OpenSnitch, firewalld, managed DNS and USBGuard are integrated. Authorization assurance, VPN leak/failover and physical-device tests remain incomplete. |
+| **Scanning, updates & recovery** | Implemented workflows have partial validation. Full scan/status acceptance, rollback, backup restore and offline repair remain open. |
+| **Screen sharing** | Known broken or unavailable in the audited environment; portal/compositor repair is pending. |
+| **Secure Boot & TPM** | Protection is not established by the audited VM; hardware-specific verification is required. |
+| **Installation & images** | An installer and image pipeline exist. Composition checks do not establish clean-install or security acceptance for a new candidate. |
 
-**Specific caveats:** ordinary same-user processes are not universally separated; registered-resource coverage is not comprehensive; default outbound network policy is not a general anti-exfiltration boundary; scanner signatures do not guarantee malware detection; snapshots are not proven backups; successful tests on a development machine do not prove an ISO installs with the same guarantees.
+Default outbound networking is not a general anti-exfiltration boundary. Malware signatures cannot guarantee detection, and snapshots do not replace tested backups. See the [threat model](THREAT_MODEL.md) for assumptions and exclusions.
 
-### Current priorities
+Current priorities are compatibility, truthful status, supported sensitive-resource access, privileged-service review, clean-install validation and tested recovery. Wider hardware, suspend/resume and accessibility coverage also remain open.
 
-- Reproducible image construction and clean-install validation.
-- Release packaging of the intended SELinux policy and session enrollment.
-- Correct security-status wording and authoritative evidence collection.
-- Legitimate access to protected material without bypasses or unusable applications.
-- Privileged service authorization and trusted-component hardening.
-- Screen sharing, VPN edge cases and routine desktop compatibility.
-- Update recovery, Restic restore and offline repair.
-- Bare-metal testing, hardware coverage, suspend/resume, accessibility and multi-display behavior.
-- External threat modeling, code review and security testing.
-
-> [!NOTE]
-> Screenshots show real GREYWARD development builds. Visual completeness, a passing unit-test suite and a successful ISO build are **not** equivalent to a security-reviewed release.
+Screenshots show development builds; appearance is not release or security acceptance.
 
 # Open development
 
-GREYWARD is free and open source partly because its assumptions should be exposed to scrutiny.
-
-If the architecture is wrong, challenge it. If an upstream mechanism already solves the problem better, use it. If a custom service creates more risk than value, simplify it. A contributor removing unnecessary code can do more for security than one adding another dashboard.
-
-The source being public is not evidence that it is good. It is an opportunity to make that question answerable.
+GREYWARD is an independent, one-person project developed in the open. Simpler upstream mechanisms and contributions that remove unnecessary complexity are welcome.
 
 # Contribute
 
-GREYWARD is currently a one-person project.
+Useful contributions include reproducible compatibility reports, hardware tests, architecture and security review, accessibility improvements and focused fixes. Fedora, SELinux, Wayland, Rust, Python and packaging experience are especially valuable.
 
-I am **not a professional software developer or security researcher**. There will be Linux mechanisms I missed, assumptions that fail on real hardware and architectural decisions that deserve to be reconsidered.
-
-Useful contributions can begin with:
-
-> This security assumption is wrong.
->
-> This can be done much more cleanly.
->
-> Linux already solves this.
->
-> This breaks on my hardware.
->
-> This restriction costs too much usability for what it provides.
-
-Particularly useful expertise includes Linux/Fedora internals, SELinux, Polkit, NetworkManager, firewalld/nftables, Rust, Tauri, Wayland, packaging, image construction, threat modeling, testing and UX/accessibility.
-
-**Try it. Break it. Question it. Improve it.**
-
-See [`CONTRIBUTING.md`](CONTRIBUTING.md). Security reports should follow [`SECURITY.md`](SECURITY.md).
+See [CONTRIBUTING.md](CONTRIBUTING.md) to get involved. Follow [SECURITY.md](SECURITY.md) for vulnerability reports.
 
 # AI disclosure
 
-Most of GREYWARD's code has been written with **AI coding agents**.
+Most of GREYWARD's code has been written with **AI coding agents**. The maintainer is not a professional software developer or security researcher. Implementation and testing do not replace experienced human review or an independent security audit.
 
-I am not a coder, and I do not want the repository to imply otherwise.
-
-AI is used to turn system behavior, product ideas, debugging results and implementation goals into working code. Changes are tested and iterated against the real system, but that is not equivalent to experienced human engineering or independent security review.
-
-There will almost certainly be places where an experienced developer sees a cleaner or safer implementation.
-
-**AI helps build GREYWARD. Open review is how it can become more robust.**
+Contributions that improve correctness, simplicity, compatibility and security are especially welcome.
 
 # Repository and technical references
 
-```text
-GREYWARD/
-├── environment/        # production system, image and session
-├── security-center/    # application, backend, services and tests
-├── packaging/          # RPM definitions
-├── branding/           # identity and system assets
-├── tests/              # validation
-└── tools/              # development tooling
-```
+Start with the [documentation index](docs/INDEX.md) and [repository map](docs/REPOSITORY_MAP.md). Installed-system definitions live in `environment/production/`, Security Center and Context in `security-center/`, RPM definitions in `packaging/`, and visual sources in `branding/`.
 
-Repository validation:
-
-```powershell
-pwsh -NoProfile -File .\tests\static.ps1
-pwsh -NoProfile -File .\tools\validate-repository.ps1
-```
-
-Security Center validation:
-
-```bash
-cd security-center
-cargo fmt --all -- --check
-cargo test --workspace --locked
-cargo clippy --workspace --all-targets --locked -- -D warnings
-node --test tauri/frontend/ux-contract.test.mjs
-```
-
-Technical references: [installation](docs/architecture/ISO_CREATION.md) · [architecture](ARCHITECTURE.md) · [threat model](THREAT_MODEL.md) · [testing](TESTING.md) · [hardware testing](HARDWARE_TESTING.md) · [privilege model](docs/security/privilege-model.md).
+See [TESTING.md](TESTING.md) and the [Security Center guide](security-center/README.md) for validation commands. [Hardware testing](HARDWARE_TESTING.md), the [architecture](ARCHITECTURE.md) and [privilege model](docs/security/privilege-model.md) describe the corresponding scope and evidence.
 
 # Licensing
 
