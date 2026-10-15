@@ -295,6 +295,9 @@ implementation.
 
 ## Current truth
 
+- [../README.md](../README.md) — product overview, user-facing capabilities,
+  pre-release limitations and entry points. Detailed validation and component
+  versions belong in the status and domain documents below.
 - [../ARCHITECTURE.md](../ARCHITECTURE.md) — public system architecture,
   authority, state, and reconciliation boundaries.
 - [../THREAT_MODEL.md](../THREAT_MODEL.md) — current threats, assumptions,
