@@ -18,6 +18,16 @@ ACTIVE_BASE = Path('/usr/lib/greyward/application-security/desktop')
 STATE = Path('/run/greyward-application-security')
 LABWC = 'bd5f5ddec12c066e0893a0a4874cbc5d55e157d5b93d3ebe6cd2bdc7b863ba64'
 THEME = Path('/usr/share/greyward/defaults/labwc/Greyward')
+PROTECTED_LABWC_AUTOSTART = """#!/bin/sh
+# The protected compositor ignores the account's writable Labwc autostart.
+# Keep its only startup action fixed and limited to the exact VM output.
+if /usr/bin/timeout 3s /usr/bin/wlr-randr --output Virtual-1 --mode 1920x1080 >/dev/null 2>&1; then
+    printf '%s\\n' 'GREYWARD display setup: Virtual-1 set to 1920x1080' >&2
+else
+    result=$?
+    printf 'GREYWARD display setup: Virtual-1 1920x1080 request failed (exit %s)\\n' "$result" >&2
+fi
+"""
 
 
 def selected_dms():
@@ -152,10 +162,12 @@ def prepare(source, labwc, account_name, materialize_runtime=True):
     (BASE / 'labwc/rc.xml').write_text(rc)
     (BASE / 'labwc/rc.xml').chmod(0o444)
     copy_theme(THEME, BASE / 'labwc')
-    # UWSM's ordinary proxy finalizes startup after root admission. The trusted
-    # compositor never launches desktop applications or owns their services.
-    (BASE / 'labwc/autostart').write_text('#!/bin/sh\nexit 0\n')
-    (BASE / 'labwc/autostart').chmod(0o555)
+    # The protected compositor ignores the account's writable Labwc
+    # autostart. Run only the fixed Virtual-1 mode request here; ordinary
+    # applications and user services remain owned by the regular session.
+    protected_autostart = BASE / 'labwc/autostart'
+    protected_autostart.write_text(PROTECTED_LABWC_AUTOSTART)
+    protected_autostart.chmod(0o555)
     # Copies from staging may inherit var_lib_t. These immutable configuration
     # and theme assets are static system data, not writable service state.
     run('/usr/bin/chcon', '-R', '-t', 'usr_t', str(BASE / 'labwc'))

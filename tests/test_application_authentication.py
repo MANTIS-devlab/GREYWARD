@@ -160,7 +160,7 @@ readonly property bool u2fSuppressedByPrimaryPam: SettingsData.lockPamExternally
             root, receipt, pins = self.fixture(base)
             release = json.loads(receipt.read_text())
             with mock.patch.object(assembly, 'PREIMAGES', pins):
-                for supported in ['v1.6.2-8', 'v1.6.2-10', 'v1.6.2-11', 'v1.6.2-12', 'v1.6.2-13', 'v1.6.2-14']:
+                for supported in ['v1.6.2-8', 'v1.6.2-10', 'v1.6.2-11', 'v1.6.2-12', 'v1.6.2-13', 'v1.6.2-14', 'v1.6.2-15']:
                     release['releaseId'] = supported
                     receipt.write_text(json.dumps(release))
                     result = assembly.assemble(root, receipt,

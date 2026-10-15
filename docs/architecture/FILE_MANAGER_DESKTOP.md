@@ -2,6 +2,27 @@
 
 ## Current development proof — 14 October
 
+### ISO 0.4.0 candidate integration
+
+The internal `GREYWARD-0.4.0-Dawn-x86_64.iso` contains Files 1.0.0-17 and
+the matched DMS 1.6.2-17 / Session 0.1.0-21 desktop integration. The staged
+RPM checks require the Strata launcher, FileManager1 routing, desktop-icon
+service and helper to match the package inputs; Nautilus remains in the base
+package set for the Security Center Safe Open extension. PCManFM-Qt owns desktop
+icons only, while DMS owns the wallpaper. The staged mimeapps default routes
+directories to Strata and preserves per-user overrides. The selected offline
+RPM closure includes Files' declared isolated SVG/PDF/video renderer
+dependencies.
+
+Composition, offline dependency resolution, both 29-path production-stage
+checks, ISO payload hashing and the independent Windows 39-path media check
+pass. The candidate also includes DMS's desktop-shortcut and Security Center
+button-feedback payload plus the shared Security Context alert projection.
+This is media evidence; a clean installation, actual desktop interactions,
+Administration/Safe Open regressions, USB, SMB/SFTP and multiple monitors remain
+unverified. The app remains available in `<development-host>` at Files 17; Session 21 was
+built for the ISO and is not installed there. See [ISO evidence](ISO_CREATION.md).
+
 ### Installed preview, file and Protected Data checks — Files 17
 
 A temporary root-owned test launcher is started through the real DMS desktop.
@@ -519,7 +540,8 @@ precedes icon installation. No guardian or authentication permission was relaxed
 | Protected Data and Administration regressions | PASS for ordinary open/close and installed Strata helper denial of the registered mock secret, confirmed by enforcing AVCs; Safe Open and Administration interaction regressions remain NON VÉRIFIÉ |
 | Restart and reconnect | PASS only for approved matched migration, real login and automatic transparent icons; intermittent spontaneous closure remains unresolved, broader crash recovery NON VÉRIFIÉ |
 | Resolution changes and multiple monitors | NON VÉRIFIÉ |
-| Offline package/ISO closure and fresh installation | NON VÉRIFIÉ |
+| Offline package/ISO closure | PASS for the 0.4.0 candidate: offline dependency resolution, both 29-path stage checks, checksum and Windows 39-path media validator |
+| Fresh installation | NON VÉRIFIÉ |
 
 The packaged desktop user unit starts through the normal confined user manager
 on the installed desktop, with both session conditions satisfied. The native

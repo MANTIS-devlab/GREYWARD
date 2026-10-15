@@ -118,6 +118,87 @@ class InstallerEnrollment(unittest.TestCase):
                 enroll.finish_preparation(accounts, receipt)
             run.assert_not_called()
 
+    def test_preparing_continuation_requires_original_mapping_and_empty_origins(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            state = base / 'installation'
+            origins = base / 'account-origins'
+            state.mkdir(mode=0o700)
+            origins.mkdir(mode=0o700)
+            accounts = [{'name': 'user', 'uid': 1000, 'gid': 1000,
+                         'home': '/home/user', 'shell': '/bin/bash'}]
+            previous = {'user': {'seuser': 'unconfined_u', 'range': 's0'}}
+            receipt = {'schema': 'greyward.installer-enrollment/v1', 'phase': 'PREPARING',
+                       'accounts': accounts, 'previous': previous, 'inputs': {}}
+            original_lstat = Path.lstat
+            def root_origin_metadata(path):
+                if path == origins:
+                    return SimpleNamespace(st_mode=stat.S_IFDIR | 0o700, st_uid=0,
+                                           st_nlink=1, st_size=0)
+                return original_lstat(path)
+            with mock.patch.object(enroll, 'STATE', state), \
+                 mock.patch.object(enroll, 'ORIGINS', origins), \
+                 mock.patch.object(enroll, 'quiescent'), \
+                 mock.patch.object(enroll, 'mapping', return_value=previous['user']), \
+                 mock.patch.object(Path, 'lstat', new=root_origin_metadata):
+                enroll.validate_preparing_transaction(accounts, receipt)
+                with mock.patch.object(enroll, 'mapping', return_value={'seuser': 'greyward_guard_u', 'range': 's0'}):
+                    with self.assertRaisesRegex(RuntimeError, 'mapping changed'):
+                        enroll.validate_preparing_transaction(accounts, receipt)
+                marker = origins / 'account.json'
+                marker.write_text('{}')
+                with self.assertRaisesRegex(RuntimeError, 'origin state changed'):
+                    enroll.validate_preparing_transaction(accounts, receipt)
+
+    def test_preparing_continuation_rejects_malformed_receipt(self):
+        accounts = [{'name': 'user'}]
+        receipt = {'schema': 'greyward.installer-enrollment/v1', 'phase': 'PREPARING',
+                   'accounts': accounts, 'previous': {}, 'inputs': {}}
+        with self.assertRaisesRegex(RuntimeError, 'receipt is incomplete'):
+            enroll.validate_preparing_transaction(accounts, receipt)
+
+    def test_partial_tree_cleanup_is_confined_to_safe_root_owned_trees(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            parent = Path(temporary)
+            partial = parent / 'partial'
+            (partial / 'nested').mkdir(parents=True)
+            (partial / 'nested/input.json').write_text('{}')
+            original_lstat = Path.lstat
+            def root_metadata(path):
+                info = original_lstat(path)
+                mode = stat.S_IFDIR | 0o700 if path.is_dir() else stat.S_IFREG | 0o600
+                return SimpleNamespace(st_mode=mode, st_uid=0, st_nlink=info.st_nlink,
+                                       st_size=info.st_size)
+            with mock.patch.object(Path, 'lstat', new=root_metadata):
+                enroll.discard_partial_tree(partial, parent)
+            self.assertFalse(partial.exists())
+            with self.assertRaisesRegex(RuntimeError, 'Invalid partial assembly path'):
+                enroll.discard_partial_tree(parent / 'outside/partial', parent)
+
+    def test_existing_selinux_users_are_reused_only_when_definition_matches(self):
+        expected = {'prefix': 'user', 'level': 's0', 'range': 's0-s0:c0.c1023',
+                    'roles': {'sysadm_r', 'greyward_admin_r'}}
+        with mock.patch.object(enroll, 'semanage_users', return_value={'greyward_admin_u': expected}), \
+             mock.patch.object(enroll, 'run') as run:
+            enroll.ensure_selinux_user('greyward_admin_u', 'greyward_admin_r sysadm_r',
+                                       's0-s0:c0.c1023')
+            run.assert_not_called()
+        with mock.patch.object(enroll, 'semanage_users', return_value={'greyward_admin_u': {**expected, 'roles': {'sysadm_r'}}}), \
+             mock.patch.object(enroll, 'run') as run:
+            with self.assertRaisesRegex(RuntimeError, 'definition changed'):
+                enroll.ensure_selinux_user('greyward_admin_u', 'greyward_admin_r sysadm_r',
+                                           's0-s0:c0.c1023')
+            run.assert_not_called()
+
+    def test_rpm_builder_normalizes_its_isolated_policy_inputs_before_archiving(self):
+        builder = (ROOT / 'packaging/greyward-enrollment/build.sh').read_text()
+        normalize = builder.index('environment/image/stage-text.py')
+        archive = builder.index("tar --sort=name")
+        build = builder.index('rpmbuild -bb')
+        self.assertLess(normalize, archive)
+        self.assertLess(archive, build)
+        self.assertIn('source_tree=', builder)
+
     def test_unsafe_broker_store_refuses_before_transaction_creation(self):
         with mock.patch.object(Path, 'is_file', return_value=True), \
              mock.patch.object(Path, 'exists', return_value=False), \

@@ -16,6 +16,14 @@ verified Fedora base ISO, its checksum, builder baseline, matched component RPMs
 and Security Center manifest. Outputs include an ISO checksum and provenance.
 Offline RPM and Flatpak closure and the embedded installer payload are checked.
 
+Retain native Labwc edge/corner snapping and top-edge maximization in the next
+candidate. Static checks protect enabled defaults, and staging compares the
+Session RPM's actual Labwc configuration against canonical source. Enrollment
+must copy those defaults into its root-owned compositor closure. See
+`docs/architecture/WINDOW_MANAGEMENT.md` for the contract and partial
+installed validation; the remaining gestures need clean-install acceptance.
+Recording this requirement does not build or publish an ISO.
+
 A successful build does not prove installation, enrollment, permissions or
 recovery. Test clean installation in a separate disposable VM through the normal
 installer; do not pre-answer authentication. Preserve SELinux Enforcing and

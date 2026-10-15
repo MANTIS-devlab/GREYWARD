@@ -1,0 +1,146 @@
+--- a/quickshell/dms/Modules/DankBar/Widgets/AppsDockContextMenu.qml
++++ b/quickshell/dms/Modules/DankBar/Widgets/AppsDockContextMenu.qml
+@@ -27,6 +27,49 @@
+     property var desktopEntry: null
+     property bool isDmsWindow: appData?.appId === "org.quickshell" || appData?.appId === "com.danklinux.dms"
+ 
++    property int shortcutGeneration: 0
++    property bool shortcutAvailable: false
++    property string shortcutReason: I18n.tr("Checking installed launcher…")
++
++    function checkDesktopShortcut() {
++        const generation = ++shortcutGeneration;
++        shortcutAvailable = false;
++        shortcutReason = I18n.tr("Checking installed launcher…");
++        const identifier = desktopEntry?.id || "";
++        if (!identifier || isDmsWindow) {
++            shortcutReason = I18n.tr("No verified installed launcher is available.");
++            return;
++        }
++        Proc.runCommand("greywardDesktopShortcut.check." + (root.screen?.name || "default") + "." + generation,
++            ["/usr/local/libexec/greyward-desktop-shortcut", "check", identifier],
++            function(stdout, code) {
++                if (generation !== root.shortcutGeneration) return;
++                let result = {};
++                try { result = JSON.parse(stdout); } catch (error) {}
++                root.shortcutAvailable = code === 0 && result.available === true;
++                root.shortcutReason = root.shortcutAvailable ? "" : I18n.tr("No verified installed launcher is available.");
++            }, 0, 3000);
++    }
++
++    function createDesktopShortcut() {
++        if (!shortcutAvailable || !desktopEntry?.id) return;
++        const identifier = desktopEntry.id;
++        Proc.runCommand("greywardDesktopShortcut.create." + (root.screen?.name || "default") + "." + (++shortcutGeneration),
++            ["/usr/local/libexec/greyward-desktop-shortcut", "create", identifier],
++            function(stdout, code) {
++                let result = {};
++                try { result = JSON.parse(stdout); } catch (error) {}
++                if (code === 0 && result.available === true) {
++                    ToastService.showInfo(I18n.tr("Desktop shortcut"), result.created
++                        ? I18n.tr("Shortcut created. Review its launcher when opening it for the first time.")
++                        : I18n.tr("This shortcut already exists on your desktop."));
++                } else {
++                    ToastService.showError(I18n.tr("Desktop shortcut"), I18n.tr("Could not create the desktop shortcut."));
++                }
++            }, 0, 3000);
++        close();
++    }
++
+     property bool isVertical: false
+     property string edge: "top"
+     property point anchorPos: Qt.point(0, 0)
+@@ -44,6 +87,7 @@
+         hidePin = hidePinOption || false;
+         desktopEntry = entry || null;
+ 
++        checkDesktopShortcut();
+         visible = true;
+ 
+         if (targetScreen) {
+@@ -52,6 +96,7 @@
+     }
+ 
+     function close() {
++        ++shortcutGeneration;
+         visible = false;
+ 
+         if (root.screen) {
+@@ -369,6 +414,47 @@
+             }
+ 
+             Rectangle {
++                visible: !root.isDmsWindow
++                implicitWidth: Theme.spacingS * 2 + shortcutLabel.implicitWidth
++                width: parent.width
++                height: root.shortcutAvailable ? 28 : 48
++                radius: Theme.cornerRadius
++                color: shortcutArea.containsMouse && root.shortcutAvailable
++                    ? BlurService.hoverColor(Theme.widgetBaseHoverColor) : "transparent"
++
++                StyledText {
++                    id: shortcutLabel
++                    anchors.left: parent.left
++                    anchors.leftMargin: Theme.spacingS
++                    anchors.right: parent.right
++                    anchors.rightMargin: Theme.spacingS
++                    y: root.shortcutAvailable ? (parent.height - height) / 2 : 5
++                    text: I18n.tr("Create desktop shortcut")
++                    font.pixelSize: Theme.fontSizeSmall
++                    color: root.shortcutAvailable ? Theme.surfaceText : Theme.surfaceVariantText
++                    elide: Text.ElideRight
++                }
++                StyledText {
++                    visible: !root.shortcutAvailable
++                    anchors.left: shortcutLabel.left
++                    anchors.right: shortcutLabel.right
++                    anchors.top: shortcutLabel.bottom
++                    text: root.shortcutReason
++                    font.pixelSize: Theme.fontSizeSmall - 2
++                    color: Theme.surfaceVariantText
++                    elide: Text.ElideRight
++                }
++                MouseArea {
++                    id: shortcutArea
++                    anchors.fill: parent
++                    hoverEnabled: true
++                    enabled: root.shortcutAvailable
++                    cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
++                    onClicked: root.createDesktopShortcut()
++                }
++            }
++
++            Rectangle {
+                 visible: !root.hidePin
+                 implicitWidth: Theme.spacingS * 2 + pinLabel.implicitWidth
+                 width: parent.width
+--- a/quickshell/dms/translations/poexports/fr.json
++++ b/quickshell/dms/translations/poexports/fr.json
+@@ -10990,5 +10990,26 @@
+   },
+   "↑/↓: Navigate • Enter: Paste • Ctrl+C: Copy • Del: Delete • Ctrl+E: Edit • Ctrl+S: Pin/Unpin • F10: Help": {
+     "↑/↓: Navigate • Enter: Paste • Ctrl+C: Copy • Del: Delete • Ctrl+E: Edit • Ctrl+S: Pin/Unpin • F10: Help": ""
++  },
++  "Checking installed launcher…": {
++    "Checking installed launcher…": "Vérification du lanceur installé…"
++  },
++  "No verified installed launcher is available.": {
++    "No verified installed launcher is available.": "Aucun lanceur installé vérifié disponible."
++  },
++  "Desktop shortcut": {
++    "Desktop shortcut": "Raccourci sur le bureau"
++  },
++  "Create desktop shortcut": {
++    "Create desktop shortcut": "Créer un raccourci sur le bureau"
++  },
++  "Shortcut created. Review its launcher when opening it for the first time.": {
++    "Shortcut created. Review its launcher when opening it for the first time.": "Raccourci créé. Vérifiez son lanceur à la première ouverture."
++  },
++  "This shortcut already exists on your desktop.": {
++    "This shortcut already exists on your desktop.": "Ce raccourci existe déjà sur votre bureau."
++  },
++  "Could not create the desktop shortcut.": {
++    "Could not create the desktop shortcut.": "Impossible de créer le raccourci sur le bureau."
+   }
+-}
++}

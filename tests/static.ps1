@@ -575,7 +575,10 @@ if (Test-Path -LiteralPath $securePluginWidgetPath) {
     }
     if ($securePluginWidget -notmatch 'launchPending' -or
         $securePluginWidget -notmatch 'Security Center did not open' -or
-        $securePluginWidget -notmatch 'root\.launchPending \? qsTr\("Opening Security Center') {
+        $securePluginWidget -notmatch 'root\.launchPending \? qsTr\("Opening Security Center' -or
+        $securePluginWidget -notmatch 'busy: root\.launchPending' -or
+        $securePluginWidget -notmatch 'qsTr\("Security Center opened"\)' -or
+        $securePluginWidget -notmatch 'visible: root\.launchMessage !== ""') {
         $errors.Add('The GREYWARD Secure DMS plugin must show opening, success, or failure feedback for its Security Center launch button.')
     }
     $openSecurityCenterMatch = [regex]::Match($securePluginWidget, '(?s)function openSecurityCenter\(\)\s*\{(.*?)\n    function runAction')
@@ -912,7 +915,7 @@ if (Test-Path -LiteralPath $dmsServicePath) {
 
 if (Test-Path -LiteralPath $dmsSessionMigratePath) {
     $dmsSessionMigrate = Get-Content -Raw -LiteralPath $dmsSessionMigratePath
-    if ($dmsSessionMigrate -notmatch 'has\("barPinnedApps"\)' -or $dmsSessionMigrate -notmatch 'brave-browser' -or $dmsSessionMigrate -notmatch 'tabby' -or $dmsSessionMigrate -notmatch 'greyward-terminal' -or $dmsSessionMigrate -notmatch 'com\.raggesilver\.BlackBox' -or $dmsSessionMigrate -notmatch 'org\.gnome\.Nautilus' -or $dmsSessionMigrate -notmatch 'exit 0') {
+    if ($dmsSessionMigrate -notmatch 'has\("barPinnedApps"\)' -or $dmsSessionMigrate -notmatch 'brave-browser' -or $dmsSessionMigrate -notmatch 'tabby' -or $dmsSessionMigrate -notmatch 'greyward-terminal' -or $dmsSessionMigrate -notmatch 'com\.raggesilver\.BlackBox' -or $dmsSessionMigrate -notmatch 'io\.github\.lgse\.Strata' -or $dmsSessionMigrate -notmatch 'org\.gnome\.Nautilus' -or $dmsSessionMigrate -notmatch 'exit 0') {
         $errors.Add('DMS default pin migration must preserve an established user barPinnedApps list.')
     }
 }
@@ -1020,6 +1023,16 @@ if (Test-Path -LiteralPath $labwcRcPath) {
     }
     if ($labwcRc -notmatch '<reuseOutputMode>yes</reuseOutputMode>') {
         $errors.Add('Labwc must reuse the active output mode to avoid an unnecessary output reset during session startup.')
+    }
+    try {
+        $windowSnapping = ([xml]$labwcRc).labwc_config.snapping
+        if ([int]$windowSnapping.range.inner -le 0 -or [int]$windowSnapping.range.outer -le 0 -or
+            [int]$windowSnapping.cornerRange -le 0 -or $windowSnapping.topMaximize -ne 'yes' -or
+            $windowSnapping.notifyClient -ne 'always') {
+            $errors.Add('Production Labwc defaults must retain native edge/corner snapping, top maximization and client tiling notifications.')
+        }
+    } catch {
+        $errors.Add('Production Labwc window-snapping configuration must be valid XML with numeric activation ranges.')
     }
 }
 
