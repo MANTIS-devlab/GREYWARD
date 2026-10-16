@@ -1,5 +1,10 @@
 # OpenSnitch admission — Session 2
 
+Current rule-editor contract: [Network rules](NETWORK_RULES.md). The admission
+evidence below is historical. The new candidate adds fresh protected Polkit,
+revisioned transactions, lifecycle and native incoming rules; its installed
+acceptance is separate from the original admission.
+
 ## Result
 
 **ADMITTED — 22 August 2026.** OpenSnitch v1.8.0 is the validated GREYWARD V1 application-network engine. It uses a small GREYWARD-owned gRPC/protobuf control plane on a protected local Unix socket; GREYWARD neither ships nor depends on the Qt UI or its database/history implementation.

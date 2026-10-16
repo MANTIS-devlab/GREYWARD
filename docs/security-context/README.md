@@ -20,6 +20,7 @@ authentication/process boundary. It is not a Context service-start side effect.
 - [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) — implementation sessions
   and what remains.
 - [OPENSNITCH.md](OPENSNITCH.md) — admitted application-network integration.
+- [NETWORK_RULES.md](NETWORK_RULES.md) — reviewed rules, lifecycle, authorization and native incoming access.
   This includes the GREYWARD-owned Feodo snapshot and Threat Protection
   projection while OpenSnitch remains the enforcement engine.
 - [PORTMASTER.md](PORTMASTER.md) — rejected alternative and rationale.

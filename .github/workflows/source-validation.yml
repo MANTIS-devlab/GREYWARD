@@ -52,6 +52,7 @@ jobs:
           node --test tauri/frontend/startup.test.mjs
           node --test tauri/frontend/performance.test.mjs
           node --test tauri/frontend/ux-contract.test.mjs
+          node --test tauri/frontend/network-rules.test.mjs
 
   python:
     name: Python source tests

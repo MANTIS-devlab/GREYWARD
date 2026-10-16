@@ -71,6 +71,18 @@ make_source_tar() {
     -C "$(dirname "$source_root")" "$(basename "$source_root")"
 }
 
+copy_spec() {
+  # SCP from a Windows checkout can preserve CRLF. RPM otherwise embeds those
+  # carriage returns in its generated shell scriptlets before %prep can run.
+  python3 - "$source_root/packaging/$1.spec" "$build_root/SPECS/$1.spec" <<'PY'
+from pathlib import Path
+import sys
+source, target = map(Path, sys.argv[1:])
+target.write_bytes(source.read_bytes().replace(b'\r\n', b'\n'))
+target.chmod(0o644)
+PY
+}
+
 # This fingerprint describes the source that produced the RPMs. Build output,
 # vendored package caches, and node_modules are excluded because they are not
 # part of the component source contract and are not reproducible inputs.
@@ -89,7 +101,7 @@ source_tree_sha256() {
 }
 
 make_source_tar greyward-security-center
-install -m 0644 "$source_root/packaging/greyward-security-center.spec" "$build_root/SPECS/"
+copy_spec greyward-security-center
 # Rust source files commonly start with `#![allow(...)]`. Fedora's
 # brp-mangle-shebangs treats those Rust attributes as executable shebangs when
 # scanning generated debug sources. The application package does not need a
@@ -101,7 +113,7 @@ printf 'GREYWARD_TIMING stage=center-rpm-build seconds=%s\n' "$((SECONDS - cente
 install -m0600 "$build_root/cargo-inputs.json" "$cargo_target/.greyward-component-inputs.json"
 
 make_source_tar greyward-security-context
-install -m 0644 "$source_root/packaging/greyward-security-context.spec" "$build_root/SPECS/"
+copy_spec greyward-security-context
 context_started=$SECONDS
 rpmbuild -ba "${rpm_common_args[@]}" "$build_root/SPECS/greyward-security-context.spec"
 printf 'GREYWARD_TIMING stage=context-rpm-build seconds=%s\n' "$((SECONDS - context_started))"

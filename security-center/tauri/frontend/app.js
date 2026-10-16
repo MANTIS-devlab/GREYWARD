@@ -16,9 +16,9 @@ const copy = (key, values) => t(key, values);
 const applicationSecurity = window.GREYWARD_APPLICATION_SECURITY.create({request: invokeBounded});
 const guardQueries = {applications: "", resources: ""};
 
-const pages = ["overview", "system", "network", "privacy", "updates", "files", "applications", "protected-data", "devices", "evidence", "activity", "threats", "history", "recovery"];
+const pages = ["overview", "system", "network", "privacy", "updates", "files", "applications", "protected-data", "devices", "evidence", "activity", "threats", "history", "recovery", "network-rules"];
 const pageAliases = Object.freeze({protection: "evidence", system: "evidence"});
-const pageParents = Object.freeze({devices: "system", evidence: "system", threats: "network"});
+const pageParents = Object.freeze({devices: "system", evidence: "system", threats: "network", "network-rules": "network"});
 const primaryNav = [
   ["overview", "nav.overview", "overview", ""],
   ["applications", "route.apps", "applications", "workspace.protection"],
@@ -33,7 +33,7 @@ const primaryNav = [
   ["privacy", "workspace.privacy", "privacy", "workspace.preferences"],
 ];
 const pageNameKeys = Object.freeze({
-  overview: "nav.overview", system: "workspace.system", network: "nav.network", privacy: "workspace.privacy", updates: "nav.updates",
+  "network-rules": "network.rules.title", overview: "nav.overview", system: "workspace.system", network: "nav.network", privacy: "workspace.privacy", updates: "nav.updates",
   files: "workspace.files", activity: "network.activity.title", threats: "network.threats", applications: "route.apps", "protected-data": "guard.resources.title", devices: "route.devices", evidence: "system.checks.title", history: "history.title", recovery: "workspace.recovery",
 });
 const normalizePage = (page) => pageAliases[String(page || "").trim().toLowerCase()] || String(page || "").trim().toLowerCase();
@@ -112,6 +112,7 @@ const networkActivityState = {
   renderedProtocolOptions: null,
 };
 const networkActionState = {feedback: ""};
+const networkRules = globalThis.GREYWARD_NETWORK_RULES?.create({request: invokeBounded, esc, icon, identity: networkIdentityMark, t});
 let focusedThreatEventId = "";
 const recoveryOperationLabels = Object.freeze({
   create_recovery_point: ["backup.queue.localPoint", "backup.queue.localPointCopy"],
@@ -141,6 +142,7 @@ function invokeBounded(command, args, timeoutMs = 10000) {
 
 function icon(name) {
   const paths = {
+    plus: '<path d="M12 5v14M5 12h14"/>',
     overview: '<path d="M4 12.2 12 5l8 7.2v7.3H4z"/><path d="M9.3 19.5v-5h5.4v5"/>',
     network: '<circle cx="5" cy="12" r="1.8"/><circle cx="19" cy="6" r="1.8"/><circle cx="19" cy="18" r="1.8"/><path d="m6.7 11.3 10.5-4.6M6.7 12.8l10.5 4.5"/>',
     applications: '<rect x="4" y="4" width="6" height="6" rx="1.25"/><rect x="14" y="4" width="6" height="6" rx="1.25"/><rect x="4" y="14" width="6" height="6" rx="1.25"/><rect x="14" y="14" width="6" height="6" rx="1.25"/>',
@@ -431,7 +433,9 @@ function networkProtectionMarkup(data) {
   const firewalld = data.firewalld || {};
   const dns = data.secure_dns || {};
   const applications = data.applications || [];
-  const rules = data.rules || [];
+  // GREYWARD policy is rendered once, by the complete Rules manager. Keep
+  // unsupported engine-owned rules in this read-only provider disclosure.
+  const rules = (data.rules || []).filter(rule => rule.source !== "GREYWARD");
   const mutationAvailable = linkState === "OPERATING" && opensnitch.capabilities?.rule_mutation === "TYPED_POLICY";
   const firewallState = String(firewalld.state || "UNAVAILABLE").toUpperCase();
   const dnsState = String(dns.effective_policy || "UNAVAILABLE").toUpperCase();
@@ -458,7 +462,7 @@ function networkProtectionMarkup(data) {
   const ruleRows = rules.length ? rules.map((rule) => `<article class="network-rule-row"><div><strong>${esc(rule.name || copy("network.protection.connectionRule"))}</strong><p class="network-rule-scope"><span class="network-activity-identity">${networkIdentityMark("application", rule.scope?.application)}<span>${esc(rule.scope?.application || copy("network.protection.allApplications"))}</span></span>${rule.scope?.destination ? ` Ã‚Â· <span class="network-activity-identity">${networkDestinationIdentity(rule.scope.destination.host || rule.scope.destination.ip || copy("network.protection.noDestination"))}<span>${esc(rule.scope.destination.host || rule.scope.destination.ip || copy("network.protection.noDestination"))}${rule.scope.destination.port ? `:${esc(rule.scope.destination.port)}` : ""}</span></span>` : ""}</p></div>${status(rule.action || "UNKNOWN", rule.action === "ALLOW" ? "allowed" : "review")}${rule.mutable ? `<button class="text-button" data-network-remove data-rule-id="${esc(rule.id)}" title="${esc(copy("network.protection.removeRuleDetail"))}">${esc(copy("network.protection.removeRule"))} ${icon("clean")}</button>` : `<span class="network-readonly">${esc(copy("network.protection.managedElsewhere"))}</span>`}</article>`).join("") : emptyState(copy("network.protection.noRules"), linkState === "UNAVAILABLE" ? copy("network.protection.noRulesUnavailable") : copy("network.protection.noRulesCopy"), "shield");
   const capabilityDetails = `${statusRow({label:copy("network.protection.capability.installed"),value:opensnitch.capabilities?.installed ? "INSTALLED" : "UNAVAILABLE",tone:opensnitch.capabilities?.installed ? "positive" : "unavailable",detail:copy("network.protection.capability.installedDetail")}, true)}${statusRow({label:copy("network.protection.capability.activity"),value:opensnitch.capabilities?.activity && linkState === "OPERATING" ? "AVAILABLE" : "UNAVAILABLE",tone:opensnitch.capabilities?.activity && linkState === "OPERATING" ? "positive" : "unavailable",detail:copy("network.protection.capability.activityDetail")}, true)}${statusRow({label:copy("network.protection.capability.rules"),value:mutationAvailable ? "AVAILABLE" : "UNAVAILABLE",tone:mutationAvailable ? "positive" : "unavailable",detail:mutationAvailable ? copy("network.protection.capability.rulesAvailable") : copy("network.protection.capability.rulesUnavailable")}, true)}`;
   const actionStatus = data.probe_feedback || networkActionState.feedback || (opensnitch.capabilities?.interactive_prompts === "DEFERRED" ? copy("network.protection.interactiveDeferred") : statusMessage);
-  return `${pageHeader(copy("network.protection.eyebrow"), copy("network.protection"), copy("network.protection.copy"), actionButton(copy("ui.refresh"), copy("network.protection.refresh"), "secondary", "data-refresh", "refresh") + actionButton(copy("network.protection.test"), copy("network.protection.testDetail"), "secondary", "data-network-probe", "network"))}<section class="network-protection-hero tone-${tone(overallState)}"><div><h2>${esc(connectionHeadline)}</h2><p>${esc(overallState === "PROTECTED" ? copy("network.protection.detail.protected") : overallState === "UNAVAILABLE" ? copy("design.network.unavailable") : copy("design.network.attention"))}</p></div></section><section class="network-protection-grid"><article class="network-capability-card"><div class="eyebrow">${esc(copy("network.protection.appControl"))}</div><h3>${esc(healthLabel)}</h3>${technicalDisclosure(copy("ui.technical"), "", `<p>${esc(statusMessage)}</p>`)}<button class="text-button" data-page="activity">${esc(copy("network.protection.viewActivity"))} ${icon("arrow")}</button></article><article class="network-capability-card"><div class="eyebrow">${esc(copy("network.protection.firewallControl"))}</div><h3>${esc(firewalld.zone || copy("network.protection.noZone"))}</h3><p>${esc(copy("network.protection.firewallBoundary"))}</p><div class="network-card-actions">${controls}</div></article></section>${secureDnsMarkup(dns)}<div class="network-action-status" id="network-action-status" role="status" aria-live="polite">${esc(actionStatus)}</div><section class="plain-section network-applications-section"><div class="section-heading"><div><div class="eyebrow">${esc(copy("network.protection.appControl"))}</div><h2>${esc(copy("network.protection.observedApplications"))}</h2></div><span class="section-meta">${esc(applications.length)}</span></div><div class="network-app-list">${appRows}</div></section>${technicalDisclosure(copy("network.protection.savedRules"), rules.length, `<div class="network-rule-list">${ruleRows}</div>`)}${technicalDisclosure(copy("network.protection.capability"), "", capabilityDetails)}`;
+  return `${pageHeader(copy("network.protection.eyebrow"), copy("network.protection"), copy("network.protection.copy"), actionButton(copy("ui.refresh"), copy("network.protection.refresh"), "secondary", "data-refresh", "refresh") + actionButton(copy("network.protection.test"), copy("network.protection.testDetail"), "secondary", "data-network-probe", "network"))}<section class="network-protection-hero tone-${tone(overallState)}"><div><h2>${esc(connectionHeadline)}</h2><p>${esc(overallState === "PROTECTED" ? copy("network.protection.detail.protected") : overallState === "UNAVAILABLE" ? copy("design.network.unavailable") : copy("design.network.attention"))}</p></div></section><section class="network-protection-grid"><article class="network-capability-card"><div class="eyebrow">${esc(copy("network.protection.appControl"))}</div><h3>${esc(healthLabel)}</h3>${technicalDisclosure(copy("ui.technical"), "", `<p>${esc(statusMessage)}</p>`)}<button class="text-button" data-page="activity">${esc(copy("network.protection.viewActivity"))} ${icon("arrow")}</button></article><article class="network-capability-card"><div class="eyebrow">${esc(copy("network.protection.firewallControl"))}</div><h3>${esc(firewalld.zone || copy("network.protection.noZone"))}</h3><p>${esc(copy("network.protection.firewallBoundary"))}</p><div class="network-card-actions">${controls}</div></article></section>${secureDnsMarkup(dns)}<div class="network-action-status" id="network-action-status" role="status" aria-live="polite">${esc(actionStatus)}</div><section class="plain-section network-applications-section"><div class="section-heading"><div><div class="eyebrow">${esc(copy("network.protection.appControl"))}</div><h2>${esc(copy("network.protection.observedApplications"))}</h2></div><span class="section-meta">${esc(applications.length)}</span></div><div class="network-app-list">${appRows}</div></section><section class="plain-section"><button class="text-button" data-page="network-rules">${esc(copy("network.rules.title"))} ${icon("arrow")}</button></section>${technicalDisclosure(copy("network.protection.savedRules"), rules.length, `<div class="network-rule-list">${ruleRows}</div>`)}${technicalDisclosure(copy("network.protection.capability"), "", capabilityDetails)}`;
 }
 function threatEventMarkup(item, focused = false) {
   const destination = item.destination || {};
@@ -676,7 +680,7 @@ function networkActivityRowMarkup(item) {
   const decision = String(item.decision || "UNKNOWN").toUpperCase();
   const mutationAvailable = networkActivityState.mutationAvailable && Boolean(item.executable);
   const dnsBypass = mutationAvailable && [53, 853].includes(Number(destination.port));
-  const actions = mutationAvailable && (destination.host || destination.ip) ? `<div class="network-activity-actions"><button class="text-button" data-network-set data-application="${esc(item.executable)}" data-network-host="${esc(destination.host || "")}" data-network-ip="${esc(destination.ip || "")}" data-network-port="${esc(destination.port || "")}" data-network-action="allow">${esc(copy("network.protection.alwaysAllow"))} ${icon("arrow")}</button>${dnsBypass ? `<button class="text-button" data-network-set data-network-dns-bypass="true" data-application="${esc(item.executable)}" data-network-port="${esc(destination.port || "")}" data-network-action="allow">${esc(copy("network.protection.allowDnsBypass"))} ${icon("arrow")}</button>` : ""}<button class="text-button" data-network-set data-application="${esc(item.executable)}" data-network-host="${esc(destination.host || "")}" data-network-ip="${esc(destination.ip || "")}" data-network-port="${esc(destination.port || "")}" data-network-action="deny">${esc(copy("network.protection.alwaysBlock"))} ${icon("arrow")}</button></div>` : "";
+  const actions = mutationAvailable && (destination.host || destination.ip) ? `<div class="network-activity-actions"><button class="text-button" data-network-set data-application="${esc(item.executable)}" data-network-host="${esc(destination.host || "")}" data-network-ip="${esc(destination.ip || "")}" data-network-port="${esc(destination.port || "")}" data-network-protocol="${esc(item.protocol || "")}" data-network-action="allow">${esc(copy("network.protection.alwaysAllow"))} ${icon("arrow")}</button>${dnsBypass ? `<button class="text-button" data-network-set data-network-dns-bypass="true" data-application="${esc(item.executable)}" data-network-port="${esc(destination.port || "")}" data-network-protocol="${esc(item.protocol || "")}" data-network-action="allow">${esc(copy("network.protection.allowDnsBypass"))} ${icon("arrow")}</button>` : ""}<button class="text-button" data-network-set data-application="${esc(item.executable)}" data-network-host="${esc(destination.host || "")}" data-network-ip="${esc(destination.ip || "")}" data-network-port="${esc(destination.port || "")}" data-network-protocol="${esc(item.protocol || "")}" data-network-action="deny">${esc(copy("network.protection.alwaysBlock"))} ${icon("arrow")}</button></div>` : "";
   const occurredAt = localizedTime(item.occurred_at, copy("network.activity.unknownTime"));
   const destinationDetail = `<span class="network-activity-destination-detail">${networkCountryFlag(destination)}<span>${esc(destination.host)}${destination.ip && destination.host !== destination.ip ? ` Ã‚Â· ${esc(destination.ip)}` : ""}</span></span>`;
   const details = `<div class="network-activity-details"${expanded ? "" : " hidden"}><div><span>${esc(copy("network.activity.detail.destination"))}</span><strong>${destinationDetail}</strong></div><div><span>${esc(copy("network.activity.detail.protocol"))}</span><strong>${esc(String(item.protocol || copy("network.activity.unknown")).toUpperCase())}</strong></div><div><span>${esc(copy("network.activity.detail.port"))}</span><strong>${esc(destination.port || copy("network.activity.unknown"))}</strong></div><div><span>${esc(copy("network.activity.detail.rule"))}</span><strong>${esc(item.rule_name || copy("network.activity.noMatchedRule"))}</strong></div><div><span>${esc(copy("network.activity.detail.source"))}</span><strong>${esc(item.source || copy("network.activity.unknown"))}</strong></div><div><span>${esc(copy("network.activity.detail.observed"))}</span><strong>${esc(occurredAt)}</strong></div>${actions}</div>`;
@@ -958,7 +962,7 @@ async function showGuardDetail(button) {
     panel.onkeydown = event => { if (event.key === "Escape") { event.preventDefault(); close(); } };
     panel.querySelector("article").focus({preventScroll: true});
     panel.scrollIntoView({block: "nearest", behavior: "instant"});
-    panel.querySelector("[data-page]")?.addEventListener("click", () => loadPage("network"));
+    panel.querySelector("[data-page]")?.addEventListener("click", () => loadPage("network-rules"));
     panel.querySelector("[data-guard-grant]")?.addEventListener("click", event => runGuardReview("grant", event.currentTarget));
     panel.querySelectorAll("[data-guard-revoke]").forEach(control => control.addEventListener("click", event => runGuardReview("revocation", event.currentTarget)));
     if (item) {
@@ -1450,8 +1454,8 @@ function contextNavigation(page) {
     const items = [["evidence", "route.evidence"], ["devices", "workspace.devices"]];
     return `<nav class="context-navigation" aria-label="${esc(t("system.title"))}">${items.map(([id, key]) => `<button class="${page === id ? "active" : ""}" data-page="${id}" aria-current="${page === id ? "page" : "false"}">${esc(t(key))}</button>`).join("")}</nav>`;
   }
-  if (["network", "threats"].includes(page)) {
-    const items = [["network", "network.protection"], ["threats", "network.threats"]];
+  if (["network", "threats", "network-rules"].includes(page)) {
+    const items = [["network", "network.protection"], ["network-rules", "network.rules.title"], ["threats", "network.threats"]];
     return `<nav class="context-navigation" aria-label="${esc(t("nav.network"))}">${items.map(([id, key]) => `<button class="${page === id ? "active" : ""}" data-page="${id}" aria-current="${page === id ? "page" : "false"}">${esc(t(key))}</button>`).join("")}</nav>`;
   }
   return "";
@@ -1461,6 +1465,7 @@ function renderContent(page, data) {
   let content;
   if (route === "overview") content = overviewMarkup(data.overview || data, data.security_digest || {}, data.guard);
   else if (route === "network") content = networkProtectionMarkup(data);
+  else if (route === "network-rules") content = networkRules ? networkRules.markup() : pageFailure("Network rule editor is unavailable.");
   else if (route === "applications") content = applicationProductMarkup(data);
   else if (route === "protected-data") content = protectedDataMarkup(data);
   else if (route === "devices") content = devicesMarkup(data);
@@ -1587,7 +1592,8 @@ function getPageData(page) {
     window.__greywardStartupOverviewRequested = true;
     startupMarkOnce("initial_overview_request_start");
   }
-  const request = page === "protected-data" ? applicationSecurity.load("resources")
+  const request = page === "network-rules" ? networkRules.load()
+    : page === "protected-data" ? applicationSecurity.load("resources")
     : page === "applications" ? applicationSecurity.load("applications").then(guard => ({guard, providerPending: true}))
     : page === "history" ? securityHistory.read()
     : page === "recovery" ? invokeBounded("get_devices", {includeHistory: false}, 12000)
@@ -1835,6 +1841,7 @@ function bind() {
   }
 }
 function bindContent() {
+  networkRules?.bind(app.querySelector("[data-network-rules]"));
   const administrationButton = app.querySelector('[data-administration-open]');
   if (administrationButton) {
     const route = currentPage, sequence = requestSequence;
@@ -2014,10 +2021,32 @@ function endButton(button) { if (!button || !button.classList.contains("is-busy"
 async function runUpdateAction(command, button, phase) { const buttons = [...app.querySelectorAll(".action-button")]; buttons.forEach((item) => { item.disabled = true; }); const pending = UPDATE_PHASE_PRESENTATION[phase] || UPDATE_PHASE_PRESENTATION.CHECKING; beginButton(button, copy(pending.stateKey)); setStatus("[data-update-status]", copy(pending.messageKey)); try { await invokeBounded(command, undefined, 15000); pageCache.delete("updates"); await loadPage("updates"); } catch (error) { setStatus("[data-update-status]", actionError(error, copy("feedback.update"))); buttons.forEach((item) => { item.disabled = false; }); endButton(button); } }
 async function probeNetwork(button) { beginButton(button, copy("network.feedback.testing")); setStatus("#network-action-status", copy("network.feedback.probing")); try { const result = await invokeBounded("get_network_protection", undefined, 9000); result.probe_feedback = copy("network.feedback.probeComplete"); pageCache.set("network", {data: result, loadedAt: Date.now()}); const frame = app.querySelector(".content-frame"); if (frame && currentPage === "network") { frame.innerHTML = renderContent("network", result); bindContent(); } } catch (error) { setStatus("#network-action-status", actionError(error, copy("network.feedback.probeAction"))); endButton(button); } }
 async function changeZone(target) { const buttons = [...app.querySelectorAll("[data-zone]")]; const button = buttons.find((item) => item.dataset.zone === target); buttons.forEach((item) => { item.disabled = true; }); beginButton(button, target === "trusted" ? copy("network.zone.trusting") : copy("network.zone.restoring")); setStatus("#network-action-status, #action-status", copy("network.zone.changing")); try { const network = await invokeBounded("get_network", undefined, 9000); if (!network.interface) throw new Error("No active connection is available."); const result = await invokeBounded("set_network_trust_zone", {interface: network.interface, target}, 15000); if (!result.ok) throw new Error(result.message || "The network zone could not be changed."); setStatus("#network-action-status, #action-status", copy("network.zone.updated")); await loadPage("network", {force: true}); } catch (error) { setStatus("#network-action-status, #action-status", actionError(error, copy("network.zone.action"))); buttons.forEach((item) => { item.disabled = false; }); endButton(button); } }
-async function setNetworkRule(button) { const buttons = [...app.querySelectorAll("[data-network-set], [data-network-remove]")]; buttons.forEach((item) => { item.disabled = true; }); beginButton(button, copy("network.rule.saving")); const destination = {}; if (!button.dataset.networkDnsBypass && button.dataset.networkHost) destination.host = button.dataset.networkHost; if (!button.dataset.networkDnsBypass && button.dataset.networkIp) destination.ip = button.dataset.networkIp; if (button.dataset.networkPort) destination.port = Number(button.dataset.networkPort); const payload = {application: button.dataset.application, action: button.dataset.networkAction, duration: "always"}; if (Object.keys(destination).length) payload.destination = destination; setStatus("#network-action-status", button.dataset.networkDnsBypass ? copy("network.rule.savingDnsBypass") : copy(Object.keys(destination).length ? "network.rule.savingDestination" : "network.rule.saving")); try { const result = await invokeBounded("network_set_rule", {payload}, 15000); if (!result.ok) throw new Error(result.detail || "The network rule was refused."); networkActionState.feedback = copy(button.dataset.networkDnsBypass ? "network.rule.savedDnsBypass" : "network.rule.saved"); setStatus("#network-action-status", networkActionState.feedback); await loadPage("network", {force: true}); } catch (error) { setStatus("#network-action-status", actionError(error, copy("network.rule.action"))); buttons.forEach((item) => { item.disabled = false; }); endButton(button); } }
-async function removeNetworkRule(button) { const buttons = [...app.querySelectorAll("[data-network-set], [data-network-remove]")]; buttons.forEach((item) => { item.disabled = true; }); beginButton(button, copy("network.rule.removing")); setStatus("#network-action-status", copy("network.rule.removing")); try { const result = await invokeBounded("network_remove_rule", {ruleId: button.dataset.ruleId}, 15000); if (!result.ok) throw new Error(result.detail || "The network rule could not be removed."); networkActionState.feedback = currentPage === "threats" ? copy("network.threats.revoked") : copy("network.rule.removed"); setStatus("#network-action-status", networkActionState.feedback); await loadPage(currentPage === "threats" ? "threats" : "network", {force: true}); } catch (error) { setStatus("#network-action-status", actionError(error, copy("network.rule.removeAction"))); buttons.forEach((item) => { item.disabled = false; }); endButton(button); } }
-async function setThreatException(button) { const buttons = [...app.querySelectorAll("[data-threat-exception], [data-network-remove]")]; buttons.forEach((item) => { item.disabled = true; }); beginButton(button, copy("network.threats.allow")); const payload = {application: button.dataset.application, action: "allow", duration: "always", destination: {ip: button.dataset.threatIp, port: Number(button.dataset.threatPort)}}; setStatus("#network-action-status", copy("network.threats.action")); try { const result = await invokeBounded("network_set_threat_exception", {payload}, 15000); if (!result.ok) throw new Error(result.detail || "The threat exception was refused."); networkActionState.feedback = copy("network.threats.saved"); focusedThreatEventId = ""; await loadPage("threats", {force: true}); } catch (error) { setStatus("#network-action-status", actionError(error, copy("network.threats.action"))); buttons.forEach((item) => { item.disabled = false; }); endButton(button); } }
-async function setThreatProtectionEnabled(button) { const enabled = button.textContent.includes(copy("network.threats.enable")); beginButton(button, enabled ? copy("network.threats.enable") : copy("network.threats.disable")); try { const result = await invokeBounded("set_threat_protection_enabled", {enabled}, 12000); if (!result.ok) throw new Error(result.detail || "The threat setting was refused."); networkActionState.feedback = enabled ? copy("network.threats.enabled") : copy("network.threats.disabled"); await loadPage("threats", {force: true}); } catch (error) { setStatus("#network-action-status", actionError(error, copy("network.threats.action"))); endButton(button); } }
+async function setNetworkRule(button) {
+  const destinations = [];
+  if (!button.dataset.networkDnsBypass && button.dataset.networkIp) destinations.push({kind: "ip", value: button.dataset.networkIp});
+  else if (!button.dataset.networkDnsBypass && button.dataset.networkHost) destinations.push({kind: "host", value: button.dataset.networkHost});
+  const ports = button.dataset.networkPort ? [[Number(button.dataset.networkPort), Number(button.dataset.networkPort)]] : [];
+  networkRules.begin({path: button.dataset.application, name: button.dataset.application.split("/").pop(),
+    action: button.dataset.networkAction === "allow" ? "allow" : "deny", destinations, ports,
+    ...(["tcp", "udp"].includes(String(button.dataset.networkProtocol).toLowerCase()) ? {protocols: [button.dataset.networkProtocol.toLowerCase()]} : {}),
+    ...(button.dataset.networkDnsBypass ? {dns_exception: true} : {})});
+  await loadPage("network-rules", {force: true});
+}
+
+async function removeNetworkRule(button) {
+  await loadPage("network-rules", {force: true});
+  await networkRules.reviewCommands([{operation: "delete", id: button.dataset.ruleId}]);
+}
+async function setThreatException(button) {
+  const rule = {path: button.dataset.application, action: "allow", ip: button.dataset.threatIp, port: Number(button.dataset.threatPort)};
+  await loadPage("network-rules", {force: true});
+  await networkRules.reviewCommands([{operation: "threat_exception", rule}]);
+}
+async function setThreatProtectionEnabled(button) {
+  const enabled = button.textContent.includes(copy("network.threats.enable"));
+  await loadPage("network-rules", {force: true});
+  await networkRules.reviewCommands([{operation: "threat_settings", enabled}]);
+}
 function privacyActionError(error, fallback) { const raw = String(error?.message || error || "").trim().replace(/\s+/g, " "); return raw ? `${fallback}: ${raw}` : fallback; }
 function setPrivacyProfilePendingDom(profile) { const surface = app.querySelector("[data-privacy-profile-state]"); if (!surface) return; surface.dataset.profilePending = profile || ""; surface.setAttribute("aria-busy", profile ? "true" : "false"); }
 async function changeProfile(profile, button) {

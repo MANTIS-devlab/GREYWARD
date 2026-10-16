@@ -13,6 +13,7 @@ import os
 import stat
 import subprocess
 import tempfile
+import threading
 import uuid
 from concurrent import futures
 from pathlib import Path
@@ -25,6 +26,7 @@ from greyward_security_context.telemetry import event as telemetry_event
 from greyward_security_context.telemetry import record_event
 from greyward_security_context.network_location import country_resolution_for_destination
 from greyward_security_context.feodo import matching_indicator, threat_status
+from greyward_security_context.network_rules import PolicyStore, PolicyError, matches as rule_matches, rule_id, lifecycle
 
 try:
     import grp
@@ -126,37 +128,19 @@ def default_policy():
     }
 
 
+_POLICY_STORES = {}
+
+
 def load_policy():
+    key = str(POLICY_PATH)
+    store = _POLICY_STORES.setdefault(key, PolicyStore(POLICY_PATH))
     try:
-        candidate = json.loads(POLICY_PATH.read_text(encoding="utf-8"))
-    except FileNotFoundError:
-        return default_policy()
-    except (OSError, json.JSONDecodeError):
-        return default_policy()
-    if not isinstance(candidate, dict):
-        return default_policy()
-    action = candidate.get("default_action", "allow")
-    duration = candidate.get("default_duration", "once")
-    interactive_prompts = candidate.get("interactive_prompts", False)
-    dns_policy = candidate.get("dns_policy", {"enforce": True, "ports": list(DNS_POLICY_PORTS)})
-    threat_intel = candidate.get("threat_intel", {"enabled": True, "provider": "feodo-recommended"})
-    rules = candidate.get("rules", [])
-    if action not in ("allow", "deny", "reject") or duration not in ("once", "until restart", "always") or not isinstance(interactive_prompts, bool):
-        return default_policy()
-    if not isinstance(rules, list) or not isinstance(dns_policy, dict) or not isinstance(threat_intel, dict):
-        return default_policy()
-    if dns_policy.get("enforce", True) is not True or dns_policy.get("ports", list(DNS_POLICY_PORTS)) != list(DNS_POLICY_PORTS):
-        return default_policy()
-    if threat_intel.get("enabled", True) not in (True, False) or threat_intel.get("provider", "feodo-recommended") != "feodo-recommended":
-        return default_policy()
-    return {
-        "default_action": action,
-        "default_duration": duration,
-        "interactive_prompts": interactive_prompts,
-        "dns_policy": {"enforce": True, "ports": list(DNS_POLICY_PORTS)},
-        "threat_intel": {"enabled": bool(threat_intel.get("enabled", True)), "provider": "feodo-recommended"},
-        "rules": rules[:128],
-    }
+        return store.read(copy_result=False)
+    except PolicyError as error:
+        # No valid policy is not permission to silently discard user denials.
+        policy = default_policy()
+        policy.update(default_action="deny", policy_error=str(error))
+        return policy
 
 
 def _clean(value, maximum=160):
@@ -299,6 +283,8 @@ class NetworkState:
         self.activity_session_id = "network-" + uuid.uuid4().hex[:16]
         self.next_activity_sequence = 0
         self.activity_retained_at = {}
+        self.policy_matches = {}
+        self.policy_match_lock = threading.Lock()
 
     @staticmethod
     def _same_connection(left, right):
@@ -514,7 +500,7 @@ class NetworkState:
             if action not in ("allow", "deny", "reject"):
                 continue
             policy_rules.append({
-                "id": "greyward-" + hashlib.sha256(json.dumps(item, sort_keys=True).encode("utf-8")).hexdigest()[:20],
+                "id": rule_id(item),
                 "name": _clean(item.get("name") or f"GREYWARD {_application_name(item['path'])}", 160),
                 "source": "GREYWARD",
                 "action": "ALLOW" if action == "allow" else "BLOCK",
@@ -533,6 +519,10 @@ class NetworkState:
         return {
             "schema": "greyward.security.network/v1",
             "generated_at": iso(current),
+            "policy_revision": policy.get("revision"),
+            "rules_schema": "greyward.network.rules/v2",
+            "policy_matches": dict(self.policy_matches),
+            "policy_error": policy.get("policy_error") or getattr(_POLICY_STORES.get(str(POLICY_PATH)), "error", None),
             "fresh_until": iso(current + dt.timedelta(seconds=NETWORK_STALE_SECONDS)),
             "opensnitch": {
                 "state": state,
@@ -648,6 +638,7 @@ def select_policy_rule(connection):
                 and int(rule.get("port", 0) or 0) == destination["port"]
                 and bool(destination["ip"])
                 and bool(destination["port"])
+                and (rule.get("uid") is None or rule["uid"] == getattr(connection, "user_id", None))
             )
         if rule.get("path") not in {process_path, "*"}:
             return False
@@ -662,14 +653,16 @@ def select_policy_rule(connection):
     # Tier 1: only the dedicated Security Center false-positive action can
     # bypass a Feodo indicator. Ordinary application allow rules remain below
     # the threat tier and cannot silently weaken it.
+    threat_exception = None
     for rule in policy["rules"]:
         if isinstance(rule, dict) and rule.get("tier") == "THREAT_EXCEPTION" and matches(rule, exact_application=True):
-            return "allow", "always", rule
+            threat_exception = rule
+            break
 
     # Tier 2: exact Feodo IP+port match. The snapshot is GREYWARD-owned and
     # is read by the existing AskRule path; OpenSnitch still enforces it.
     threat_config = policy.get("threat_intel", {})
-    indicator = matching_indicator(connection) if threat_config.get("enabled", True) is True else None
+    indicator = matching_indicator(connection) if threat_config.get("enabled", True) is True and threat_exception is None else None
     if indicator:
         indicator["tier"] = "THREAT"
         indicator["path"] = "*"
@@ -679,24 +672,20 @@ def select_policy_rule(connection):
         indicator["indicator_id"] = f"{indicator.get('ip')}:{indicator.get('port')}"
         return "deny", "always", indicator
 
-    # Tier 3: existing GREYWARD rules, retaining their current matching
-    # semantics and specificity without allowing them to outrank threats.
-    candidates = sorted(
-        (item for item in policy["rules"] if isinstance(item, dict) and item.get("tier") != "THREAT_EXCEPTION"),
-        key=lambda item: (
-            item.get("path") == process_path,
-            bool(item.get("host") or item.get("ip") or item.get("port")),
-            bool(item.get("path")),
-        ),
-        reverse=True,
-    )
+    # The reviewed list order is authoritative within the user tier. Generic
+    # allows cannot override managed DNS; an explicit DNS-port exception is
+    # required, while user denies remain effective on those ports.
+    candidates = [item for item in policy["rules"]
+                  if isinstance(item, dict) and item.get("provider") == "application"]
     for rule in candidates:
-        if not matches(rule):
+        if not rule_matches(rule, connection):
             continue
-        action = rule.get("action")
-        duration = rule.get("duration", "always")
-        if action in ("allow", "deny", "reject") and duration in ("once", "until restart", "always"):
-            return action, duration, rule
+        action = rule["action"]
+        dns_port = int(getattr(connection, "dst_port", 0) or 0) in DNS_POLICY_PORTS
+        explicit_dns = rule.get("dns_exception") is True
+        if dns_port and action == "allow" and not explicit_dns:
+            continue
+        return action, "once", rule
     dns_policy = policy.get("dns_policy", {})
     port = int(getattr(connection, "dst_port", 0) or 0)
     if dns_policy.get("enforce") is True and port in DNS_POLICY_PORTS:
@@ -726,7 +715,7 @@ def select_policy_rule(connection):
         if process_path == "/usr/lib/systemd/systemd-resolved" and destination_ip in _active_network_default_dns_addresses():
             return "allow", "always", {"path": process_path, "ip": destination_ip, "port": port, "name": "GREYWARD explicit Network Default resolver upstream"}
         return "deny", "always", {"path": "*", "port": port, "name": "GREYWARD deny direct DNS outside managed resolver"}
-    return policy["default_action"], policy["default_duration"], None
+    return policy["default_action"], policy["default_duration"], threat_exception
 
 
 class SecurityContextStore:
@@ -827,20 +816,30 @@ class ControlPlane(ui_pb2_grpc.UIServicer):
 
     def AskRule(self, request, context):
         action, duration, selected = select_policy_rule(request)
+        if selected and selected.get('id'):
+            with self.store.network.policy_match_lock:
+                key = selected['id']
+                observed = self.store.network.policy_matches.get(key, {})
+                if observed.get('version') != selected.get('updated_at'):
+                    observed = {'version': selected.get('updated_at'), 'decisions': 0}
+                observed.update(decisions=observed['decisions'] + 1, last_seen=iso(now()))
+                self.store.network.policy_matches[key] = observed
+                if len(self.store.network.policy_matches) > 1024:
+                    self.store.network.policy_matches.pop(next(iter(self.store.network.policy_matches)))
         if action in ("deny", "reject"):
             self.store.blocked(request, selected)
         else:
             self.store.network._record(request, action, "greyward-policy", rule_name=selected.get("name", "") if selected else "", threat=selected if selected and selected.get("tier") == "THREAT" else None)
             self.store.network.write()
         operators = []
-        if selected and selected.get("path"):
-            operators.append(ui_pb2.Operator(type="simple", operand="process.path", data=selected["path"]))
-        if selected and selected.get("host"):
-            operators.append(ui_pb2.Operator(type="simple", operand="dest.host", data=selected["host"]))
-        if selected and selected.get("ip"):
-            operators.append(ui_pb2.Operator(type="simple", operand="dest.ip", data=selected["ip"]))
-        if selected and selected.get("port"):
-            operators.append(ui_pb2.Operator(type="simple", operand="dest.port", data=str(selected["port"])))
+        for operand, data in (("process.path", request.process_path),
+                              ("user.id", str(request.user_id)),
+                              ("dest.ip", request.dst_ip),
+                              ("dest.port", str(request.dst_port)),
+                              ("source.port", str(request.src_port)),
+                              ("protocol", request.protocol)):
+            if data:
+                operators.append(ui_pb2.Operator(type="simple", operand=operand, data=data))
         if len(operators) > 1:
             operator = ui_pb2.Operator(type="list", operand="list", list=operators)
         elif operators:
@@ -852,7 +851,7 @@ class ControlPlane(ui_pb2_grpc.UIServicer):
         # GREYWARD persistence lives in the validated policy file. Return a
         # one-shot daemon decision so removing that policy cannot leave an
         # independently persisted OpenSnitch rule behind.
-        effective_duration = "once" if selected else duration
+        effective_duration = "once"
         return ui_pb2.Rule(
             name=f"greyward-{action}-{digest}",
             description="GREYWARD typed application-network decision",
@@ -896,52 +895,27 @@ def serve():
     server.wait_for_termination()
 
 
-def set_rule(arguments):
+def _cli_policy_call(member, payload):
     if os.geteuid() != 0:
         raise SystemExit("root is required to change OpenSnitch policy")
-    if not arguments.path.startswith("/") or "\x00" in arguments.path:
-        raise SystemExit("an absolute application path is required")
-    if arguments.port is not None and not 1 <= arguments.port <= 65535:
-        raise SystemExit("destination port must be between 1 and 65535")
-    policy = load_policy()
-    def same_scope(rule):
-        return (
-            isinstance(rule, dict)
-            and rule.get("path") == arguments.path
-            and rule.get("host") == arguments.host
-            and rule.get("ip") == arguments.ip
-            and int(rule.get("port", 0) or 0) == int(arguments.port or 0)
-            and rule.get("tier") != "THREAT_EXCEPTION"
-        )
-    rules = [rule for rule in policy["rules"] if not same_scope(rule)]
-    rules.append({
-        "path": arguments.path,
-        "host": arguments.host,
-        "ip": arguments.ip,
-        "port": arguments.port,
-        "action": arguments.action,
-        "duration": arguments.duration,
-        "name": arguments.name or f"GREYWARD {_application_name(arguments.path)}",
-    })
-    policy["rules"] = rules
-    POLICY_PATH.parent.mkdir(parents=True, exist_ok=True)
-    atomic_json(POLICY_PATH, policy, 0o600)
+    import dbus
+    result = dbus.SystemBus().call_blocking(
+        "systems.mantis.greyward.OpenSnitchPolicy1", "/systems/mantis/greyward/OpenSnitchPolicy1",
+        "systems.mantis.greyward.OpenSnitchPolicy1", member, "s", (payload,), timeout=120)
+    value = json.loads(str(result))
+    if value.get("ok") is not True:
+        raise SystemExit(value.get("detail", "Network policy was refused"))
+    return value
+
+
+def set_rule(arguments):
+    destination = {key: value for key, value in (("host", arguments.host), ("ip", arguments.ip), ("port", arguments.port)) if value}
+    return _cli_policy_call("SetRule", json.dumps({"application": arguments.path, "action": arguments.action,
+        "duration": arguments.duration, "name": arguments.name, "destination": destination}))
 
 
 def remove_rule(arguments):
-    if os.geteuid() != 0:
-        raise SystemExit("root is required to change OpenSnitch policy")
-    policy = load_policy()
-    before = len(policy["rules"])
-    policy["rules"] = [
-        rule for rule in policy["rules"]
-        if not isinstance(rule, dict)
-        or not rule.get("path")
-        or "greyward-" + hashlib.sha256(json.dumps(rule, sort_keys=True).encode("utf-8")).hexdigest()[:20] != arguments.rule_id
-    ]
-    if len(policy["rules"]) == before:
-        raise SystemExit("GREYWARD rule was not found")
-    atomic_json(POLICY_PATH, policy, 0o600)
+    return _cli_policy_call("RemoveRule", arguments.rule_id)
 
 
 def main():

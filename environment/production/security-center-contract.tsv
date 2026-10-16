@@ -47,3 +47,7 @@ greyward-security-context|/usr/share/dbus-1/system-services/systems.mantis.greyw
 greyward-security-context|/usr/share/dbus-1/system-services/systems.mantis.greyward.SecureDns1.service
 greyward-security-context|/usr/share/polkit-1/actions/org.greyward.Update1.policy
 greyward-security-context|/usr/share/polkit-1/actions/org.greyward.RecoveryPoint.policy
+greyward-security-context|/usr/share/polkit-1/actions/org.greyward.NetworkRules1.policy
+greyward-security-context|/usr/lib/greyward-security-context/greyward_security_context/network_rules.py
+greyward-security-context|/usr/lib/greyward-security-context/greyward_security_context/network_rule_transactions.py
+greyward-security-context|/usr/lib/greyward-security-context/greyward_security_context/network_firewall.py
