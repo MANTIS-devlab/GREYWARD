@@ -2,7 +2,7 @@
 
 ## 16 October network rules — installed development candidate
 
-Center 102 / Context 96 adds reviewed application/incoming rule editing,
+Center 102 / Context 97 adds reviewed application/incoming rule editing,
 stable revisions, bounded persistence, lifetimes, native firewalld recovery and
 fresh per-transaction protected Polkit. Installed OpenSnitch UID/executable,
 disable/re-enable, persistence and stale-request checks pass. Native incoming

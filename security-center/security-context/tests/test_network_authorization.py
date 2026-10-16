@@ -3,6 +3,7 @@ import unittest
 import json
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
+from pathlib import Path
 from unittest.mock import Mock, patch
 
 try:
@@ -11,6 +12,20 @@ except ModuleNotFoundError as error:
     if error.name not in ('dbus', 'gi'):
         raise
     service = None
+
+
+class NetworkPolkitContractTests(unittest.TestCase):
+    def test_session_service_callers_require_fresh_self_authentication(self):
+        root = Path(__file__).parents[1] / 'polkit'
+        rule = (root / '49-greyward-recovery.rules').read_text()
+        branch = rule.split('if (action.id === "org.greyward.NetworkRules1.manage")', 1)[1].split('}', 1)[0]
+        self.assertIn('subject.isInGroup("wheel")', branch)
+        self.assertIn('polkit.Result.AUTH_SELF : polkit.Result.NO', branch)
+        self.assertNotIn('AUTH_SELF_KEEP', branch)
+        self.assertNotIn('polkit.Result.YES', branch)
+        policy = (root / 'org.greyward.NetworkRules1.policy').read_text()
+        self.assertIn('<allow_any>no</allow_any>', policy)
+        self.assertIn('<allow_active>auth_self</allow_active>', policy)
 
 
 @unittest.skipIf(service is None, 'Requires Fedora D-Bus/GObject bindings')

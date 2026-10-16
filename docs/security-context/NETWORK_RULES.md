@@ -56,6 +56,14 @@ cancelled, replayed or expired reviews cannot write. Legacy mutations reach
 the same root authorization, with asynchronous session forwarding. Explicit
 root maintenance retains root's existing policy authority.
 
+The existing fixed-helper Polkit rule also handles this exact network action:
+wheel callers require AUTH_SELF without retained authorization. This permits
+the user-systemd transport to challenge even when Polkit does not attach that
+process to a logind session. The root broker separately requires an active,
+unlocked local seat before requesting the challenge; the rule grants no write
+authority on its own. A no-interaction check must return a challenge, never
+authorization, for an eligible caller without a fresh password.
+
 Native incoming rules affect the selected zone and only their exact generated
 rich-rule entries. Runtime and permanent readback are separate. GREYWARD never
 saves all runtime settings or reloads firewalld. Before native writes, a bounded
@@ -83,12 +91,12 @@ this delivery.
 
 ## Validation and rollout status
 
-Focused and regression suites pass: 384 Context tests on Fedora, 138 frontend
+Focused and regression suites pass: 385 Context tests on Fedora, 138 frontend
 tests and 208 Rust tests (22 ignored). Static and repository validation pass.
 These checks cover matcher, migration, transaction, transport and packaging
 contracts; they do not replace the outstanding desktop acceptance below.
 
-Installed development candidate: Center 102 / Context 96. Actual installed
+Installed development candidate: Center 102 / Context 97. Actual installed
 OpenSnitch tests demonstrate a root-UID curl block, same-UID Python separation,
 different-UID curl access, disable/re-enable, policy-service restart persistence,
 stale/forged refusal and cleanup. Native incoming tests from a separate machine
@@ -100,7 +108,10 @@ is retained as a disabled backup. The running Center ELF matches the installed
 binary. Source checks alone are not treated as this enforcement evidence.
 
 Real non-administrator D-Bus mutation is denied. An administrator's Apply and
-legacy write both refuse a locked desktop without changing policy. Successful
+legacy write both refuse a locked desktop without changing policy. A
+no-interaction Polkit readback for a sessionless eligible caller changes from
+refusal to a required AUTH_SELF challenge, with authorization remaining false.
+This verifies challenge eligibility without entering credentials. Successful
 protected GUI authentication, cancellation/wrong-password interaction, visual
 review, narrow-window/keyboard and actual WebKit import/export acceptance remain
 pending because the desktop is locked. IPv6/UDP packet, real-time expiry and
