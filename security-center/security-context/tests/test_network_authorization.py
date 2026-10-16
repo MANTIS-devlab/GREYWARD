@@ -4,6 +4,7 @@ import json
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 from pathlib import Path
+import threading
 from unittest.mock import Mock, patch
 
 try:
@@ -50,6 +51,24 @@ class NetworkAuthorizationTests(unittest.TestCase):
         for value in (None, 123, 'other-owner', 'greyward-' + 'a' * 100000):
             with self.assertRaises(service.PolicyError):
                 service.legacy_remove_id(value)
+
+    def test_legacy_dns_port_allow_remains_an_ordinary_review(self):
+        self.subject.peer = Mock(return_value=1001)
+        self.subject.engine_ready = Mock()
+        self.subject.slots = threading.BoundedSemaphore(2)
+        self.subject.workers = Mock()
+        self.subject.workers.submit.side_effect = lambda callback: callback()
+        self.subject.manager = Mock()
+        self.subject.manager.store.read.return_value = {'revision': 7}
+        self.subject.manager.prepare.return_value = {'transaction': 'review'}
+        self.subject.manager.apply.return_value = {'ok': True}
+        payload = json.dumps({'application': '/usr/bin/curl', 'action': 'allow',
+                              'duration': 'always', 'destination': {'port': 53}})
+        with patch.object(service.GLib, 'idle_add', side_effect=lambda callback: callback()):
+            self.subject.dispatch(payload, ':1.2', Mock(), Mock(), legacy='set')
+        command = self.subject.manager.prepare.call_args.args[1]['commands'][0]
+        self.assertEqual(command['operation'], 'upsert')
+        self.assertNotIn('dns_exception', command['rule'])
 
     def auth(self, *, remote=False, active=True, display=True, locked=False, result=(True, False, None), changed=False):
         self.subject.peer = Mock(side_effect=[1001, 1002] if changed else [1001, 1001])

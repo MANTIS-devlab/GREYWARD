@@ -200,8 +200,9 @@ class OpenSnitchPolicy(dbus.service.Object):
                         if destination.get('host') and destination.get('ip'):
                             rule['required_host'] = destination['host']
                             rule['destinations'] = [{'kind': 'ip', 'value': destination['ip']}]
-                        operation = 'dns_exception' if rule['action'] == 'allow' and destination.get('port') in (53, 853) else 'upsert'
-                        commands = [{'operation': operation, 'rule': rule}]
+                        # Legacy Allow is still an ordinary rule. Only the
+                        # explicit reviewed DNS-exception operation may opt out.
+                        commands = [{'operation': 'upsert', 'rule': rule}]
                     preview = self.manager.prepare(uid, {'provider': 'application', 'revision': revision, 'commands': commands})
                     value = {'transaction': preview['transaction']}
                 token = value.get('transaction')

@@ -1,6 +1,6 @@
 Name:           greyward-security-context
 Version:        0.1.0
-Release:        97%{?dist}
+Release:        98%{?dist}
 Summary:        GREYWARD OpenSnitch control plane and Security Context session bus
 License:        GPL-3.0-only
 Source0:        %{name}-%{version}.tar.gz
@@ -187,6 +187,9 @@ install -Dm0644 security-context/tmpfiles.d/greyward-secure-dns.conf %{buildroot
 
 
 %changelog
+* Fri Oct 16 2026 MANTIS SYSTEMS - 0.1.0-98
+- Keep legacy Allow rules separate from explicit managed-DNS exceptions.
+
 * Fri Oct 16 2026 MANTIS SYSTEMS - 0.1.0-97
 - Require fresh network-rule authentication for eligible session-service callers.
 
