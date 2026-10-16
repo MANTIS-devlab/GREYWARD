@@ -6,12 +6,14 @@ matching and storage; `network_rule_transactions.py` owns reviews/lifecycle;
 `user_bus.py` and named Tauri commands preserve the root boundary. Frontend
 `network-rules.js`/`.css` own presentation. The Context RPM installs
 `org.greyward.NetworkRules1.policy`. Validation: Context `test_network*.py`,
-frontend `network-rules.test.mjs` and UX contracts. Executable-line normalization
+frontend `network-rules.test.mjs` (including complete HTML-order bootstrap) and
+UX contracts. Executable-line normalization
 belongs to the two Security Center/Context specs and spec-copy normalization to
 `environment/development/build-security-center.sh`; `test_network_packaging.py`
 protects scripts without corrupting binary assets. The Context spec defers
-coupled engine activation. Installed Center 102 / Context 96 has live network
-evidence; normal visual/PAM gates remain pending. Authority:
+coupled engine activation. Installed Center 103 / Context 98 has live network
+evidence and installed startup/route accessibility readback; visual/PAM gates
+remain pending. Authority:
 [network rules](security-context/NETWORK_RULES.md).
 
 Native window-placement ownership: `environment/session/labwc/rc.xml`, packaged

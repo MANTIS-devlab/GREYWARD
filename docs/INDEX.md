@@ -2,8 +2,9 @@
 
 16 October network-rule implementation candidate: reviewed application and
 incoming transactions reuse OpenSnitch, firewalld and protected Polkit.
-Center 102 / Context 96 has installed enforcement evidence; normal desktop
-visual/PAM acceptance remains pending on the locked session. See
+Center 103 / Context 98 has installed enforcement evidence and corrects the
+network module's startup initialization error. Normal-app accessibility readback
+confirms Network protection and Rules render; visual/PAM acceptance remains pending. See
 [network rules](security-context/NETWORK_RULES.md).
 
 15 October native window placement: retain Labwc edge/corner snapping in the

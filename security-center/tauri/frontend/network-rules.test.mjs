@@ -19,6 +19,40 @@ const rule = {id: "greyward-01234567890123456789", provider: "application", path
   action: "deny", enabled: true, scope: "user", uid: 1000, ports: [[443, 443]], protocols: ["tcp"], destinations: [], lifetime: "permanent", position: 0, state: "SAVED"};
 const page = (rules = [rule], extra = {}) => ({ok: true, revision: 1, rules, total: rules.length, next_offset: null, capabilities: {edit: true}, ...extra});
 
+test("the complete bundled script order boots with network rules enabled", async () => {
+  const index = readFileSync(new URL("./index.html", import.meta.url), "utf8");
+  const scripts = [...index.matchAll(/<script src="([^"]+)"/g)].map(match => match[1]);
+  for (const route of ["overview", "network-rules"]) {
+    const calls = [], errors = [];
+    const element = () => ({innerHTML: "", dataset: {}, style: {},
+      classList: {add() {}, remove() {}, toggle() {}},
+      querySelector: () => null, querySelectorAll: () => [],
+      setAttribute() {}, addEventListener() {}});
+    const app = element(), control = element(), bar = element(), edges = element();
+    bar.querySelector = () => control;
+    const context = {URLSearchParams, performance, navigator: {language: "en"},
+      location: {search: `?page=${route}`}, localStorage: {getItem: () => null},
+      console: {error: (...args) => errors.push(args), warn() {}, log() {}},
+      setTimeout: () => 1, clearTimeout() {}, setInterval: () => 1, clearInterval() {},
+      requestAnimationFrame: callback => callback(), addEventListener() {},
+      document: {hidden: false, documentElement: element(), addEventListener() {},
+        querySelector: selector => ({"#app": app, "#window-titlebar": bar, "#window-resize-edges": edges}[selector] || null)},
+      // Keep real provider reads pending: this checks bootstrap, not fake security state.
+      __TAURI_INTERNALS__: {invoke: command => { calls.push(command); return new Promise(() => {}); }}};
+    context.window = context;
+    vm.createContext(context);
+    for (const script of scripts) {
+      vm.runInContext(readFileSync(new URL(script, import.meta.url), "utf8"), context, {filename: script});
+    }
+    await Promise.resolve();
+    assert.ok(context.__greywardStartupMarks.some(mark => mark.name === "frontend_bootstrap_complete"), route);
+    assert.match(app.innerHTML, /app-shell/, route);
+    assert.doesNotMatch(app.innerHTML, /Security Center could not start/);
+    assert.deepEqual(errors, []);
+    if (route === "network-rules") assert.ok(calls.includes("network_rules_list"));
+  }
+});
+
 test("new rule controls remain unavailable when the real read fails", async () => {
   const {controller} = fixture(async () => { throw new Error("Provider unavailable"); });
   await controller.load();

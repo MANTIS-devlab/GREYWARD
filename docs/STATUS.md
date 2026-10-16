@@ -2,7 +2,7 @@
 
 ## 16 October network rules — installed development candidate
 
-Center 102 / Context 98 adds reviewed application/incoming rule editing,
+Center 103 / Context 98 adds reviewed application/incoming rule editing,
 stable revisions, bounded persistence, lifetimes, native firewalld recovery and
 fresh per-transaction protected Polkit. Installed OpenSnitch UID/executable,
 disable/re-enable, persistence and stale-request checks pass. Native incoming
@@ -10,10 +10,16 @@ source/port and runtime/permanent checks pass from a separate machine, followed
 by verified removal. Non-admin and locked-admin writes are refused. The normal
 Context service uses the installed code; its old development override is
 preserved but disabled. Running Center and installed ELF hashes match.
-Protected GUI authentication and visual acceptance remain pending on the locked
-desktop. A CRLF packaging incident briefly stopped OpenSnitch; repaired RPMs,
+Protected GUI authentication and visual acceptance remain pending.
+A CRLF packaging incident briefly stopped OpenSnitch; repaired RPMs,
 service recovery and deferred coupled activation are documented in the contract.
 Generic Flatpak/script identity scopes and interactive prompts are unavailable.
+Center 103 corrects the startup ReferenceError introduced in Center 102 by
+initializing the network editor after its escaping helper. The regression now
+executes all bundled scripts in HTML order, including the enabled network module.
+The normal installed process restarts successfully; its live accessibility tree
+contains Network protection, Rules and the editor controls rather than the
+startup failure. VMConnect is minimized, so this readback is not visual acceptance.
 See [network rules](security-context/NETWORK_RULES.md).
 
 ## 15 October native window placement retained for the next ISO
