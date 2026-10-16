@@ -57,214 +57,258 @@
   }
   function portsText(value) { if (typeof value === "string") return value; return (value || []).map(([a, b]) => a === b ? String(a) : `${a}-${b}`).join(", "); }
   function destinationText(value) { return (value || []).map(d => (d.kind === "domain" ? "*." : "") + d.value).join(", "); }
+  const workflowCopy = {
+    en: {allFlows:"All rules",direction:"Traffic",outgoing:"Application connections",inbound:"Incoming connections",order:"Order",rule:"Rule",from:"Source",to:"Destination",services:"Services & ports",decision:"Action",state:"Status",trafficType:"Traffic direction",flowHint:"Define the flow, choose its service, then review the exact changes.",localApplication:"Application on this computer",remoteSource:"Remote source",thisDevice:"This computer",anyApplication:"Any application",anyService:"Any TCP/UDP port",chooseService:"Search a service or port…",customService:"Custom ports",customHint:"Enter ports or ranges, for example 443, 8000-8010.",installedServices:"Installed services",additionalConditions:"Includes additional service conditions",outboundUnsupported:"This definition cannot be represented safely as one application rule. Use explicit ports and protocol instead.",serviceUnavailable:"Service definitions are incomplete. Unknown ports are not assumed.",noServiceMatch:"No service matches this search",serviceSelection:"Service selection",clearService:"Use custom ports",serviceDefinition:"Incoming rules follow firewalld’s service definition, including its additional conditions. Application rules use the exact displayed ports.",engine:"Enforcement",flowOrder:"Each direction has its own evaluation order. Rows from different engines do not form one shared chain.",reviewFor:"Review changes for",providerUnavailable:"This direction is unavailable",searchAll:"Search rule, application, address, service or port",noResults:"No matching rules",noResultsCopy:"Change the search or traffic filter to see your rules.",applyScope:"Only the reviewed direction is changed by this transaction.",newFlow:"New network rule",editFlow:"Edit network rule",create:"Create",update:"Update",delete:"Delete",availabilityChange:"Change availability",restoreOrder:"Restore rule order",move:"Change order",restore:"Restore",definitionMissing:"Definition unavailable",catalogSource:"Service names and port definitions come from the installed firewalld catalog.",exportApplications:"Export application rules",exportIncoming:"Export incoming rules",unavailableDirections:"Some directions could not be read. Their rules are not assumed absent.",draftScope:"Choose the traffic direction to reveal its supported conditions.",portsProtocols:"Ports / protocol"},
+    fr: {allFlows:"Toutes les règles",direction:"Trafic",outgoing:"Connexions des applications",inbound:"Connexions entrantes",order:"Ordre",rule:"Règle",from:"Source",to:"Destination",services:"Services et ports",decision:"Action",state:"État",trafficType:"Sens du trafic",flowHint:"Définissez le flux, choisissez son service, puis vérifiez les changements exacts.",localApplication:"Application sur cet ordinateur",remoteSource:"Source distante",thisDevice:"Cet ordinateur",anyApplication:"Toute application",anyService:"Tout port TCP/UDP",chooseService:"Rechercher un service ou un port…",customService:"Ports personnalisés",customHint:"Saisissez des ports ou plages, par exemple 443, 8000-8010.",installedServices:"Services installés",additionalConditions:"Comprend des conditions de service supplémentaires",outboundUnsupported:"Cette définition ne peut pas être représentée sûrement par une seule règle d’application. Choisissez des ports et un protocole explicites.",serviceUnavailable:"Certaines définitions de service sont indisponibles. Aucun port inconnu n’est supposé.",noServiceMatch:"Aucun service ne correspond",serviceSelection:"Sélection du service",clearService:"Utiliser des ports personnalisés",serviceDefinition:"Les règles entrantes suivent la définition firewalld, y compris ses conditions supplémentaires. Les règles d’application utilisent les ports exacts affichés.",engine:"Moteur",flowOrder:"Chaque sens possède son propre ordre d’évaluation. Les lignes des deux moteurs ne forment pas une chaîne commune.",reviewFor:"Vérifier les changements pour",providerUnavailable:"Ce sens est indisponible",searchAll:"Rechercher une règle, application, adresse, un service ou port",noResults:"Aucune règle correspondante",noResultsCopy:"Modifiez la recherche ou le filtre de trafic pour retrouver vos règles.",applyScope:"Seul le sens vérifié est modifié par cette transaction.",newFlow:"Nouvelle règle réseau",editFlow:"Modifier la règle réseau",create:"Créer",update:"Modifier",delete:"Supprimer",availabilityChange:"Changer la disponibilité",restoreOrder:"Restaurer l’ordre des règles",move:"Changer l’ordre",restore:"Restaurer",definitionMissing:"Définition indisponible",catalogSource:"Les noms des services et leurs ports proviennent du catalogue firewalld installé.",exportApplications:"Exporter les règles d’application",exportIncoming:"Exporter les règles entrantes",unavailableDirections:"Certains sens n’ont pas pu être lus. Leurs règles ne sont pas considérées absentes.",draftScope:"Choisissez le sens du trafic pour afficher les conditions prises en charge.",portsProtocols:"Ports / protocole"},
+  };
+  for (const [locale, values] of Object.entries(workflowCopy)) Object.assign(catalogs[locale], Object.fromEntries(Object.entries(values).map(([k,v]) => [`network.rules.${k}`,v])));
+
+  function serviceScope(service) {
+    if (!service?.simple || !Array.isArray(service.ports) || !service.ports.length || service.ports.length > 64) return null;
+    const groups = {};
+    for (const [port, protocol] of service.ports) {
+      if (!["tcp","udp"].includes(protocol) || !/^\d+(?:-\d+)?$/.test(port)) return null;
+      const [start,end = start] = String(port).split("-").map(Number);
+      if (start < 1 || end > 65535 || end < start) return null;
+      (groups[protocol] ||= []).push([start,end]);
+    }
+    const normalized = Object.values(groups).map(ranges => {
+      const result = [];
+      for (const [a,b] of ranges.sort((x,y)=>x[0]-y[0] || x[1]-y[1])) {
+        if (result.length && a <= result.at(-1)[1]+1) result.at(-1)[1] = Math.max(b,result.at(-1)[1]);
+        else result.push([a,b]);
+      }
+      return result;
+    });
+    if (normalized.some(ports => JSON.stringify(ports) !== JSON.stringify(normalized[0]))) return null;
+    return {ports:normalized[0],protocols:Object.keys(groups).sort()};
+  }
+  const servicePortLabel = service => (service?.ports || []).map(([p,protocol]) => `${p}/${String(protocol).toUpperCase()}`).join(" · ");
+
   function create({request, esc, icon, identity, t}) {
-    const state = {provider: "application", data: null, draft: null, editing: null, preview: null, busy: false, error: "", feedback: "", search: "", filter: "", offset: 0, selected: new Set(), exportText: "", undo: null};
-    let root = null, searchTimer = null, loadSequence = 0, previewSequence = 0;
+    const state = {provider:"application",filterProvider:"all",data:null,draft:null,editing:null,preview:null,busy:false,error:"",feedback:"",search:"",filter:"",offset:0,selected:new Set(),exportText:"",undo:null,serviceOpen:false,serviceQuery:"",serviceIndex:0};
+    let root = null, loadSequence = 0, previewSequence = 0, restoringFocus = false;
     const c = key => t(`network.rules.${key}`);
-    const call = async (method, payload, timeout = 15000) => {
-      const result = await request(`network_rules_${method}`, {payload}, timeout);
+    const providerName = provider => c(provider === "incoming" ? "inbound" : "outgoing");
+    const engine = provider => provider === "incoming" ? "firewalld" : "OpenSnitch";
+    const serviceDetails = () => state.data?.catalog?.service_details || [];
+    const canEdit = provider => state.data?.providers?.[provider]?.capabilities?.edit === true;
+    const call = async (method,payload,timeout=15000) => {
+      const result = await request(`network_rules_${method}`,{payload},timeout);
       if (result?.ok !== true) throw new Error(result?.detail || c("unavailable"));
       return result;
     };
-    async function load() {
-      const sequence = ++loadSequence;
-      try {
-        const data = await call("list", {provider: state.provider, offset: state.offset, search: state.search, state: state.filter});
-        if (sequence !== loadSequence) return state.data;
-        state.data = data;
-        state.error = "";
-      } catch (error) { if (sequence === loadSequence) { state.data = null; state.error = String(error.message); } }
-      return state.data;
-    }
-    function fresh(values = {}) {
-      previewSequence++;
-      state.draft = {provider: state.provider, name: "", path: "", action: "deny", scope: "user", lifetime: "permanent", enabled: true,
-        protocols: ["tcp", "udp"], ports: [], family: "any", destinations: [], zone: state.data?.catalog?.zones?.includes("public") ? "public" : state.data?.catalog?.zones?.[0] || "", service: "", source: "", description: "", ...values};
-      state.editing = null; state.preview = null; state.error = "";
-    }
-    const options = (values, selected) => values.map(([value, label]) => `<option value="${esc(value)}"${value === selected ? " selected" : ""}>${esc(label)}</option>`).join("");
-    const field = (name, label, value, hint = "", type = "text") => `<label class="network-rule-field"><span>${esc(c(label))}</span><input name="${name}" type="${type}" value="${esc(value ?? "")}" maxlength="${name === "path" ? 4096 : 500}"${name === "path" ? ' list="network-executable-options"' : ""}>${hint ? `<small>${esc(c(hint))}</small>` : ""}</label>`;
-    const select = (name, label, values, selected) => `<label class="network-rule-field"><span>${esc(c(label))}</span><select name="${name}">${options(values, selected)}</select></label>`;
-    function summary(rule) {
-      if (!rule) return "";
-      const target = rule.provider === "incoming" ? `${rule.service || portsText(rule.ports)} · ${rule.zone}` : rule.path;
-      const destination = rule.provider === "incoming" ? rule.source : destinationText(rule.destinations);
-      return `${c(rule.action || "edit")} · ${target || rule.name || c("executable")} · ${destination || c(rule.provider === "incoming" ? "anySource" : "anyDestination")} · ${rule.service ? c("serviceDefined") : `${(rule.protocols || []).join("/").toUpperCase()} ${portsText(rule.ports)}`} · ${c(rule.lifetime || "permanent")}`;
-    }
-    function editor() {
-      const d = state.draft;
-      if (!d) return "";
-      const incoming = state.provider === "incoming";
-      return `<aside class="network-rule-editor"><div class="section-heading"><h2>${esc(c(state.editing ? "edit" : "new"))}</h2><button type="button" class="text-button" data-rule-close${state.busy ? " disabled" : ""}>${esc(c("close"))}</button></div><form data-rule-form><fieldset${state.busy ? " disabled" : ""}>
-        ${field("name", "name", d.name)}
-        ${incoming ? select("zone", "zone", (state.data?.catalog?.zones || []).map(z => [z, z]), d.zone) + select("service", "service", [["", c("customPorts")], ...(state.data?.catalog?.services || []).map(s => [s, s])], d.service) + field("source", "source", d.source, "sourceHint") : field("path", "executable", d.path, "executableHint") + `<datalist id="network-executable-options">${(state.data?.applications || []).map(a => `<option value="${esc(a.path)}">${esc(a.name)}</option>`).join("")}</datalist>` + field("destinations", "destinations", destinationText(d.destinations), "destinationHint")}
-        <div class="network-rule-field-pair">${select("action", "action", [["deny", c("deny")], ["allow", c("allow")]], d.action)}${select("lifetime", "lifetime", ["permanent", "boot", "15m", "1h"].map(v => [v, c(v)]), d.lifetime)}</div>
-        <details class="network-rule-advanced"><summary>${esc(c("advanced"))}</summary>
-          ${select("protocol", "protocols", [["both", c("both")], ["tcp", "TCP"], ["udp", "UDP"], ...(!incoming ? [["any", c("anyProtocol")]] : [])], d.protocols?.includes("any") ? "any" : d.protocols?.length === 2 ? "both" : d.protocols?.[0])}
-          ${field("ports", "ports", portsText(d.ports), "portsHint")}
-          ${select("family", "family", [["any", c("any")], ["ipv4", "IPv4"], ["ipv6", "IPv6"]], d.family)}
-          ${!incoming ? select("scope", "scope", [["user", c("user")], ["system", c("system")]], d.scope) : ""}${field("description", "description", d.description)}
-        </details><div class="network-rule-summary"><span class="eyebrow">${esc(c("summary"))}</span><output data-rule-summary>${esc(summary(d))}</output></div>
-        <p class="network-rule-note">${esc(c(incoming ? "wholeSystem" : "allowNotice"))}</p>
-        <button class="primary" type="submit"${state.busy || !state.data?.capabilities?.edit ? " disabled" : ""}>${esc(c("review"))} ${icon("arrow")}</button>
-      </fieldset></form></aside>`;
-    }
-    function review() {
-      if (!state.preview) return "";
-      return `<section class="network-rule-review" role="region" aria-label="${esc(c("reviewTitle"))}"><h2>${esc(c("reviewTitle"))}</h2><p>${esc(c("reviewCopy"))}</p><div class="network-rule-change-list">${state.preview.changes.map(change => `<article><strong>${esc(change.operation)} · ${esc(change.rule.name)}</strong><p>${esc(summary(change.rule))}</p></article>`).join("")}</div>${state.preview.warnings.map(w => `<p class="network-rule-warning">${esc(w)}</p>`).join("")}<div class="network-rule-actions"><button class="primary" data-rule-apply${state.busy ? " disabled" : ""}>${esc(c(state.busy ? "saving" : "apply"))}</button><button class="secondary" data-rule-cancel>${esc(c("cancel"))}</button></div></section>`;
-    }
-    function markup() {
-      const data = state.data;
-      const rows = data?.rules || [];
-      const rowsMarkup = rows.map(rule => {
-        const label = ({SAVED: "savedState", LOADED: "loadedState", OBSERVED: "observedState", EXPIRED: "expiredState", DISABLED: "disabledState", UNAVAILABLE: "unavailableState"})[rule.state] || "savedState";
-        return `<article class="network-rule-card" data-rule-id="${esc(rule.id)}"><input type="checkbox" data-rule-select="${esc(rule.id)}" aria-label="${esc(rule.name)}"${state.selected.has(rule.id) ? " checked" : ""}>
-          <span class="guard-item-icon" aria-hidden="true">${state.provider === "application" ? identity("application", [rule.path, rule.name]) : icon("network")}</span>
-          <div class="network-rule-identity"><strong>${esc(rule.name)}</strong><p>${esc(summary(rule))}</p><small>${esc(c(state.provider === "application" ? "nativeScope" : "wholeSystem"))} · ${esc(rule.scope === "user" ? `${c("user")} (${rule.uid})` : c("system"))}${rule.observed ? ` · ${esc(c("matches"))}: ${esc(rule.observed.decisions)} · ${esc(c("lastUsed"))}: ${esc(rule.observed.last_seen || "—")}` : ""}</small></div>
-          <span class="network-rule-state state-${esc(rule.state.toLowerCase())}">${esc(c(label))}</span>
-          <details class="network-rule-menu"><summary aria-label="${esc(c("edit"))}">•••</summary><div>${["edit", "duplicate", rule.enabled ? "disable" : "enable", "up", "down", "remove"].map(action => `<button type="button" data-rule-action="${action}" data-id="${esc(rule.id)}"${!data.capabilities?.edit ? " disabled" : ""}>${esc(c(action))}</button>`).join("")}</div></details></article>`;
-      }).join("");
-      return `<section class="network-rules-product" data-network-rules><header class="network-rules-header"><div><div class="eyebrow">${esc(t("nav.network"))}</div><h1>${esc(c("title"))}</h1><p>${esc(c("intro"))}</p></div><button class="primary" data-rule-new${!data?.capabilities?.edit ? " disabled" : ""}>${icon("plus")} ${esc(c("new"))}</button></header>
-        <div class="network-rules-tabs" role="group" aria-label="${esc(c("title"))}">${["application", "incoming"].map(provider => `<button data-rule-provider="${provider}" aria-pressed="${state.provider === provider}" class="${state.provider === provider ? "active" : ""}">${esc(c(provider === "application" ? "applications" : "incoming"))}</button>`).join("")}</div>
-        <p class="network-rule-note">${esc(c("sameEngine"))}</p>
-        <div class="network-rules-toolbar"><input data-rule-search aria-label="${esc(c("search"))}" placeholder="${esc(c("search"))}" value="${esc(state.search)}"><select data-rule-filter aria-label="${esc(c("all"))}">${options([["", c("all")], ["ACTIVE", c("active")], ["DISABLED", c("disabledState")], ["EXPIRED", c("expiredState")]], state.filter)}</select><button class="secondary" data-rule-refresh>${icon("refresh")} ${esc(c("refresh"))}</button><button class="secondary" data-rule-import${!data?.capabilities?.edit ? " disabled" : ""}>${esc(c("import"))}</button><input type="file" accept="application/json,.json" data-rule-import-file hidden><button class="secondary" data-rule-export${!rows.length ? " disabled" : ""}>${esc(c("export"))}</button></div>
-        <div role="status" aria-live="polite" class="network-rule-feedback">${esc(state.busy ? c("saving") : state.error || state.feedback || data?.detail || "")}${state.undo && !state.busy ? `<button class="text-button" data-rule-undo>${esc(c("undo"))}</button>` : ""}</div>
-        ${state.preview ? review() : ""}<div class="network-rules-layout${state.draft ? " has-editor" : ""}"><div><div class="network-rule-bulk"${state.selected.size ? "" : " hidden"}><span>${state.selected.size} ${esc(c("selected"))}</span>${["enable", "disable", "remove"].map(a => `<button class="text-button" data-rule-bulk="${a}">${esc(c(a))}</button>`).join("")}</div>
-          ${!data ? `<div class="empty-state"><h2>${esc(c("unavailable"))}</h2><p>${esc(c("unavailableCopy"))}</p></div>` : rows.length ? rowsMarkup : `<div class="empty-state"><h2>${esc(c("empty"))}</h2><p>${esc(c("emptyCopy"))}</p></div>`}
-          <footer class="network-rule-pagination"><span>${data?.total || 0} ${esc(c("total"))}</span><button class="text-button" data-rule-page="previous"${!state.offset ? " disabled" : ""}>${esc(c("previous"))}</button><button class="text-button" data-rule-page="next"${data?.next_offset == null ? " disabled" : ""}>${esc(c("next"))}</button></footer><p class="network-rule-note">${esc(c("revokeNotice"))}</p></div>${editor()}</div>
-        ${state.provider === "incoming" && data?.external?.rules?.length ? `<details class="technical-disclosure"><summary>${esc(c("external"))} (${data.external.rules.length})</summary><p class="network-rule-note">${esc(c("readOnly"))}</p>${data.external.rules.map(r => `<article class="network-rule-external"><strong>${esc(r.zone)} · ${esc(r.kind)}</strong><p>${esc(r.value)}</p><small>${esc([r.runtime ? c("runtime") : "", r.permanent ? c("permanentPlane") : ""].filter(Boolean).join(" / "))}</small></article>`).join("")}${data.external.truncated ? `<p>${esc(c("limited"))}</p>` : ""}</details>` : ""}
-        ${state.exportText ? `<section class="network-rule-export"><h2>${esc(c("exportTitle"))}</h2><p>${esc(c("exportCopy"))}</p><textarea readonly aria-label="${esc(c("exportTitle"))}">${esc(state.exportText)}</textarea><a class="secondary" data-rule-download download="greyward-network-rules.json">${esc(c("exportAll"))}</a><button class="text-button" data-rule-export-close>${esc(c("close"))}</button></section>` : ""}</section>`;
-    }
-    function draw() {
-      if (!root?.isConnected) return;
-      const focused = root.querySelector(":focus");
-      const focusSelector = focused?.hasAttribute("data-rule-search") ? "[data-rule-search]"
-        : focused?.dataset?.ruleSelect ? `[data-rule-select="${focused.dataset.ruleSelect}"]`
-        : focused?.name ? `[name="${focused.name}"]` : null;
-      const selection = focused?.selectionStart == null ? null : [focused.selectionStart, focused.selectionEnd];
-      const parent = root.parentElement;
-      root.outerHTML = markup(); root = parent.querySelector("[data-network-rules]"); bind(root);
-      if (focusSelector) {
-        const next = root.querySelector(focusSelector); next?.focus();
-        if (selection && next?.setSelectionRange) next.setSelectionRange(...selection);
-      }
-    }
-    async function reload() { await load(); state.selected.clear(); draw(); }
-    async function exportDocument() {
-      const rows = []; let offset = 0; const revision = state.data.revision;
+    async function readProvider(provider) {
+      const rows = []; let offset = 0, first;
       do {
-        const page = await call("list", {provider: state.provider, offset});
-        if (page.revision !== revision || !Array.isArray(page.rules) || rows.length + page.rules.length > 1024) throw new Error(c("previewError"));
+        const page = await call("list",{provider,offset});
+        first ||= page;
+        if (!Array.isArray(page.rules) || page.revision !== first.revision || rows.length+page.rules.length > 1024 || page.rules.some(r=>r.provider !== provider)) throw new Error(c("previewError"));
         rows.push(...page.rules);
         if (page.next_offset != null && (!Number.isInteger(page.next_offset) || page.next_offset <= offset || page.next_offset > 1024)) throw new Error(c("previewError"));
         offset = page.next_offset;
       } while (offset != null);
-      return {schema: "greyward.network.rules-export/v1", provider: state.provider,
-        rules: rows.map(({state, owner, position, observed, ...rule}) => rule)};
+      return {...first,rules:rows,next_offset:null,total:rows.length};
+    }
+    async function load() {
+      const sequence = ++loadSequence;
+      for (let attempt=0;attempt<2;attempt++) {
+        const values = await Promise.allSettled([readProvider("application"),readProvider("incoming")]);
+        if (sequence !== loadSequence) return state.data;
+        const providers = Object.fromEntries(values.map((v,i)=>[["application","incoming"][i],v.status === "fulfilled" ? v.value : {rules:[],capabilities:{edit:false},detail:v.reason?.message || c("unavailable")} ]));
+        const available = Object.values(providers).filter(p=>Number.isInteger(p.revision));
+        if (new Set(available.map(p=>p.revision)).size > 1) { if (!attempt) continue; state.error=c("previewError");state.data=null;return null; }
+        const rows = Object.values(providers).flatMap(p=>p.rules);
+        if (rows.length > 1024 || !available.length || new Set(rows.map(r=>r.id)).size !== rows.length) {state.error=c("unavailable");state.data=null;return null;}
+        state.data = {ok:true,revision:available[0].revision,actor_uid:available[0].actor_uid,rules:rows,total:rows.length,providers,
+          catalog:providers.incoming.catalog || {},external:providers.incoming.external,
+          applications:providers.application.applications || [],capabilities:{edit:Object.values(providers).some(p=>p.capabilities?.edit)}};
+        state.offset=Math.min(state.offset,Math.max(0,Math.floor((filteredRules().length-1)/100)*100));
+        state.error = values.some(v=>v.status === "rejected") ? c("unavailableDirections") : Object.entries(providers).filter(([,p])=>p.detail).map(([provider,p])=>`${providerName(provider)}: ${p.detail}`).join(" · ");
+        return state.data;
+      }
+    }
+    function fresh(values={}) {
+      previewSequence++;state.provider=values.provider || state.provider;
+      state.draft={provider:state.provider,name:"",path:"",action:"deny",scope:"user",lifetime:"permanent",enabled:true,protocols:["tcp","udp"],ports:[],family:"any",destinations:[],zone:state.data?.catalog?.zones?.includes("public") ? "public" : state.data?.catalog?.zones?.[0] || "",service:"",source:"",description:"",...values};
+      state.editing=null;state.preview=null;state.error="";state.serviceOpen=false;state.serviceQuery="";
+    }
+    const options = (values,selected) => values.map(([value,label])=>`<option value="${esc(value)}"${value===selected ? " selected":""}>${esc(label)}</option>`).join("");
+    const field = (name,label,value,hint="",extra="") => `<label class="network-rule-field"><span>${esc(c(label))}</span><input name="${name}" value="${esc(value ?? "")}" ${extra}>${hint ? `<small>${esc(c(hint))}</small>`:""}</label>`;
+    const select = (name,label,values,value) => `<label class="network-rule-field"><span>${esc(c(label))}</span><select name="${name}">${options(values,value)}</select></label>`;
+    function selectedService(rule) {
+      if (rule?.custom_service) return null;
+      if (rule?.service) return serviceDetails().find(s=>s.id===rule.service) || {id:rule.service,label:rule.service,ports:[],additional_conditions:true};
+      if (rule?.selected_service) return serviceDetails().find(s=>s.id===rule.selected_service);
+      if (!rule || !rule.ports?.length || typeof rule.ports === "string") return null;
+      const ports = JSON.stringify(rule.ports), protocols = JSON.stringify([...(rule.protocols || [])].sort());
+      return serviceDetails().find(s=>{const scope=serviceScope(s);return scope && JSON.stringify(scope.ports)===ports && JSON.stringify(scope.protocols)===protocols;});
+    }
+    function servicesText(rule) {
+      const service=selectedService(rule);
+      return `${service ? service.id+" · ":""}${service ? servicePortLabel(service) || c("definitionMissing") : portsText(rule.ports) || c("anyService")}${!service ? " · "+(rule.protocols || []).join("/").toUpperCase():""}`;
+    }
+    function summary(rule) {
+      const from=rule.provider === "incoming" ? rule.source || c("anySource") : rule.path || c("localApplication");
+      const to=rule.provider === "incoming" ? `${c("thisDevice")} · ${rule.zone}` : destinationText(rule.destinations) || c("anyDestination");
+      return `${c(rule.action || "edit")} · ${from} → ${to} · ${servicesText(rule)} · ${c(rule.lifetime || "permanent")}`;
+    }
+    function matchingServices() {
+      const query=state.serviceQuery.trim().toLowerCase();
+      return serviceDetails().filter(s=>`${s.id} ${s.label} ${servicePortLabel(s)}`.toLowerCase().includes(query)).slice(0,80);
+    }
+    function servicePicker(d) {
+      const service=selectedService(d), matches=matchingServices();
+      return `<section class="network-flow-services"><div class="network-flow-caption"><span class="network-flow-number">03</span><div><h3>${esc(c("services"))}</h3><p>${esc(c("catalogSource"))}</p></div></div>
+        <div class="network-service-picker"><div class="network-service-selected"><strong>${esc(service?.label || c("customService"))}</strong><code>${esc(service ? servicePortLabel(service) || c("definitionMissing") : portsText(d.ports) || (d.provider==="incoming" ? c("customHint"):c("anyService")))}</code>${service ? `<button type="button" class="text-button" data-rule-service-custom>${esc(c("clearService"))}</button>`:""}</div>
+        <label class="network-service-search"><span class="sr-only">${esc(c("serviceSelection"))}</span><input name="service_query" data-rule-service-search placeholder="${esc(c("chooseService"))}" value="${esc(state.serviceQuery)}" role="combobox" aria-autocomplete="list" aria-expanded="${state.serviceOpen}" aria-controls="network-service-options" ${state.serviceOpen && matches.length ? `aria-activedescendant="network-service-${Math.min(state.serviceIndex,matches.length-1)}"`:""}></label>
+        ${state.serviceOpen ? `<div class="network-service-options" id="network-service-options" role="listbox" aria-label="${esc(c("installedServices"))}">${matches.length ? matches.map((s,index)=>{const supported=d.provider==="incoming" || Boolean(serviceScope(s));return `<button type="button" role="option" id="network-service-${index}" aria-selected="${index===state.serviceIndex}" data-rule-service="${esc(s.id)}"${!supported ? " disabled":""}><span><strong>${esc(s.label)}</strong><small>${esc(s.id)}${!supported ? " · "+esc(c("outboundUnsupported")):s.additional_conditions ? " · "+esc(c("additionalConditions")):""}</small></span><code>${esc(servicePortLabel(s) || c("definitionMissing"))}</code></button>`;}).join(""):`<p>${esc(c("noServiceMatch"))}</p>`}</div>`:""}</div>
+        ${!service ? `<div class="network-rule-field-pair">${field("ports","customService",portsText(d.ports),"customHint")}${select("protocol","protocols",[["both",c("both")],["tcp","TCP"],["udp","UDP"],...(d.provider!=="incoming" ? [["any",c("anyProtocol")]]:[])],d.protocols?.includes("any") ? "any":d.protocols?.length===2 ? "both":d.protocols?.[0])}</div>`:`<p class="network-rule-note">${esc(c("serviceDefinition"))}</p>`}
+        ${state.data?.catalog?.definitions_incomplete ? `<p class="network-rule-warning">${esc(c("serviceUnavailable"))}</p>`:""}</section>`;
+    }
+    function editor() {
+      const d=state.draft;if(!d)return "";
+      const incoming=d.provider==="incoming", active=canEdit(d.provider);
+      return `<section class="network-rule-editor" aria-label="${esc(c(state.editing ? "editFlow":"newFlow"))}"><header class="network-editor-heading"><div><div class="eyebrow">${esc(c("draftScope"))}</div><h2>${esc(c(state.editing ? "editFlow":"newFlow"))}</h2><p>${esc(c("flowHint"))}</p></div><button type="button" class="text-button" data-rule-close${state.busy ? " disabled":""}>${esc(c("close"))}</button></header><form data-rule-form><fieldset${state.busy ? " disabled":""}>
+        <div class="network-editor-basics">${field("name","name",d.name)}${select("flow_provider","trafficType",[["application",c("outgoing")],["incoming",c("inbound")]],d.provider)}</div>
+        <div class="network-flow-path"><section class="network-flow-endpoint"><div class="network-flow-caption"><span class="network-flow-number">01</span><div><h3>${esc(c("from"))}</h3><p>${esc(c(incoming ? "remoteSource":"localApplication"))}</p></div></div>${incoming ? field("source","source",d.source,"sourceHint") : field("path","executable",d.path,"executableHint",'list="network-executable-options"')+`<datalist id="network-executable-options">${(state.data?.applications || []).map(a=>`<option value="${esc(a.path)}">${esc(a.name)}</option>`).join("")}</datalist><span class="network-rule-scope">${esc(c(d.scope==="system" ? "system":"user"))}</span>`}</section><span class="network-flow-arrow" aria-hidden="true">${icon("arrow")}</span><section class="network-flow-endpoint"><div class="network-flow-caption"><span class="network-flow-number">02</span><div><h3>${esc(c("to"))}</h3><p>${esc(c(incoming ? "thisDevice":"destinations"))}</p></div></div>${incoming ? select("zone","zone",(state.data?.catalog?.zones || []).map(z=>[z,z]),d.zone):field("destinations","destinations",destinationText(d.destinations),"destinationHint")}</section></div>
+        ${servicePicker(d)}<section class="network-flow-decision"><div class="network-flow-caption"><span class="network-flow-number">04</span><h3>${esc(c("decision"))}</h3></div><div class="network-rule-field-pair">${select("action","action",[["deny",c("deny")],["allow",c("allow")]],d.action)}${select("lifetime","lifetime",["permanent","boot","15m","1h"].map(v=>[v,c(v)]),d.lifetime)}</div></section>
+        <details class="network-rule-advanced"><summary>${esc(c("advanced"))}</summary><div class="network-rule-field-pair">${select("family","family",[["any",c("any")],["ipv4","IPv4"],["ipv6","IPv6"]],d.family)}${!incoming ? select("scope","scope",[["user",c("user")],["system",c("system")]],d.scope):""}</div>${field("description","description",d.description)}</details>
+        <div class="network-editor-footer"><div><span class="eyebrow">${esc(c("summary"))}</span><output data-rule-summary>${esc(summary(d))}</output><small>${esc(engine(d.provider))} · ${esc(c(incoming ? "wholeSystem":"allowNotice"))}</small></div><button class="primary" type="submit"${!active ? " disabled":""}>${esc(c("review"))} ${icon("arrow")}</button></div>${!active ? `<p class="network-rule-warning">${esc(c("providerUnavailable"))}</p>`:""}</fieldset></form></section>`;
+    }
+    function review() {
+      if(!state.preview)return "";
+      return `<section class="network-rule-review" role="region" aria-label="${esc(c("reviewTitle"))}"><div class="eyebrow">${esc(providerName(state.provider))} · ${esc(engine(state.provider))}</div><h2>${esc(c("reviewTitle"))}</h2><p>${esc(c("reviewCopy"))} ${esc(c("applyScope"))}</p><div class="network-rule-change-list">${state.preview.changes.map(change=>`<article><strong>${esc(c(change.operation==="enable" ? "availabilityChange":change.operation==="restore order" ? "restoreOrder":change.operation))} · ${esc(change.rule.name)}</strong><p>${esc(change.operation==="restore order" ? c("restoreOrder"):change.rule.provider ? summary(change.rule):change.rule.name)}</p></article>`).join("")}</div>${state.preview.warnings.map(w=>`<p class="network-rule-warning">${esc(w)}</p>`).join("")}<div class="network-rule-actions"><button class="primary" data-rule-apply${state.busy ? " disabled":""}>${esc(c(state.busy ? "saving":"apply"))}</button><button class="secondary" data-rule-cancel>${esc(c("cancel"))}</button></div></section>`;
+    }
+    function filteredRules() {
+      const query=state.search.trim().toLowerCase();
+      return (state.data?.rules || []).filter(r=>(state.filterProvider==="all" || r.provider===state.filterProvider) && (!state.filter || (state.filter==="ACTIVE" ? ["SAVED","LOADED","OBSERVED"].includes(r.state):r.state===state.filter)) && (!query || `${JSON.stringify(r)} ${servicesText(r)} ${selectedService(r)?.label || ""}`.toLowerCase().includes(query)));
+    }
+    function row(rule) {
+      const incoming=rule.provider==="incoming", service=selectedService(rule);
+      const label=({SAVED:"savedState",LOADED:"loadedState",OBSERVED:"observedState",EXPIRED:"expiredState",DISABLED:"disabledState",UNAVAILABLE:"unavailableState"})[rule.state] || "savedState";
+      const source=incoming ? rule.source || c("anySource"):rule.path;
+      const destination=incoming ? `${c("thisDevice")} · ${rule.zone}`:destinationText(rule.destinations) || c("anyDestination");
+      return `<tr data-rule-id="${esc(rule.id)}"><td><input type="checkbox" data-rule-select="${esc(rule.id)}" aria-label="${esc(rule.name)}"${state.selected.has(rule.id) ? " checked":""}></td><td class="network-order"><strong>${incoming ? "I":"A"}${Number(rule.position)+1}</strong><span title="${esc(providerName(rule.provider))}">${esc(engine(rule.provider))}</span></td><td class="network-rule-name"><strong>${esc(rule.name)}</strong><small>${esc(providerName(rule.provider))}</small></td><td><div class="network-rule-source">${!incoming ? identity("application",[rule.name,rule.path]):""}<span title="${esc(source)}">${esc(source || c("localApplication"))}<small>${esc(c(incoming ? "wholeSystem":rule.scope==="system" ? "system":"user"))}</small></span></div></td><td><span class="network-cell-value" title="${esc(destination)}">${esc(destination)}</span></td><td><strong class="network-service-name">${esc(service?.id || c("customService"))}</strong><code class="network-service-ports">${esc(service ? servicePortLabel(service) || c("definitionMissing"):(portsText(rule.ports) || c("anyService"))+" · "+(rule.protocols || []).join("/").toUpperCase())}</code></td><td><span class="network-rule-action action-${esc(rule.action)}">${esc(c(rule.action))}</span></td><td><span class="network-rule-state state-${String(rule.state).toLowerCase()}">${esc(c(label))}</span>${rule.observed?.decisions != null ? `<small class="network-observed-count">${esc(rule.observed.decisions)} ${esc(c("matches"))}</small>`:""}</td><td><details class="network-rule-menu"><summary aria-label="${esc(c("edit"))}">···</summary><div>${["edit","duplicate",rule.enabled ? "disable":"enable","up","down","remove"].map(a=>`<button data-rule-action="${a}" data-id="${esc(rule.id)}"${!canEdit(rule.provider) ? " disabled":""}>${esc(c(a))}</button>`).join("")}</div></details></td></tr>`;
+    }
+    function markup() {
+      const data=state.data, filtered=filteredRules(), rows=filtered.slice(state.offset,state.offset+100);
+      return `<section class="network-rules-product" data-network-rules><header class="network-rules-header"><div><div class="eyebrow">${esc(t("nav.network"))}</div><h1>${esc(c("title"))}</h1><p>${esc(c("intro"))}</p></div><button class="primary" data-rule-new${!(state.filterProvider==="all" ? data?.capabilities?.edit:canEdit(state.filterProvider)) ? " disabled":""}>${icon("plus")} ${esc(c("new"))}</button></header>
+        <div class="network-rules-toolbar"><div class="network-rules-filters" role="group" aria-label="${esc(c("direction"))}">${[["all",c("allFlows")],["application",c("outgoing")],["incoming",c("inbound")]].map(([p,label])=>`<button data-rule-filter-provider="${p}" aria-pressed="${p===state.filterProvider}">${esc(label)}<span>${data ? (p==="all" ? data.total+(Object.values(data.providers).some(v=>!Number.isInteger(v.revision)) ? "+":""):Number.isInteger(data.providers[p].revision) ? data.providers[p].rules.length:"—"):"—"}</span></button>`).join("")}</div><input data-rule-search placeholder="${esc(c("searchAll"))}" aria-label="${esc(c("searchAll"))}" value="${esc(state.search)}"><select data-rule-filter aria-label="${esc(c("state"))}">${options([["",c("all")],["ACTIVE",c("active")],["DISABLED",c("disabledState")],["EXPIRED",c("expiredState")]],state.filter)}</select><button class="secondary" data-rule-refresh>${icon("refresh")}</button><label class="secondary network-import">${esc(c("import"))}<input type="file" accept="application/json,.json" data-rule-import hidden></label><details class="network-rule-menu"><summary class="secondary">${esc(c("export"))}</summary><div>${["application","incoming"].map(p=>`<button data-rule-export="${p}"${!Number.isInteger(data?.providers?.[p]?.revision) ? " disabled":""}>${esc(c(p==="application" ? "exportApplications":"exportIncoming"))}</button>`).join("")}</div></details></div>
+        <div class="network-rule-feedback" role="status">${esc(state.error || state.feedback || "")}</div>${state.undo ? `<button class="text-button" data-rule-undo>${esc(c("undo"))}</button>`:""}${state.preview ? review():editor()}
+        ${["application","incoming"].map(p=>{const count=(data?.rules || []).filter(r=>r.provider===p && state.selected.has(r.id)).length;return count ? `<div class="network-rule-bulk"><strong>${esc(providerName(p))} · ${count} ${esc(c("selected"))}</strong>${["enable","disable","remove"].map(a=>`<button class="secondary" data-rule-bulk="${a}" data-provider="${p}">${esc(c(a))}</button>`).join("")}</div>`:"";}).join("")}
+        <div class="network-rule-table-wrap"><table class="network-rule-table"><thead><tr><th></th>${["order","rule","from","to","services","decision","state"].map(key=>`<th scope="col">${esc(c(key))}</th>`).join("")}<th></th></tr></thead><tbody>${rows.map(row).join("")}</tbody></table>${(!data || (state.filterProvider!=="all" && !Number.isInteger(data.providers[state.filterProvider].revision)) || (!data.total && Object.values(data.providers).some(v=>!Number.isInteger(v.revision)))) ? `<div class="empty-state"><h2>${esc(c("unavailable"))}</h2><p>${esc(c("unavailableCopy"))}</p></div>`:!rows.length ? `<div class="empty-state"><h2>${esc(c(data.total ? "noResults":"empty"))}</h2><p>${esc(c(data.total ? "noResultsCopy":"emptyCopy"))}</p></div>`:""}</div>
+        <footer class="network-rule-pagination"><span>${filtered.length} ${esc(c("total"))}</span><button class="text-button" data-rule-page="previous"${!state.offset ? " disabled":""}>${esc(c("previous"))}</button><button class="text-button" data-rule-page="next"${state.offset+100>=filtered.length ? " disabled":""}>${esc(c("next"))}</button></footer><p class="network-rule-note">${esc(c("flowOrder"))} ${esc(c("revokeNotice"))}</p>
+        ${data?.external?.rules?.length ? `<details class="network-rule-external-disclosure"><summary>${esc(c("external"))} (${data.external.rules.length})</summary><p class="network-rule-note">${esc(c("readOnly"))}</p>${data.external.rules.map(r=>`<article class="network-rule-external"><strong>${esc(r.zone)} · ${esc(r.kind)}</strong><p>${esc(r.value)}</p><small>${esc([r.runtime ? c("runtime"):"",r.permanent ? c("permanentPlane"):""].filter(Boolean).join(" / "))}</small></article>`).join("")}${data.external.truncated ? `<p>${esc(c("limited"))}</p>`:""}</details>`:""}
+        ${state.exportText ? `<section class="network-rule-export"><h2>${esc(c("exportTitle"))}</h2><p>${esc(c("exportCopy"))}</p><textarea readonly aria-label="${esc(c("exportTitle"))}">${esc(state.exportText)}</textarea><a class="secondary" data-rule-download download="greyward-network-rules.json">${esc(c("exportAll"))}</a><button class="text-button" data-rule-export-close>${esc(c("close"))}</button></section>`:""}</section>`;
+    }
+    function draw() {
+      if(!root?.isConnected)return;
+      const focused=root.querySelector(":focus"), selector=focused?.hasAttribute("data-rule-search") ? "[data-rule-search]":focused?.name ? `[name="${focused.name}"]`:null;
+      const selection=focused?.selectionStart==null ? null:[focused.selectionStart,focused.selectionEnd];
+      const parent=root.parentElement;root.outerHTML=markup();root=parent.querySelector("[data-network-rules]");bind(root);
+      const next=selector ? root.querySelector(selector):null;restoringFocus=true;next?.focus();restoringFocus=false;if(selection && next?.setSelectionRange)next.setSelectionRange(...selection);
+    }
+    async function reload() {await load();state.selected.clear();draw();}
+    async function exportDocument(provider=state.provider) {
+      if(!["application","incoming"].includes(provider))throw new Error(c("previewError"));
+      const page=await readProvider(provider);
+      if(page.revision!==state.data.revision)throw new Error(c("previewError"));
+      return {schema:"greyward.network.rules-export/v1",provider,rules:page.rules.map(({state,owner,position,observed,...rule})=>rule)};
     }
     function readForm() {
-      const form = root?.querySelector("[data-rule-form]");
-      if (!form) return state.draft;
-      const values = Object.fromEntries(new FormData(form));
-      const d = {...state.draft, ...values};
-      d.protocols = values.protocol === "both" ? ["tcp", "udp"] : [values.protocol]; delete d.protocol;
-      if (d.provider === "incoming" && d.service) d.protocols = ["tcp", "udp"];
-      d.ports = d.service ? "" : values.ports || ""; d.destinations = destinations(values.destinations);
-      state.draft = d;
+      const form=root?.querySelector("[data-rule-form]");if(!form)return state.draft;
+      const values=Object.fromEntries(new FormData(form)), d={...state.draft,...values};
+      d.provider=state.provider;d.destinations=destinations(values.destinations);
+      d.protocols=values.protocol==="both" ? ["tcp","udp"]:[values.protocol || d.protocols?.[0] || "tcp"];
+      d.ports=values.ports ?? d.ports;
+      const selected=selectedService(state.draft);
+      if(selected) {
+        if(d.provider==="incoming") {d.service=selected.id;d.ports=[];d.protocols=["tcp","udp"];}
+        else {const scope=serviceScope(selected);if(!scope)throw new Error(c("outboundUnsupported"));d.ports=scope.ports;d.protocols=scope.protocols;d.service="";}
+      } else d.service="";
+      const custom=state.draft.custom_service;
+      delete d.service_query;delete d.flow_provider;delete d.protocol;delete d.selected_service;delete d.custom_service;
+      state.draft={...d,...(selected ? {selected_service:selected.id}:{}),...(custom ? {custom_service:true}:{})};
       return d;
     }
-    async function preview(commands, extra = {}) {
-      const sequence = ++previewSequence;
+    async function preview(commands,extra={}) {
+      const sequence=++previewSequence;
       try {
-        state.error = "";
-        const reviewed = await call("preview", {provider: state.provider, revision: state.data.revision, commands, ...extra});
-        if (sequence !== previewSequence) {
-          await call("cancel", {transaction: reviewed.transaction});
-          return;
-        }
-        state.preview = reviewed;
-      } catch (error) { if (sequence === previewSequence) state.error = error.message || c("previewError"); }
+        state.error="";
+        const reviewed=await call("preview",{provider:state.provider,revision:state.data.revision,commands,...extra});
+        if(sequence!==previewSequence){await call("cancel",{transaction:reviewed.transaction});return;}
+        state.preview=reviewed;
+      } catch(error){if(sequence!==previewSequence)return;state.error=error.message || c("previewError");state.preview=null;}
       draw();
     }
-    function action(command, rule) {
-      if (command === "edit" || command === "duplicate") {
-        fresh({...rule, ports: rule.ports.map(p => [...p]), destinations: (rule.destinations || []).map(d => ({...d}))});
-        if (command === "edit") state.editing = rule.id; else { delete state.draft.id; state.draft.name += " (copy)"; }
-        draw(); root.querySelector('[name="name"]')?.focus(); return;
-      }
-      const operation = command === "remove" ? "delete" : ["up", "down"].includes(command) ? "move" : "enable";
-      const payload = {operation, id: rule.id};
-      if (operation === "enable") payload.enabled = command === "enable";
-      if (operation === "move") payload.position = rule.position + (command === "up" ? -1 : 1);
-      preview([payload]);
-    }
     async function apply() {
-      if (!state.preview || state.busy) return;
-      const transaction = state.preview.transaction;
-      state.busy = true; state.error = ""; draw();
+      if(!state.preview || state.busy)return;
+      state.busy=true;draw();
       try {
-        const result = await call("apply", {transaction}, 130000);
-        state.undo = result.undo || null;
-        state.preview = null; state.draft = null; state.editing = null; state.feedback = c("saved");
-        await load(); state.selected.clear();
-      } catch (error) { state.error = error.message || c("applyError"); state.preview = null; }
-      finally { state.busy = false; draw(); }
+        const provider=state.provider, saved=await call("apply",{transaction:state.preview.transaction},125000);
+        state.undo=saved.undo ? {token:saved.undo,provider}:null;state.preview=null;state.draft=null;state.feedback=c("saved");await load();state.selected.clear();
+      }catch(error){state.error=error.message || c("applyError");state.preview=null;}
+      finally{state.busy=false;draw();}
     }
     async function cancel() {
-      previewSequence++;
-      const transaction = state.preview?.transaction;
-      if (transaction) { try { await call("cancel", {transaction}); } catch (error) { state.error = error.message; } }
-      state.preview = null; draw();
+      previewSequence++;const transaction=state.preview?.transaction;
+      if(transaction){try{await call("cancel",{transaction});}catch(error){state.error=error.message;}}
+      state.preview=null;draw();
+    }
+    async function action(operation,rule) {
+      if(!rule || state.busy)return;state.provider=rule.provider;
+      if(operation==="edit" || operation==="duplicate") {fresh({...rule,...(operation==="duplicate" ? {name:rule.name+" · "+c("duplicate")}:{})});state.editing=operation==="edit" ? rule.id:null;draw();return;}
+      const siblings=state.data.rules.filter(r=>r.provider===rule.provider);
+      const position=siblings.findIndex(r=>r.id===rule.id)+(operation==="up" ? -1:1);
+      if(["up","down"].includes(operation) && (position<0 || position>=siblings.length))return;
+      await preview([{id:rule.id,operation:operation==="remove" ? "delete":["up","down"].includes(operation) ? "move":"enable",...(["up","down"].includes(operation) ? {position}:operation!=="remove" ? {enabled:operation==="enable"}:{})}]);
+    }
+    function chooseService(id) {
+      const service=serviceDetails().find(s=>s.id===id);if(!service || !state.draft)return;
+      if(state.provider==="application" && !serviceScope(service))return;
+      const d=readForm();state.draft={...d,custom_service:false,selected_service:id,service:state.provider==="incoming" ? id:""};
+      const scope=serviceScope(service);if(state.provider==="application"){state.draft.ports=scope.ports;state.draft.protocols=scope.protocols;}
+      state.serviceOpen=false;state.serviceQuery="";state.preview=null;previewSequence++;draw();
     }
     function bind(element) {
-      root = element;
-      if (!root) { clearTimeout(searchTimer); return; }
-      if (state.busy) root.querySelectorAll("button,input,select,textarea").forEach(element => { if (!element.hasAttribute("data-rule-cancel")) element.disabled = true; });
-      root.querySelector("[data-rule-new]")?.addEventListener("click", () => { fresh(); draw(); root.querySelector('[name="name"]')?.focus(); });
-      root.querySelector("[data-rule-close]")?.addEventListener("click", async () => { await cancel(); state.draft = null; draw(); });
-      root.querySelectorAll("[data-rule-provider]").forEach(b => b.addEventListener("click", async () => { if (state.busy) return; await cancel(); state.provider = b.dataset.ruleProvider; state.offset = 0; state.draft = null; await reload(); }));
-      root.querySelector("[data-rule-refresh]")?.addEventListener("click", reload);
-      root.querySelector("[data-rule-filter]")?.addEventListener("change", async event => { state.filter = event.target.value; state.offset = 0; await reload(); });
-      root.querySelector("[data-rule-search]")?.addEventListener("input", event => { state.search = event.target.value; clearTimeout(searchTimer); searchTimer = setTimeout(() => { state.offset = 0; reload(); }, 300); });
-      root.querySelectorAll("[data-rule-select]").forEach(b => b.addEventListener("change", () => { b.checked ? state.selected.add(b.dataset.ruleSelect) : state.selected.delete(b.dataset.ruleSelect); draw(); }));
-      root.querySelectorAll("[data-rule-action]").forEach(b => b.addEventListener("click", () => action(b.dataset.ruleAction, state.data.rules.find(r => r.id === b.dataset.id))));
-      root.querySelectorAll("[data-rule-bulk]").forEach(b => b.addEventListener("click", () => preview([...state.selected].map(id => ({id, operation: b.dataset.ruleBulk === "remove" ? "delete" : "enable", ...(b.dataset.ruleBulk === "remove" ? {} : {enabled: b.dataset.ruleBulk === "enable"})})))));
-      root.querySelector("[data-rule-form]")?.addEventListener("submit", event => { event.preventDefault(); const rule = readForm(); preview([{operation: rule.dns_exception ? "dns_exception" : "upsert", ...(state.editing ? {id: state.editing} : {}), rule}]); });
-      root.querySelector("[data-rule-form]")?.addEventListener("input", () => {
-        previewSequence++;
-        if (state.preview) {
-          const transaction = state.preview.transaction;
-          state.preview = null; root.querySelector(".network-rule-review")?.remove();
-          call("cancel", {transaction}).catch(error => { state.error = error.message; });
-        }
-        const d = readForm(); root.querySelector("[data-rule-summary]").textContent = summary(d);
-      });
-      root.querySelector("[data-rule-apply]")?.addEventListener("click", apply);
-      root.querySelector("[data-rule-undo]")?.addEventListener("click", () => preview(undefined, {undo: state.undo}));
-      root.querySelector("[data-rule-cancel]")?.addEventListener("click", cancel);
-      root.querySelectorAll("[data-rule-page]").forEach(b => b.addEventListener("click", async () => { state.offset = b.dataset.rulePage === "next" ? state.data.next_offset : Math.max(0, state.offset - 100); await reload(); }));
-      root.querySelector("[data-rule-import]")?.addEventListener("click", () => root.querySelector("[data-rule-import-file]").click());
-      root.querySelector("[data-rule-import-file]")?.addEventListener("change", async event => {
-        try {
-          const file = event.target.files[0]; if (!file || file.size > 1048576) throw new Error(c("importError"));
-          const value = JSON.parse(await file.text());
-          if (value.schema !== "greyward.network.rules-export/v1" || value.provider !== state.provider || !Array.isArray(value.rules)) throw new Error(c("importError"));
-          await preview(value.rules.map(rule => ({operation: rule.dns_exception ? "dns_exception" : "upsert", rule})));
-        } catch (error) { state.error = error.message; draw(); }
-      });
-      root.querySelector("[data-rule-export]")?.addEventListener("click", async () => {
-        try {
-          state.exportText = JSON.stringify(await exportDocument(), null, 2);
-        } catch (error) { state.error = error.message; }
-        draw();
-      });
-      root.querySelector("[data-rule-export-close]")?.addEventListener("click", () => { state.exportText = ""; draw(); });
-      const download = root.querySelector("[data-rule-download]");
-      if (download) download.addEventListener("click", () => { const url = URL.createObjectURL(new Blob([state.exportText], {type: "application/json"})); download.href = url; setTimeout(() => URL.revokeObjectURL(url), 1000); });
+      root=element;if(!root)return;
+      root.querySelectorAll("details.network-rule-menu").forEach(menu=>menu.addEventListener("toggle",()=>{
+        if(!menu.open)return;
+        root.querySelectorAll("details.network-rule-menu[open]").forEach(other=>{if(other!==menu)other.open=false;});
+        const panel=menu.querySelector("div"), rect=menu.querySelector("summary").getBoundingClientRect();
+        panel.style.left=Math.max(8,Math.min(rect.right-panel.offsetWidth,globalThis.innerWidth-panel.offsetWidth-8))+"px";
+        panel.style.top=Math.max(8,Math.min(rect.bottom+6,globalThis.innerHeight-panel.offsetHeight-8))+"px";
+      }));
+      if(state.busy)root.querySelectorAll("button,input,select,textarea").forEach(el=>{if(!el.hasAttribute("data-rule-cancel"))el.disabled=true;});
+      root.querySelector("[data-rule-new]")?.addEventListener("click",()=>{state.provider=state.filterProvider!=="all" ? state.filterProvider:canEdit("application") ? "application":"incoming";fresh();draw();root.querySelector('[name="name"]')?.focus();});
+      root.querySelector("[data-rule-close]")?.addEventListener("click",async()=>{await cancel();state.draft=null;draw();});
+      root.querySelectorAll("[data-rule-filter-provider]").forEach(b=>b.addEventListener("click",()=>{state.filterProvider=b.dataset.ruleFilterProvider;state.offset=0;draw();}));
+      root.querySelector("[data-rule-refresh]")?.addEventListener("click",reload);
+      root.querySelector("[data-rule-filter]")?.addEventListener("change",e=>{state.filter=e.target.value;state.offset=0;draw();});
+      root.querySelector("[data-rule-search]")?.addEventListener("input",e=>{state.search=e.target.value;state.offset=0;draw();});
+      root.querySelectorAll("[data-rule-select]").forEach(b=>b.addEventListener("change",()=>{b.checked ? state.selected.add(b.dataset.ruleSelect):state.selected.delete(b.dataset.ruleSelect);draw();}));
+      root.querySelectorAll("[data-rule-action]").forEach(b=>b.addEventListener("click",()=>action(b.dataset.ruleAction,state.data.rules.find(r=>r.id===b.dataset.id))));
+      root.querySelectorAll("[data-rule-bulk]").forEach(b=>b.addEventListener("click",()=>{state.provider=b.dataset.provider;preview((state.data.rules || []).filter(r=>r.provider===state.provider && state.selected.has(r.id)).map(r=>({id:r.id,operation:b.dataset.ruleBulk==="remove" ? "delete":"enable",...(b.dataset.ruleBulk!=="remove" ? {enabled:b.dataset.ruleBulk==="enable"}:{})})));}));
+      root.querySelector("[data-rule-form]")?.addEventListener("submit",e=>{e.preventDefault();try{const rule=readForm();preview([{operation:rule.dns_exception ? "dns_exception":"upsert",...(state.editing ? {id:state.editing}:{}),rule}]);}catch(error){state.error=error.message;draw();}});
+      root.querySelector('[name="flow_provider"]')?.addEventListener("change",e=>{const value=e.target.value,d=readForm();fresh({provider:value,name:d.name,action:d.action,lifetime:d.lifetime,description:d.description});draw();});
+      const search=root.querySelector("[data-rule-service-search]");
+      search?.addEventListener("input",e=>{state.serviceQuery=e.target.value;state.serviceOpen=true;state.serviceIndex=0;draw();});
+      search?.addEventListener("focus",()=>{if(!restoringFocus && !state.serviceOpen){state.serviceOpen=true;draw();}});
+      search?.addEventListener("keydown",e=>{const list=matchingServices();if(["ArrowDown","ArrowUp"].includes(e.key)){e.preventDefault();state.serviceOpen=true;const delta=e.key==="ArrowDown" ? 1:-1;state.serviceIndex=Math.max(0,Math.min(list.length-1,state.serviceIndex+delta));draw();}else if(e.key==="Enter" && state.serviceOpen){e.preventDefault();const service=list[state.serviceIndex];if(service)chooseService(service.id);}else if(e.key==="Tab"){state.serviceOpen=false;const popup=root.querySelector(".network-service-options");if(popup)popup.hidden=true;search.setAttribute("aria-expanded","false");}else if(e.key==="Escape"){e.preventDefault();state.serviceOpen=false;draw();}});
+      root.querySelectorAll("[data-rule-service]").forEach(b=>b.addEventListener("click",()=>chooseService(b.dataset.ruleService)));
+      root.querySelector("[data-rule-service-custom]")?.addEventListener("click",()=>{const d=readForm();delete d.selected_service;d.service="";state.draft={...d,custom_service:true};state.serviceOpen=false;state.serviceQuery="";draw();});
+      root.querySelector("[data-rule-form]")?.addEventListener("input",e=>{if(e.target.hasAttribute("data-rule-service-search"))return;try{readForm();root.querySelector("[data-rule-summary]").textContent=summary(state.draft);previewSequence++;state.preview=null;}catch(error){state.error=error.message;}});
+      root.querySelector("[data-rule-apply]")?.addEventListener("click",apply);
+      root.querySelector("[data-rule-cancel]")?.addEventListener("click",cancel);
+      root.querySelector("[data-rule-undo]")?.addEventListener("click",()=>{state.provider=state.undo.provider;preview([],{undo:state.undo.token});});
+      root.querySelectorAll("[data-rule-page]").forEach(b=>b.addEventListener("click",()=>{state.offset=b.dataset.rulePage==="previous" ? Math.max(0,state.offset-100):state.offset+100;draw();}));
+      root.querySelectorAll("[data-rule-export]").forEach(b=>b.addEventListener("click",async()=>{try{state.exportText=JSON.stringify(await exportDocument(b.dataset.ruleExport),null,2);}catch(error){state.error=error.message;}draw();}));
+      root.querySelector("[data-rule-import]")?.addEventListener("change",async e=>{try{const file=e.target.files?.[0];if(!file || file.size>1048576)throw new Error(c("importError"));const value=JSON.parse(await file.text());if(value.schema!=="greyward.network.rules-export/v1" || !["application","incoming"].includes(value.provider) || !Array.isArray(value.rules) || !value.rules.length || value.rules.length>1024)throw new Error(c("importError"));state.provider=value.provider;await preview(value.rules.map(rule=>({operation:rule.dns_exception ? "dns_exception":"upsert",rule})));}catch(error){state.error=error.message;draw();}});
+      root.querySelector("[data-rule-export-close]")?.addEventListener("click",()=>{state.exportText="";draw();});
+      root.querySelector("[data-rule-download]")?.addEventListener("click",e=>{const url=URL.createObjectURL(new Blob([state.exportText],{type:"application/json"}));e.currentTarget.href=url;setTimeout(()=>URL.revokeObjectURL(url),1000);});
     }
-    return {load, markup, bind, exportDocument,
-      reviewCommands: async commands => { state.provider = "application"; await load(); await preview(commands); },
-      begin: values => { state.provider = "application"; fresh(values); }, state};
+    return {load,markup,bind,exportDocument,reviewCommands:async commands=>{state.provider="application";await load();await preview(commands);},begin:values=>{state.provider="application";fresh(values);},state};
   }
-  globalThis.GREYWARD_NETWORK_RULES = Object.freeze({create, copy: catalogs, destinations, portsText});
+  globalThis.GREYWARD_NETWORK_RULES = Object.freeze({create,copy:catalogs,destinations,portsText,serviceScope});
 })();

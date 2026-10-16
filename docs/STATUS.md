@@ -1,5 +1,11 @@
 # GREYWARD current status
 
+Network workflow candidate: one mixed rule table and shared flow editor, with
+searchable installed firewalld service/port definitions. Provider transactions
+and enforcement remain separate. Candidate checks pass (388 Context / 155
+frontend); installed and visual acceptance are pending. See
+[network rules](security-context/NETWORK_RULES.md).
+
 ## 16 October network rules — installed development candidate
 
 Center 103 / Context 98 adds reviewed application/incoming rule editing,

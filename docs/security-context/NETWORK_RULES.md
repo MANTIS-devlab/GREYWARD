@@ -21,10 +21,28 @@ An idle statistics stream does not disable editing. Loaded/Observed still need
 fresh revision/match evidence. Private synchronous calls use separate connections
 without GLib disconnect watches or process-exit-on-disconnect behavior.
 
-The Rules page offers application/incoming views, reviewed creation, edits,
+The Rules page combines application and incoming rules in one table and one
+Source → Destination → Services → Action editor, with optional traffic filters.
+Provider-local A/I order markers must not imply one cross-engine chain. Mixed
+selections expose separate provider batches; no combined atomic Apply is offered.
+The page offers reviewed creation, edits,
 duplication, enable/disable, deletion, order, bulk changes, search, lifecycle
 filters, pagination and versioned reviewed import/export. Activity prefills
 the same editor; it never authenticates a historical application identity.
+
+The service picker searches installed firewalld names, labels and port/protocol
+pairs. The existing root service reads `getServiceSettings2`; there is no new
+service database. Reads are bounded to 1,024 definitions, 64 port pairs per
+definition and a two-second collection budget, cached for 30 seconds. Incomplete
+metadata is explicitly unavailable rather than replaced with guessed ports.
+Incoming named services retain their full native semantics. Application rules
+snapshot explicit ports/protocols: a service can be selected only when every
+protocol has the same port set and no helper, include, source or destination
+condition would be lost. Asymmetric definitions cannot be broadened into a
+port/protocol cross-product. Explicit custom ports remain available. Future
+firewalld definition updates affect native incoming services; outgoing port
+snapshots remain the reviewed ports. Table service names are descriptive aliases
+for exact matching port sets, not additional application identity evidence.
 
 Application conditions combine with AND; values in destinations and port lists
 combine with OR. Application rules use explicit order and first-match behavior
@@ -91,7 +109,10 @@ this delivery.
 
 ## Validation and rollout status
 
-Focused and regression suites pass: 386 Context tests on Fedora, 150 frontend
+The unified workflow candidate passes 388 Context tests on Fedora and 155
+frontend tests (three optional browser checks skipped). Its RPM build and live
+visual validation are pending. The prior installed candidate passed 386 Context
+tests on Fedora, 150 frontend
 tests and 208 Rust tests (22 ignored). Static and repository validation pass.
 These checks cover matcher, migration, transaction, transport and packaging
 contracts; they do not replace the outstanding desktop acceptance below.
@@ -148,3 +169,11 @@ then restore matched packages. Never feed v2 rules to the legacy matcher: UID,
 CIDR and protocol conditions would be misinterpreted. Do not reboot, reload
 firewalld, terminate the graphical session or change SSH during development
 validation. ISO composition and clean installation remain separate gates.
+
+## Workflow references
+
+The source/destination/service/action organization is informed by
+[Stormshield filtering-rule creation](https://documentation.stormshield.eu/SNS/v5/en/Content/HowTo_-_Implementing_a_filtering_rule/Adding-filter-rule.htm).
+GREYWARD retains its own visual assets and its two existing enforcement providers.
+The service read model follows the native
+[firewalld D-Bus contract](https://firewalld.org/documentation/man-pages/firewalld.dbus.html).

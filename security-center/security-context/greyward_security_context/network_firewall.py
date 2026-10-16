@@ -34,6 +34,8 @@ class Firewall:
         self.config = dbus.Interface(bus.get_object('org.fedoraproject.FirewallD1', '/org/fedoraproject/FirewallD1/config'),
                                      'org.fedoraproject.FirewallD1.config')
         self.bus = bus
+        self.definitions = dbus.Interface(obj, 'org.fedoraproject.FirewallD1')
+        self._definition_cache = None
 
     def permanent(self, zone):
         import dbus
@@ -42,8 +44,34 @@ class Firewall:
                               'org.fedoraproject.FirewallD1.config.zone')
 
     def catalog(self):
+        names = sorted(str(s) for s in self.config.getServiceNames(timeout=5))
+        if len(names) > 1024:
+            raise PolicyError('The installed service catalog exceeds its bounded capacity.')
+        cached = getattr(self, '_definition_cache', None)
+        if not cached or cached[0] < time.monotonic() or cached[1] != names:
+            deadline, details = time.monotonic() + 2, []
+            for name in names:
+                if time.monotonic() >= deadline:
+                    break
+                try:
+                    definition = self.definitions.getServiceSettings2(name, timeout=.35)
+                    ports = [[str(p), str(protocol)] for p, protocol in definition.get('ports', [])[:64]]
+                    complex_scope = any(definition.get(k) for k in ('protocols', 'source_ports', 'destinations', 'includes', 'helpers', 'modules'))
+                    truncated = len(definition.get('ports', [])) > 64
+                    details.append({'id': name, 'label': str(definition.get('short') or name)[:120],
+                                    'description': str(definition.get('description', ''))[:280], 'ports': ports,
+                                    'simple': bool(ports) and not complex_scope and not truncated,
+                                    'additional_conditions': bool(complex_scope or truncated)})
+                except Exception:
+                    # A missing definition never becomes an invented port mapping.
+                    continue
+            self._definition_cache = (time.monotonic() + 30, names, details)
+        else:
+            details = cached[2]
         return {'zones': sorted(str(z) for z in self.runtime.getZones(timeout=5)),
-                'services': sorted(str(s) for s in self.config.getServiceNames(timeout=5))}
+                'services': names, 'service_details': details,
+                'definitions_incomplete': len(details) != len(names),
+                'definitions_source': 'firewalld-runtime'}
 
     def external(self, rules):
         """Read existing active-zone exposure without adopting provider policy."""
