@@ -1,6 +1,6 @@
 Name:           greyward-security-center
 Version:        0.1.0
-Release:        103%{?dist}
+Release:        104%{?dist}
 Summary:        GREYWARD local security posture and control application
 License:        GPL-3.0-only AND Apache-2.0 AND OFL-1.1 AND CC0-1.0
 Source0:        %{name}-%{version}.tar.gz
@@ -116,6 +116,9 @@ install -Dm0755 greyward-safe-open.so \
 %postun
 /usr/bin/fc-cache -f >/dev/null 2>&1 || :
 %changelog
+* Fri Oct 16 2026 MANTIS SYSTEMS - 0.1.0-104
+- Unify network rules and add searchable native service and port selection.
+
 * Fri Oct 16 2026 MANTIS SYSTEMS - 0.1.0-103
 - Initialize the network editor after its helpers; exercise bundled bootstrap.
 

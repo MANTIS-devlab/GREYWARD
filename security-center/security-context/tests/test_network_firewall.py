@@ -3,10 +3,46 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
+from types import SimpleNamespace
+from unittest.mock import Mock, patch
 
 from greyward_security_context.network_firewall import Firewall, rich_rules
 from greyward_security_context.network_rules import PolicyError, PolicyStore, normalize
 from greyward_security_context.network_rule_transactions import RuleManager
+
+
+class ServiceCatalogTests(unittest.TestCase):
+    def setUp(self):
+        self.firewall = object.__new__(Firewall)
+        self.firewall.runtime = SimpleNamespace(getZones=lambda **kw: ['public'])
+        self.firewall.config = SimpleNamespace(getServiceNames=lambda **kw: ['https', 'dns', 'complex', 'missing'])
+        definitions = {
+            'https': {'short': 'Secure WWW (HTTPS)', 'ports': [('443', 'tcp')]},
+            'dns': {'short': 'DNS', 'ports': [('53', 'tcp'), ('53', 'udp')]},
+            'complex': {'ports': [('21', 'tcp')], 'helpers': ['ftp']},
+        }
+        self.firewall.definitions = SimpleNamespace(getServiceSettings2=Mock(side_effect=lambda name, **kw: definitions[name]))
+
+    def test_real_definition_fields_are_bounded_cached_and_never_guessed(self):
+        catalog = self.firewall.catalog()
+        self.assertEqual(catalog['services'], ['complex', 'dns', 'https', 'missing'])
+        values = {s['id']: s for s in catalog['service_details']}
+        self.assertEqual(values['https']['ports'], [['443', 'tcp']])
+        self.assertEqual(values['dns']['ports'], [['53', 'tcp'], ['53', 'udp']])
+        self.assertFalse(values['complex']['simple'])
+        self.assertTrue(values['complex']['additional_conditions'])
+        self.assertNotIn('missing', values)
+        self.assertTrue(catalog['definitions_incomplete'])
+        calls = self.firewall.definitions.getServiceSettings2.call_count
+        self.assertEqual(self.firewall.catalog(), catalog)
+        self.assertEqual(self.firewall.definitions.getServiceSettings2.call_count, calls)
+
+    def test_read_budget_stops_without_claiming_complete_definitions(self):
+        with patch('greyward_security_context.network_firewall.time.monotonic', side_effect=[0, 3, 3]):
+            catalog = self.firewall.catalog()
+        self.assertEqual(catalog['service_details'], [])
+        self.assertTrue(catalog['definitions_incomplete'])
+        self.firewall.definitions.getServiceSettings2.assert_not_called()
 
 
 class NativeRules:

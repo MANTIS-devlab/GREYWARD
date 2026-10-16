@@ -1,5 +1,11 @@
 # GREYWARD repository map
 
+Network workflow candidate: one mixed rule table and shared flow editor, with
+searchable installed firewalld service/port definitions. Provider transactions
+and enforcement remain separate. Candidate checks pass (388 Context / 155
+frontend); installed and visual acceptance are pending. See
+[network rules](security-context/NETWORK_RULES.md).
+
 Network-rule ownership: Context `network_rules.py` defines normalization,
 matching and storage; `network_rule_transactions.py` owns reviews/lifecycle;
 `network_firewall.py` owns native readback/rollback. `network_policy_service.py`,

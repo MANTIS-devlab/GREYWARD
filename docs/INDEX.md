@@ -1,5 +1,11 @@
 # GREYWARD documentation index
 
+Network workflow candidate: one mixed rule table and shared flow editor, with
+searchable installed firewalld service/port definitions. Provider transactions
+and enforcement remain separate. Candidate checks pass (388 Context / 155
+frontend); installed and visual acceptance are pending. See
+[network rules](security-context/NETWORK_RULES.md).
+
 16 October network-rule implementation candidate: reviewed application and
 incoming transactions reuse OpenSnitch, firewalld and protected Polkit.
 Center 103 / Context 98 has installed enforcement evidence and corrects the
