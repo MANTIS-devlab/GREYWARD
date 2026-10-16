@@ -112,7 +112,6 @@ const networkActivityState = {
   renderedProtocolOptions: null,
 };
 const networkActionState = {feedback: ""};
-const networkRules = globalThis.GREYWARD_NETWORK_RULES?.create({request: invokeBounded, esc, icon, identity: networkIdentityMark, t});
 let focusedThreatEventId = "";
 const recoveryOperationLabels = Object.freeze({
   create_recovery_point: ["backup.queue.localPoint", "backup.queue.localPointCopy"],
@@ -125,6 +124,7 @@ const recoveryOperationLabels = Object.freeze({
 const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (character) => ({
   "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
 }[character]));
+const networkRules = globalThis.GREYWARD_NETWORK_RULES?.create({request: invokeBounded, esc, icon, identity: networkIdentityMark, t});
 const invoke = (command, args) => {
   const api = window.__TAURI_INTERNALS__;
   return api?.invoke ? api.invoke(command, args) : Promise.reject(new Error(copy("feedback.ipcUnavailable")));
