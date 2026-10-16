@@ -53,7 +53,7 @@ FILE_SECURITY_DBUS_TIMEOUT=30
 AUTHORITATIVE_POSTURE_CACHE_SECONDS=5
 SUMMARY_CACHE_SECONDS=2
 NETWORK_HEALTH_CACHE_SECONDS=5
-RECENT_POLICY_RULES={}
+NETWORK_RULES_SLOTS=threading.BoundedSemaphore(4)
 _AUTHORITATIVE_POSTURE_CACHE=None
 _AUTHORITATIVE_POSTURE_CACHE_LOCK=threading.Lock()
 _NETWORK_HEALTH_CACHE=None
@@ -342,47 +342,20 @@ def _update_transaction():
    except (TypeError,ValueError,OverflowError): age=0
    if age > 900: value.update({"phase":"COMPLETE","restart_required":"UNKNOWN","error":None,"finished_at":stamp(now()),"updated_at":stamp(now())})
  return value
-def _validated_network_rule(value):
- if not isinstance(value,dict): raise ValueError("A typed network rule is required.")
- path=str(value.get("application") or "")
- action=str(value.get("action") or "").lower()
- duration=str(value.get("duration") or "always").lower()
- if not path.startswith("/") or "\x00" in path or len(path)>240: raise ValueError("A valid absolute application path is required.")
- if action not in {"allow","block","deny","reject"}: raise ValueError("Unsupported network action.")
- if duration not in {"once","until_restart","until restart","always"}: raise ValueError("Unsupported network duration.")
- destination=value.get("destination") or {}
- if not isinstance(destination,dict): raise ValueError("Destination scope is invalid.")
- host=str(destination.get("host") or "").strip().lower()
- ip=str(destination.get("ip") or "").strip()
- port=destination.get("port")
- if host and (len(host)>160 or not re.fullmatch(r"[a-z0-9._-]+",host)):
-  raise ValueError("Destination domain is invalid.")
- if ip:
-  try: ipaddress.ip_address(ip)
-  except ValueError as error: raise ValueError("Destination IP is invalid.") from error
- if port not in (None, "", 0):
-  try: port=int(port)
-  except (TypeError,ValueError) as error: raise ValueError("Destination port is invalid.") from error
-  if not 1<=port<=65535: raise ValueError("Destination port must be between 1 and 65535.")
- else: port=None
- return {"application":path,"action":"allow" if action=="allow" else "deny","duration":"until restart" if duration in {"until_restart","until restart"} else duration,"destination":{"host":host or None,"ip":ip or None,"port":port}}
-def _policy_helper(args):
- method="SetRule" if args and args[0]=="set-rule" else "SetThreatException" if args and args[0]=="set-threat-exception" else "RemoveRule"
- if method in {"SetRule", "SetThreatException"}:
-  payload={"application":args[args.index("--path")+1],"action":args[args.index("--action")+1],"duration":args[args.index("--duration")+1]}
-  destination={}
-  for key,field in (("--host","host"),("--ip","ip"),("--port","port")):
-   if key in args: destination[field]=int(args[args.index(key)+1]) if field=="port" else args[args.index(key)+1]
-  if destination: payload["destination"]=destination
-  value=json.dumps(payload,separators=(",",":"))
- else:
-  value=args[args.index("--rule-id")+1]
+def _network_rules_call(member, payload, timeout=8):
+ if member not in {"GetRules", "Preview", "Apply", "Cancel", "SetRule", "RemoveRule", "SetThreatException", "SetThreatIntelEnabled"}: raise ValueError("Unsupported network rule operation.")
+ if not isinstance(payload, str) or len(payload.encode("utf-8")) > 1048576 or "\x00" in payload:
+  return {"ok":False,"state":"INVALID","detail":"Network request exceeds its size limit."}
+ bus=dbus.SystemBus(private=True,mainloop=dbus.mainloop.NULL_MAIN_LOOP)
+ bus.set_exit_on_disconnect(False)
  try:
-  result=dbus.SystemBus().call_blocking("systems.mantis.greyward.OpenSnitchPolicy1","/systems/mantis/greyward/OpenSnitchPolicy1","systems.mantis.greyward.OpenSnitchPolicy1",method,"s",(value,),timeout=DBUS_CALL_TIMEOUT)
- except (dbus.DBusException,AttributeError,TypeError):
-  return {"ok":False,"state":"UNAVAILABLE","detail":"The GREYWARD network policy service is unavailable."}
- try: return json.loads(str(result))
- except json.JSONDecodeError: return {"ok":False,"state":"REFUSED","detail":"The network policy service returned an invalid result."}
+  result=bus.call_blocking("systems.mantis.greyward.OpenSnitchPolicy1","/systems/mantis/greyward/OpenSnitchPolicy1","systems.mantis.greyward.OpenSnitchPolicy1",member,"s",(payload,),timeout=timeout)
+  return json.loads(str(result))
+ except (dbus.DBusException,ValueError,TypeError) as error:
+  return {"ok":False,"state":"UNAVAILABLE","detail":"The network rule request did not complete. Its outcome is unknown; refresh the rules before retrying."}
+ finally:
+  bus.close()
+
 def _policy_rules():
  rules=[]
  for attempt in range(3):
@@ -395,16 +368,12 @@ def _policy_rules():
 def _merge_policy_rules(value):
  rules=[item for item in value.get("rules",[]) if isinstance(item,dict) and item.get("source")!="GREYWARD"]
  policy_rules=_policy_rules()
- policy_ids={item.get("id") for item in policy_rules if isinstance(item,dict)}
- for rule_id in tuple(RECENT_POLICY_RULES):
-  if rule_id in policy_ids: RECENT_POLICY_RULES.pop(rule_id,None)
  rules.extend(policy_rules)
- rules.extend(RECENT_POLICY_RULES.values())
+ value["rules_total"]=len(rules)
+ value["rules_truncated"]=len(rules)>128
  value["rules"]=rules[-128:]
  return value
-def _recent_policy_rule(value,rule_id):
- destination=value["destination"]
- return {"id":rule_id,"name":f"GREYWARD {Path(value['application']).name}","action":"ALLOW" if value["action"]=="allow" else "DENY","duration":value["duration"].upper().replace(" ","_"),"scope":{"application":value["application"],"destination":destination if any(destination.values()) else None},"source":"GREYWARD","mutable":True,"enabled":True}
+
 class UsbContext:
  def __init__(self): self.adapter=UsbGuardAdapter(); self.events=[]; self.blocked=set(); self.telemetry=user_store(); import_root_spool(self.telemetry)
  def devices(self):
@@ -1003,18 +972,9 @@ class SecurityContext(dbus.service.Object):
   threat=value.get("threat_intel") if isinstance(value,dict) else None
   if not isinstance(threat,dict): threat={"enabled":False,"provider":"feodo-recommended","state":"ERROR","indicator_count":0,"recent_blocked_connections":[],"exceptions":[]}
   return json.dumps(threat,sort_keys=True,separators=(",",":"))
- @dbus.service.method(BUS_NAME,in_signature="s",out_signature="s")
- def SetThreatProtectionEnabled(self,payload):
-  try: enabled=json.loads(payload)
-  except (TypeError,json.JSONDecodeError): return json.dumps({"ok":False,"state":"INVALID","detail":"Threat protection enablement must be boolean."},separators=(",",":"))
-  if not isinstance(enabled,bool): return json.dumps({"ok":False,"state":"INVALID","detail":"Threat protection enablement must be boolean."},separators=(",",":"))
-  try:
-   result=dbus.SystemBus().call_blocking("systems.mantis.greyward.OpenSnitchPolicy1","/systems/mantis/greyward/OpenSnitchPolicy1","systems.mantis.greyward.OpenSnitchPolicy1","SetThreatIntelEnabled","s",(json.dumps(enabled),),timeout=DBUS_CALL_TIMEOUT)
-   value=json.loads(str(result))
-  except (dbus.DBusException,AttributeError,TypeError,json.JSONDecodeError):
-   value={"ok":False,"state":"UNAVAILABLE","detail":"The GREYWARD threat policy service is unavailable."}
-  if value.get("ok") is True: self._invalidate_caches()
-  return json.dumps(value,sort_keys=True,separators=(",",":"))
+ @dbus.service.method(BUS_NAME,in_signature="s",out_signature="s",async_callbacks=("reply","error"))
+ def SetThreatProtectionEnabled(self,payload,reply,error):
+  self._network_policy_async("SetThreatIntelEnabled",payload,reply)
  @dbus.service.method(BUS_NAME,in_signature="tu",out_signature="s")
  def GetNetworkActivity(self,since_sequence,limit):
   return json.dumps(network_activity(since_sequence,limit),sort_keys=True,separators=(",",":"))
@@ -1167,40 +1127,41 @@ class SecurityContext(dbus.service.Object):
   if value.get("ok") is True and str(value.get("profile") or "").upper()==target: self._invalidate_caches()
   return json.dumps(value,sort_keys=True,separators=(",",":"))
  @dbus.service.method(BUS_NAME,in_signature="s",out_signature="s")
- def NetworkSetRule(self,payload):
-  try: value=_validated_network_rule(json.loads(payload))
-  except (TypeError,ValueError,json.JSONDecodeError) as error: return json.dumps({"ok":False,"state":"INVALID","detail":str(error)[:240]},separators=(",",":"))
-  args=["set-rule","--path",value["application"],"--action",value["action"],"--duration",value["duration"]]
-  destination=value["destination"]
-  if destination["host"]: args.extend(["--host",destination["host"]])
-  if destination["ip"]: args.extend(["--ip",destination["ip"]])
-  if destination["port"]: args.extend(["--port",str(destination["port"])])
-  result=_policy_helper(args)
-  if result.get("ok") is True and result.get("rule_id"):
-   RECENT_POLICY_RULES[result["rule_id"]]=_recent_policy_rule(value,result["rule_id"])
-   self._invalidate_caches()
-  return json.dumps(result,separators=(",",":"))
+ def NetworkRulesList(self,payload):
+  return json.dumps(_network_rules_call("GetRules",str(payload)),separators=(",",":"))
  @dbus.service.method(BUS_NAME,in_signature="s",out_signature="s")
- def NetworkSetThreatException(self,payload):
-  try: value=_validated_network_rule(json.loads(payload))
-  except (TypeError,ValueError,json.JSONDecodeError) as error: return json.dumps({"ok":False,"state":"INVALID","detail":str(error)[:240]},separators=(",",":"))
-  destination=value["destination"]
-  if value["action"] != "allow" or value["duration"] != "always" or destination["host"] or not destination["ip"] or not destination["port"]:
-   return json.dumps({"ok":False,"state":"INVALID","detail":"A Feodo exception requires exact application, IP, and port scope."},separators=(",",":"))
-  args=["set-threat-exception","--path",value["application"],"--action","allow","--duration","always","--ip",destination["ip"],"--port",str(destination["port"])]
-  result=_policy_helper(args)
-  if result.get("ok") is True and result.get("rule_id"):
-   RECENT_POLICY_RULES.pop(result["rule_id"],None); self._invalidate_caches()
-  return json.dumps(result,separators=(",",":"))
+ def NetworkRulesPreview(self,payload):
+  return json.dumps(_network_rules_call("Preview",str(payload)),separators=(",",":"))
  @dbus.service.method(BUS_NAME,in_signature="s",out_signature="s")
- def NetworkRemoveRule(self,rule_id):
-  if not isinstance(rule_id,str) or not re.fullmatch(r"greyward-[a-f0-9]{20}",rule_id):
-   return json.dumps({"ok":False,"state":"INVALID","detail":"Only a GREYWARD-owned rule can be removed."},separators=(",",":"))
-  result=_policy_helper(["remove-rule","--rule-id",rule_id])
-  if result.get("ok") is True:
-   RECENT_POLICY_RULES.pop(rule_id,None)
-   self._invalidate_caches()
-  return json.dumps(result,separators=(",",":"))
+ def NetworkRulesCancel(self,payload):
+  return json.dumps(_network_rules_call("Cancel",str(payload)),separators=(",",":"))
+ def _network_policy_async(self,member,payload,reply):
+  if not NETWORK_RULES_SLOTS.acquire(blocking=False):
+   reply(json.dumps({"ok":False,"state":"BUSY","detail":"Another network review is in progress."}))
+   return
+  def work():
+   try: result=_network_rules_call(member,str(payload),120)
+   except Exception:
+    result={"ok":False,"state":"UNAVAILABLE","detail":"The network policy operation did not complete."}
+   finally: NETWORK_RULES_SLOTS.release()
+   def finish():
+    if result.get("ok") is True: self._invalidate_caches()
+    reply(json.dumps(result,separators=(",",":")))
+    return False
+   GLib.idle_add(finish)
+  threading.Thread(target=work,daemon=True).start()
+ @dbus.service.method(BUS_NAME,in_signature="s",out_signature="s",async_callbacks=("reply","error"))
+ def NetworkRulesApply(self,payload,reply,error):
+  self._network_policy_async("Apply",payload,reply)
+ @dbus.service.method(BUS_NAME,in_signature="s",out_signature="s",async_callbacks=("reply","error"))
+ def NetworkSetRule(self,payload,reply,error):
+  self._network_policy_async("SetRule",payload,reply)
+ @dbus.service.method(BUS_NAME,in_signature="s",out_signature="s",async_callbacks=("reply","error"))
+ def NetworkSetThreatException(self,payload,reply,error):
+  self._network_policy_async("SetThreatException",payload,reply)
+ @dbus.service.method(BUS_NAME,in_signature="s",out_signature="s",async_callbacks=("reply","error"))
+ def NetworkRemoveRule(self,rule_id,reply,error):
+  self._network_policy_async("RemoveRule",rule_id,reply)
  @dbus.service.method(BUS_NAME,in_signature="s",out_signature="s")
  def NetworkPromptDecision(self,payload):
   return json.dumps({"ok":False,"state":"DEFERRED","detail":"Interactive OpenSnitch decisions are not enabled until the end-to-end prompt lifecycle is validated."},separators=(",",":"))

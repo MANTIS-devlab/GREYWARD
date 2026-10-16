@@ -1,4 +1,11 @@
 polkit.addRule(function (action, subject) {
+    // The network broker independently verifies the unlocked local desktop,
+    // caller eligibility and exact reviewed transaction. Its user-service
+    // caller may lack a logind session; still require a fresh own-password
+    // challenge here, never wheel-only authorization or a retained ticket.
+    if (action.id === "org.greyward.NetworkRules1.manage") {
+        return subject.isInGroup("wheel") ? polkit.Result.AUTH_SELF : polkit.Result.NO;
+    }
     var program = action.lookup("program");
     var is_greyward_helper =
         action.id === "org.greyward.RecoveryPoint" ||

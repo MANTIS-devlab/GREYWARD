@@ -1,5 +1,11 @@
 # GREYWARD documentation index
 
+16 October network-rule implementation candidate: reviewed application and
+incoming transactions reuse OpenSnitch, firewalld and protected Polkit.
+Center 102 / Context 96 has installed enforcement evidence; normal desktop
+visual/PAM acceptance remains pending on the locked session. See
+[network rules](security-context/NETWORK_RULES.md).
+
 15 October native window placement: retain Labwc edge/corner snapping in the
 next ISO. Static defaults and actual Session RPM payload guards protect the
 configuration; real left-half and control-button checks are partial acceptance,

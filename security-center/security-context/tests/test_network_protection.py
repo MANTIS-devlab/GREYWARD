@@ -19,6 +19,12 @@ except ModuleNotFoundError as error:  # Fedora package dependencies are not pres
 
 @unittest.skipIf(NetworkState is None, "OpenSnitch runtime dependencies are unavailable on this host")
 class NetworkProtectionTests(unittest.TestCase):
+    def test_policy_upgrade_preserves_rules_and_defers_coupled_engine_activation(self):
+        spec = (Path(__file__).parents[2] / 'packaging/greyward-security-context.spec').read_text(encoding='utf-8')
+        self.assertIn('%config(noreplace) %attr(0600,root,root) %{_sysconfdir}/greyward/opensnitch-policy.json', spec)
+        self.assertIn('%systemd_postun greyward-opensnitch-control-plane.service', spec)
+        self.assertNotIn('%systemd_postun_with_restart greyward-opensnitch-control-plane.service', spec)
+
     def test_threat_policy_mutation_requires_explicit_wheel_bus_authorization(self):
         config = Path(__file__).parents[1] / "dbus" / "systems.mantis.greyward.OpenSnitchPolicy1.conf"
         text = config.read_text(encoding="utf-8")
@@ -75,6 +81,18 @@ class NetworkProtectionTests(unittest.TestCase):
         action, _duration, selected = select_policy_rule(connection)
         self.assertEqual(action, "allow")
         self.assertEqual(selected["name"], "GREYWARD local resolver stub")
+
+    def test_threat_exception_cannot_also_bypass_managed_dns(self):
+        connection = SimpleNamespace(process_path='/usr/bin/example', user_id=1001,
+                                     dst_ip='203.0.113.5', dst_host='', dst_port=53, protocol='udp')
+        policy = {'default_action': 'allow', 'default_duration': 'once',
+                  'dns_policy': {'enforce': True, 'ports': [53, 853]},
+                  'rules': [{'tier': 'THREAT_EXCEPTION', 'path': '/usr/bin/example',
+                             'uid': 1001, 'action': 'allow', 'ip': '203.0.113.5', 'port': 53}]}
+        with patch('greyward_security_context.control_plane.load_policy', return_value=policy):
+            action, _, selected = select_policy_rule(connection)
+        self.assertEqual(action, 'deny')
+        self.assertIn('deny direct DNS', selected['name'])
 
     def test_vpn_dns_exception_requires_active_vpn_dns_server(self):
         connection = SimpleNamespace(

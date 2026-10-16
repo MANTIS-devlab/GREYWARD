@@ -1,5 +1,19 @@
 # GREYWARD repository map
 
+Network-rule ownership: Context `network_rules.py` defines normalization,
+matching and storage; `network_rule_transactions.py` owns reviews/lifecycle;
+`network_firewall.py` owns native readback/rollback. `network_policy_service.py`,
+`user_bus.py` and named Tauri commands preserve the root boundary. Frontend
+`network-rules.js`/`.css` own presentation. The Context RPM installs
+`org.greyward.NetworkRules1.policy`. Validation: Context `test_network*.py`,
+frontend `network-rules.test.mjs` and UX contracts. Executable-line normalization
+belongs to the two Security Center/Context specs and spec-copy normalization to
+`environment/development/build-security-center.sh`; `test_network_packaging.py`
+protects scripts without corrupting binary assets. The Context spec defers
+coupled engine activation. Installed Center 102 / Context 96 has live network
+evidence; normal visual/PAM gates remain pending. Authority:
+[network rules](security-context/NETWORK_RULES.md).
+
 Native window-placement ownership: `environment/session/labwc/rc.xml`, packaged
 by `packaging/greyward-session/` and copied into enrolled compositor inputs by
 `security-center/packaging/application-security/desktop/prepare.py`. Validation:

@@ -1,12 +1,13 @@
 Name:           greyward-security-center
 Version:        0.1.0
-Release:        100%{?dist}
+Release:        102%{?dist}
 Summary:        GREYWARD local security posture and control application
 License:        GPL-3.0-only AND Apache-2.0 AND OFL-1.1 AND CC0-1.0
 Source0:        %{name}-%{version}.tar.gz
 %{!?greyward_cargo_target:%global greyward_cargo_target target}
 
 BuildRequires:  cargo
+BuildRequires:  python3
 BuildRequires:  rust
 BuildRequires:  pkgconfig(webkit2gtk-4.1)
 BuildRequires:  openssl-devel
@@ -31,6 +32,15 @@ surfaces are limited to explicit typed Tauri or Security Context commands.
 
 %prep
 %autosetup
+python3 - <<'PY'
+from pathlib import Path
+for root in ('data', 'file-context'):
+    for path in Path(root).rglob('*'):
+        if path.is_file():
+            data = path.read_bytes()
+            if data.startswith(b'#!') and not data.startswith(b'#!['):
+                path.write_bytes(data.replace(b'\r\n', b'\n'))
+PY
 
 %build
 build_started=$SECONDS
@@ -106,6 +116,12 @@ install -Dm0755 greyward-safe-open.so \
 %postun
 /usr/bin/fc-cache -f >/dev/null 2>&1 || :
 %changelog
+* Fri Oct 16 2026 MANTIS SYSTEMS - 0.1.0-102
+- Normalize executable text launchers from Windows source archives before packaging.
+
+* Fri Oct 16 2026 MANTIS SYSTEMS - 0.1.0-101
+- Add reviewed application and incoming network rules through typed Context calls.
+
 * Mon Oct 12 2026 MANTIS SYSTEMS - 0.1.0-100
 - Rebuild the source-bound manifest after protected display setup changed.
 

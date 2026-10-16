@@ -223,7 +223,7 @@ test("normalizes legacy protection navigation and keeps contextual tools discove
   assert.match(source, /const normalizePage/);
   assert.match(source, /const pageParents = Object\.freeze\(\{devices: "system"/);
   assert.match(source, /function contextNavigation/);
-  assert.match(source, /\["network", "network\.protection"\], \["threats", "network\.threats"\]/);
+  assert.match(source, /\["network", "network\.protection"\], \["network-rules", "network\.rules\.title"\], \["threats", "network\.threats"\]/);
   assert.doesNotMatch(source, /function systemSecurityMarkup/);
   assert.match(source, /\["evidence", "route\.evidence"\], \["devices", "workspace\.devices"\]/);
   assert.match(source, /\["applications", "route\.apps", "applications", "workspace\.protection"\]/);
@@ -538,8 +538,9 @@ test("keeps Network Activity filters as one model across mode and clear transiti
 test("matches the Tauri argument names for network rules and history", () => {
   assert.match(source, /const filters = \{from, limit: NETWORK_HISTORY_PAGE_SIZE/);
   assert.match(source, /invokeBounded\("get_network_history", \{filters\}, 12000\)/);
-  assert.match(source, /invokeBounded\("network_set_rule", \{payload\}, 15000\)/);
-  assert.match(source, /invokeBounded\("network_remove_rule", \{ruleId: button\.dataset\.ruleId\}, 15000\)/);
+  assert.match(source, /networkRules\.begin\(/);
+  assert.match(source, /await loadPage\("network-rules", \{force: true\}\)/);
+  assert.match(source, /operation: "delete", id: button\.dataset\.ruleId/);
 });
 
 test("refreshes GREYWARD-owned rules from the typed policy service", () => {
@@ -548,8 +549,10 @@ test("refreshes GREYWARD-owned rules from the typed policy service", () => {
   assert.match(userBus, /call_blocking\([^\n]+"ListRules","",\(\),timeout=DBUS_CALL_TIMEOUT\)/);
   assert.match(userBus, /def _merge_policy_rules\(value\):/);
   assert.match(userBus, /return _normalize_network_capabilities\(_merge_policy_rules\(value\)\)[\s\S]*def network_activity/);
-  assert.match(userBus, /RECENT_POLICY_RULES\[result\["rule_id"\]\]=_recent_policy_rule/);
-  assert.match(policy, /def list_rules\(\):/);
+  assert.match(userBus, /def _network_policy_async\(self,member,payload,reply\)/);
+  assert.match(userBus, /self\._network_policy_async\("SetRule",payload,reply\)/);
+  assert.match(userBus, /if result\.get\("ok"\) is True: self\._invalidate_caches\(\)/);
+  assert.match(policy, /self\.manager\.store\.read\(\)\['rules'\]/);
   assert.match(policy, /def ListRules\(self\):/);
   const busPolicy = readFileSync(new URL("../../security-context/dbus/systems.mantis.greyward.OpenSnitchPolicy1.conf", import.meta.url), "utf8");
   assert.match(busPolicy, /send_member="ListRules"/);

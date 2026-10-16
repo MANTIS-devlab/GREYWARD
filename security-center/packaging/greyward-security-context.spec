@@ -1,11 +1,12 @@
 Name:           greyward-security-context
 Version:        0.1.0
-Release:        92%{?dist}
+Release:        98%{?dist}
 Summary:        GREYWARD OpenSnitch control plane and Security Context session bus
 License:        GPL-3.0-only
 Source0:        %{name}-%{version}.tar.gz
 
 BuildArch:      noarch
+BuildRequires:  python3
 Requires:       opensnitch
 Recommends:     libmaxminddb-utils
 Requires:       python3-dbus
@@ -27,6 +28,7 @@ Requires:       dnf5daemon-server-polkit
 Requires:       btrfs-progs
 Requires:       restic
 Requires:       polkit
+Requires:       firewalld
 Requires(post): systemd
 Requires(preun): systemd
 Requires(postun): systemd
@@ -39,6 +41,14 @@ redacted typed result; it exposes no shell or raw clamd control.
 
 %prep
 %autosetup
+python3 - <<'PY'
+from pathlib import Path
+for path in Path('security-context').rglob('*'):
+    if path.is_file():
+        data = path.read_bytes()
+        if data.startswith(b'#!') and not data.startswith(b'#!['):
+            path.write_bytes(data.replace(b'\r\n', b'\n'))
+PY
 
 %build
 
@@ -78,6 +88,7 @@ install -Dm0644 security-context/dbus/systems.mantis.greyward.SecurityContext1.s
 install -Dm0644 security-context/dbus/org.greyward.Update1.service %{buildroot}%{_datadir}/dbus-1/services/org.greyward.Update1.service
 install -Dm0644 security-context/polkit/org.greyward.Update1.policy %{buildroot}%{_datadir}/polkit-1/actions/org.greyward.Update1.policy
 install -Dm0644 security-context/polkit/org.greyward.RecoveryPoint.policy %{buildroot}%{_datadir}/polkit-1/actions/org.greyward.RecoveryPoint.policy
+install -Dm0644 security-context/polkit/org.greyward.NetworkRules1.policy %{buildroot}%{_datadir}/polkit-1/actions/org.greyward.NetworkRules1.policy
 install -Dm0644 security-context/polkit/49-greyward-recovery.rules %{buildroot}%{_sysconfdir}/polkit-1/rules.d/49-greyward-recovery.rules
 install -Dm0644 security-context/polkit/49-greyward-usbguard-read.rules %{buildroot}%{_sysconfdir}/polkit-1/rules.d/49-greyward-usbguard-read.rules
 install -Dm0644 security-context/dbus/systems.mantis.greyward.ClamAvScan1.service %{buildroot}%{_datadir}/dbus-1/system-services/systems.mantis.greyward.ClamAvScan1.service
@@ -111,7 +122,9 @@ install -Dm0644 security-context/tmpfiles.d/greyward-secure-dns.conf %{buildroot
 %systemd_preun greyward-update-worker.socket
 
 %postun
-%systemd_postun_with_restart greyward-opensnitch-control-plane.service
+# Restarting this required unit also stops OpenSnitch. Activate engine changes
+# through an explicit maintenance transaction or the normal offline update boot.
+%systemd_postun greyward-opensnitch-control-plane.service
 %systemd_postun_with_restart greyward-opensnitch-policy.service
 %systemd_postun_with_restart greyward-feodo-update.timer
 %systemd_postun_with_restart greyward-auto-update.timer
@@ -143,7 +156,7 @@ install -Dm0644 security-context/tmpfiles.d/greyward-secure-dns.conf %{buildroot
 %{_libexecdir}/greyward-backup
 %{_libexecdir}/greyward-secure-dns
 %{_libexecdir}/greyward-feodo-update
-%attr(0600,root,root) %{_sysconfdir}/greyward/opensnitch-policy.json
+%config(noreplace) %attr(0600,root,root) %{_sysconfdir}/greyward/opensnitch-policy.json
 %{_unitdir}/greyward-opensnitch-control-plane.service
 %{_unitdir}/greyward-opensnitch-policy.service
 %{_unitdir}/greyward-feodo-update.service
@@ -160,6 +173,7 @@ install -Dm0644 security-context/tmpfiles.d/greyward-secure-dns.conf %{buildroot
 %{_datadir}/dbus-1/services/org.greyward.Update1.service
 %{_datadir}/polkit-1/actions/org.greyward.Update1.policy
 %{_datadir}/polkit-1/actions/org.greyward.RecoveryPoint.policy
+%{_datadir}/polkit-1/actions/org.greyward.NetworkRules1.policy
 %config(noreplace) %{_sysconfdir}/polkit-1/rules.d/49-greyward-recovery.rules
 %config(noreplace) %{_sysconfdir}/polkit-1/rules.d/49-greyward-usbguard-read.rules
 %{_datadir}/dbus-1/system-services/systems.mantis.greyward.ClamAvScan1.service
@@ -173,6 +187,25 @@ install -Dm0644 security-context/tmpfiles.d/greyward-secure-dns.conf %{buildroot
 
 
 %changelog
+* Fri Oct 16 2026 MANTIS SYSTEMS - 0.1.0-98
+- Keep legacy Allow rules separate from explicit managed-DNS exceptions.
+
+* Fri Oct 16 2026 MANTIS SYSTEMS - 0.1.0-97
+- Require fresh network-rule authentication for eligible session-service callers.
+
+* Fri Oct 16 2026 MANTIS SYSTEMS - 0.1.0-96
+- Keep synchronous private network calls outside the service GLib loop.
+
+* Fri Oct 16 2026 MANTIS SYSTEMS - 0.1.0-95
+- Verify the live engine generation independently of activity freshness.
+- Defer coupled OpenSnitch engine activation instead of restarting it implicitly.
+
+* Fri Oct 16 2026 MANTIS SYSTEMS - 0.1.0-94
+- Normalize executable text entry points before packaging; retain reviewed policy.
+
+* Fri Oct 16 2026 MANTIS SYSTEMS - 0.1.0-93
+- Add revisioned network policy, fresh Polkit review and scoped firewalld recovery.
+
 * Mon Oct 12 2026 MANTIS SYSTEMS - 0.1.0-92
 - Rebuild the source-bound manifest after protected display setup changed.
 

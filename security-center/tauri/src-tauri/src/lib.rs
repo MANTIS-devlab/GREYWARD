@@ -583,29 +583,16 @@ fn retry_secure_dns() -> Result<Value, String> {
     security_context_method("systems.mantis.greyward.SecurityContext1.RetrySecureDns")
 }
 #[tauri::command]
-fn network_set_rule(payload: Value) -> Result<Value, String> {
-    let encoded = serde_json::to_string(&payload)
-        .map_err(|_| "The network rule could not be encoded.".to_string())?;
-    security_context_payload_method(
-        "systems.mantis.greyward.SecurityContext1.NetworkSetRule",
-        &encoded,
-    )
+async fn network_set_rule(payload: Value) -> Result<Value, String> {
+    network_rules_call("NetworkSetRule", payload).await
 }
 #[tauri::command]
-fn network_set_threat_exception(payload: Value) -> Result<Value, String> {
-    let encoded = serde_json::to_string(&payload)
-        .map_err(|_| "The threat exception could not be encoded.".to_string())?;
-    security_context_payload_method(
-        "systems.mantis.greyward.SecurityContext1.NetworkSetThreatException",
-        &encoded,
-    )
+async fn network_set_threat_exception(payload: Value) -> Result<Value, String> {
+    network_rules_call("NetworkSetThreatException", payload).await
 }
 #[tauri::command]
-fn network_remove_rule(rule_id: String) -> Result<Value, String> {
-    security_context_payload_method(
-        "systems.mantis.greyward.SecurityContext1.NetworkRemoveRule",
-        &rule_id,
-    )
+async fn network_remove_rule(rule_id: String) -> Result<Value, String> {
+    network_rules_call("NetworkRemoveRule", Value::String(rule_id)).await
 }
 #[tauri::command]
 fn network_prompt_decision(payload: Value) -> Result<Value, String> {
@@ -615,6 +602,64 @@ fn network_prompt_decision(payload: Value) -> Result<Value, String> {
         "systems.mantis.greyward.SecurityContext1.NetworkPromptDecision",
         &encoded,
     )
+}
+
+async fn network_rules_call(member: &'static str, payload: Value) -> Result<Value, String> {
+    let encoded = serde_json::to_string(&payload)
+        .map_err(|_| "The rule request could not be encoded.".to_string())?;
+    if encoded.len() > 1_048_576 || encoded.contains('\0') {
+        return Err("The rule request exceeds its size limit.".into());
+    }
+    tauri::async_runtime::spawn_blocking(move || {
+        let connection = Connection::new_session()
+            .map_err(|_| "Security Context is unavailable.".to_string())?;
+        let timeout = if !matches!(
+            member,
+            "NetworkRulesList" | "NetworkRulesPreview" | "NetworkRulesCancel"
+        ) {
+            125
+        } else {
+            15
+        };
+        let proxy = connection.with_proxy(
+            SECURITY_CONTEXT_BUS_NAME,
+            SECURITY_CONTEXT_OBJECT_PATH,
+            std::time::Duration::from_secs(timeout),
+        );
+        let request = if member == "NetworkRemoveRule" {
+            serde_json::from_str::<String>(&encoded)
+                .map_err(|_| "Invalid rule identifier.".to_string())?
+        } else {
+            encoded
+        };
+        let (reply,): (String,) = proxy
+            .method_call(SECURITY_CONTEXT_BUS_NAME, member, (request,))
+            .map_err(|_| "The network rule service did not complete the request.".to_string())?;
+        serde_json::from_str(&reply)
+            .map_err(|_| "The rule service returned invalid data.".to_string())
+    })
+    .await
+    .map_err(|_| "The network rule request could not complete.".to_string())?
+}
+
+#[tauri::command]
+async fn network_rules_list(payload: Value) -> Result<Value, String> {
+    network_rules_call("NetworkRulesList", payload).await
+}
+
+#[tauri::command]
+async fn network_rules_preview(payload: Value) -> Result<Value, String> {
+    network_rules_call("NetworkRulesPreview", payload).await
+}
+
+#[tauri::command]
+async fn network_rules_apply(payload: Value) -> Result<Value, String> {
+    network_rules_call("NetworkRulesApply", payload).await
+}
+
+#[tauri::command]
+async fn network_rules_cancel(payload: Value) -> Result<Value, String> {
+    network_rules_call("NetworkRulesCancel", payload).await
 }
 #[tauri::command]
 fn set_network_trust_zone(
@@ -2551,6 +2596,10 @@ pub fn run() {
             network_set_rule,
             network_set_threat_exception,
             network_remove_rule,
+            network_rules_list,
+            network_rules_preview,
+            network_rules_apply,
+            network_rules_cancel,
             network_prompt_decision,
             set_network_trust_zone,
             get_applications,
