@@ -91,12 +91,25 @@ this delivery.
 
 ## Validation and rollout status
 
-Focused and regression suites pass: 386 Context tests on Fedora, 138 frontend
+Focused and regression suites pass: 386 Context tests on Fedora, 150 frontend
 tests and 208 Rust tests (22 ignored). Static and repository validation pass.
 These checks cover matcher, migration, transaction, transport and packaging
 contracts; they do not replace the outstanding desktop acceptance below.
 
-Installed development candidate: Center 102 / Context 98. Actual installed
+Center 102 failed to bootstrap with the network module loaded: its controller
+received the lexical `esc` helper before initialization. Center 103 moves
+controller creation after the helper. The regression executes every bundled
+script in actual HTML order for Overview and Rules with provider reads pending;
+it reproduces the pre-fix ReferenceError and does not invent provider state.
+This startup check runs in the existing network-rule CI suite. It supplements,
+rather than replaces, normal installed desktop validation.
+The normal Center 103 process was restarted and its executable hash matches the
+installed binary. Live accessibility readback from that exact process confirms
+Network protection and Rules render with the real backend, including the empty
+rule list and editor controls. This is installed UI evidence, not a screenshot
+or visual-quality acceptance; VMConnect remains minimized.
+
+Installed development candidate: Center 103 / Context 98. Actual installed
 OpenSnitch tests demonstrate a root-UID curl block, same-UID Python separation,
 different-UID curl access, disable/re-enable, policy-service restart persistence,
 stale/forged refusal and cleanup. Native incoming tests from a separate machine
@@ -114,7 +127,8 @@ refusal to a required AUTH_SELF challenge, with authorization remaining false.
 This verifies challenge eligibility without entering credentials. Successful
 protected GUI authentication, cancellation/wrong-password interaction, visual
 review, narrow-window/keyboard and actual WebKit import/export acceptance remain
-pending because the desktop is locked. IPv6/UDP packet, real-time expiry and
+pending. The desktop is unlocked; the console must be visible for visual review.
+IPv6/UDP packet, real-time expiry and
 clean-image acceptance are separate uncompleted gates; model/source tests do
 not substitute for them. Interactive prompts remain deferred.
 
