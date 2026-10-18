@@ -65,7 +65,7 @@ unvalidated; development evidence is not release acceptance.
 - firewalld: inbound baseline, zones, trust, SSH/service exposure, and its nftables state.
 - OpenSnitch: application interception, attribution, rules, and only its own nftables state. GREYWARD uses the documented v1.8.0 gRPC/protobuf server contract over a protected local Unix socket; it does not ship Qt/UI/database code.
 - GREYWARD: read/present combined state; never write raw nftables or proxy arbitrary privileged requests.
-- USBGuard: upstream USB enforcement and rule owner. GREYWARD uses its supported system D-Bus/Polkit interface through the Security Context boundary; it neither writes raw USB authorization nor creates broad trust rules.
+- USBGuard: upstream USB enforcement and rule owner. GREYWARD reads its bounded device projection through Security Context. The ordinary taskbar invokes a fixed client in `greyward_usbguard_approval_t`, which has only protected-authentication IPC access. The protected shell launches the fixed executor in `greyward_usbguard_auth_approval_t`; only that executor can request USBGuard changes through upstream Polkit. It accepts one current device reference and `once`/`always`, then verifies state and persistent trust. Ordinary applications, the long-lived user service and the authentication UI itself have no USBGuard write access. GREYWARD does not write raw USB authorization or create broad trust rules.
 - ClamAV, NetworkManager, and systemd: upstream capability/policy owners.
 - PipeWire/WirePlumber: upstream media graph owners. GREYWARD reads only linked stream metadata through `pw-dump`; it records sensor type, state, and reliable application label only. It captures no media and offers no revoke action without proven upstream semantics.
 - NetworkManager and systemd-resolved: connection, VPN, routing-domain and resolver owners. The GREYWARD Secure DNS reconciler uses typed D-Bus APIs and, for a single site-private link, one reversible runtime public-scope drop-in. It never edits persistent resolver configuration or starts another resolver daemon.
@@ -95,13 +95,66 @@ signals, update transaction phase, current privacy profile, and fixed
 capability flags. It never exposes evidence secrets, raw OpenSnitch protobuf,
 raw nftables, absolute paths, or generic actions.
 
-The shell supports typed `SetPrivacyProfile`, `RequestUsbTrust(connection_ref,
-mode)` and capability-gated clipboard clearing. Profile changes keep the closed
-values `STANDARD`, `PRIVATE`, and `TRAVEL` and the existing transactional helper.
-USB actions delegate to USBGuard's upstream Polkit authorization and require
-state readback. The shared presentation separates posture, live activity and
-unresolved operations; see [LIVE_PRIVACY_CAPSULE.md](LIVE_PRIVACY_CAPSULE.md) for
-shell presentation and delivery semantics. Network rules, file remediation and
+The shell supports typed `SetPrivacyProfile`, capability-gated clipboard
+clearing, and a compatibility `RequestUsbTrust(connection_ref, mode)` method
+that refuses with `SESSION_REQUIRED`. It does not mutate USBGuard from the
+long-lived user service because that process has no active logind session.
+The taskbar starts a fixed client helper with one current device reference and
+`once` or `always`; the helper reads a fresh, UID-owned USB availability record at
+`auth-UID/runtime/usbguard-approval/readiness.json` and
+calls the protected shell's `authentication.requestUsbTrust` IPC handler by
+Quickshell PID. PID selection must not be combined with `--any-display` (the
+CLI rejects the two selectors together). The taskbar client runs in
+`greyward_usbguard_approval_t`; it can read only the typed readiness/IPC
+endpoints and has no USBGuard or Polkit D-Bus permission. The protected shell
+checks that its Polkit agent is registered and idle, starts the fixed auth-only
+helper in its active process tree, and exposes only the request's pending/final
+state back over the same IPC handler. That helper transitions into the distinct
+`greyward_usbguard_auth_approval_t` domain, which alone has USBGuard and Polkit
+D-Bus permissions. Ordinary DMS startup verifies its selected shell and taskbar
+client without reading or hashing this authentication-only executable; root
+full verification checks the receipt digest. This keeps the selector inside
+its SELinux boundary instead of treating a denied cross-domain read as a DMS
+startup error. The auth helper requests USBGuard's existing
+interactive Polkit authorization and reads back the exact device state and
+persistent rule before returning `COMPLETE`. Neither the DMS taskbar parent nor
+the sessionless Security Context service receives USBGuard D-Bus permissions.
+The dedicated SELinux policy labels the USB metadata directory, its files and IPC endpoints
+separately from the rest of the private runtime and permits only this typed
+client connection. The general `authentication-ready.json` heartbeat remains
+private and unchanged. Quickshell's FileView uses atomic replacement: a named
+transition on the final filename alone cannot label its temporary inode. A
+default file transition in the dedicated metadata directory covers replacement
+inodes without exposing other authentication files. Both heartbeats stay atomic;
+the client rejects stale, shared, symlinked or multiply linked records. Go CPU
+autosizing is disabled for these two tiny clients; no cgroup access is granted.
+The IPC client may allocate its own typed anonymous Qt log buffers and private
+datagram sockets; it cannot read generic tmpfs or protected authentication logs.
+The fixed Python executor calls its CLI entrypoint explicitly and emits a typed
+JSON result. An isolated subprocess regression checks the actual entrypoint,
+including nonzero failure status, without requesting USB authorization.
+The authentication-shell focus candidate also handles late Qt window activation,
+after the session lock or form has mapped. Focus is restored on window entry and
+visibility changes, without a repeating focus-stealing timer. Diagnostic messages
+contain only focus booleans and lifecycle reasons, never keys, password text or
+length. The offscreen regression uses the generated form and synthetic input;
+physical-keyboard acceptance still requires an approved normal-seat activation.
+Enrollment restores both helper executable labels after
+loading the policy. Its quiescent migration also relabels readiness,
+instance-lock and IPC socket files left behind by older sessions; newly created
+endpoints receive the dedicated types through policy transitions. Account-name
+checks and a protected-process check refuse migration on an active local seat.
+USB identity parsing distinguishes a device's own `hash` from `parent-hash`;
+the latter alone never establishes persistent device identity.
+The helper rejects stale references and host controllers and limits persistent
+trust to stable identities. Native USB notifications are review-only because
+their callback runs in the sessionless user service; they direct the user to
+the taskbar panel where an active authorization prompt can be shown. Live
+acceptance requires verified USBGuard state and rule readback plus withdrawal
+of the matching alert; a process exit or UI message alone does not prove trust.
+The shared presentation separates posture, live activity and unresolved
+operations; see [LIVE_PRIVACY_CAPSULE.md](LIVE_PRIVACY_CAPSULE.md) for shell
+presentation and delivery semantics. Network rules, file remediation and
 updates remain targeted Security Center workflows.
 
 The DMS `greywardSecure` plugin uses the shell projection through `/usr/bin/gdbus`

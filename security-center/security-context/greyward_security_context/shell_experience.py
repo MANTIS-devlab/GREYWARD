@@ -72,7 +72,7 @@ def build_experience(shell, capsule, devices, usb_error, files, network, operati
                 pending.append(item("usb:" + ref, "usb", "ACTION", device.get("name") or "USB device",
                                     op.get("detail") or "Blocked until you approve this device.", "devices",
                                     [] if busy else actions, connection_ref=ref, operation=op.get("state", "IDLE"),
-                                    notification_title="USB device needs approval", notification_detail=(device.get('name') or 'USB device') + ': ' + (op.get('detail') or 'Blocked until you approve it.')))
+                                    notification_title="USB device needs approval", notification_detail=(device.get('name') or 'USB device') + ': Open the GREYWARD taskbar panel to approve this device.'))
             elif device.get("authorized"):
                 activity.append({"id": "usb:" + ref, "kind": "usb", "icon": "usb", "title": device.get("name") or "USB device",
                                  "detail": "Trusted device connected" if device.get("trusted") else "Allowed for this connection", "route": "devices"})

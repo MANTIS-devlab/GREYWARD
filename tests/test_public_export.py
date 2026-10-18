@@ -14,6 +14,14 @@ POLICY = json.loads((ROOT / 'tools/publication-policy.json').read_text())
 
 
 class PublicationBoundaryTests(unittest.TestCase):
+    def test_validation_host_and_account_are_not_published_in_runtime_notes(self):
+        text = 'Readback on `.150` at 192.168.1.150 for cicada.'
+        cleaned = EXPORT.sanitized_text(text, 'docs/STATUS.md', set())
+        self.assertNotIn('192.168.1.150', cleaned)
+        self.assertNotIn('`.150`', cleaned)
+        self.assertNotIn('cicada', cleaned)
+        self.assertIn('<validation-host>', cleaned)
+
     def test_extensionless_installed_scripts_keep_linux_line_endings(self):
         attributes = (ROOT / '.gitattributes').read_text()
         self.assertIn('environment/production/greyward-* text eol=lf', attributes)

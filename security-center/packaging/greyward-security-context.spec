@@ -1,6 +1,6 @@
 Name:           greyward-security-context
 Version:        0.1.0
-Release:        98%{?dist}
+Release:        104%{?dist}
 Summary:        GREYWARD OpenSnitch control plane and Security Context session bus
 License:        GPL-3.0-only
 Source0:        %{name}-%{version}.tar.gz
@@ -32,6 +32,9 @@ Requires:       firewalld
 Requires(post): systemd
 Requires(preun): systemd
 Requires(postun): systemd
+
+Requires:       gtk3
+Requires:       rpm
 
 %description
 A narrow GREYWARD-owned OpenSnitch v1.8.0 gRPC/protobuf control plane and
@@ -187,6 +190,24 @@ install -Dm0644 security-context/tmpfiles.d/greyward-secure-dns.conf %{buildroot
 
 
 %changelog
+* Sun Oct 18 2026 MANTIS SYSTEMS - 0.1.0-104
+- Invoke and regression-test the fixed protected USB approval CLI entrypoint.
+
+* Sun Oct 18 2026 MANTIS SYSTEMS - 0.1.0-103
+- Explain why sessionless USB approvals must be completed from the taskbar.
+
+* Sun Oct 18 2026 MANTIS SYSTEMS - 0.1.0-102
+- Make the fixed USB approval script import correctly under isolated Python.
+
+* Sat Oct 17 2026 MANTIS SYSTEMS - 0.1.0-101
+- Run USBGuard approval from the active protected DMS session and verify USBGuard readback.
+
+* Fri Oct 16 2026 MANTIS SYSTEMS - 0.1.0-100
+- Project installed desktop application names, icons and safe executable candidates without launching them.
+
+* Fri Oct 16 2026 MANTIS SYSTEMS - 0.1.0-99
+- Project bounded installed firewalld service definitions for the shared rule editor.
+
 * Fri Oct 16 2026 MANTIS SYSTEMS - 0.1.0-98
 - Keep legacy Allow rules separate from explicit managed-DNS exceptions.
 

@@ -24,10 +24,16 @@ class PackageVerificationTests(unittest.TestCase):
         (self.root/'shell').mkdir(parents=True); (self.root/'bin').mkdir()
         (self.root/'shell/sample.qml').write_text('fixture')
         (self.root/'bin/dms').write_text('fixture binary; never executed')
+        self.approval_helper = Path(self.temporary.name)/'greyward-usbguard-approval'
+        self.approval_helper.write_text('fixed helper fixture; never executed')
+        self.auth_approval_helper = Path(self.temporary.name)/'greyward-usbguard-auth-approval'
+        self.auth_approval_helper.write_text('protected-session helper fixture; never executed')
         self.selector = Path(self.temporary.name)/'selector'; self.selector.write_text('v1.6.2-99\n')
         self.receipt = {'schema': 'greyward.dms-release/v1', 'releaseId': 'v1.6.2-99',
                         'compatibility': {'quickshell': 'test-1'},
                         'binarySha256': hashlib.sha256((self.root/'bin/dms').read_bytes()).hexdigest(),
+                        'usbguardApprovalSha256': hashlib.sha256(self.approval_helper.read_bytes()).hexdigest(),
+                        'usbguardAuthApprovalSha256': hashlib.sha256(self.auth_approval_helper.read_bytes()).hexdigest(),
                         'shellFiles': {'sample.qml': hashlib.sha256(b'fixture').hexdigest()}, 'firstPartyFiles': {}}
         self.save()
         self.packages = patch.object(verifier.subprocess, 'check_output', return_value='quickshell\ttest-1\n')
@@ -37,7 +43,8 @@ class PackageVerificationTests(unittest.TestCase):
         (self.root/'release.json').write_text(json.dumps(self.receipt))
 
     def verify(self, full=True):
-        return verifier.verify(self.selector, self.base, full=full)
+        return verifier.verify(self.selector, self.base, full=full, approval_helper=self.approval_helper,
+                               auth_approval_helper=self.auth_approval_helper)
 
     def test_valid_pair_and_changed_shell_refusal_at_startup(self):
         self.assertEqual(self.verify(), self.root)
@@ -51,6 +58,24 @@ class PackageVerificationTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'inventory'): self.verify()
         extra.unlink(); (self.root/'bin/dms').write_text('changed')
         with self.assertRaisesRegex(ValueError, 'digest'): self.verify()
+
+    def test_changed_approval_helper_refuses_startup(self):
+        self.approval_helper.write_text('changed helper')
+        with self.assertRaisesRegex(ValueError, 'usbguard approval helper'): self.verify()
+
+    def test_changed_protected_session_helper_refuses_startup(self):
+        self.auth_approval_helper.write_text('changed helper')
+        with self.assertRaisesRegex(ValueError, 'protected-session USB approval helper'): self.verify()
+
+    def test_unprivileged_startup_does_not_inspect_protected_helper(self):
+        trusted = verifier.trusted
+        def refuse_protected(path, checked=None):
+            if path == self.auth_approval_helper:
+                raise AssertionError('ordinary DMS startup inspected the protected helper')
+            return trusted(path, checked)
+        with patch.object(verifier.os, 'geteuid', return_value=1000), \
+             patch.object(verifier, 'trusted', side_effect=refuse_protected):
+            self.assertEqual(self.verify(), self.root)
 
     def test_writable_binary_refuses_even_ipc_selection(self):
         (self.root/'bin/dms').chmod(0o666)

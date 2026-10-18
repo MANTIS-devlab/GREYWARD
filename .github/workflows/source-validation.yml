@@ -68,6 +68,10 @@ jobs:
         run: /usr/bin/python3 -m unittest discover -s security-context/tests -p 'test_*.py'
       - name: Image source tests
         run: /usr/bin/python3 -m unittest tests.test_image_baseline tests.test_image_offline tests.test_image_stage_text
+      - name: Protected USB approval and ISO regression contracts
+        # Migration fixtures deliberately require real root-owned ancestors.
+        # Use the disposable runner's authority; do not relax ownership checks.
+        run: sudo /usr/bin/python3 -m unittest tests.test_application_authentication tests.test_dms_build_inputs tests.test_dms_package_verify tests.test_dms_shell_migration tests.test_usbguard_release_inputs
 
   rust:
     name: Rust source checks

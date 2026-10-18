@@ -13,7 +13,9 @@ POLICY_INTERFACE = 'org.usbguard.Policy1'
 ALLOW, BLOCK = 0, 1
 DEVICE_ID = re.compile(r'^[1-9][0-9]*$')
 DEVICE_IDENTIFIER = re.compile(r'\bid\s+([0-9a-fA-F]{4}:[0-9a-fA-F]{4})\b')
-ATTR = re.compile(r'\b(?P<key>name|serial|hash|via-port)\s+"(?P<value>[^"]*)"')
+# A word boundary also matches the suffix of parent-hash. That is not the
+# device's own identity and must never substitute for its hash/serial.
+ATTR = re.compile(r'(?<![\w-])(?P<key>name|serial|hash|via-port)\s+"(?P<value>[^"]*)"')
 INTERFACE = re.compile(r'with-interface\s+(\{[^}]*\}|"[^"]*"|\S+)')
 DBUS_CALL_TIMEOUT = 8
 

@@ -16,6 +16,13 @@ verified Fedora base ISO, its checksum, builder baseline, matched component RPMs
 and Security Center manifest. Outputs include an ISO checksum and provenance.
 Offline RPM and Flatpak closure and the embedded installer payload are checked.
 
+Protected USB approval is a mandatory next-image input. Complete staging rejects
+stale selected RPM payloads through `environment/image/verify-usbguard-inputs.py`,
+including the authentication assembler, Python entrypoint, metadata materializer,
+SELinux compiler inputs and Go source receipts. Build the matched versions in
+`docs/security-center/USB_APPROVAL.md`; do not reuse earlier same-name artifacts.
+Source gates and the validated installed hotfix do not certify a fresh ISO.
+
 Retain native Labwc edge/corner snapping and top-edge maximization in the next
 candidate. Static checks protect enabled defaults, and staging compares the
 Session RPM's actual Labwc configuration against canonical source. Enrollment

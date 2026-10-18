@@ -1,6 +1,6 @@
 Name: greyward-application-enrollment
 Version: 0.1.0
-Release: 32%{?dist}
+Release: 46%{?dist}
 Summary: GREYWARD protected-session installation inputs
 License: GPL-2.0-only AND GPL-3.0-only AND MIT
 Source0: %{name}-%{version}.tar.gz
@@ -29,8 +29,8 @@ BuildRequires: pkgconfig(libsfdo-desktop)
 BuildRequires: pkgconfig(libsfdo-icon)
 BuildRequires: gettext
 BuildRequires: pkgconfig(cmocka)
-Requires: greyward-application-security-experimental = 0.1.0-51%{?dist}
-Requires: greyward-dms = 1.6.2-17%{?dist}
+Requires: greyward-application-security-experimental = 0.1.0-55%{?dist}
+Requires: greyward-dms = 1.6.2-23%{?dist}
 Requires: greyward-session >= 0.1.0-10
 Requires: selinux-policy-targeted = 44.11-1.fc44
 Requires: flatpak-selinux
@@ -84,6 +84,8 @@ bash -n packaging/greyward-enrollment/build.sh
 %install
 base=%{buildroot}%{_datadir}/greyward-application-security/enrollment
 install -d "$base/policy"
+# Retain the exact public compiler inputs for source-aware ISO staging.
+install -m0444 policy/*.te policy/*.fc "$base/policy/"
 install -m0444 policy/*.pp environment/production/selinux/greyward-application-auth.cil environment/production/selinux/greyward-application-metadata.cil environment/production/selinux/greyward-administration.cil packaging/greyward-enrollment/runtime-boundary.cil "$base/policy/"
 install -m0444 inputs.json "$base/"
 install -m0444 packaging/greyward-enrollment/installer-accounts.py "$base/"
@@ -105,6 +107,40 @@ install -Dm0644 security-center/packaging/application-security/greyward-maintena
 %{_unitdir}/greyward-maintenance-console.service
 
 %changelog
+* Sun Oct 18 2026 MANTIS SYSTEMS - 0.1.0-46
+- Ship validated USB approval policy inputs and reject stale ISO package closure.
+
+* Sun Oct 18 2026 MANTIS SYSTEMS - 0.1.0-45
+- Rebuild the protected authentication shell with the corrected QML template and relabel stale USB IPC endpoints.
+- Label atomic USB readiness metadata separately and match active login account names before migration.
+
+* Sun Oct 18 2026 MANTIS SYSTEMS - 0.1.0-44
+- Relabel stale protected USB authorization readiness and IPC endpoints during migration.
+
+* Sun Oct 18 2026 MANTIS SYSTEMS - 0.1.0-43
+- Separate taskbar USB IPC client from the Polkit-authorized USBGuard helper domain.
+
+* Sun Oct 18 2026 MANTIS SYSTEMS - 0.1.0-42
+- Migrate existing protected sessions onto the active-session USB IPC policy and label both helpers.
+
+* Sun Oct 18 2026 MANTIS SYSTEMS - 0.1.0-41
+- Pin the protected authentication runtime to the corrected DMS 1.6.2-20 tuple.
+
+* Sun Oct 18 2026 MANTIS SYSTEMS - 0.1.0-37
+- Permit the protected DMS authentication domain to launch the USB approval helper through its narrow SELinux domain.
+
+* Sun Oct 18 2026 MANTIS SYSTEMS - 0.1.0-36
+- Include and activate the taskbar USB approval SELinux domain during enrollment.
+
+* Sun Oct 18 2026 MANTIS SYSTEMS - 0.1.0-35
+- Install the dedicated SELinux domain for the taskbar's one-device USB approval helper.
+
+* Sat Oct 17 2026 MANTIS SYSTEMS - 0.1.0-34
+- Permit only the protected DMS auth domain to exchange USBGuard D-Bus messages for active-session approvals.
+
+* Sat Oct 17 2026 MANTIS SYSTEMS - 0.1.0-33
+- Relabel the pre-existing update-worker socket after loading its SELinux policy; reject stale payloads during ISO staging.
+
 * Tue Oct 13 2026 MANTIS SYSTEMS - 0.1.0-26
 - Retain safe PREPARING recovery with the stable DMS 1.6.2-15 and Application Security 45 match.
 

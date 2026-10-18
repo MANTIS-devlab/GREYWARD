@@ -1,7 +1,7 @@
 {
   "schema": "greyward.dms-release/v1",
-  "status": "candidate-unpromoted",
-  "releaseId": "v1.6.2-17",
+  "status": "validated-source-package-build-pending",
+  "releaseId": "v1.6.2-23",
   "dms": {
     "tag": "v1.6.2",
     "commit": "2db7646fe3ab47fddfdb8723f2da07d61a0d47ac",
@@ -43,7 +43,7 @@
     "labwc": "0.9.6-1.fc44",
     "uwsm": "0.24.3-1.fc44",
     "greeter": "1:1.6.2-1.fc44",
-    "validation": "Pre-release candidate tuple; package-only login/image/hardware gates pending."
+    "validation": "Protected USB approval and keyboard workflow validated on an installed matched source hotfix. Fresh matched RPM, image and hardware gates remain separate."
   },
   "patches": [
     {

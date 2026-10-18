@@ -8,6 +8,15 @@ except ModuleNotFoundError:
 
 @unittest.skipIf(parse_rule is None, 'USBGuard D-Bus adapter requires Fedora dependencies')
 class UsbGuardTests(unittest.TestCase):
+    def test_parent_hash_is_not_a_device_identity(self):
+        from greyward_security_context.usbguard import persistent_rule_is_narrow
+        own = 'block id 214b:7260 hash "device-hash" parent-hash "controller-hash" via-port "3-2"'
+        self.assertEqual(parse_rule(own)['stable_material'], 'device-hash')
+        self.assertTrue(persistent_rule_is_narrow(own))
+        parent_only = 'block id 214b:7260 parent-hash "controller-hash" via-port "3-2"'
+        self.assertFalse(parse_rule(parent_only)['stable_identity'])
+        self.assertFalse(persistent_rule_is_narrow(parent_only))
+
     def test_enrolled_projection_has_no_direct_fallback(self):
         import json
         from greyward_security_context.usbguard import UsbGuardError
@@ -42,7 +51,8 @@ class UsbGuardTests(unittest.TestCase):
         self.assertTrue(parse_rule(base.replace('1-2', 'usb1') + 'with-interface 09:00:00')['controller'])
         self.assertFalse(parse_rule(base)['controller'])
 
-    def test_upstream_policy_matching_and_attachment_reference(self):
+    @patch('greyward_security_context.usbguard.os.getuid', return_value=0)
+    def test_upstream_policy_matching_and_attachment_reference(self, _uid):
         bus = Mock()
         bus.get_name_owner.return_value = ':1.4'
         adapter = UsbGuardAdapter(bus)

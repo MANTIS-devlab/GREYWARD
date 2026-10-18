@@ -43,10 +43,13 @@ def sanitized_text(text, relative, excluded_files):
         text = re.sub(r'F:/GREYWARD[^\s)`]*', '<local workspace>', text)
         text = text.replace('192.168.1.149', '<development-host>')
         text = text.replace('`.149`', '`<development-host>`')
+        text = text.replace('192.168.1.150', '<validation-host>')
+        text = text.replace('`.150`', '`<validation-host>`')
         text = text.replace('GREYWARD-ALPHA-GEN2-20260828', '<development VM>')
         text = text.replace('GREYWARD ALPHA GEN2', '<development VM>')
         text = text.replace('antoi', '<local-user>')
         text = text.replace('stendev', 'example-user')
+        text = text.replace('cicada', 'example-user')
     if relative.endswith(('.md', '.json')):
         text = text.replace('/home/stendev', '/home/example-user')
     return text

@@ -214,6 +214,20 @@ changing policy. Actual Administration review and terminal visual checks remain
 necessary. The [privilege model](../docs/security-center/PRIVILEGE_MODEL.md)
 defines warning, authentication and handoff behavior.
 
+For protected Polkit focus changes, assemble the exact pinned DMS inputs first.
+From the repository root, run the explicit Fedora offscreen gate as root (QtTest,
+Quickshell and `unshare` are required):
+
+```bash
+GREYWARD_AUTH_FOCUS_SHELL=/path/to/candidate/shell GREYWARD_AUTH_FOCUS_BASELINE=/path/to/previous/shell python3 -m unittest discover -s tests -p test_authentication_input_focus.py -v
+```
+
+The gate copies both trees into temporary directories, disables Polkit, isolates
+the child network namespace and sends only synthetic input to offscreen windows.
+It checks late window-focus entry and preserves button navigation. It never
+joins the user's compositor. Passing it does not prove physical keyboard input,
+successful authentication or USBGuard persistence on the installed desktop.
+
 Use an isolated builder for dependency acquisition. Do not upgrade the active
 desktop's runtime libraries just to obtain headers. The experimental peer
 tests require Fedora's real system bus with `ProcessFD` credentials and run
