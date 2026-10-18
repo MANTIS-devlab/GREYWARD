@@ -2,9 +2,13 @@
 import hashlib
 import importlib.util
 import json
+import os
 from pathlib import Path
+import socket
+from types import SimpleNamespace
 import tempfile
 import unittest
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / 'packaging/greyward-enrollment/migrate-dms-shell.py'
@@ -18,6 +22,14 @@ def sha(data):
 
 
 class DmsShellMigrationTests(unittest.TestCase):
+    def test_quiescent_check_rejects_account_name_before_scanning_processes(self):
+        replies = [SimpleNamespace(stdout='49 1000 cicada seat0\n'),
+                   SimpleNamespace(stdout='Name=cicada\nClass=user\nSeat=seat0\nRemote=no\n')]
+        with patch.object(migration.subprocess, 'run', side_effect=replies), patch.object(Path, 'iterdir') as scan:
+            with self.assertRaisesRegex(RuntimeError, 'Log out'):
+                migration.ensure_quiescent({'cicada'})
+        scan.assert_not_called()
+
     def test_protected_login_input_refresh_is_detected_without_a_dms_version_change(self):
         with tempfile.TemporaryDirectory() as directory:
             shell = Path(directory) / 'shell'
@@ -134,6 +146,63 @@ class DmsShellMigrationTests(unittest.TestCase):
         self.assertIn("'authentication.py'] = digest(authentication_worker)", source)
         self.assertIn("atomic_write(base / 'authentication.py', authentication_worker_bytes", source)
         self.assertIn("'session.py'] = digest(session)", source)
+
+    def test_quiescent_migration_applies_usb_policy_and_labels_both_helpers(self):
+        source = SOURCE.read_text()
+        self.assertIn('def activate_usbguard_approval_policy(accounts):', source)
+        self.assertIn("'/usr/sbin/semodule', '-i', str(USBGUARD_POLICY)", source)
+        self.assertIn("'/usr/sbin/restorecon', str(helper)", source)
+        self.assertIn("'/usr/sbin/matchpathcon', '-V', str(helper)", source)
+        self.assertIn("runtime / 'usbguard-approval'", source)
+        self.assertIn("instance / 'instance.lock'", source)
+        self.assertIn("instance / 'ipc.sock'", source)
+        self.assertIn("activate_usbguard_approval_policy(accounts)", source)
+        self.assertIn("greyward-usbguard-approval'", source)
+        self.assertIn("greyward-usbguard-auth-approval'", source)
+        self.assertLess(source.rindex('activate_usbguard_approval_policy(accounts)'),
+                        source.index('if payload_matches_current(desktop'))
+
+    def test_migration_relabels_only_owned_existing_usbguard_runtime_endpoints(self):
+        with tempfile.TemporaryDirectory() as directory:
+            runtime = Path(directory) / 'runtime'
+            by_id = runtime / 'quickshell/by-id/instance-a'
+            by_id.mkdir(parents=True)
+            metadata = runtime / 'usbguard-approval'
+            metadata.mkdir(mode=0o700)
+            readiness = metadata / 'readiness.json'
+            instance_lock = by_id / 'instance.lock'
+            readiness.write_text('{}\n')
+            instance_lock.write_text('{}\n')
+            readiness.chmod(0o600)
+            instance_lock.chmod(0o600)
+            usb_socket = socket.socket(socket.AF_UNIX)
+            try:
+                usb_socket.bind(str(by_id / 'ipc.sock'))
+                (by_id / 'ipc.sock').chmod(0o600)
+                with patch.object(migration.subprocess, 'run') as run:
+                    migration.label_existing_usbguard_runtime(runtime, os.getuid())
+                relabelled = [call.args[0][-1] for call in run.call_args_list
+                              if call.args[0][0] == '/usr/sbin/restorecon']
+                self.assertEqual(set(relabelled), {
+                    str(metadata), str(readiness),
+                    str(by_id / 'instance.lock'),
+                    str(by_id / 'ipc.sock'),
+                })
+                self.assertEqual(len(run.call_args_list), 8)
+            finally:
+                usb_socket.close()
+
+    def test_migration_refuses_symlinked_usbguard_runtime_endpoint(self):
+        with tempfile.TemporaryDirectory() as directory:
+            runtime = Path(directory) / 'runtime'
+            runtime.mkdir()
+            target = Path(directory) / 'target'
+            target.write_text('{}\n')
+            metadata = runtime / 'usbguard-approval'
+            metadata.mkdir(mode=0o700)
+            (metadata / 'readiness.json').symlink_to(target)
+            with self.assertRaisesRegex(RuntimeError, 'Unsafe protected authentication runtime endpoint'):
+                migration.label_existing_usbguard_runtime(runtime, os.getuid())
 
 
 if __name__ == '__main__':

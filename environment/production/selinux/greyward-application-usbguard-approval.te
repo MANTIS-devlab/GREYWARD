@@ -1,0 +1,122 @@
+policy_module(greyward_application_usbguard_approval, 0.1.8)
+
+# The taskbar-facing entrypoint can request only one typed operation through
+# the protected authentication shell. A second entrypoint, executable only
+# from that active logind session, makes the USBGuard policy request.
+type greyward_usbguard_approval_t;
+type greyward_usbguard_approval_exec_t;
+type greyward_usbguard_auth_approval_t;
+type greyward_usbguard_auth_approval_exec_t;
+type greyward_usbguard_auth_readiness_t;
+type greyward_usbguard_auth_readiness_dir_t;
+type greyward_usbguard_auth_instance_t;
+type greyward_usbguard_auth_ipc_t;
+type greyward_usbguard_client_tmpfs_t;
+domain_type(greyward_usbguard_approval_t)
+domain_type(greyward_usbguard_auth_approval_t)
+files_type(greyward_usbguard_approval_exec_t)
+files_type(greyward_usbguard_auth_approval_exec_t)
+files_type(greyward_usbguard_auth_readiness_t)
+files_type(greyward_usbguard_auth_readiness_dir_t)
+files_type(greyward_usbguard_auth_instance_t)
+files_type(greyward_usbguard_auth_ipc_t)
+files_type(greyward_usbguard_client_tmpfs_t)
+gen_require(`
+    role greyward_guard_r;
+    role system_r;
+    type greyward_guard_t;
+    type greyward_as_auth_t;
+    type greyward_as_auth_runtime_t;
+')
+role greyward_guard_r types greyward_usbguard_approval_t;
+role system_r types greyward_usbguard_approval_t;
+role system_r types greyward_usbguard_auth_approval_t;
+domtrans_pattern(greyward_guard_t, greyward_usbguard_approval_exec_t,
+                 greyward_usbguard_approval_t)
+# The installed domtrans expansion grants caller execute/transition rights but
+# not the target domain's entrypoint permission; keep this exact file explicit.
+allow greyward_usbguard_approval_t greyward_usbguard_approval_exec_t:file entrypoint;
+# The helper is a position-independent Go ELF; its executable load segments
+# must be mmap'd after the SELinux domain transition.
+allow greyward_usbguard_approval_t greyward_usbguard_approval_exec_t:file map;
+# After transition, the helper domain must read and execute this same fixed
+# binary; entrypoint permission alone only enables the transition itself.
+allow greyward_usbguard_approval_t greyward_usbguard_approval_exec_t:file { read execute };
+allow greyward_guard_t greyward_usbguard_approval_t:process2 nnp_transition;
+allow greyward_usbguard_approval_t greyward_guard_t:process sigchld;
+allow greyward_usbguard_approval_t greyward_guard_t:fd use;
+allow greyward_usbguard_approval_t greyward_guard_t:fifo_file { open read write getattr };
+
+# The protected DMS instance runs in greyward_as_auth_t. Allow only this
+# fixed entrypoint to transition from that actual desktop domain, including
+# its no_new_privs launch. The parent receives no USBGuard D-Bus permission.
+domtrans_pattern(greyward_as_auth_t, greyward_usbguard_auth_approval_exec_t,
+                 greyward_usbguard_auth_approval_t)
+allow greyward_usbguard_auth_approval_t greyward_usbguard_auth_approval_exec_t:file { entrypoint map read execute };
+allow greyward_as_auth_t greyward_usbguard_auth_approval_t:process2 nnp_transition;
+allow greyward_usbguard_auth_approval_t greyward_as_auth_t:process sigchld;
+allow greyward_usbguard_auth_approval_t greyward_as_auth_t:fd use;
+allow greyward_usbguard_auth_approval_t greyward_as_auth_t:fifo_file { open read write getattr };
+
+# Quickshell creates these fixed protected-session endpoints inside the
+# private auth runtime. The helper can traverse the runtime and connect to the
+# labelled IPC socket, but cannot read its private D-Bus, Wayland, DMS, settings
+# or authentication-log files.
+# QSaveFile creates a temporary inode and renames it. A filename transition
+# on the destination is insufficient. Only this metadata directory has a
+# default file transition, including atomic replacement temporaries.
+type_transition greyward_as_auth_t greyward_as_auth_runtime_t:dir
+                 greyward_usbguard_auth_readiness_dir_t "usbguard-approval";
+type_transition greyward_as_auth_t greyward_usbguard_auth_readiness_dir_t:file
+                 greyward_usbguard_auth_readiness_t;
+type_transition greyward_as_auth_t greyward_as_auth_runtime_t:file
+                 greyward_usbguard_auth_instance_t "instance.lock";
+type_transition greyward_as_auth_t greyward_as_auth_runtime_t:sock_file
+                 greyward_usbguard_auth_ipc_t "ipc.sock";
+manage_dirs_pattern(greyward_as_auth_t, greyward_as_auth_runtime_t,
+                    greyward_usbguard_auth_readiness_dir_t)
+allow greyward_as_auth_t greyward_usbguard_auth_readiness_dir_t:dir search;
+manage_files_pattern(greyward_as_auth_t, greyward_usbguard_auth_readiness_dir_t,
+                     greyward_usbguard_auth_readiness_t)
+manage_files_pattern(greyward_as_auth_t, greyward_as_auth_runtime_t,
+                     greyward_usbguard_auth_instance_t)
+manage_sock_files_pattern(greyward_as_auth_t, greyward_as_auth_runtime_t,
+                          greyward_usbguard_auth_ipc_t)
+allow greyward_usbguard_approval_t var_run_t:dir search;
+allow greyward_usbguard_approval_t greyward_as_auth_runtime_t:dir { search getattr };
+allow greyward_usbguard_approval_t greyward_usbguard_auth_readiness_dir_t:dir search;
+allow greyward_usbguard_approval_t greyward_as_auth_runtime_t:lnk_file { getattr read };
+allow greyward_usbguard_approval_t greyward_usbguard_auth_readiness_t:file { getattr open read };
+allow greyward_usbguard_approval_t greyward_usbguard_auth_instance_t:file { getattr open read };
+allow greyward_usbguard_approval_t greyward_usbguard_auth_ipc_t:sock_file { getattr open write };
+allow greyward_usbguard_approval_t greyward_as_auth_t:unix_stream_socket connectto;
+
+# Qt's CLI event dispatcher uses a private AF_UNIX socket pair. Quickshell
+# also initializes two anonymous memfd logs before selecting the IPC instance.
+# Label only this client's own allocations; never grant generic tmpfs access
+# or access to the protected authentication process's buffers/logs.
+allow greyward_usbguard_approval_t self:unix_dgram_socket { create read write getattr getopt setopt ioctl };
+fs_tmpfs_filetrans(greyward_usbguard_approval_t, greyward_usbguard_client_tmpfs_t, file)
+allow greyward_usbguard_approval_t greyward_usbguard_client_tmpfs_t:file { create getattr open read write map setattr lock ioctl };
+
+libs_use_ld_so(greyward_usbguard_approval_t)
+libs_use_shared_libs(greyward_usbguard_approval_t)
+files_read_usr_files(greyward_usbguard_approval_t)
+corecmd_search_bin(greyward_usbguard_approval_t)
+corecmd_exec_bin(greyward_usbguard_approval_t)
+
+libs_use_ld_so(greyward_usbguard_auth_approval_t)
+libs_use_shared_libs(greyward_usbguard_auth_approval_t)
+files_read_usr_files(greyward_usbguard_auth_approval_t)
+corecmd_search_bin(greyward_usbguard_auth_approval_t)
+corecmd_exec_bin(greyward_usbguard_auth_approval_t)
+dbus_system_bus_client(greyward_usbguard_auth_approval_t)
+policykit_dbus_chat(greyward_usbguard_auth_approval_t)
+
+# No USBGuard IPC is granted to ordinary applications or the long-lived
+# Security Context service. The taskbar client has only the typed auth-shell
+# channel; the auth-only entrypoint sends one-device policy requests. USBGuard's
+# own Polkit authorization remains mandatory.
+gen_require(` type usbguard_t; ')
+allow greyward_usbguard_auth_approval_t usbguard_t:dbus send_msg;
+allow usbguard_t greyward_usbguard_auth_approval_t:dbus send_msg;

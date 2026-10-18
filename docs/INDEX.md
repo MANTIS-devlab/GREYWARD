@@ -1,5 +1,16 @@
 # GREYWARD documentation index
 
+18 October USBGuard Trust always: the installed `<validation-host>` workflow is validated
+by device/kernel/persistent-rule readback, successful protected PAM records and
+the user's confirmation of keyboard entry and matching-alert removal. Scoped
+corrections cover atomic typed readiness, private Qt IPC buffers, the Python CLI
+entrypoint, late window focus and device-hash parsing. SELinux remains Enforcing;
+unapproved devices remain blocked. Installed RPMs remain 21/53/43 (Context 103),
+with backed-up source hotfixes; next-build targets DMS 23 / Context 104 / Application Security 55 / Enrollment 46. Unplug/replug and reboot
+persistence remain untested. See [current status](STATUS.md) and
+[Security Center architecture](security-context/ARCHITECTURE.md). The
+[USB approval contract](security-center/USB_APPROVAL.md) defines the next-ISO gates.
+
 16 October network-rule implementation candidate: reviewed application and
 incoming transactions reuse OpenSnitch, firewalld and protected Polkit.
 Center 103 / Context 98 has installed enforcement evidence and corrects the

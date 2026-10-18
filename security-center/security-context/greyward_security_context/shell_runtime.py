@@ -10,7 +10,7 @@ from gi.repository import GLib
 
 from .notification_router import NotificationRouter, open_route
 from .shell_experience import build_experience
-from .usbguard import UsbGuardAdapter, UsbGuardError, USB_SERVICE, DEVICES_INTERFACE
+from .usbguard import USB_SERVICE, DEVICES_INTERFACE
 
 
 class ShellRuntime:
@@ -124,63 +124,8 @@ class ShellRuntime:
     def trust(self, reference, mode):
         if mode not in {'once', 'always'}:
             return {'ok': False, 'state': 'INVALID', 'detail': 'Unknown trust action.'}
-        current = self.read()
-        wanted = 'trust_' + mode
-        device = next((x for x in current.get('items', []) if x.get('connection_ref') == reference), None)
-        old = self.operations.get(reference)
-        if old and old.get('state') in {'PENDING', 'VERIFYING', 'INDETERMINATE'}:
-            return {'ok': True, 'state': old['state'], 'operation_id': old['operation_id']}
-        if not device or wanted not in {x['id'] for x in device.get('actions', [])}:
-            return {'ok': False, 'state': 'STALE', 'detail': 'This device action is no longer available.'}
-        operation_id = reference + ':' + str(time.monotonic_ns())
-        self.operations[reference] = {'connection_ref': reference, 'operation_id': operation_id, 'mode': mode, 'state': 'PENDING', 'detail': 'Waiting for authorization…'}
-        # Publish acknowledgement before entering USBGuard: its upstream Polkit
-        # check can hold its D-Bus bridge while the authorization dialog is open.
-        current.pop('revision', None)
-        for event in current.get('items', []):
-            if event.get('connection_ref') == reference:
-                event.update(actions=[], operation='PENDING', detail='Waiting for authorization…')
-                event['notification_detail'] = event['title'] + ': Waiting for authorization…'
-        current['operations'] = copy.deepcopy(list(self.operations.values()))
-        self._publish(current, False, release_collector=False)
-        self.invalidate()
-        threading.Thread(target=self._trust_worker, args=(reference, mode, operation_id), daemon=True).start()
-        return {'ok': True, 'state': 'PENDING', 'operation_id': operation_id}
-
-    def _trust_worker(self, reference, mode, operation_id):
-        result = {'state': 'FAILED', 'detail': 'Device approval could not be confirmed.'}
-        try:
-            adapter = UsbGuardAdapter(dbus.SystemBus(private=True))
-        except dbus.DBusException:
-            GLib.idle_add(self._finish_trust, reference, operation_id, {'state': 'UNAVAILABLE', 'detail': 'USBGuard is unavailable.'})
-            return
-        try:
-            device = next((x for x in adapter.list_devices() if x['connection_ref'] == reference), None)
-            if not device:
-                result = {'state': 'REMOVED', 'detail': 'The device was removed.'}
-            else:
-                if mode == 'always': adapter.always_allow(device['device_id'])
-                else: adapter.allow_once(device['device_id'])
-                result = {'state': 'VERIFYING', 'detail': 'Checking device permission…'}
-        except UsbGuardError as error:
-            result = {'state': error.state, 'detail': str(error)}
-        try:
-            confirmed = next((x for x in adapter.list_devices() if x['connection_ref'] == reference), None)
-            if not confirmed: result = {'state': 'REMOVED', 'detail': 'The device was removed.'}
-            elif confirmed.get('authorized') and (mode == 'once' or confirmed.get('trusted')):
-                result = {'state': 'COMPLETE', 'detail': 'Device trusted.' if mode == 'always' else 'Allowed until disconnected.'}
-            elif result['state'] == 'VERIFYING': result = {'state': 'FAILED', 'detail': 'USBGuard did not confirm the requested permission.'}
-        except UsbGuardError:
-            result = {'state': 'INDETERMINATE', 'detail': 'Device state is unavailable. Waiting for USBGuard.'}
-        GLib.idle_add(self._finish_trust, reference, operation_id, result)
-
-    def _finish_trust(self, reference, operation_id, result):
-        old = self.operations.get(reference)
-        if old and old['operation_id'] == operation_id:
-            old.update(result)
-            if result['state'] in {'COMPLETE', 'REMOVED'}: old['expires_at'] = time.monotonic() + 5
-        self.invalidate()
-        return False
+        return {'ok': False, 'state': 'SESSION_REQUIRED',
+                'detail': 'This background request cannot show the USB approval prompt. Use Trust once or Trust always in the GREYWARD taskbar; the device remains blocked until approved.'}
 
     def dispatch(self, current, selected):
         if selected in {'trust_once', 'trust_always'}:

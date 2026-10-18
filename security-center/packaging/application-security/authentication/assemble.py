@@ -18,7 +18,7 @@ PREIMAGES = {
 
 # Revision 8 changes build receipts/desktop plugins; the authentication inputs
 # remain exact-pinned below. A new release still requires explicit review.
-SUPPORTED_RELEASES = frozenset({"v1.6.2-6", "v1.6.2-8", "v1.6.2-10", "v1.6.2-11", "v1.6.2-12", "v1.6.2-13", "v1.6.2-14", "v1.6.2-15", "v1.6.2-17"})
+SUPPORTED_RELEASES = frozenset({"v1.6.2-6", "v1.6.2-8", "v1.6.2-10", "v1.6.2-11", "v1.6.2-12", "v1.6.2-13", "v1.6.2-14", "v1.6.2-15", "v1.6.2-17", "v1.6.2-18", "v1.6.2-19", "v1.6.2-20", "v1.6.2-21", "v1.6.2-22", "v1.6.2-23"})
 
 SHELL = '''//@ pragma UseQApplication
 //@ pragma AppId com.danklinux.dms
@@ -32,6 +32,12 @@ import qs.Modules.Lock
 import qs.Services
 
 ShellRoot {
+    id: shellRoot
+    property string usbApprovalRequestId: ""
+    property bool usbApprovalActive: false
+    property double usbApprovalUpdatedAtMs: 0
+    property var usbApprovalResult: ({ok: false, state: "IDLE", detail: "No USB approval request."})
+
     Variants {
         model: Quickshell.screens
 
@@ -107,6 +113,12 @@ ShellRoot {
         id: readiness
         path: Quickshell.env("XDG_RUNTIME_DIR") + "/authentication-ready.json"
     }
+    FileView {
+        id: usbReadiness
+        // Its dedicated parent labels atomic temporary inodes as metadata.
+        // Never export the general authentication heartbeat or private runtime.
+        path: Quickshell.env("XDG_RUNTIME_DIR") + "/usbguard-approval/readiness.json"
+    }
     Timer {
         id: readinessTimer
         interval: 100
@@ -122,11 +134,60 @@ ShellRoot {
                 exclusiveInput: nativeLock.authenticationInputSecure,
                 lockRequested: nativeLock.shouldLock
             }));
+            usbReadiness.setText(JSON.stringify({
+                schema: "greyward.authentication-readiness/v1",
+                pid: Quickshell.processId, observedAtMs: Date.now(),
+                polkitRegistered: registered,
+                polkitActive: PolkitService.agent?.isActive === true
+            }));
             // Poll quickly only during startup so login does not wait for the
             // first one-second heartbeat after Polkit registers.
             if (registered)
                 readinessTimer.interval = 1000;
         }
+    }
+    Process {
+        id: usbApprovalProcess
+        command: []
+        stdout: StdioCollector { id: usbApprovalOutput }
+        onExited: (exitCode, exitStatus) => {
+            const lines = String(usbApprovalOutput.text || "").split(String.fromCharCode(10)).filter(line => line.trim().length > 0);
+            let result = null;
+            try { result = lines.length ? JSON.parse(lines[lines.length - 1]) : null; } catch (error) {}
+            const confirmed = exitCode === 0 && result?.ok === true && result?.state === "COMPLETE";
+            if (!confirmed) {
+                result = result && result.ok === false && typeof result.state === "string" ? result :
+                    {ok: false, state: "FAILED", detail: "USBGuard did not return verified approval evidence. The device remains blocked."};
+            }
+            shellRoot.usbApprovalResult = result;
+            shellRoot.usbApprovalActive = false;
+            shellRoot.usbApprovalUpdatedAtMs = Date.now();
+        }
+    }
+    function requestUsbTrust(reference: string, mode: string, requestId: string): string {
+        if (!/^[0-9a-f]{32}$/.test(reference) || !["once", "always"].includes(mode) || !/^[0-9a-f]{32}$/.test(requestId))
+            return JSON.stringify({ok: false, state: "INVALID", detail: "Choose a current USB device and a supported trust action."});
+        if (requestId === usbApprovalRequestId && (usbApprovalActive || Date.now() - usbApprovalUpdatedAtMs < 180000))
+            return JSON.stringify(usbApprovalResult);
+        if (usbApprovalActive || usbApprovalProcess.running || PolkitService.agent?.isActive === true)
+            return JSON.stringify({ok: false, state: "BUSY", detail: "Another protected authorization is active. Try again when it finishes."});
+        if (PolkitService.agent?.isRegistered !== true)
+            return JSON.stringify({ok: false, state: "UNAVAILABLE", detail: "The protected authorization agent is unavailable. The device remains blocked."});
+        usbApprovalRequestId = requestId;
+        usbApprovalResult = {ok: true, state: "PENDING", detail: "Waiting for administrator approval…"};
+        usbApprovalUpdatedAtMs = Date.now();
+        usbApprovalActive = true;
+        usbApprovalProcess.exec({command: ["/usr/libexec/greyward-usbguard-auth-approval", reference, mode], workingDirectory: "/"});
+        return JSON.stringify(usbApprovalResult);
+    }
+    function usbTrustStatus(requestId: string): string {
+        if (!/^[0-9a-f]{32}$/.test(requestId) || requestId !== usbApprovalRequestId)
+            return JSON.stringify({ok: false, state: "UNKNOWN", detail: "This USB approval request is no longer available."});
+        if (usbApprovalActive)
+            return JSON.stringify(usbApprovalResult);
+        if (Date.now() - usbApprovalUpdatedAtMs > 180000)
+            return JSON.stringify({ok: false, state: "EXPIRED", detail: "The approval result expired. Check the current device state before retrying."});
+        return JSON.stringify(usbApprovalResult);
     }
     IpcHandler {
         target: "settings"
@@ -142,6 +203,12 @@ ShellRoot {
             return JSON.stringify({ polkitRegistered: PolkitService.agent?.isRegistered === true,
                 polkitActive: PolkitService.agent?.isActive === true,
                 responseRequired: PolkitService.agent?.flow?.isResponseRequired === true });
+        }
+        function requestUsbTrust(reference: string, mode: string, requestId: string): string {
+            return shellRoot.requestUsbTrust(reference, mode, requestId);
+        }
+        function usbTrustStatus(requestId: string): string {
+            return shellRoot.usbTrustStatus(requestId);
         }
     }
 }
@@ -258,7 +325,7 @@ def protected_authorization(text):
     cannot establish exclusive input. Completion releases only a lock acquired
     for this challenge; it never releases a pre-existing native session lock.
     """
-    text = replace_once(text, "import qs.Services\n", "import qs.Services\nimport qs.Modals\n")
+    text = replace_once(text, "import qs.Services\n", "import qs.Services\nimport QtQuick.Window\nimport qs.Modals\n")
     text = replace_once(text, '    property bool shouldLock: false\n', '''    property bool shouldLock: false
     readonly property bool authenticationInputSecure: sessionLock.secure
     readonly property bool authorizationActive: PolkitService.agent?.isActive ?? false
@@ -306,20 +373,42 @@ def protected_authorization(text):
                 height: Math.min(420, parent.height - 32)
                 active: root.authorizationActive
                 visible: sessionLock.secure && root.authorizationActive
+                focus: visible
                 sourceComponent: PolkitAuthContent {
                     onCloseRequested: PolkitService.agent?.flow?.cancelAuthenticationRequest()
                 }
-                onLoaded: {
-                    if (sessionLock.secure)
-                        Qt.callLater(() => item?.focusPasswordField());
+                function focusAuthorization(reason) {
+                    if (!visible || !sessionLock.secure || !item)
+                        return;
+                    Qt.callLater(() => {
+                        if (!visible || !sessionLock.secure || !item)
+                            return;
+                        item.focusPasswordField();
+                        // State only: never log keys, text or password length.
+                        console.info("GREYWARD protected-input", reason,
+                            "scopeFocused=" + item.activeFocus,
+                            "windowFocused=" + (authorizationContent.Window.window?.active ?? false));
+                    });
                 }
+                onLoaded: focusAuthorization("loaded")
+                onVisibleChanged: focusAuthorization("visible")
             }
 
             Connections {
                 target: sessionLock
                 function onSecureChanged() {
                     if (sessionLock.secure && root.authorizationActive)
-                        Qt.callLater(() => authorizationContent.item?.focusPasswordField());
+                        authorizationContent.focusAuthorization("secured");
+                }
+            }
+
+            Connections {
+                target: authorizationContent.Window.window
+                function onActiveChanged() {
+                    // Wayland keyboard-enter can arrive after locked/loaded.
+                    // Focus only on window entry; retain normal button/Tab use.
+                    if (authorizationContent.Window.window?.active === true)
+                        authorizationContent.focusAuthorization("keyboard-enter");
                 }
             }
 

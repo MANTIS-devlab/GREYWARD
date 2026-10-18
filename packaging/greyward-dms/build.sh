@@ -17,6 +17,8 @@ PY
 cp "$inputs/dms-source.tar.gz" "$inputs/dms-cli-1.6.2.tar.gz" "$output/SOURCES/"
 tar -C "$repo" -czf "$output/SOURCES/greyward-dms-inputs.tar.gz" \
   packaging/greyward-dms/assemble.py packaging/greyward-dms/verify.py \
+  packaging/greyward-dms/usbguard-approval.go packaging/greyward-dms/usbguard-approval-execute.go \
+  packaging/greyward-dms/usbguard-approval_test.go \
   environment/production/dms-release.json environment/patches/dms \
   environment/session/greyward-dms environment/session/dankmaterialshell/plugins
 python3 - "$repo/environment/production/dms-release.json" "$repo/packaging/greyward-dms/greyward-dms.spec" "$output/SPECS/greyward-dms.spec" <<'PY'

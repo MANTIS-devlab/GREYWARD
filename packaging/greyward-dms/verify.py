@@ -22,7 +22,9 @@ def trusted(path, checked=None):
             checked.add(item)
 
 
-def verify(selector=Path('/etc/greyward/dms-release'), base=Path('/usr/lib/greyward/dms'), full=True, constraints=False):
+def verify(selector=Path('/etc/greyward/dms-release'), base=Path('/usr/lib/greyward/dms'), full=True, constraints=False,
+           approval_helper=Path('/usr/libexec/greyward-usbguard-approval'),
+           auth_approval_helper=Path('/usr/libexec/greyward-usbguard-auth-approval')):
     # Each immutable root-owned ancestor is checked once per invocation. Leaves
     # are still checked before every read; never cache trust across invocations.
     checked = set()
@@ -71,6 +73,22 @@ def verify(selector=Path('/etc/greyward/dms-release'), base=Path('/usr/lib/greyw
             actual_digest = hashlib.file_digest(stream, 'sha256').hexdigest()
         if actual_digest != digest:
             raise ValueError(f'DMS installed digest mismatch: {name}')
+    trusted(approval_helper, checked)
+    with approval_helper.open('rb') as stream:
+        actual_digest = hashlib.file_digest(stream, 'sha256').hexdigest()
+    if actual_digest != receipt['usbguardApprovalSha256']:
+        raise ValueError('DMS installed digest mismatch: usbguard approval helper')
+    if os.geteuid() == 0:
+        # The protected helper intentionally has a dedicated SELinux type that
+        # the ordinary desktop domain cannot inspect. Its bytes are checked by
+        # the root enrollment/package boundary; only root-side full verification
+        # reads them. A normal DMS startup must not fail by crossing that domain
+        # boundary just to validate its unprivileged shell.
+        trusted(auth_approval_helper, checked)
+        with auth_approval_helper.open('rb') as stream:
+            actual_digest = hashlib.file_digest(stream, 'sha256').hexdigest()
+        if actual_digest != receipt['usbguardAuthApprovalSha256']:
+            raise ValueError('DMS installed digest mismatch: protected-session USB approval helper')
     plugins = Path('/etc/xdg/quickshell/dms-plugins')
     for name, digest in receipt['firstPartyFiles'].items():
         if '..' in Path(name).parts or Path(name).is_absolute():

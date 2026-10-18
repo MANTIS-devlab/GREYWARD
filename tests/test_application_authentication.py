@@ -1,6 +1,8 @@
 """Exact-input authentication assembly; no VM, policy or PAM mutation."""
 import importlib.util
+import hashlib
 import json
+import os
 from pathlib import Path
 import tempfile
 import unittest
@@ -17,6 +19,15 @@ MATERIALIZE_SPEC.loader.exec_module(materialize)
 
 
 class AuthenticationAssembly(unittest.TestCase):
+    def test_wayland_protocol_integrity_pin_uses_canonical_git_bytes(self):
+        root = Path(__file__).resolve().parents[1]
+        protocol = root / 'security-center/packaging/application-security/wayland/security-context-v1.xml'
+        canonical = protocol.read_bytes().replace(b'\r\n', b'\n')
+        digest = hashlib.sha256(canonical).hexdigest()
+        spec = (root / 'security-center/packaging/application-security/greyward-application-security-experimental.spec').read_text()
+
+        self.assertIn(f"expected = '{digest}'", spec)
+
     def test_private_auth_profile_marks_pinned_dms_defaults_current(self):
         template = {'configVersion': 0, 'loginctlLockIntegration': False,
                     'lockPamPath': '/unsafe/user/value', 'customDefault': 'preserved'}
@@ -35,6 +46,61 @@ class AuthenticationAssembly(unittest.TestCase):
         self.assertIn('const registered = PolkitService.agent?.isRegistered === true;', assembly.SHELL)
         self.assertIn('if (registered)\n                readinessTimer.interval = 1000;', assembly.SHELL)
         self.assertIn('polkitRegistered: registered', assembly.SHELL)
+
+    def test_atomic_readiness_has_a_dedicated_metadata_parent(self):
+        start = assembly.SHELL.index('id: usbReadiness\n')
+        end = assembly.SHELL.index('    Timer {', start)
+        writer = assembly.SHELL[start:end]
+        self.assertIn('/usbguard-approval/readiness.json', writer)
+        self.assertNotIn('atomicWrites: false', assembly.SHELL)
+        # The permission is for metadata only, not arbitrary auth runtime files.
+        policy = (SOURCE.parents[4] / 'environment/production/selinux/greyward-application-usbguard-approval.te').read_text()
+        self.assertIn('greyward_usbguard_auth_readiness_dir_t "usbguard-approval";', policy)
+        self.assertIn('greyward_as_auth_t greyward_usbguard_auth_readiness_dir_t:file', policy)
+        self.assertNotIn('greyward_usbguard_approval_t greyward_as_auth_runtime_t:file', policy)
+        self.assertNotIn('cgroup', policy)
+
+    def test_usb_cli_buffers_are_private_without_general_tmpfs_or_auth_reads(self):
+        policy = (SOURCE.parents[4] / 'environment/production/selinux/greyward-application-usbguard-approval.te').read_text()
+        self.assertIn('fs_tmpfs_filetrans(greyward_usbguard_approval_t, greyward_usbguard_client_tmpfs_t, file)', policy)
+        self.assertNotIn('greyward_usbguard_approval_t tmpfs_t:file', policy)
+        self.assertNotIn('greyward_usbguard_approval_t greyward_as_auth_runtime_t:file', policy)
+        self.assertIn('greyward_as_auth_runtime_t:dir { search getattr }', policy)
+
+    @unittest.skipUnless(os.name == 'posix', 'Unix ownership and modes')
+    def test_usb_metadata_directory_is_private_and_rejects_aliases(self):
+        with tempfile.TemporaryDirectory() as folder:
+            auth = Path(folder)
+            (auth / 'runtime').mkdir()
+            with mock.patch.object(materialize.os, 'chown') as chown, mock.patch.object(materialize, 'run') as run:
+                materialize.prepare_usb_metadata(auth, os.getuid(), os.getgid())
+                directory = auth / 'runtime/usbguard-approval'
+                chown.assert_called_once()
+                run.assert_called_once_with('/usr/bin/chcon', '-t', 'greyward_usbguard_auth_readiness_dir_t', str(directory))
+            directory.rmdir()
+            directory.symlink_to(auth / 'runtime', target_is_directory=True)
+            with self.assertRaises(RuntimeError), mock.patch.object(materialize, 'run') as run:
+                materialize.prepare_usb_metadata(auth, 1000, 1000)
+            run.assert_not_called()
+
+    def test_usbguard_request_is_executed_by_the_active_protected_session(self):
+        root = Path(__file__).resolve().parents[1]
+        widget = (root / 'environment/session/dankmaterialshell/plugins/greywardSecure/SecureWidget.qml').read_text()
+        helper = (root / 'packaging/greyward-dms/usbguard-approval.go').read_text()
+        auth_helper = (root / 'packaging/greyward-dms/usbguard-approval-execute.go').read_text()
+        self.assertIn('function requestUsbTrust(reference: string, mode: string, requestId: string)', assembly.SHELL)
+        self.assertIn('function usbTrustStatus(requestId: string)', assembly.SHELL)
+        self.assertIn('PolkitService.agent?.isRegistered !== true', assembly.SHELL)
+        self.assertIn('/usr/libexec/greyward-usbguard-auth-approval', assembly.SHELL)
+        self.assertIn('"usbguard-approval", "readiness.json"', helper)
+        self.assertIn('"/usr/bin/qs"', helper)
+        self.assertIn('"--pid"', helper)
+        self.assertNotIn('"--any-display"', helper)
+        self.assertIn('"requestUsbTrust"', helper)
+        self.assertIn('"usbTrustStatus"', helper)
+        self.assertIn('syscall.Exec("/usr/bin/python3", argv, os.Environ())', auth_helper)
+        self.assertIn('greyward-usbguard-approval', widget)
+        self.assertNotIn('greyward-usbguard-auth-approval', widget)
 
     def test_startup_backdrop_is_branded_noninteractive_and_behind_the_desktop(self):
         self.assertIn('import Quickshell.Wayland', assembly.SHELL)
@@ -136,6 +202,9 @@ readonly property bool u2fSuppressedByPrimaryPam: SettingsData.lockPamExternally
             self.assertIn('startup/shell.qml', first['shellFiles'])
             self.assertEqual((base / 'first/shell/startup/shell.qml').read_text(encoding='utf-8'),
                              assembly.STARTUP_SHELL)
+            auth_shell = (base / 'first/shell/shell.qml').read_text(encoding='utf-8')
+            self.assertIn('split(String.fromCharCode(10))', auth_shell)
+            self.assertNotIn('split(/\n', auth_shell)
             lock = (base / 'first/shell/Modules/Lock/Lock.qml').read_text()
             self.assertIn('active: !root.authorizationActive', lock)
             self.assertIn('sourceComponent: LockSurface {', lock)
@@ -160,7 +229,7 @@ readonly property bool u2fSuppressedByPrimaryPam: SettingsData.lockPamExternally
             root, receipt, pins = self.fixture(base)
             release = json.loads(receipt.read_text())
             with mock.patch.object(assembly, 'PREIMAGES', pins):
-                for supported in ['v1.6.2-8', 'v1.6.2-10', 'v1.6.2-11', 'v1.6.2-12', 'v1.6.2-13', 'v1.6.2-14', 'v1.6.2-15']:
+                for supported in ['v1.6.2-8', 'v1.6.2-10', 'v1.6.2-11', 'v1.6.2-12', 'v1.6.2-13', 'v1.6.2-14', 'v1.6.2-15', 'v1.6.2-17', 'v1.6.2-18', 'v1.6.2-19', 'v1.6.2-20', 'v1.6.2-21', 'v1.6.2-22', 'v1.6.2-23']:
                     release['releaseId'] = supported
                     receipt.write_text(json.dumps(release))
                     result = assembly.assemble(root, receipt,

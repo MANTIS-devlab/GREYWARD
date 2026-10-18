@@ -44,6 +44,7 @@
     "docs/REPOSITORY_MAP.md",
     "environment/image/build-iso.sh",
     "environment/image/build-components.py",
+    "environment/image/verify-usbguard-inputs.py",
     "environment/development/build-security-center.sh",
     "environment/production/provision.sh",
     "environment/production/dms-release.json",

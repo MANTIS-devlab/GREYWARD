@@ -69,7 +69,13 @@ class NotificationRouter:
                 record['notification_id'] = 0
                 self._save()
                 break
-            allowed = {x['id'] for x in current.get('actions', [])} | {'open', 'default'}
+            # USB approval requires a Polkit prompt associated with the active
+            # protected DMS session. A notification callback runs in the
+            # long-lived user service, so it must never invoke a stale trust
+            # action from that sessionless process.
+            allowed = {'open', 'default'}
+            if current.get('kind') != 'usb':
+                allowed.update(x['id'] for x in current.get('actions', []))
             if str(action_id) in allowed:
                 self.dispatch(current, 'open' if str(action_id) == 'default' else str(action_id))
             break
@@ -130,7 +136,12 @@ class NotificationRouter:
             escalated = current.get('severity') == 'CRITICAL' and old.get('severity') != 'CRITICAL'
             quiet = bool(record.get('signature')) and not escalated
             actions = []
-            for action in current.get('actions', []): actions.extend([action['id'], action['label']])
+            if current.get('kind') == 'usb':
+                # The taskbar widget owns the active-session trust action.
+                # Notifications can only open the device review page.
+                actions = ['open', 'Review']
+            else:
+                for action in current.get('actions', []): actions.extend([action['id'], action['label']])
             if not actions: actions = ['open', 'Review']
             hints = {'desktop-entry': dbus.String(APP_ID), 'urgency': dbus.Byte(2 if current['severity'] == 'CRITICAL' else 1),
                      'category': dbus.String('device' if current['kind'] == 'usb' else 'system'),

@@ -11,6 +11,7 @@ BuildRequires: golang >= 1.26.5
 BuildRequires: python3
 BuildRequires: make
 Requires: quickshell >= 0.3.1
+Requires: greyward-security-context >= 0.1.0-104%{?dist}
 Requires: python3
 Requires: bash
 Requires: jq
@@ -36,6 +37,12 @@ python3 packaging/greyward-dms/assemble.py --manifest environment/production/dms
 ln -s ../source/DankMaterialShell-1.6.2/quickshell assembled/vendor/quickshell
 
 %build
+GO111MODULE=off GOPROXY=off GOSUMDB=off GOTOOLCHAIN=local CGO_ENABLED=0 \
+    go build -trimpath -buildvcs=false -ldflags '-s -w -buildid=' \
+    -o usbguard-approval packaging/greyward-dms/usbguard-approval.go
+GO111MODULE=off GOPROXY=off GOSUMDB=off GOTOOLCHAIN=local CGO_ENABLED=0 \
+    go build -trimpath -buildvcs=false -ldflags '-s -w -buildid=' \
+    -o usbguard-approval-auth packaging/greyward-dms/usbguard-approval-execute.go
 python3 - <<'PY'
 from pathlib import Path
 interfaces=[line.split(':',1)[0].strip() for line in Path('/proc/net/dev').read_text().splitlines()[2:]]
@@ -52,6 +59,7 @@ go build -trimpath -tags 'distro_binary withshell' -ldflags '-s -w -buildid= -X 
 
 %check
 export GOPROXY=off GOSUMDB=off GOTOOLCHAIN=local GOFLAGS=-mod=vendor CGO_ENABLED=0
+GO111MODULE=off go test packaging/greyward-dms/usbguard-approval.go packaging/greyward-dms/usbguard-approval_test.go
 export XDG_RUNTIME_DIR=$(mktemp -d)
 mkdir -m0700 "$XDG_RUNTIME_DIR/danklinux"
 trap 'rm -rf "$XDG_RUNTIME_DIR"' EXIT
@@ -65,11 +73,17 @@ go test -tags distro_binary ./...
 mkdir -p %{buildroot}%{runtime}/bin %{buildroot}/usr/bin %{buildroot}/etc/greyward
 cp -a assembled/shell %{buildroot}%{runtime}/shell
 install -m0755 assembled/vendor/dms-cli-1.6.2/dms %{buildroot}%{runtime}/bin/dms
+install -D -m0755 usbguard-approval %{buildroot}/usr/libexec/greyward-usbguard-approval
+install -D -m0755 usbguard-approval-auth %{buildroot}/usr/libexec/greyward-usbguard-auth-approval
 cp assembled/release.json %{buildroot}%{runtime}/release.json
 python3 - %{buildroot}%{runtime} <<'PY'
 import hashlib,json,pathlib,subprocess,sys
 root=pathlib.Path(sys.argv[1]); p=root/'release.json'; m=json.loads(p.read_text())
 m['binarySha256']=hashlib.sha256((root/'bin/dms').read_bytes()).hexdigest()
+m['usbguardApprovalSha256']=hashlib.sha256(pathlib.Path('usbguard-approval').read_bytes()).hexdigest()
+m['usbguardAuthApprovalSha256']=hashlib.sha256(pathlib.Path('usbguard-approval-auth').read_bytes()).hexdigest()
+m['usbguardApprovalSourceSha256']=hashlib.sha256(pathlib.Path('packaging/greyward-dms/usbguard-approval.go').read_bytes()).hexdigest()
+m['usbguardAuthApprovalSourceSha256']=hashlib.sha256(pathlib.Path('packaging/greyward-dms/usbguard-approval-execute.go').read_bytes()).hexdigest()
 m['build']['packages']=subprocess.check_output(['rpm','-q','--qf','%%{NEVRA}\\n','golang','python3','make','rpm-build'],text=True).splitlines()
 m['build']['goVersion']=subprocess.check_output(['go','version'],text=True).strip()
 m['firstPartyFiles']={p.relative_to(pathlib.Path('environment/session/dankmaterialshell/plugins')).as_posix():hashlib.sha256(p.read_bytes()).hexdigest() for p in pathlib.Path('environment/session/dankmaterialshell/plugins').rglob('*') if p.is_file()}
@@ -98,10 +112,25 @@ PY
 %config /etc/greyward/dms-release
 /usr/bin/dms
 /usr/libexec/greyward-dms-verify
+/usr/libexec/greyward-usbguard-approval
+/usr/libexec/greyward-usbguard-auth-approval
 %{runtime}
 /etc/xdg/quickshell/dms-plugins
 
 %changelog
+* Sun Oct 18 2026 GREYWARD <build@mantis.systems> - 1.6.2-22
+- Keep the confined desktop selector from reading the protected USB approval helper.
+- Consume the private atomic USB availability projection; disable unnecessary Go cgroup CPU discovery.
+
+* Sun Oct 18 2026 GREYWARD <build@mantis.systems> - 1.6.2-21
+- Route taskbar USB trust through the active protected Polkit session.
+
+* Sun Oct 18 2026 GREYWARD <build@mantis.systems> - 1.6.2-20
+- Keep USBGuard approval alive through its Polkit prompt and require verified completion feedback.
+
+* Sun Oct 18 2026 GREYWARD <build@mantis.systems> - 1.6.2-19
+- Route USBGuard approval through a fixed, separately confined client.
+
 * Sun Oct 11 2026 GREYWARD <build@mantis.systems> - 1.6.2-15
 - Ship the current first-party shell plugin payload and verify it against source during ISO staging.
 

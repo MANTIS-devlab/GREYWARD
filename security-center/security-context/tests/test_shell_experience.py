@@ -4,6 +4,14 @@ from greyward_security_context.shell_experience import build_experience
 
 
 class ShellExperienceTests(unittest.TestCase):
+    def test_trusted_device_clears_only_its_own_approval_notice(self):
+        blocked = [self.device(connection_ref='hub'), self.device(connection_ref='camera')]
+        previous = self.render(devices=blocked)['items']
+        current = [self.device(connection_ref='hub', state='ALLOW', authorized=True, trusted=True), blocked[1]]
+        value = self.render(devices=current, previous_items=previous)
+        self.assertEqual([i['id'] for i in value['items'] if i['kind'] == 'usb'], ['usb:camera'])
+        self.assertTrue(any(i['id'] == 'usb:hub' and i['detail'] == 'Trusted device connected' for i in value['activity']))
+
     def test_sensitive_denial_review_targets_resource_without_allow_action(self):
         reference = 'resource_' + 'a' * 64
         value = self.render(access_blocks=[{'resource_ref': reference, 'count': 2}])

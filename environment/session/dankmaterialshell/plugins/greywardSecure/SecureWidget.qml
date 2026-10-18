@@ -13,6 +13,7 @@ PluginComponent {
     layerNamespacePlugin: "greyward-secure"
     readonly property string busName: "systems.mantis.greyward.SecurityContext1"
     readonly property string objectPath: "/systems/mantis/greyward/SecurityContext1"
+    readonly property string usbguardApproval: "/usr/libexec/greyward-usbguard-approval"
     // The shell projection itself has a 30-second bounded freshness lease.
     // Do not place recovery on the same edge: a missed D-Bus signal previously
     // made the pill discard its live content before the fallback read returned.
@@ -32,6 +33,7 @@ PluginComponent {
     property bool profileMenuOpen: false
     property bool actionPending: false
     property string actionMessage: ""
+    property int usbActionGeneration: 0
     property bool launchPending: false
     property int launchChecks: 0
     property string launchState: ""
@@ -187,8 +189,28 @@ PluginComponent {
             root.actionMessage = result?.ok ? result.state === "PENDING" ? qsTr("Waiting for authorization…") : qsTr("Done") : result?.detail || qsTr("The action could not be completed. Check Security Center.");
             messageTimer.restart(); root.refreshSummary();
         };
-        if (action.id === "trust_once" || action.id === "trust_always")
-            call("RequestUsbTrust", [variantString(item.connection_ref), variantString(action.id === "trust_once" ? "once" : "always")], finish);
+        if (action.id === "trust_once" || action.id === "trust_always") {
+            const mode = action.id === "trust_once" ? "once" : "always";
+            actionTimeout.stop();
+            root.actionMessage = qsTr("Waiting for administrator approval…");
+            usbActionTimeout.restart();
+            // USBGuard's Polkit request may wait 120 seconds. DMS Proc's
+            // default timeout is 10 seconds, so give each reviewed request a
+            // unique ID and a bounded timeout that covers lookup, approval,
+            // and readback without allowing one device's callback to replace
+            // another's.
+            Proc.runCommand("greywardSecure.usb." + mode + "." + String(item.connection_ref) + "." + (++usbActionGeneration),
+                [usbguardApproval, String(item.connection_ref), mode],
+                function(stdout, code) {
+                    usbActionTimeout.stop();
+                    root.actionPending = false;
+                    let result = null;
+                    try { result = JSON.parse(String(stdout || "").trim()); } catch (error) {}
+                    const confirmed = code === 0 && result?.ok === true && result?.state === "COMPLETE";
+                    root.actionMessage = confirmed ? result.detail || qsTr("USB permission confirmed") : result?.detail || qsTr("USB approval could not be confirmed. The device remains blocked.");
+                    messageTimer.restart(); root.refreshSummary();
+                }, 0, 150000, root);
+        }
         else if (action.id === "clear_clipboard") call("ClearClipboard", [variantString(item.id)], finish);
         else { actionPending = false; actionTimeout.stop(); }
     }
@@ -205,6 +227,7 @@ PluginComponent {
     }
     Timer { id: requestTimeout; interval: 7000; onTriggered: { ++root.requestGeneration; root.requestPending = false; root.clockNow = Date.now(); } }
     Timer { id: actionTimeout; interval: 7000; onTriggered: { root.actionPending = false; root.actionMessage = qsTr("The result is not confirmed. Check Security Center before retrying."); messageTimer.restart(); root.refreshSummary(); } }
+    Timer { id: usbActionTimeout; interval: 160000; onTriggered: { root.actionPending = false; root.actionMessage = qsTr("Authorization timed out. The device remains blocked."); messageTimer.restart(); root.refreshSummary(); } }
     Timer { id: launchWindowTimer; interval: 250; repeat: true; onTriggered: root.checkSecurityCenterLaunch() }
     Timer { id: launchMessageTimer; interval: 7000; onTriggered: { root.launchState = ""; root.launchMessage = "" } }
     Timer { id: attentionTimer; interval: 10000; onTriggered: root.attentionId = "" }
@@ -337,6 +360,7 @@ PluginComponent {
                                         delegate: SecurityButton {
                                             required property var modelData
                                             text: modelData.label; primary: modelData.id === "trust_once" || modelData.id === "clear_clipboard"
+                                            busy: root.actionPending && ["trust_once", "trust_always"].includes(modelData.id)
                                             enabled: root.fresh && !root.actionPending
                                             onClicked: root.runAction(eventCard.modelData, modelData)
                                         }

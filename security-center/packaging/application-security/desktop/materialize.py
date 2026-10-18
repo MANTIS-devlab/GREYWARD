@@ -30,6 +30,16 @@ def authentication_settings(template):
 
 def run(*command):
     subprocess.run(command,check=True,timeout=15)
+
+def prepare_usb_metadata(auth, uid, gid):
+    """Prepare only the dedicated atomic availability projection directory."""
+    metadata = auth / 'runtime/usbguard-approval'
+    metadata.mkdir(mode=0o700, exist_ok=True)
+    info = metadata.lstat()
+    if metadata.is_symlink() or not metadata.is_dir() or info.st_uid not in (0, uid) or info.st_mode & 0o077:
+        raise RuntimeError('Unsafe USB approval metadata directory')
+    os.chown(metadata, uid, gid)
+    run('/usr/bin/chcon', '-t', 'greyward_usbguard_auth_readiness_dir_t', str(metadata))
 def prepare_enforcement(uid):
     base=Path('/var/lib/greyward/application-security/enforcement')
     for directory in [base, base/f'uid-{uid}', base/f'uid-{uid}/content']:
@@ -99,3 +109,6 @@ def materialize(uid,gid):
     administration.write_text(json.dumps({'active':False,'validUntilMs':0}))
     administration.chmod(0o644)
     run('/usr/bin/chcon', '-R', '-t', 'greyward_as_auth_runtime_t', str(auth))
+    # The taskbar client sees only availability metadata, never auth state.
+    # A dedicated parent preserves its type across atomic file replacement.
+    prepare_usb_metadata(auth, uid, gid)

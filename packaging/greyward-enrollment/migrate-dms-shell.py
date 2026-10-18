@@ -11,6 +11,7 @@ import hashlib
 import json
 import os
 from pathlib import Path, PurePosixPath
+import pwd
 import re
 import shutil
 import stat
@@ -24,6 +25,12 @@ DESKTOP_SOURCE = Path('/usr/share/greyward-application-security/desktop')
 SELECTOR = Path('/etc/greyward/dms-release')
 VERIFY = Path('/usr/libexec/greyward-dms-verify')
 LOCK = Path('/run/lock/greyward-protected-dms-migration.lock')
+USBGUARD_POLICY = Path('/usr/share/greyward-application-security/enrollment/policy/greyward_application_usbguard_approval.pp')
+USBGUARD_HELPERS = (
+    Path('/usr/libexec/greyward-usbguard-approval'),
+    Path('/usr/libexec/greyward-usbguard-auth-approval'),
+)
+AUTH_RUNTIME_ROOT = Path('/run/greyward-application-security')
 
 
 def digest(data):
@@ -141,6 +148,84 @@ def selected_dms():
     return root
 
 
+def _owned_runtime_directory(path, owner_uid):
+    try:
+        metadata = path.lstat()
+    except FileNotFoundError:
+        return False
+    if (path.is_symlink() or not stat.S_ISDIR(metadata.st_mode)
+            or metadata.st_uid != owner_uid or metadata.st_mode & 0o022):
+        raise RuntimeError(f'Unsafe protected authentication runtime directory: {path}')
+    return True
+
+
+def _label_runtime_endpoint(path, owner_uid, expected_type):
+    try:
+        metadata = path.lstat()
+    except FileNotFoundError:
+        return
+    if (path.is_symlink() or not expected_type(metadata.st_mode)
+            or metadata.st_uid != owner_uid or metadata.st_mode & 0o077
+            or (stat.S_ISREG(metadata.st_mode) and metadata.st_nlink != 1)):
+        raise RuntimeError(f'Unsafe protected authentication runtime endpoint: {path}')
+    subprocess.run(['/usr/sbin/restorecon', str(path)], check=True, timeout=10)
+    subprocess.run(['/usr/sbin/matchpathcon', '-V', str(path)], check=True, timeout=10)
+
+
+def label_existing_usbguard_runtime(runtime, owner_uid):
+    """Repair stale labels left by sessions that predate the USB IPC policy."""
+    if not _owned_runtime_directory(runtime.parent, 0):
+        return
+    if not _owned_runtime_directory(runtime, owner_uid):
+        return
+    metadata = runtime / 'usbguard-approval'
+    if _owned_runtime_directory(metadata, owner_uid):
+        _label_runtime_endpoint(metadata / 'readiness.json', owner_uid, stat.S_ISREG)
+        subprocess.run(['/usr/sbin/restorecon', str(metadata)], check=True, timeout=10)
+        subprocess.run(['/usr/sbin/matchpathcon', '-V', str(metadata)], check=True, timeout=10)
+
+    quickshell = runtime / 'quickshell'
+    if not _owned_runtime_directory(quickshell, owner_uid):
+        return
+    by_id = quickshell / 'by-id'
+    if not _owned_runtime_directory(by_id, owner_uid):
+        return
+    for instance in sorted(by_id.iterdir()):
+        if instance.is_symlink():
+            raise RuntimeError(f'Unsafe protected authentication runtime directory: {instance}')
+        if not stat.S_ISDIR(instance.lstat().st_mode):
+            continue
+        if not _owned_runtime_directory(instance, owner_uid):
+            continue
+        _label_runtime_endpoint(instance / 'instance.lock', owner_uid, stat.S_ISREG)
+        _label_runtime_endpoint(instance / 'ipc.sock', owner_uid, stat.S_ISSOCK)
+
+
+def activate_usbguard_approval_policy(accounts):
+    """Load the fixed USB IPC policy and repair executable/runtime labels."""
+    trusted_file(USBGUARD_POLICY)
+    subprocess.run(['/usr/sbin/semodule', '-i', str(USBGUARD_POLICY)],
+                   check=True, timeout=60)
+    for helper in USBGUARD_HELPERS:
+        trusted_file(helper)
+        metadata = helper.stat()
+        if (metadata.st_uid != 0 or metadata.st_gid != 0
+                or metadata.st_mode & 0o022 or not metadata.st_mode & 0o111):
+            raise RuntimeError(f'USB approval helper is not a protected root-owned executable: {helper.name}')
+        subprocess.run(['/usr/sbin/restorecon', str(helper)], check=True, timeout=10)
+        subprocess.run(['/usr/sbin/matchpathcon', '-V', str(helper)],
+                       check=True, timeout=10)
+    for account in sorted(accounts):
+        try:
+            owner_uid = pwd.getpwnam(account).pw_uid
+        except KeyError as error:
+            raise RuntimeError(f'Protected desktop account is missing: {account}') from error
+        if owner_uid < 1000:
+            raise RuntimeError(f'Invalid protected desktop account UID: {account}')
+        runtime = AUTH_RUNTIME_ROOT / f'auth-{owner_uid}' / 'runtime'
+        label_existing_usbguard_runtime(runtime, owner_uid)
+
+
 def ensure_quiescent(accounts):
     sessions = subprocess.run(['/usr/bin/loginctl', 'list-sessions', '--no-legend', '--no-pager'],
                               check=True, capture_output=True, text=True, timeout=5)
@@ -149,10 +234,10 @@ def ensure_quiescent(accounts):
         if not fields:
             continue
         result = subprocess.run(['/usr/bin/loginctl', 'show-session', fields[0],
-                                 '-p', 'User', '-p', 'Class', '-p', 'Seat', '-p', 'Remote'],
+                                 '-p', 'Name', '-p', 'Class', '-p', 'Seat', '-p', 'Remote'],
                                 check=True, capture_output=True, text=True, timeout=3)
         values = dict(item.split('=', 1) for item in result.stdout.splitlines() if '=' in item)
-        if (values.get('User') in accounts and values.get('Class') == 'user'
+        if (values.get('Name') in accounts and values.get('Class') in {'user', 'user-early'}
                 and values.get('Seat') == 'seat0' and values.get('Remote') == 'no'):
             raise RuntimeError('Log out of the protected desktop first; protected desktop files are unchanged')
 
@@ -259,6 +344,11 @@ def migrate(assembler=ASSEMBLER, base=BASE, admin=ADMIN,
                     os.chown(path, 0, 0)
             new_shell.chmod(0o555)
             os.chown(new_shell, 0, 0)
+
+            # Existing installations do not rerun first-boot enrollment after
+            # an RPM upgrade. Apply the updated policy and executable labels as
+            # part of this explicit, quiescent protected-session migration.
+            activate_usbguard_approval_policy(accounts)
 
             new_binary = work / 'dms'
             copy_metadata(dms / 'bin/dms', new_binary)

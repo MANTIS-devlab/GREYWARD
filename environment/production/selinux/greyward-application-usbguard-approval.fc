@@ -1,0 +1,6 @@
+/usr/libexec/greyward-usbguard-approval -- gen_context(system_u:object_r:greyward_usbguard_approval_exec_t,s0)
+/usr/libexec/greyward-usbguard-auth-approval -- gen_context(system_u:object_r:greyward_usbguard_auth_approval_exec_t,s0)
+/run/greyward-application-security/auth-[0-9]+/runtime/usbguard-approval -d gen_context(system_u:object_r:greyward_usbguard_auth_readiness_dir_t,s0)
+/run/greyward-application-security/auth-[0-9]+/runtime/usbguard-approval/[^/]+ -- gen_context(system_u:object_r:greyward_usbguard_auth_readiness_t,s0)
+/run/greyward-application-security/auth-[0-9]+/runtime/quickshell/by-id/[^/]+/instance\.lock -- gen_context(system_u:object_r:greyward_usbguard_auth_instance_t,s0)
+/run/greyward-application-security/auth-[0-9]+/runtime/quickshell/by-id/[^/]+/ipc\.sock -s gen_context(system_u:object_r:greyward_usbguard_auth_ipc_t,s0)

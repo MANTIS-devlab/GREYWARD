@@ -998,6 +998,51 @@ test("uses the DMS localization mechanism and product-safe privacy feedback", ()
   assert.doesNotMatch(widget, /actionMessage = result && result\.ok \? .*result\?\.detail/);
 });
 
+test("routes USBGuard approval through its fixed, separately confined entrypoint", () => {
+  const widget = readFileSync(new URL("../../../environment/session/dankmaterialshell/plugins/greywardSecure/SecureWidget.qml", import.meta.url), "utf8");
+  const policy = readFileSync(new URL("../../../environment/production/selinux/greyward-application-usbguard-approval.te", import.meta.url), "utf8");
+  const authPolicy = readFileSync(new URL("../../../environment/production/selinux/greyward-application-auth.te", import.meta.url), "utf8");
+  const helper = readFileSync(new URL("../../../packaging/greyward-dms/usbguard-approval.go", import.meta.url), "utf8");
+  const authHelper = readFileSync(new URL("../../../packaging/greyward-dms/usbguard-approval-execute.go", import.meta.url), "utf8");
+  const authShell = readFileSync(new URL("../../../security-center/packaging/application-security/authentication/assemble.py", import.meta.url), "utf8");
+  assert.match(widget, /usbguardApproval: "\/usr\/libexec\/greyward-usbguard-approval"/);
+  assert.match(widget, /\[usbguardApproval, String\(item\.connection_ref\), mode\]/);
+  assert.match(widget, /Proc\.runCommand\("greywardSecure\.usb\." \+ mode \+ "\." \+ String\(item\.connection_ref\) \+ "\." \+ \(\+\+usbActionGeneration\)/);
+  assert.match(widget, /\}, 0, 150000, root\);/);
+  assert.match(widget, /const confirmed = code === 0 && result\?\.ok === true && result\?\.state === "COMPLETE"/);
+  assert.doesNotMatch(widget, /code === 0 \? qsTr\("USB approval completed"\)/);
+  assert.match(widget, /interval: 160000; onTriggered: \{ root\.actionPending = false; root\.actionMessage = qsTr\("Authorization timed out/);
+  assert.match(widget, /Waiting for administrator approval/);
+  assert.match(widget, /busy: root\.actionPending/);
+  assert.doesNotMatch(widget, /call\("RequestUsbTrust"/);
+  assert.match(policy, /domtrans_pattern\(greyward_guard_t, greyward_usbguard_approval_exec_t,/);
+  assert.match(policy, /role system_r types greyward_usbguard_approval_t;/);
+  assert.match(policy, /domtrans_pattern\(greyward_as_auth_t, greyward_usbguard_auth_approval_exec_t,/);
+  assert.match(policy, /type_transition greyward_as_auth_t greyward_as_auth_runtime_t:sock_file/);
+  assert.match(policy, /greyward_usbguard_auth_ipc_t:sock_file \{ getattr open write \}/);
+  assert.match(policy, /greyward_usbguard_approval_t greyward_as_auth_t:unix_stream_socket connectto/);
+  assert.match(policy, /allow greyward_as_auth_t greyward_usbguard_auth_approval_t:process2 nnp_transition;/);
+  assert.match(policy, /allow greyward_usbguard_auth_approval_t usbguard_t:dbus send_msg/);
+  assert.match(policy, /allow usbguard_t greyward_usbguard_auth_approval_t:dbus send_msg/);
+  assert.doesNotMatch(policy, /greyward_usbguard_approval_t usbguard_t:dbus send_msg/);
+  assert.doesNotMatch(policy, /greyward_usbguard_approval_t auth_approval_exec_t:file \{ entrypoint map read execute \}/);
+  assert.doesNotMatch(policy, /allow greyward_guard_t usbguard_t:dbus send_msg/);
+  assert.doesNotMatch(policy, /allow greyward_as_auth_t usbguard_t:dbus send_msg/);
+  assert.doesNotMatch(authPolicy, /usbguard_t:dbus send_msg/);
+  assert.match(helper, /os\.Args\[2\] != "once"/);
+  assert.match(helper, /os\.Args\[2\] != "always"/);
+  assert.match(helper, /"\/usr\/bin\/qs"/);
+  assert.match(helper, /"requestUsbTrust"/);
+  assert.match(helper, /"usbTrustStatus"/);
+  assert.match(helper, /"usbguard-approval", "readiness\.json"/);
+  assert.doesNotMatch(helper, /authentication-ready\.json/);
+  assert.match(authShell, /function requestUsbTrust\(reference: string, mode: string, requestId: string\)/);
+  assert.match(authShell, /PolkitService\.agent\?\.isRegistered !== true/);
+  assert.match(authShell, /"\/usr\/libexec\/greyward-usbguard-auth-approval"/);
+  assert.match(authHelper, /syscall\.Exec\("\/usr\/bin\/python3", argv, os\.Environ\(\)\)/);
+  assert.doesNotMatch(helper, /sh -c|bash -c/);
+});
+
 test("keeps Privacy profile transitions authoritative and single-flight", () => {
   const rust = readFileSync(new URL("../src-tauri/src/lib.rs", import.meta.url), "utf8");
   const helper = readFileSync(new URL("../../crates/greyward-security-backends/src/bin/greyward-security-profile.rs", import.meta.url), "utf8");

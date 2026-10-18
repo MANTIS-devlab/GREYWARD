@@ -363,6 +363,15 @@ if $require_complete; then
     echo "The enrollment RPM must require the selected Application Security runtime exactly ($expected_appsec_requirement)." >&2
     exit 1
   fi
+  enrollment_runtime_path='./usr/libexec/greyward-enrollment'
+  if ! rpm_query -qpl "$enrollment_rpm" | awk -v expected='/usr/libexec/greyward-enrollment' '$0 == expected { found = 1 } END { exit !found }'; then
+    echo 'The enrollment RPM is missing its fixed enrollment runtime.' >&2
+    exit 1
+  fi
+  if ! rpm2cpio "$enrollment_rpm" | cpio -i --quiet --to-stdout "$enrollment_runtime_path" | cmp -s - "$repo_root/packaging/greyward-enrollment/enroll.py"; then
+    echo 'The enrollment RPM contains stale enrollment logic; rebuild it from this checkout before ISO staging.' >&2
+    exit 1
+  fi
 fi
 if $require_complete && [[ -z "$branding_rpm" ]]; then
   echo "Complete production staging requires one greyward-branding RPM." >&2
@@ -511,6 +520,19 @@ PY
   normalize_plugin_text() {
     python3 -c 'import sys; data=sys.stdin.buffer.read(); sys.stdout.buffer.write(data if b"\0" in data else data.replace(b"\r\n", b"\n"))'
   }
+  # Version agreement alone cannot detect an RPM built before the USB approval
+  # entrypoint, focus or SELinux fixes. Compare the actual selected payloads.
+  usb_context_rpm=''
+  for candidate in "${security_rpms[@]}"; do
+    if [[ "$(rpm_query -qp --qf '%{NAME}' "$candidate")" == greyward-security-context ]]; then
+      usb_context_rpm=$candidate
+    fi
+  done
+  test -n "$usb_context_rpm" || { echo 'USB approval requires the Security Context RPM.' >&2; exit 1; }
+  python3 "$repo_root/environment/image/verify-usbguard-inputs.py" --repo "$repo_root" --kind dms --rpm "$dms_rpm"
+  python3 "$repo_root/environment/image/verify-usbguard-inputs.py" --repo "$repo_root" --kind context --rpm "$usb_context_rpm"
+  python3 "$repo_root/environment/image/verify-usbguard-inputs.py" --repo "$repo_root" --kind application-security --rpm "$appsec_rpm"
+  python3 "$repo_root/environment/image/verify-usbguard-inputs.py" --repo "$repo_root" --kind enrollment --rpm "$enrollment_rpm"
   plugin_source="$session/dankmaterialshell/plugins"
   plugin_count=0
   while IFS= read -r -d '' plugin_file; do

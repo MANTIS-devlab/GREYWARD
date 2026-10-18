@@ -303,8 +303,8 @@ def prepare_inputs(accounts, receipt, resume=False):
     ordinary = STATE / 'greyward_ordinary.cil'
     ordinary.write_text('(typeattribute greyward_as_ordinary)\n')
     policies = sorted((INPUT / 'policy').glob('*.pp'))
-    if len(policies) != 6:
-        raise RuntimeError('Matched six-module policy closure missing')
+    if len(policies) != 7:
+        raise RuntimeError('Matched seven-module policy closure missing')
     for path in policies:
         trusted(path)
     run('/usr/sbin/semodule', '-i', str(ordinary), *(str(p) for p in policies))
@@ -315,6 +315,39 @@ def prepare_inputs(accounts, receipt, resume=False):
     for path in overlays:
         trusted(path)
     run('/usr/sbin/semodule', '-i', str(ordinary), *(str(p) for p in overlays))
+    # The taskbar and auth-session USBGuard helpers are installed before
+    # first-boot enrollment loads their dedicated SELinux domain. Validate
+    # both immutable executables, then apply and verify their file contexts.
+    approval_helpers = (
+        Path('/usr/libexec/greyward-usbguard-approval'),
+        Path('/usr/libexec/greyward-usbguard-auth-approval'),
+    )
+    for approval_helper in approval_helpers:
+        try:
+            approval_info = approval_helper.lstat()
+        except FileNotFoundError as error:
+            raise RuntimeError(f'USB approval helper is missing: {approval_helper.name}') from error
+        if (not stat.S_ISREG(approval_info.st_mode) or approval_info.st_uid != 0
+                or approval_info.st_gid != 0 or approval_info.st_mode & 0o022
+                or not approval_info.st_mode & 0o111):
+            raise RuntimeError(f'USB approval helper is not the expected root-owned executable: {approval_helper.name}')
+        run('/usr/sbin/restorecon', str(approval_helper))
+        run('/usr/sbin/matchpathcon', '-V', str(approval_helper))
+    # Production starts this root-only socket before enrollment loads the
+    # session policy.  The creation-time transition cannot relabel an inode
+    # that already exists, so apply the newly installed file-context rule now.
+    update_socket = Path('/run/greyward-update-worker.sock')
+    try:
+        update_socket_info = update_socket.lstat()
+    except FileNotFoundError:
+        pass
+    else:
+        if (not stat.S_ISSOCK(update_socket_info.st_mode)
+                or update_socket_info.st_uid != 0
+                or update_socket_info.st_gid != 0
+                or stat.S_IMODE(update_socket_info.st_mode) != 0o600):
+            raise RuntimeError('Update worker socket is not the expected root-only socket')
+        run('/usr/sbin/restorecon', str(update_socket))
     ensure_selinux_user('greyward_guard_u', 'greyward_guard_r', 's0')
     ensure_selinux_user('greyward_admin_u', 'greyward_admin_r sysadm_r', 's0-s0:c0.c1023')
     context = Path('/etc/selinux/targeted/contexts/users/greyward_guard_u')

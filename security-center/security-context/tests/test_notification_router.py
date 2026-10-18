@@ -63,6 +63,21 @@ class NotificationTests(unittest.TestCase):
         self.router._action(1, 'open')
         self.dispatch.assert_not_called()
 
+    def test_usb_notification_never_offers_sessionless_trust_actions(self):
+        item = {**self.item, 'actions': [
+            {'id': 'trust_once', 'label': 'Trust once'},
+            {'id': 'trust_always', 'label': 'Trust always'},
+        ]}
+        self.router.reconcile([item])
+
+        # Notification review is navigation-only; trust remains in the DMS
+        # widget, where its child process inherits the active session.
+        self.assertEqual(self.bus.sent[-1][5], ['open', 'Review'])
+        self.router._action(1, 'trust_always')
+        self.dispatch.assert_not_called()
+        self.router._action(1, 'open')
+        self.dispatch.assert_called_once_with(item, 'open')
+
     def test_protected_review_handoff_is_scoped_and_never_authorizes(self):
         from greyward_security_context.notification_router import open_route
         reference = 'resource_' + 'a' * 64

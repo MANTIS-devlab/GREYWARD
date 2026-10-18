@@ -1,5 +1,56 @@
 # GREYWARD current status
 
+## 18 October `<validation-host>` Trust always — installed workflow validated
+
+The user confirms successful reconnection, physical-keyboard password entry,
+protected authorization and disappearance of the matching USB2.1 Hub alert.
+This completes the installed taskbar → protected IPC → Polkit → USBGuard →
+verified device/persistent rule → matching-alert flow for the tested hub.
+No approval was synthesized or allow rule created by the agent.
+
+At the 10:58 readback, USB2.1 Hub `05e3:0610`, device 22 on `3-1`, is ALLOW,
+authorized=true/trusted=true in both upstream USBGuard and the root projection;
+its sysfs authorization is 1. Rule 24 is present in `/etc/usbguard/rules.conf`,
+bound to its own stable hash, parent hash and interfaces. Protected PAM
+successful-authentication/accounting records corroborate the user decisions.
+Two separately approved child-device rules are present. The earlier USB2.0 HUB
+`214b:7260` and other unapproved devices remain blocked. Root SSH could not read
+the ordinary user-bus transport; matching-alert clearance is the user's actual
+installed-UI confirmation, not an inferred result from helper exit status.
+
+The scoped corrections address five concrete integration failures:
+
+- FileView atomic replacement lost the readiness filename's intended label.
+  A dedicated typed directory/default file transition now protects bounded
+  PID/Polkit availability metadata; the internal heartbeat remains atomic/private.
+- The Qt IPC client needed its own typed anonymous buffers and private socket
+  primitives, without generic tmpfs, cgroup or protected-auth-file access.
+- The fixed Python executor defined `main()` but never invoked it. Its isolated
+  CLI now returns structured results and meaningful exit status.
+- Password focus was not restored on late Qt window activation. The protected
+  form now handles window entry/visibility without a focus-stealing timer.
+- USB rule parsing confused `parent-hash` with the device's own `hash`.
+
+Validation includes seven Fedora USB action tests, fourteen authentication
+assembly tests, nine migration tests and the explicit offscreen focus regression
+(previous generation fails; corrected generation passes with button navigation
+preserved). A real auth-domain atomic FileView proof produces ten correctly
+labelled replacement inodes. Thirteen enforcing kernel boundary decisions pass;
+the legacy auth-domain USBGuard write pair was removed against canonical source.
+Both repository gates pass. No general command execution or direct USBGuard
+write access was granted to ordinary applications, the taskbar or the auth UI.
+
+Two explicitly approved graphical-session closures activated the corrections.
+SSH, USBGuard, Polkit and greetd remain active; SELinux stays Enforcing. Installed
+RPMs remain DMS 21 / Application Security 53 / Enrollment 43 / Context 103:
+these are backed-up matched source hotfixes, not newly built 22/54/45 RPMs.
+Canonical next-build inputs are DMS 23 / Context 104 / Application Security 55 /
+Enrollment 46; complete ISO staging rejects stale USB approval payloads. See
+[the USB approval contract](security-center/USB_APPROVAL.md).
+No reboot, GitHub publication or agent-created trust decision occurred.
+Persistence across actual unplug/replug or reboot remains untested. No further
+logout is authorized; this result does not establish ISO/release acceptance.
+
 ## 16 October network rules — installed development candidate
 
 Center 103 / Context 98 adds reviewed application/incoming rule editing,

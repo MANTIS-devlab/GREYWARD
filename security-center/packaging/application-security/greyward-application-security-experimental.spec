@@ -1,6 +1,6 @@
 Name:           greyward-application-security-experimental
 Version:        0.1.0
-Release:        51%{?dist}
+Release:        55%{?dist}
 Summary:        Experimental GREYWARD application-security runtime and Guard CLI
 License:        GPL-3.0-only AND MIT
 Source0:        %{name}-%{version}.tar.gz
@@ -50,7 +50,16 @@ export CARGO_TARGET_DIR="%{greyward_cargo_target}"
 export PATH=/usr/bin:/bin
 export RUSTC=/usr/bin/rustc RUSTDOC=/usr/bin/rustdoc
 /usr/bin/cargo build --release --locked --offline -p greyward-application-security --bins
-printf 'f4f8ba15ebd2df62db611b1de32e992f660a4aeeea83250cb88fa468da42ffcb  packaging/application-security/wayland/security-context-v1.xml\n' | sha256sum --check --strict
+python3 - <<'PY'
+import hashlib
+from pathlib import Path
+
+source = Path('packaging/application-security/wayland/security-context-v1.xml')
+actual = hashlib.sha256(source.read_bytes().replace(b'\r\n', b'\n')).hexdigest()
+expected = 'f4f8ba15ebd2df62db611b1de32e992f660a4aeeea83250cb88fa468da42ffcb'
+if actual != expected:
+    raise SystemExit('Wayland security-context protocol source hash mismatch')
+PY
 wayland-scanner client-header packaging/application-security/wayland/security-context-v1.xml security-context-v1-client-protocol.h
 wayland-scanner private-code packaging/application-security/wayland/security-context-v1.xml security-context-v1-protocol.c
 gcc %{build_cflags} -Wall -Wextra -Werror -I. packaging/application-security/wayland/context.c security-context-v1-protocol.c $(pkg-config --cflags --libs wayland-client) %{build_ldflags} -o greyward-wayland-context
@@ -131,6 +140,20 @@ install -Dm0644 packaging/application-security/systems.mantis.greyward.Applicati
 %{_datadir}/dbus-1/system.d/systems.mantis.greyward.ApplicationSecurityDevelopment1.conf
 
 %changelog
+* Sun Oct 18 2026 MANTIS SYSTEMS - 0.1.0-55
+- Preserve protected Polkit keyboard focus after late window activation.
+
+* Sun Oct 18 2026 MANTIS SYSTEMS - 0.1.0-54
+- Keep the generated USB approval result parser on one valid JavaScript line.
+- Publish only bounded USB availability metadata in a dedicated, atomically written directory.
+
+* Sun Oct 18 2026 MANTIS SYSTEMS - 0.1.0-53
+- Route USBGuard review into the active protected authentication shell.
+
+* Sun Oct 18 2026 MANTIS SYSTEMS - 0.1.0-52
+- Accept the DMS 1.6.2-20 receipt for the verified USB approval wait and feedback fix.
+- Normalize line endings before checking the pinned Wayland protocol input.
+
 * Wed Oct 14 2026 MANTIS SYSTEMS - 0.1.0-51
 - Align the production RPM source revision with the validated installed runtime.
 

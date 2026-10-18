@@ -80,7 +80,11 @@ class BuildInputVerificationTests(unittest.TestCase):
         enrollment_spec = (ROOT / 'packaging/greyward-enrollment/greyward-enrollment.spec').read_text()
         self.assertIn('expected_dms_requirement="greyward-dms = $selected_dms_version"', source)
         self.assertIn('rpm_query -qp --requires "$enrollment_rpm"', source)
-        self.assertIn('Requires: greyward-dms = 1.6.2-17%{?dist}', enrollment_spec)
+        self.assertIn('Requires: greyward-application-security-experimental = 0.1.0-55%{?dist}', enrollment_spec)
+        self.assertIn('Requires: greyward-dms = 1.6.2-23%{?dist}', enrollment_spec)
+        build = (ROOT / 'packaging/greyward-dms/build.sh').read_text()
+        self.assertIn('usbguard-approval-execute.go', build)
+        self.assertIn('usbguardAuthApprovalSha256', (ROOT / 'packaging/greyward-dms/greyward-dms.spec').read_text())
 
     def test_iso_builder_requires_exact_matched_runtime_pair_and_records_files_inputs(self):
         source = IMAGE_BUILDER.read_text()
