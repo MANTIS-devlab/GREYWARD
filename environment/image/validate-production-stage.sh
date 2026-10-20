@@ -53,6 +53,20 @@ for package in greyward-security-center greyward-security-context greyward-brand
   fi
 done
 
+# Every firmware RPM selected in the production manifest must also be named in
+# the generated offline Anaconda transaction. Firmware is never host-detected
+# at build time, so omission from this closure would otherwise be easy to miss.
+if [[ -r "$stage/packages.txt" && -r "$stage/offline/installer-packages.ks" ]]; then
+  while IFS= read -r package || [[ -n "$package" ]]; do
+    package=${package%$'\r'}
+    [[ -z "$package" || "$package" == \#* || "$package" != *-firmware ]] && continue
+    if ! grep -Fqx "$package.noarch" "$stage/offline/installer-packages.ks" \
+      && ! grep -Fqx "$package" "$stage/offline/installer-packages.ks"; then
+      missing+=("offline/installer-packages.ks is missing declared firmware package $package")
+    fi
+  done < "$stage/packages.txt"
+fi
+
 if ((${#missing[@]})); then
   printf 'PRODUCTION_STAGE_VALIDATION=FAIL\n'
   printf 'MISSING_OR_INVALID: %s\n' "${missing[@]}"

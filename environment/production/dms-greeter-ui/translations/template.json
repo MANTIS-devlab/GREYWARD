@@ -1,0 +1,121 @@
+[
+  {
+    "term": "Authenticating...",
+    "translation": "",
+    "context": "",
+    "reference": "",
+    "comment": ""
+  },
+  {
+    "term": "Authentication error - try again",
+    "translation": "",
+    "context": "",
+    "reference": "",
+    "comment": ""
+  },
+  {
+    "term": "Authentication failed - attempt %1 of %2",
+    "translation": "",
+    "context": "",
+    "reference": "",
+    "comment": ""
+  },
+  {
+    "term": "Authentication failed - lockout can occur",
+    "translation": "",
+    "context": "",
+    "reference": "",
+    "comment": ""
+  },
+  {
+    "term": "Authentication failed - try again",
+    "translation": "",
+    "context": "",
+    "reference": "",
+    "comment": ""
+  },
+  {
+    "term": "Auto-login",
+    "translation": "",
+    "context": "",
+    "reference": "",
+    "comment": ""
+  },
+  {
+    "term": "Awaiting fingerprint authentication",
+    "translation": "",
+    "context": "",
+    "reference": "",
+    "comment": ""
+  },
+  {
+    "term": "Awaiting fingerprint or security key authentication",
+    "translation": "",
+    "context": "",
+    "reference": "",
+    "comment": ""
+  },
+  {
+    "term": "Awaiting security key authentication",
+    "translation": "",
+    "context": "",
+    "reference": "",
+    "comment": ""
+  },
+  {
+    "term": "Back to user list",
+    "translation": "",
+    "context": "greeter link to return from manual username entry to user picker",
+    "reference": "",
+    "comment": ""
+  },
+  {
+    "term": "Change username",
+    "translation": "",
+    "context": "greeter action to correct a manually entered username",
+    "reference": "Modules/Greetd/GreeterContent.qml:1341",
+    "comment": ""
+  },
+  {
+    "term": "Logging in...",
+    "translation": "",
+    "context": "",
+    "reference": "",
+    "comment": ""
+  },
+  {
+    "term": "Not listed?",
+    "translation": "",
+    "context": "greeter link to switch to manual username entry",
+    "reference": "",
+    "comment": ""
+  },
+  {
+    "term": "Password...",
+    "translation": "",
+    "context": "",
+    "reference": "",
+    "comment": ""
+  },
+  {
+    "term": "Select user...",
+    "translation": "",
+    "context": "greeter user picker placeholder",
+    "reference": "",
+    "comment": ""
+  },
+  {
+    "term": "Too many failed attempts - account may be locked",
+    "translation": "",
+    "context": "",
+    "reference": "",
+    "comment": ""
+  },
+  {
+    "term": "Username...",
+    "translation": "",
+    "context": "",
+    "reference": "",
+    "comment": ""
+  }
+]

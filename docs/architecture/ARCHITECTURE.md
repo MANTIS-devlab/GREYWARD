@@ -16,15 +16,25 @@ coverage and independent recovery; no login policy has been changed.
 GREYWARD owns shell presentation, product branding, and the Security Center product surface. DMS Settings owns general desktop/system settings; there is no separate GREYWARD Settings application. Fedora, Labwc, DMS, systemd, NetworkManager, PipeWire, BlueZ, UPower, Polkit, Plymouth, dracut, and cryptsetup remain standard upstream backends. Hyprland remains installed only as the explicit fallback compositor. No upstream fork or compositor plugin is part of H0-H2.
 
 DMS is the sole graphical Polkit-agent owner in the canonical session. The
-production DMS patch adjusts only the Polkit dialog dimensions; Security Center
-keeps the privileged Recovery V1 action narrow and asks Polkit to authenticate
-the active logged-in `wheel` user rather than selecting another administrator
-account.
+protected DMS authentication shell owns a single password-entry surface per
+Polkit challenge and shows an explicit, non-input location card on other
+displays. It applies GREYWARD styling while preserving DMS flow and Fedora PAM.
+Security Center keeps the privileged Recovery V1 action narrow and asks Polkit
+to authenticate the active logged-in `wheel` user rather than selecting another
+administrator account.
 
 The login boundary is `greetd → dms-greeter → Fedora PAM → selected Wayland
 session`. DMS Greeter runs as the unprivileged `greeter` account, reads only its
 root-owned cache, and never receives or validates passwords itself. tty autologin is
 disabled; `/etc/pam.d/greetd` remains the authoritative authentication policy.
+The production image selects the pinned GREYWARD Greeter UI through DMS
+Greeter's `--shell-dir` option. That UI creates a surface for every Wayland
+screen and lets users return to username entry after a mistaken account name,
+including installations with a single account. Its compositor launcher selects
+the validated wlroots GLES2 renderer on physical systems, matching the
+protected display worker's cross-GPU DMA-BUF path. It retains Pixman only for
+known virtual GPUs or systems without a DRM render node, and clears inherited
+software-renderer overrides on physical hardware.
 
 For enrolled sessions, the protected login broker keeps the session admission
 gate closed until the private Polkit agent is registered. Its readiness signal
@@ -110,10 +120,20 @@ Public identity uses the reviewed HTTPS providers, is always refreshed rather
 than restored from an address cache, and remains in memory only. Its pill
 popout owns a persistent `Public IP check` switch; the saved off state is loaded
 before timers can run and prevents provider requests until manually re-enabled.
+Country badges are drawn locally for the supported country codes, with an ISO
+code tile retained for codes that do not have a dedicated flag drawing.
 The session unit also sends non-local plain-HTTP proxy attempts to a closed
 loopback port, containing explicit upstream cleartext `ip-api.com` geolocation requests
 (the 1.6 backend loads location lazily) without blocking the plugin's reviewed HTTPS
 providers.
+
+DMS creates a separate Network Identity widget instance for each bar and output.
+Those instances use screen-and-instance-scoped process IDs because DMS's Proc
+service is a singleton and replaces callbacks that reuse an ID. One live widget
+owns the provider and local-route lookups; it shares current values with all
+other bars through PluginService global variables held only in shell memory.
+This avoids duplicate external lookups while keeping every display in sync. If
+the owner widget is removed, another live instance takes over.
 
 ## DMS runtime ownership
 

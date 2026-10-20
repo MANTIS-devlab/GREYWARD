@@ -40,6 +40,7 @@ from greyward_security_context.network_location import country_resolution_for_de
 from greyward_security_context.application_security import ApplicationSecurityReads, ApplicationReadError, unavailable_read as unavailable_application_read
 from greyward_security_context.application_workflows import ApplicationSecurityWorkflows
 from greyward_security_context import local_activity
+from greyward_security_context.network_applications import installed_catalog
 BUS_NAME="systems.mantis.greyward.SecurityContext1"; OBJECT_PATH="/systems/mantis/greyward/SecurityContext1"; STATE_PATH=Path("/run/greyward-security-context/opensnitch-summary.json"); SCHEMA="greyward.security.context/v1"
 NETWORK_STATE_PATH=Path("/run/greyward-security-context/network-protection.json"); NETWORK_SCHEMA="greyward.security.network/v1"
 SECURE_DNS_STATE_PATH=Path("/run/greyward-secure-dns/state.json")
@@ -53,6 +54,10 @@ FILE_SECURITY_DBUS_TIMEOUT=30
 AUTHORITATIVE_POSTURE_CACHE_SECONDS=5
 SUMMARY_CACHE_SECONDS=2
 NETWORK_HEALTH_CACHE_SECONDS=5
+NETWORK_CONTROL_SOCKET=Path("/run/greyward-opensnitch/control-plane.sock")
+SS_EXECUTABLE=Path("/usr/bin/ss")
+NETWORK_ACTIVITY_FRESH_SECONDS=30
+NETWORK_ACTIVITY_LIMIT=256
 NETWORK_RULES_SLOTS=threading.BoundedSemaphore(4)
 _AUTHORITATIVE_POSTURE_CACHE=None
 _AUTHORITATIVE_POSTURE_CACHE_LOCK=threading.Lock()
@@ -152,8 +157,21 @@ def _service_active(name):
   return result.returncode == 0
  except (OSError,subprocess.SubprocessError):
   return False
+def _opensnitch_control_connected():
+ """Check for an established OpenSnitch client on GREYWARD's root-only socket."""
+ try:
+  result=subprocess.run([str(SS_EXECUTABLE),"-xan"],stdout=subprocess.PIPE,stderr=subprocess.DEVNULL,text=True,timeout=2,check=False)
+  if result.returncode != 0:
+   return False
+  for line in result.stdout.splitlines():
+   fields=line.split()
+   if len(fields) >= 3 and fields[0] == "u_str" and fields[1] == "ESTAB" and str(NETWORK_CONTROL_SOCKET) in line:
+    return True
+ except (OSError,subprocess.SubprocessError):
+  return False
+ return False
 def _probe_network_link():
- """Confirm both local OpenSnitch services before reporting stale data as down."""
+ """Confirm both services and OpenSnitch's established local control connection."""
  return all(_network_service_health())
 def _network_service_health():
  global _NETWORK_HEALTH_CACHE
@@ -161,19 +179,43 @@ def _network_service_health():
   current=time.monotonic()
   if _NETWORK_HEALTH_CACHE and current-_NETWORK_HEALTH_CACHE[0] < NETWORK_HEALTH_CACHE_SECONDS:
    return _NETWORK_HEALTH_CACHE[1]
-  value=(_service_active("opensnitch.service"),_service_active("greyward-opensnitch-control-plane.service"))
+  daemon_active=_service_active("opensnitch.service")
+  control_active=_service_active("greyward-opensnitch-control-plane.service")
+  connection_active=daemon_active and control_active and _opensnitch_control_connected()
+  value=(daemon_active,control_active,connection_active)
   _NETWORK_HEALTH_CACHE=(current,value)
   return value
+def _network_activity_recent(value,current):
+ events=value.get("activity") if isinstance(value.get("activity"),list) else []
+ for event in reversed(events[-NETWORK_ACTIVITY_LIMIT:]):
+  if not isinstance(event,dict):
+   continue
+  occurred_at=event.get("occurred_at")
+  if not isinstance(occurred_at,str):
+   continue
+  try:
+   observed=dt.datetime.fromisoformat(occurred_at.replace("Z","+00:00"))
+   if observed.tzinfo is None:
+    observed=observed.astimezone(current.tzinfo or dt.timezone.utc)
+   age=(current-observed).total_seconds()
+   if -5 <= age <= NETWORK_ACTIVITY_FRESH_SECONDS:
+    return True
+  except (TypeError,ValueError,OverflowError):
+   continue
+ return False
 def _apply_idle_health(value):
  opensnitch=value.get("opensnitch") or {}
  if opensnitch.get("last_seen") or str(opensnitch.get("state") or "").upper() not in {"","UNAVAILABLE","DEGRADED"}:
   return value
- daemon_active,control_active=_network_service_health()
- ready=daemon_active and control_active
- opensnitch["health"]={"state":"IDLE" if ready else "UNAVAILABLE","daemon":"ACTIVE" if daemon_active else "INACTIVE","control_plane":"ACTIVE" if control_active else "INACTIVE","event_stream":"EMPTY","detail":"Link ready; no application traffic has been observed yet." if ready else "OpenSnitch health could not be confirmed."}
+ daemon_active,control_active,connection_active=_network_service_health()
+ ready=daemon_active and control_active and connection_active
+ detail=("OpenSnitch is connected to GREYWARD; no recent application connections were observed."
+         if ready else "OpenSnitch is running but is not connected to the GREYWARD control plane."
+         if daemon_active and control_active else "OpenSnitch health could not be confirmed.")
+ opensnitch["health"]={"state":"IDLE" if ready else "UNAVAILABLE","daemon":"ACTIVE" if daemon_active else "INACTIVE","control_plane":"ACTIVE" if control_active else "INACTIVE","event_stream":"IDLE" if ready else "UNKNOWN","freshness":"FRESH" if ready else "STALE","healthy":ready,"detail":detail}
  if ready:
   opensnitch["state"]="OPERATING"
-  opensnitch["detail"]="OpenSnitch is connected and idle. No application connections have been observed yet."
+  opensnitch["detail"]=detail
   capabilities=opensnitch.setdefault("capabilities",{})
   capabilities.update({"activity":True,"rules":True,"rule_mutation":"TYPED_POLICY"})
  value["opensnitch"]=opensnitch
@@ -207,20 +249,26 @@ def network_summary():
  if last_seen:
   try:
    age=(now()-dt.datetime.fromisoformat(str(last_seen).replace("Z","+00:00"))).total_seconds()
-   if age > 30:
+   if age > NETWORK_ACTIVITY_FRESH_SECONDS:
     if _probe_network_link():
-     value["opensnitch"]["state"]="OPERATING"; value["opensnitch"]["detail"]="OpenSnitch is reachable; its heartbeat is stale, but application protection remains available."
-     value["opensnitch"].setdefault("health",{}).update({"state":"ACTIVE","daemon":"ACTIVE","control_plane":"ACTIVE","event_stream":"STALE","freshness":"STALE","healthy":True,"detail":"OpenSnitch and the GREYWARD control plane answered the liveness probe; the daemon heartbeat is stale."})
+     recent_activity=_network_activity_recent(value,now())
+     detail=("OpenSnitch is connected to GREYWARD and recent application connections are visible."
+             if recent_activity else "OpenSnitch is connected to GREYWARD; no recent application connections were observed.")
+     value["opensnitch"]["state"]="OPERATING"; value["opensnitch"]["detail"]=detail
+     value["opensnitch"].setdefault("health",{}).update({"state":"ACTIVE" if recent_activity else "IDLE","daemon":"ACTIVE","control_plane":"ACTIVE","event_stream":"OBSERVED" if recent_activity else "IDLE","freshness":"FRESH","healthy":True,"detail":detail})
     elif age > 120:
-     value["opensnitch"]["state"]="UNAVAILABLE"; value["opensnitch"]["detail"]="OpenSnitch has not reported for more than two minutes and its liveness probe failed. Application protection state is unavailable."
-     value["opensnitch"].setdefault("health",{}).update({"state":"UNAVAILABLE","daemon":"INACTIVE","control_plane":"INACTIVE","event_stream":"STALE","freshness":"STALE","healthy":False,"detail":"The OpenSnitch and GREYWARD control-plane liveness probe failed after the heartbeat became stale."})
+     value["opensnitch"]["state"]="UNAVAILABLE"; value["opensnitch"]["detail"]="The OpenSnitch control connection is unavailable; application protection state cannot be confirmed."
+     value["opensnitch"].setdefault("health",{}).update({"state":"UNAVAILABLE","daemon":"INACTIVE","control_plane":"INACTIVE","event_stream":"STALE","freshness":"STALE","healthy":False,"detail":"The OpenSnitch daemon is not connected to the GREYWARD control plane."})
     else:
-     value["opensnitch"]["state"]="DEGRADED"; value["opensnitch"]["detail"]="OpenSnitch heartbeat is stale and its liveness probe did not confirm the link yet. Recent activity may be delayed."
-     value["opensnitch"].setdefault("health",{}).update({"state":"DEGRADED","event_stream":"STALE","freshness":"STALE","healthy":False,"detail":"The OpenSnitch and GREYWARD control-plane liveness probe failed; recent activity may be delayed."})
+     value["opensnitch"]["state"]="DEGRADED"; value["opensnitch"]["detail"]="The OpenSnitch control connection could not be confirmed. Recent application activity may be delayed."
+     value["opensnitch"].setdefault("health",{}).update({"state":"DEGRADED","event_stream":"STALE","freshness":"STALE","healthy":False,"detail":"The OpenSnitch daemon is not connected to the GREYWARD control plane; recent application activity may be delayed."})
   except (TypeError,ValueError):
    if _probe_network_link():
-    value["opensnitch"]["state"]="OPERATING"; value["opensnitch"]["detail"]="OpenSnitch is reachable, but its heartbeat timestamp could not be verified."
-    value["opensnitch"].setdefault("health",{}).update({"state":"ACTIVE","daemon":"ACTIVE","control_plane":"ACTIVE","event_stream":"STALE","freshness":"STALE","healthy":True,"detail":"The liveness probe answered; heartbeat freshness is unavailable."})
+    recent_activity=_network_activity_recent(value,now())
+    detail=("OpenSnitch is connected to GREYWARD; recent application connections are visible."
+            if recent_activity else "OpenSnitch is connected to GREYWARD; no recent application connections were observed.")
+    value["opensnitch"]["state"]="OPERATING"; value["opensnitch"]["detail"]=detail
+    value["opensnitch"].setdefault("health",{}).update({"state":"ACTIVE" if recent_activity else "IDLE","daemon":"ACTIVE","control_plane":"ACTIVE","event_stream":"OBSERVED" if recent_activity else "IDLE","freshness":"FRESH","healthy":True,"detail":detail})
    else:
     value["opensnitch"]["state"]="UNAVAILABLE"; value["opensnitch"]["detail"]="OpenSnitch freshness could not be verified and its liveness probe failed."
     value["opensnitch"].setdefault("health",{}).update({"state":"UNAVAILABLE","daemon":"INACTIVE","control_plane":"INACTIVE","event_stream":"STALE","freshness":"STALE","healthy":False})
@@ -1128,7 +1176,11 @@ class SecurityContext(dbus.service.Object):
   return json.dumps(value,sort_keys=True,separators=(",",":"))
  @dbus.service.method(BUS_NAME,in_signature="s",out_signature="s")
  def NetworkRulesList(self,payload):
-  return json.dumps(_network_rules_call("GetRules",str(payload)),separators=(",",":"))
+  result=_network_rules_call("GetRules",str(payload))
+  if result.get("ok") and result.get("provider")=="application":
+   try: result["installed_applications"]=installed_catalog()
+   except Exception: result["installed_applications"]={"items":[],"total":0,"unavailable":True}
+  return json.dumps(result,separators=(",",":"))
  @dbus.service.method(BUS_NAME,in_signature="s",out_signature="s")
  def NetworkRulesPreview(self,payload):
   return json.dumps(_network_rules_call("Preview",str(payload)),separators=(",",":"))

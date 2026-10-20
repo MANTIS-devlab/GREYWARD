@@ -102,12 +102,22 @@ class NetworkProtectionTests(unittest.TestCase):
             dst_port=53,
             protocol="udp",
         )
-        with patch("greyward_security_context.control_plane._active_vpn_dns_addresses", return_value=set()):
+        policy = {"default_action": "allow", "default_duration": "once",
+                  "interactive_prompts": False,
+                  "dns_policy": {"enforce": True, "ports": [53, 853]},
+                  "threat_intel": {"enabled": False}, "rules": []}
+        with patch("greyward_security_context.control_plane._active_vpn_dns_addresses", return_value=set()), \
+             patch("greyward_security_context.control_plane._active_private_dns_addresses", return_value=set()), \
+             patch("greyward_security_context.control_plane._active_network_default_dns_addresses", return_value=set()), \
+             patch("greyward_security_context.control_plane.load_policy", return_value=policy):
             action, _duration, selected = select_policy_rule(connection)
         self.assertEqual(action, "deny")
         self.assertEqual(selected["name"], "GREYWARD deny direct DNS outside managed resolver")
 
-        with patch("greyward_security_context.control_plane._active_vpn_dns_addresses", return_value={"10.2.0.1"}):
+        with patch("greyward_security_context.control_plane._active_vpn_dns_addresses", return_value={"10.2.0.1"}), \
+             patch("greyward_security_context.control_plane._active_private_dns_addresses", return_value=set()), \
+             patch("greyward_security_context.control_plane._active_network_default_dns_addresses", return_value=set()), \
+             patch("greyward_security_context.control_plane.load_policy", return_value=policy):
             action, _duration, selected = select_policy_rule(connection)
         self.assertEqual(action, "allow")
         self.assertEqual(selected["name"], "GREYWARD active VPN resolver upstream")
@@ -250,10 +260,11 @@ class NetworkProtectionTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             state_path = Path(directory) / "network-protection.json"
             state_path.write_text(json.dumps(value), encoding="utf-8")
-            with patch.object(user_bus, "NETWORK_STATE_PATH", state_path), patch.object(user_bus, "_probe_network_link", return_value=True), patch.object(user_bus, "now", return_value=now):
+            with patch.object(user_bus, "NETWORK_STATE_PATH", state_path), patch.object(user_bus, "_network_service_health", return_value=(True, True, True)), patch.object(user_bus, "now", return_value=now):
                 snapshot = user_bus.network_summary()
         self.assertEqual(snapshot["opensnitch"]["state"], "OPERATING")
-        self.assertIn("connected and idle", snapshot["opensnitch"]["detail"])
+        self.assertIn("connected to GREYWARD", snapshot["opensnitch"]["detail"])
+        self.assertEqual(snapshot["opensnitch"]["health"]["state"], "IDLE")
 
     def test_recent_stale_reachable_link_stays_operating(self):
         now = datetime.now(timezone.utc)
@@ -272,7 +283,52 @@ class NetworkProtectionTests(unittest.TestCase):
             with patch.object(user_bus, "NETWORK_STATE_PATH", state_path), patch.object(user_bus, "_probe_network_link", return_value=True), patch.object(user_bus, "now", return_value=now):
                 snapshot = user_bus.network_summary()
         self.assertEqual(snapshot["opensnitch"]["state"], "OPERATING")
+        self.assertEqual(snapshot["opensnitch"]["health"]["state"], "IDLE")
+        self.assertEqual(snapshot["opensnitch"]["health"]["event_stream"], "IDLE")
+        self.assertEqual(snapshot["opensnitch"]["health"]["freshness"], "FRESH")
+        self.assertTrue(snapshot["opensnitch"]["health"]["healthy"])
+
+    def test_stale_heartbeat_with_recent_traffic_keeps_active_visibility(self):
+        now = datetime.now(timezone.utc)
+        value = {
+            "schema": "greyward.security.network/v1",
+            "opensnitch": {
+                "state": "DEGRADED",
+                "detail": "stale",
+                "last_seen": (now - timedelta(minutes=5)).isoformat().replace("+00:00", "Z"),
+                "health": {"state": "DEGRADED"},
+            },
+            "activity": [{"occurred_at": now.isoformat().replace("+00:00", "Z")}],
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            state_path = Path(directory) / "network-protection.json"
+            state_path.write_text(json.dumps(value), encoding="utf-8")
+            with patch.object(user_bus, "NETWORK_STATE_PATH", state_path), patch.object(user_bus, "_probe_network_link", return_value=True), patch.object(user_bus, "now", return_value=now):
+                snapshot = user_bus.network_summary()
+        self.assertEqual(snapshot["opensnitch"]["state"], "OPERATING")
         self.assertEqual(snapshot["opensnitch"]["health"]["state"], "ACTIVE")
+        self.assertEqual(snapshot["opensnitch"]["health"]["event_stream"], "OBSERVED")
+        self.assertEqual(snapshot["opensnitch"]["health"]["freshness"], "FRESH")
+
+    def test_invalid_heartbeat_timestamp_uses_live_connection_not_stale_alarm(self):
+        now = datetime.now(timezone.utc)
+        value = {
+            "schema": "greyward.security.network/v1",
+            "opensnitch": {
+                "state": "OPERATING",
+                "detail": "stale",
+                "last_seen": "invalid timestamp",
+                "health": {"state": "ACTIVE"},
+            },
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            state_path = Path(directory) / "network-protection.json"
+            state_path.write_text(json.dumps(value), encoding="utf-8")
+            with patch.object(user_bus, "NETWORK_STATE_PATH", state_path), patch.object(user_bus, "_probe_network_link", return_value=True), patch.object(user_bus, "now", return_value=now):
+                snapshot = user_bus.network_summary()
+        self.assertEqual(snapshot["opensnitch"]["state"], "OPERATING")
+        self.assertEqual(snapshot["opensnitch"]["health"]["state"], "IDLE")
+        self.assertEqual(snapshot["opensnitch"]["health"]["freshness"], "FRESH")
 
     def test_recent_stale_unreachable_link_is_degraded(self):
         now = datetime.now(timezone.utc)
@@ -292,7 +348,7 @@ class NetworkProtectionTests(unittest.TestCase):
                 snapshot = user_bus.network_summary()
         self.assertEqual(snapshot["opensnitch"]["state"], "DEGRADED")
         self.assertEqual(snapshot["opensnitch"]["health"]["state"], "DEGRADED")
-        self.assertIn("liveness probe failed", snapshot["opensnitch"]["health"]["detail"])
+        self.assertIn("not connected", snapshot["opensnitch"]["health"]["detail"])
 
     def test_stale_but_reachable_link_stays_operating(self):
         now = datetime.now(timezone.utc)
@@ -311,7 +367,8 @@ class NetworkProtectionTests(unittest.TestCase):
             with patch.object(user_bus, "NETWORK_STATE_PATH", state_path), patch.object(user_bus, "_probe_network_link", return_value=True), patch.object(user_bus, "now", return_value=now):
                 snapshot = user_bus.network_summary()
         self.assertEqual(snapshot["opensnitch"]["state"], "OPERATING")
-        self.assertEqual(snapshot["opensnitch"]["health"]["state"], "ACTIVE")
+        self.assertEqual(snapshot["opensnitch"]["health"]["state"], "IDLE")
+        self.assertEqual(snapshot["opensnitch"]["health"]["freshness"], "FRESH")
 
     def test_stale_unreachable_link_becomes_unavailable(self):
         now = datetime.now(timezone.utc)
@@ -330,7 +387,7 @@ class NetworkProtectionTests(unittest.TestCase):
             with patch.object(user_bus, "NETWORK_STATE_PATH", state_path), patch.object(user_bus, "_probe_network_link", return_value=False), patch.object(user_bus, "now", return_value=now):
                 snapshot = user_bus.network_summary()
         self.assertEqual(snapshot["opensnitch"]["state"], "UNAVAILABLE")
-        self.assertIn("liveness probe failed", snapshot["opensnitch"]["detail"])
+        self.assertIn("control connection is unavailable", snapshot["opensnitch"]["detail"])
     def test_policy_projection_is_bounded_and_separate_from_upstream_rules(self):
         state = NetworkState()
         state.connected = True

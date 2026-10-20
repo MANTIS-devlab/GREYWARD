@@ -51,6 +51,17 @@ plymouth
 plymouth-scripts
 dracut
 linux-firmware
+iwlwifi-mvm-firmware
+iwlbluetooth-firmware
+iwlwifi-dvm-firmware
+iwlegacy-firmware
+realtek-firmware
+mt7xxx-firmware
+atheros-firmware
+brcmfmac-firmware
+libertas-firmware
+nxpwireless-firmware
+tiwilink-firmware
 restic
 btrfs-progs
 opensnitch

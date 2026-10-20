@@ -29,10 +29,28 @@ checkpoint 'required production packages and login boundary'
 rpm -q greyward-application-security-experimental greyward-application-enrollment >/dev/null || fail 'enrollment package closure is missing'
 /usr/libexec/greyward-enrollment check || fail 'installer enrollment is not prepared'
 rpm -q dms-greeter greyward-session greyward-security-center greyward-security-context audit audit-rules policycoreutils wlr-randr wlopm net-tools >/dev/null || fail 'required production package is missing'
+firmware_manifest=/usr/lib/greyward/installer/production/packages.txt
+test -r "$firmware_manifest" || fail 'immutable production package manifest is missing'
+while IFS= read -r firmware_package || [[ -n "$firmware_package" ]]; do
+  firmware_package=${firmware_package%$'\r'}
+  [[ -z "$firmware_package" || "$firmware_package" == \#* || "$firmware_package" != *-firmware ]] && continue
+  rpm -q "$firmware_package" >/dev/null 2>&1 || fail "declared firmware package is missing: $firmware_package"
+done < "$firmware_manifest"
 test -x /usr/bin/dms-greeter || fail 'DMS Greeter is not installed'
+test -x /usr/local/libexec/greyward-start-dms-greeter || fail 'GREYWARD greeter renderer launcher is missing'
+grep -Fq 'export WLR_RENDERER=gles2' /usr/local/libexec/greyward-start-dms-greeter || fail 'GREYWARD physical greeter does not select the validated GLES2 renderer'
+test -s /usr/share/greyward/dms-greeter-ui/shell.qml || fail 'GREYWARD multi-display greeter UI is missing'
+test -s /usr/share/greyward/dms-greeter-ui/Modules/Greetd/GreeterSurface.qml || fail 'GREYWARD per-display greeter surface is missing'
+grep -Fq -- '/usr/local/libexec/greyward-start-dms-greeter' /etc/greetd/config.toml || fail 'greetd bypasses the GREYWARD greeter renderer launcher'
+grep -Fq -- '--shell-dir /usr/share/greyward/dms-greeter-ui' /etc/greetd/config.toml || fail 'greetd is not using the reviewed GREYWARD greeter UI'
+/usr/bin/grep -Fq 'Change username' /usr/share/greyward/dms-greeter-ui/Modules/Greetd/GreeterContent.qml || fail 'greeter username recovery action is missing'
 /usr/libexec/greyward-dms-verify >/dev/null || fail 'Selected DMS runtime or tested tuple is invalid'
 test "$(rpm -qf --qf '%{NAME}' /usr/bin/dms)" = greyward-dms || fail 'DMS backend is not package-owned'
 test -s /etc/greetd/config.toml || fail 'greetd configuration is missing'
+test -s /etc/greyward/keyboard.json || fail 'Anaconda-selected GREYWARD keyboard settings are missing'
+test -s /etc/greyward/keyboard.env || fail 'GREYWARD keyboard environment is missing'
+/usr/bin/python3 -I /usr/share/greyward-application-security/desktop/keyboard_config.py \
+  --verify-installed || fail 'GREYWARD greeter and desktop keyboard settings do not match Anaconda selection'
 is_enabled greetd || fail 'greetd is not enabled'
 is_enabled auditd || fail 'auditd is not enabled'
 is_enabled audit-rules || fail 'audit-rules is not enabled'
@@ -166,9 +184,31 @@ security_manifest_value() {
   awk -F= -v key="$1" '$1 == key { print substr($0, index($0, "=") + 1); exit }' \
     "$artifact_dir/security-center-build-manifest.tsv"
 }
-test "$(security_manifest_value schema)" = 'greyward.security-center-build/v1' || fail 'Security Center build manifest schema is invalid'
-test "$(rpm -q --qf '%{NAME}-%{VERSION}-%{RELEASE}.%{ARCH}' greyward-security-center)" = "$(security_manifest_value center_nevra)" || fail 'installed Security Center package differs from its build manifest'
-test "$(rpm -q --qf '%{NAME}-%{VERSION}-%{RELEASE}.%{ARCH}' greyward-security-context)" = "$(security_manifest_value context_nevra)" || fail 'installed Security Context package differs from its build manifest'
+security_manifest_schema=$(security_manifest_value schema)
+case "$security_manifest_schema" in
+  greyward.security-center-build/v1)
+    ;;
+  greyward.security-center-installed-import/v1)
+    for package_label in center context dms appsec enrollment; do
+      case "$package_label" in
+        center) package_name=greyward-security-center ;;
+        context) package_name=greyward-security-context ;;
+        dms) package_name=greyward-dms ;;
+        appsec) package_name=greyward-application-security-experimental ;;
+        enrollment) package_name=greyward-application-enrollment ;;
+      esac
+      expected_header=$(security_manifest_value "${package_label}_header_sha1")
+      actual_header=$(rpm -q --qf '%{SHA1HEADER}' "$package_name" | tr 'A-F' 'a-f')
+      test -n "$expected_header" && test "$actual_header" = "$expected_header" || \
+        fail "installed $package_name RPM header differs from the captured .150 artifact"
+    done
+    ;;
+  *)
+    fail 'Security Center artifact manifest schema is invalid'
+    ;;
+esac
+test "$(rpm -q --qf '%{NAME}-%{VERSION}-%{RELEASE}.%{ARCH}' greyward-security-center)" = "$(security_manifest_value center_nevra)" || fail 'installed Security Center package differs from its artifact manifest'
+test "$(rpm -q --qf '%{NAME}-%{VERSION}-%{RELEASE}.%{ARCH}' greyward-security-context)" = "$(security_manifest_value context_nevra)" || fail 'installed Security Context package differs from its artifact manifest'
 while IFS='|' read -r package path; do
   [[ -z "$package" || "$package" == \#* ]] && continue
   test "$(rpm -qf --qf '%{NAME}' "$path" 2>/dev/null)" = "$package" || fail "Security Center contract ownership is invalid: $path"

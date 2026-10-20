@@ -1,6 +1,7 @@
 {
   "schema": "greyward.publication-policy/v1",
   "excludedPaths": [
+    ".codex-attachments/*",
     "environment/greyward.pkr.hcl",
     "environment/http/greyward-dev-bootstrap.ks.tmpl",
     "environment/http/greyward-dev-boottest.ks.tmpl",
@@ -11,6 +12,7 @@
     "docs/history/*",
     "docs/audit/*",
     "docs/history/security-center/captures/*",
+    "tests/security/*",
     "output/*",
     ".secrets/*",
     ".vmtest/*",

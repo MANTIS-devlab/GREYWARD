@@ -285,6 +285,11 @@ encryption, firmware, SELinux, and recovery readiness. Application versions
 remain owned by Update Center and the Application Access view. Its detail page
 leads with findings and their relevant typed page actions; the recorded reason and complete
 technical evidence remains available behind the All checks disclosure.
+The security-update check uses `dnf5 check-upgrade --json --security`. On the
+installed Fedora DNF5 provider, a successful query with no matching updates
+returns `{}` and exit code 0; the backend treats that exact response as zero
+updates. A nonzero exit, invalid JSON or an unrecognized response shape stays
+unverified. Parser tests cover both the empty result and failure cases.
 Privileged recovery-point creation depends on the DMS-owned session Polkit
 agent and the packaged `org.greyward.RecoveryPoint` fixed-path policy. The
 authenticated `wheel` user supplies their own password; the policy does not

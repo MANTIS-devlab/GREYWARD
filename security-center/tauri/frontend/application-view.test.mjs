@@ -114,8 +114,16 @@ test("resource and provider marks express supplied records without implying veri
 test("optional portal coverage is explicitly unverified without erasing baseline", () => {
   const protection = {...snapshot(), coverage:{...coverage,deputies_and_portals:false}};
   assert.equal(api.protection(protection).verified,true);
-  const html=view().inventory({coverage:{projection:{protection}},envelope:{projection:{resources:[]}},grants:{grants:[]}},"resources");
+  const renderer=view();
+  const html=renderer.summary({coverage:{projection:{protection}}});
   assert.match(html,/Portal attribution and complete deputy isolation are not verified/);
+  const degraded={...protection,health:"DEGRADED",effective_profile:null,coverage:{...coverage,direct_exec:false,deputies_and_portals:false}};
+  const degradedHtml=renderer.summary({coverage:{projection:{protection:degraded}}});
+  assert.match(degradedHtml,/Required checks not confirmed: application launches/);
+  assert.doesNotMatch(degradedHtml,/Baseline status covers|Portal attribution and complete deputy isolation/);
+  const unavailable={...protection,health:"UNAVAILABLE",effective_profile:null};
+  const unavailableHtml=renderer.summary({coverage:{projection:{protection:unavailable}}});
+  assert.doesNotMatch(unavailableHtml,/Baseline status covers|Portal attribution and complete deputy isolation/);
   const detail=view().detail({resource_ref:ref("resource"),label:"Keys",category:"CREDENTIALS",coverage:"PROTECTED"},"resources",[],true);
   assert.match(detail,/Review SSH key inspection/);
   assert.match(detail,/Script and IDE raw-key access is not yet available/);

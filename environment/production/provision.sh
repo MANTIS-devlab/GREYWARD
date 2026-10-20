@@ -70,6 +70,10 @@ test -r "$stage/zsh/greyward-terminal-brief.py"
 test -r "$stage/audit/greyward.rules"
 test -r "$stage/selinux/greyward-dms-greeter.cil"
 test -r "$stage/greyward-sync-greeter-wallpaper"
+test -r "$stage/greyward-start-dms-greeter"
+test -s "$stage/dms-greeter-ui/shell.qml"
+test -s "$stage/dms-greeter-ui/Modules/Greetd/GreeterSurface.qml"
+test -s "$stage/dms-greeter-ui/Modules/Greetd/GreeterContent.qml"
 test -r "$stage/crypto-policy/GREYWARD.pmod"
 test -r "$stage/security-center-contract.tsv"
 test -r "$stage/flatpak/seed-system-permissions.py"
@@ -244,10 +248,10 @@ if [[ "$target_install" == 1 || "${GREYWARD_LOCAL_FINALIZE:-0}" != 1 ]]; then
     }
   done
 
-  # The image stager validates the RPM inputs against the canonical component
-  # build manifest. Repeat the installed-package contract here so a manually
-  # assembled stage cannot silently omit a provider/helper or install a package
-  # whose NEVRA differs from the artifact that was validated for the image.
+  # The image stager validates RPM inputs against its recorded artifact
+  # manifest (source-built or explicitly imported). Repeat the installed-
+  # package contract here so a manually assembled stage cannot omit a provider
+  # or install a package whose NEVRA differs from the image artifact.
   security_manifest="$stage/artifacts/security-center-build-manifest.tsv"
   security_manifest_value() {
     awk -F= -v key="$1" '$1 == key { print substr($0, index($0, "=") + 1); exit }' "$security_manifest"
@@ -350,6 +354,16 @@ fi
 
 phase 'Applying post-Store desktop and session configuration'
 
+# Anaconda writes the selected XKB map through systemd-localed. Capture that
+# root-owned setting once and use the same validated values for the greeter,
+# ordinary Labwc sessions and the protected compositor prepared at enrollment.
+keyboard_helper=/usr/share/greyward-application-security/desktop/keyboard_config.py
+test -r "$keyboard_helper"
+/usr/bin/python3 -I "$keyboard_helper" --write-installed >/dev/null
+test -s /etc/greyward/keyboard.json
+test -s /etc/greyward/keyboard.env
+. /etc/greyward/keyboard.env
+
 # Keep Brave's Wayland decoration preference in the per-user Flatpak
 # configuration, outside the application payload so app updates preserve it.
 # Seed it for first-boot accounts even when Flatpak installation is deferred
@@ -360,6 +374,7 @@ install -D -m 0644 "$flatpak/brave-flags.conf" /etc/skel/.var/app/com.brave.Brow
 # virtual-display commands remain in the development overlay only.
 install -D -m 0644 "$labwc/rc.xml" /etc/skel/.config/labwc/rc.xml
 install -D -m 0644 "$stage/labwc-environment" /etc/skel/.config/labwc/environment
+cat /etc/greyward/keyboard.env >> /etc/skel/.config/labwc/environment
 install -D -m 0755 "$stage/labwc-autostart" /etc/skel/.config/labwc/autostart
 install -D -m 0644 "$labwc/Greyward/themerc" /etc/skel/.local/share/themes/Greyward/labwc/themerc
 find "$labwc/Greyward" -maxdepth 1 -type f -name '*.svg' -exec install -D -m 0644 {} /etc/skel/.local/share/themes/Greyward/labwc/ \;
@@ -510,6 +525,7 @@ if [[ "$target_install" != 1 ]]; then
       "$labwc/rc.xml" "$production_home/.config/labwc/rc.xml"
     install -o "$production_user" -g "$production_group" -m 0644 \
       "$stage/labwc-environment" "$production_home/.config/labwc/environment"
+    cat /etc/greyward/keyboard.env >> "$production_home/.config/labwc/environment"
     install -o "$production_user" -g "$production_group" -m 0755 \
       "$stage/labwc-autostart" "$production_home/.config/labwc/autostart"
     install -o "$production_user" -g "$production_group" -m 0644 \
@@ -552,26 +568,41 @@ printf '%s\n' 'greyward-labwc.desktop' > /etc/skel/.config/uwsm/default-id
 
 install -d -m 0755 /etc/greetd
 phase 'Writing the GREYWARD login and first-boot boundary'
-cat > /etc/greetd/config.toml <<'EOF'
+greeter_xkb="XKB_DEFAULT_MODEL=$XKB_DEFAULT_MODEL XKB_DEFAULT_LAYOUT=$XKB_DEFAULT_LAYOUT"
+if [[ -n "${XKB_DEFAULT_VARIANT:-}" ]]; then
+  greeter_xkb+=" XKB_DEFAULT_VARIANT=$XKB_DEFAULT_VARIANT"
+fi
+if [[ -n "${XKB_DEFAULT_OPTIONS:-}" ]]; then
+  greeter_xkb+=" XKB_DEFAULT_OPTIONS=$XKB_DEFAULT_OPTIONS"
+fi
+greeter_command="/usr/bin/env $greeter_xkb QT_QPA_PLATFORM=wayland XDG_CURRENT_DESKTOP=Labwc:GREYWARD XDG_SESSION_DESKTOP=labwc XDG_CONFIG_HOME=/var/cache/dms-greeter/.config /usr/local/libexec/greyward-start-dms-greeter --command labwc --no-save-username --shell-dir /usr/share/greyward/dms-greeter-ui"
+cat > /etc/greetd/config.toml <<EOF
 [terminal]
 vt = 1
 
 [default_session]
 user = "greeter"
-command = "/usr/bin/env WLR_RENDERER=pixman WLR_RENDERER_ALLOW_SOFTWARE=1 WLR_NO_HARDWARE_CURSORS=1 WLR_DRM_NO_MODIFIERS=1 LIBGL_ALWAYS_SOFTWARE=1 QT_QUICK_BACKEND=rhi QSG_RHI_BACKEND=opengl QT_OPENGL=software QSG_RHI_PREFER_SOFTWARE_RENDERER=1 QT_QPA_PLATFORM=wayland XDG_CURRENT_DESKTOP=Labwc:GREYWARD XDG_SESSION_DESKTOP=labwc XDG_CONFIG_HOME=/var/cache/dms-greeter/.config /usr/bin/dms-greeter --command labwc --no-save-username"
+command = "$greeter_command"
 EOF
 chown root:root /etc/greetd/config.toml
 chmod 0644 /etc/greetd/config.toml
 # DMS Greeter launches a separate Labwc compositor as the unprivileged
-# greeter account. The command above carries the VMware-safe renderer settings
-# only into that greeter process; they are not global service or user-session
-# defaults.
-# Qt's software scenegraph cannot draw the embedded UI's wallpaper shader.
-# Use Mesa software OpenGL for Qt RHI while Labwc retains its Pixman renderer.
+# greeter account. Its wrapper clears inherited software overrides on physical
+# systems and selects Pixman only for known virtual GPUs or no render node.
+# GREYWARD's reviewed per-output UI is loaded from the immutable system tree.
+# Explicit XKB defaults from Anaconda apply only to this separate process.
+# Renderer variables set by the greeter launcher are not inherited by this separate session.
 getent passwd greeter >/dev/null
 getent group greeter >/dev/null
 install -d -o greeter -g greeter -m 2770 /var/cache/dms-greeter
 install -o greeter -g greeter -m 0644 "$dms/settings.json" /var/cache/dms-greeter/settings.json
+install -D -m 0755 "$stage/greyward-start-dms-greeter" \
+  /usr/local/libexec/greyward-start-dms-greeter
+install -d -m 0755 /usr/share/greyward/dms-greeter-ui
+cp -a "$stage/dms-greeter-ui/." /usr/share/greyward/dms-greeter-ui/
+chown -R root:root /usr/share/greyward/dms-greeter-ui
+find /usr/share/greyward/dms-greeter-ui -type d -exec chmod 0755 {} +
+find /usr/share/greyward/dms-greeter-ui -type f -exec chmod 0644 {} +
 # The helper owns the persistent /var/cache/dms-greeter/greeter_wallpaper_override.jpg
 # copy and is also called by greetd before every login-screen start.
 install -D -m 0755 "$stage/greyward-sync-greeter-wallpaper" \

@@ -32,3 +32,8 @@ packaging/greyward-enrollment/*.spec text eol=lf
 *.jpg binary
 *.jpeg binary
 *.ttf binary
+
+# The sudo handoff is an extensionless Python executable. Its shebang passes
+# Python's isolated-mode option, so the CR from Windows line endings is fatal.
+security-center/packaging/application-security/administration/sudo-handoff text eol=lf
+security-center/packaging/application-security/greyward-application-security-experimental.spec text eol=lf

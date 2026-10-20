@@ -203,6 +203,18 @@ def build_experience(shell, capsule, devices, usb_error, files, network, operati
     if posture == "UNAVAILABLE":
         current = now_value or dt.datetime.now(dt.timezone.utc)
         display_until = (current + dt.timedelta(seconds=30)).isoformat().replace("+00:00", "Z")
+    elif display_until:
+        # The authoritative posture cache is refreshed every 10 seconds by
+        # ShellRuntime. Its evidence lease is shorter, so preserve the last
+        # confirmed label through that bounded refresh gap while leaving
+        # fresh_until untouched as the action/attention authority.
+        current = now_value or dt.datetime.now(dt.timezone.utc)
+        display_grace = current + dt.timedelta(seconds=12)
+        try:
+            evidence_expiry = dt.datetime.fromisoformat(display_until.replace("Z", "+00:00"))
+            display_until = max(display_grace, evidence_expiry).isoformat().replace("+00:00", "Z")
+        except (TypeError, ValueError):
+            display_until = display_grace.isoformat().replace("+00:00", "Z")
     return {"schema": "greyward.security.experience/v1", "fresh_until": shell.get("fresh_until"),
             "display_fresh_until": display_until,
             "posture": posture, "label": label, "reason": reason, "severity": severity,

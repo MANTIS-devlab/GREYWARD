@@ -152,6 +152,11 @@ helper isolation without modifying Fedora PAM. Public Flatpak service metadata
 permits reads and directory watches; explicit CIL denies remove inherited
 ordinary-helper writes. Mount preparation permits ordinary certificate paths
 and DMA metadata, while protected-resource reads and DMA open/ioctl stay denied.
+The extensionless `greyward-administration` Python handoff must have LF line
+endings: its `#!/usr/bin/python3 -I` shebang passes `-I` as an interpreter
+argument, and CRLF makes Python reject it before the protected request reaches
+the broker. `.gitattributes` enforces LF on Windows checkouts, and the RPM install
+normalizes both packaged handoff copies as a defense against non-Git archives.
 Session package 8 selects the supported GTK/wlroots portal backends.
 Ordinary screen capture/sharing remains unavailable under the protected
 compositor; do not solve that by exposing protected frames or broadening the
@@ -280,12 +285,14 @@ path. A verified admitted compositor can reload those trusted decorations
 through SIGHUP without replacing the seat or authentication owner.
 
 The protected Labwc process also uses a fixed environment allowlist and does
-not read the account's writable `~/.config/labwc/environment`. Its launcher
-must therefore pass the canonical `XKB_DEFAULT_MODEL=pc105` and
-`XKB_DEFAULT_LAYOUT=fr` values itself. Without those values wlroots falls back
-to US QWERTY even when Fedora's locale tools report French AZERTY. The focused
-keyboard-layout test keeps this protected path aligned with the production
-Labwc defaults.
+not read the account's writable `~/.config/labwc/environment`. First-boot
+provisioning validates Anaconda/systemd-localed's root-owned XKB record and
+stores the selected keyboard in `/etc/greyward/keyboard.json`. Enrollment copies
+that selection and its validator into the immutable protected-desktop receipt;
+the seat worker passes only the validated model, layout, variant and options to
+wlroots. GREYWARD uses that same selection for greetd and ordinary Labwc
+sessions, and production acceptance checks that they agree. This preserves
+user layout choices without trusting the account's writable environment.
 
 Only nonexporting key inspection is reviewed. Unsupported temporary grants,
 general SSH/signing and IDE profiles stay UNAVAILABLE. Automatic installer/

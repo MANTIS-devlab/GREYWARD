@@ -6,6 +6,7 @@ manifest is immutable packaging input, never positive live coverage evidence.
 """
 import argparse
 import hashlib
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -133,6 +134,17 @@ def prepare(source, labwc, account_name, materialize_runtime=True):
     for component in ['session.py', 'verify.py', 'authentication.py', 'materialize.py']:
         shutil.copyfile(source / component, BASE / component)
         (BASE / component).chmod(0o444)
+    keyboard_helper = source / 'keyboard_config.py'
+    trusted_root_file(keyboard_helper)
+    helper_spec = importlib.util.spec_from_file_location(
+        'greyward_keyboard_config', keyboard_helper)
+    keyboard_config = importlib.util.module_from_spec(helper_spec)
+    helper_spec.loader.exec_module(keyboard_config)
+    keyboard_settings = keyboard_config.load_saved_settings()
+    shutil.copyfile(keyboard_helper, BASE / 'keyboard_config.py')
+    (BASE / 'keyboard_config.py').chmod(0o444)
+    (BASE / 'keyboard.json').write_bytes(keyboard_config.canonical_json(keyboard_settings))
+    (BASE / 'keyboard.json').chmod(0o444)
     for original, target, label in [
         (labwc, 'labwc', 'greyward_as_display_exec_t'),
         (Path('/usr/bin/python3.14'), 'auth-python', 'greyward_as_auth_exec_t'),

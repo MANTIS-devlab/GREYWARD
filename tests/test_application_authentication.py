@@ -102,6 +102,18 @@ class AuthenticationAssembly(unittest.TestCase):
         self.assertIn('greyward-usbguard-approval', widget)
         self.assertNotIn('greyward-usbguard-auth-approval', widget)
 
+    def test_security_center_widget_process_requests_are_isolated_per_display_instance(self):
+        root = Path(__file__).resolve().parents[1]
+        widget = (root / 'environment/session/dankmaterialshell/plugins/greywardSecure/SecureWidget.qml').read_text()
+        manifest = json.loads((root / 'environment/session/dankmaterialshell/plugins/greywardSecure/plugin.json').read_text())
+        self.assertIn('readonly property string instanceToken: Math.random().toString(36).slice(2)', widget)
+        self.assertEqual(manifest['version'], '3.0.1')
+        self.assertIn('String(parentScreen?.name || "unknown")', widget)
+        self.assertIn('return "greywardSecure." + screenName + "." + instanceToken + "."', widget)
+        self.assertIn('Proc.runCommand(root.processCommandId(method)', widget)
+        self.assertIn('root.processCommandId("usb." + mode', widget)
+        self.assertNotIn('Proc.runCommand("greywardSecure.', widget)
+
     def test_startup_backdrop_is_branded_noninteractive_and_behind_the_desktop(self):
         self.assertIn('import Quickshell.Wayland', assembly.SHELL)
         self.assertIn('model: Quickshell.screens', assembly.SHELL)
@@ -135,7 +147,66 @@ class AuthenticationAssembly(unittest.TestCase):
         # to be the pinned upstream files. Real QML/PAM is a separate Fedora gate.
         root = base / 'source'
         (root / 'Modules/Lock').mkdir(parents=True)
+        (root / 'Modals').mkdir(parents=True)
         (root / 'shell.qml').write_text('original shell\n')
+        (root / 'Modals/PolkitAuthContent.qml').write_text('''import QtQuick
+FocusScope {
+    id: root
+    property string passwordInput: ""
+    focus: true
+
+    Keys.onEscapePressed: event => event.accepted = true
+
+    Item {
+        id: headerSection
+        Column {
+            id: titleColumn
+            StyledText {
+                text: I18n.tr("Authentication Required")
+                font.pixelSize: Theme.fontSizeLarge
+                color: Theme.surfaceText
+                font.weight: Font.Medium
+            }
+            StyledText {
+                text: root.currentFlow?.message ?? ""
+                font.pixelSize: Theme.fontSizeMedium
+                color: Theme.surfaceText
+                width: parent.width
+                wrapMode: Text.Wrap
+                maximumLineCount: 2
+                elide: Text.ElideRight
+                visible: text !== ""
+            }
+
+            StyledText {
+                text: root.currentFlow?.supplementaryMessage ?? ""
+                font.pixelSize: Theme.fontSizeSmall
+                color: (root.currentFlow?.supplementaryIsError ?? false) ? Theme.error : Theme.surfaceTextMedium
+                width: parent.width
+                wrapMode: Text.Wrap
+                maximumLineCount: 2
+                elide: Text.ElideRight
+                opacity: (root.currentFlow?.supplementaryIsError ?? false) ? 1 : 0.8
+                visible: text !== ""
+            }
+        }
+    }
+
+    Column {
+        id: bottomSection
+        DankTextField {
+            id: passwordField
+            text: root.passwordInput
+            onTextEdited: root.passwordInput = text
+            onAccepted: root.submitAuth()
+        }
+        StyledText {
+            text: I18n.tr("Authentication failed - try again")
+            visible: PolkitService.authFailed
+        }
+    }
+}
+''')
         lock = '''import qs.Services
     property bool shouldLock: false
         locked: shouldLock && !lockRetryPending
@@ -207,8 +278,53 @@ readonly property bool u2fSuppressedByPrimaryPam: SettingsData.lockPamExternally
             self.assertNotIn('split(/\n', auth_shell)
             lock = (base / 'first/shell/Modules/Lock/Lock.qml').read_text()
             self.assertIn('active: !root.authorizationActive', lock)
+            self.assertIn('locked: root.authorizationActive || (shouldLock && !lockRetryPending && !root.administrationActive)', lock)
+            self.assertIn('visible: root.authorizationActive && !sessionLock.secure', lock)
+            self.assertIn('Password entry will appear after this screen is protected.', lock)
             self.assertIn('sourceComponent: LockSurface {', lock)
             self.assertNotIn('\n            LockSurface {', lock)
+            self.assertIn('authorizationScreenName = Quickshell.screens?.[0]?.name ?? ""', lock)
+            self.assertIn('function reconcileAuthorizationScreen()', lock)
+            self.assertIn('function onScreensChanged()', lock)
+            self.assertIn('const screens = Quickshell.screens ?? [];', lock)
+            self.assertIn('lockSurface.screen?.name === root.authorizationScreenName', lock)
+            self.assertNotIn('modelData?.name', lock)
+            self.assertIn('text: I18n.tr("Authentication Required")', lock)
+            broken_multiline = 'I18n.tr("Authentication Required") + "' + chr(10) + '" +'
+            self.assertNotIn(broken_multiline, lock)
+            self.assertIn('root.authorizationScreenName', lock)
+            self.assertIn('property int authorizationPasswordLength: 0', lock)
+            self.assertIn('item.passwordCharacterCount', lock)
+            self.assertIn('"\\u2022".repeat(root.authorizationPasswordLength)', lock)
+            self.assertIn('root.authorizationController?.focusPasswordField()', lock)
+            self.assertIn('root.authorizationController?.submitAuth()', lock)
+            self.assertNotIn('VIEW ONLY', lock)
+            self.assertNotIn('KEYBOARD INPUT', lock)
+            self.assertNotIn('informational only', lock)
+            self.assertNotIn('keyboardLayoutLabel', lock)
+            self.assertIn('active: root.authorizationActive && lockSurface.screen?.name === root.authorizationScreenName', lock)
+            self.assertIn('SECURE AUTHORIZATION', lock)
+            auth_content = (base / 'first/shell/Modals/PolkitAuthContent.qml').read_text()
+            self.assertIn('name: "shield_lock"', auth_content)
+            self.assertIn('text: I18n.tr("Authentication Required")', auth_content)
+            self.assertIn('readonly property int passwordCharacterCount: passwordInput.length', auth_content)
+            self.assertIn('AUTHORIZATION REQUEST', auth_content)
+            self.assertIn('id: authorizationCard', auth_content)
+            self.assertIn('width: Math.max(1, Math.min(720, parent.width))', auth_content)
+            self.assertIn('height: Math.max(1, Math.min(440, parent.height))', auth_content)
+            self.assertIn('id: passwordField', auth_content)
+            self.assertIn('showPasswordToggle: false', auth_content)
+            self.assertNotIn('id: headerSection', auth_content)
+            self.assertNotIn('id: bottomSection', auth_content)
+            remote = lock[lock.index('id: remoteAuthorizationCard'):lock.index('Connections {\n                target: sessionLock')]
+            self.assertIn('root.authorizationPasswordLength', remote)
+            self.assertIn('PolkitService.agent?.flow?.message', remote)
+            self.assertIn('height: Math.max(1, Math.min(440, parent.height - 48))', remote)
+            self.assertIn('color: "#141b22"', remote)
+            self.assertIn('color: "#10171d"', remote)
+            self.assertIn('Authentication failed - try again', remote)
+            self.assertIn('enabled: parent.enabled', remote)
+            self.assertNotIn('passwordInput', remote)
 
     def test_changed_source_and_reissued_receipt_cannot_bypass_pin(self):
         with tempfile.TemporaryDirectory() as folder:
@@ -229,7 +345,7 @@ readonly property bool u2fSuppressedByPrimaryPam: SettingsData.lockPamExternally
             root, receipt, pins = self.fixture(base)
             release = json.loads(receipt.read_text())
             with mock.patch.object(assembly, 'PREIMAGES', pins):
-                for supported in ['v1.6.2-8', 'v1.6.2-10', 'v1.6.2-11', 'v1.6.2-12', 'v1.6.2-13', 'v1.6.2-14', 'v1.6.2-15', 'v1.6.2-17', 'v1.6.2-18', 'v1.6.2-19', 'v1.6.2-20', 'v1.6.2-21', 'v1.6.2-22', 'v1.6.2-23']:
+                for supported in ['v1.6.2-8', 'v1.6.2-10', 'v1.6.2-11', 'v1.6.2-12', 'v1.6.2-13', 'v1.6.2-14', 'v1.6.2-15', 'v1.6.2-17', 'v1.6.2-18', 'v1.6.2-19', 'v1.6.2-20', 'v1.6.2-21', 'v1.6.2-22', 'v1.6.2-23', 'v1.6.2-24', 'v1.6.2-25', 'v1.6.2-26']:
                     release['releaseId'] = supported
                     receipt.write_text(json.dumps(release))
                     result = assembly.assemble(root, receipt,

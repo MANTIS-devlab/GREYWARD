@@ -708,6 +708,13 @@ test("gives system checks an explicit resolution workflow", () => {
   assert.match(source, /function recoveryDeviationAction/);
 });
 
+test("shows measured firmware security attributes without routing to an empty updates page", () => {
+  assert.match(source, /function firmwareSecurityAttributesMarkup/);
+  assert.match(source, /row\.check_id === "system\.firmware\.hsi" \? firmwareSecurityAttributesMarkup\(row\)/);
+  assert.match(source, /firmware\.attribute\.observed/);
+  assert.match(i18nSource, /GREYWARD does not change firmware settings automatically/);
+});
+
 test("lets users ignore unavailable recommendations and refreshes posture", () => {
   assert.match(source, /\["REVIEW NEEDED", "ACTION REQUIRED", "UNAVAILABLE"\]/);
   assert.match(source, /evidence\.deviation\.ignore/);
@@ -1007,7 +1014,7 @@ test("routes USBGuard approval through its fixed, separately confined entrypoint
   const authShell = readFileSync(new URL("../../../security-center/packaging/application-security/authentication/assemble.py", import.meta.url), "utf8");
   assert.match(widget, /usbguardApproval: "\/usr\/libexec\/greyward-usbguard-approval"/);
   assert.match(widget, /\[usbguardApproval, String\(item\.connection_ref\), mode\]/);
-  assert.match(widget, /Proc\.runCommand\("greywardSecure\.usb\." \+ mode \+ "\." \+ String\(item\.connection_ref\) \+ "\." \+ \(\+\+usbActionGeneration\)/);
+  assert.match(widget, /Proc\.runCommand\(root\.processCommandId\("usb\." \+ mode \+ "\." \+ String\(item\.connection_ref\) \+ "\." \+ \(\+\+usbActionGeneration\)\)/);
   assert.match(widget, /\}, 0, 150000, root\);/);
   assert.match(widget, /const confirmed = code === 0 && result\?\.ok === true && result\?\.state === "COMPLETE"/);
   assert.doesNotMatch(widget, /code === 0 \? qsTr\("USB approval completed"\)/);
@@ -1105,6 +1112,25 @@ test("uses the native DMS subscription for live privacy capsule changes", () => 
   assert.match(widget, /root\.items\.slice\(0,1\)/);
   assert.doesNotMatch(widget, /notificationStabilityMs|deferredAttentionSince|item\.notification_stability_seconds/);
   assert.doesNotMatch(widget, /gdbus monitor|notify-send/);
+});
+
+test("protected DMS reads only aggregate system posture when its private session bus has no Context service", () => {
+  const widget = readFileSync(new URL("../../../environment/session/dankmaterialshell/plugins/greywardSecure/SecureWidget.qml", import.meta.url), "utf8");
+  const busPolicy = readFileSync(new URL("../../packaging/application-security/systems.mantis.greyward.ApplicationSecurity1.conf", import.meta.url), "utf8");
+  const broker = readFileSync(new URL("../../crates/greyward-application-security/src/development_bus.rs", import.meta.url), "utf8");
+  assert.match(widget, /gdbus", "call", "--system"/);
+  assert.match(widget, /ApplicationSecurity1\.GetSystemPosture/);
+  assert.match(widget, /greyward\.security\.system-posture\/v1/);
+  assert.match(widget, /items: \[\], notification_items: \[\], activity: \[\], details: \[\], operations: \[\]/);
+  assert.match(widget, /root\.applyProtectedDesktopPosture\(posture\)/);
+  assert.match(widget, /Math\.min\(previousDisplayUntil, now \+ 12000\)/);
+  assert.match(widget, /The last confirmed status is shown\. Actions are paused/);
+  assert.match(widget, /items: \[\], notification_items: \[\], activity: \[\], details: \[\], operations: \[\]/);
+  assert.match(busPolicy, /send_member="GetSystemPosture"/);
+  assert.match(broker, /<method name="GetSystemPosture"><arg type="s" direction="out"\/><\/method>/);
+  assert.match(broker, /fn system_posture_projection/);
+  assert.match(broker, /SYSTEM_POSTURE_INITIAL_DISPLAY_GRACE: Duration = Duration::from_secs\(20\)/);
+  assert.match(broker, /SYSTEM_POSTURE_INITIAL_DISPLAY_GRACE\n/);
 });
 
 test("cleans up local request timers and bounds Security Context D-Bus calls", () => {

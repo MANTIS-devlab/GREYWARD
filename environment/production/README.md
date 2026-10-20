@@ -37,6 +37,34 @@ locks, update authority, exact patch assembly and outstanding acceptance.
 `packages.txt` is the runtime package contract and `repositories.txt` lists
 the small set of production sources needed by that contract.
 
+Wi-Fi and Bluetooth firmware is explicit in `packages.txt`, independently of
+the build machine's hardware. The selected Fedora packages cover Intel
+(`iwlwifi-mvm-firmware`, its `iwlwifi-mld-firmware` dependency,
+`iwlwifi-dvm-firmware`, `iwlegacy-firmware`, and
+`iwlbluetooth-firmware`), Realtek (`realtek-firmware`), MediaTek
+(`mt7xxx-firmware`), Qualcomm/Atheros (`atheros-firmware`),
+Broadcom/Cypress (`brcmfmac-firmware`), legacy Marvell Libertas
+(`libertas-firmware`), NXP (`nxpwireless-firmware`) and Texas Instruments
+WiLink (`tiwilink-firmware`) adapters. Their upstream kernel drivers are
+included by the production kernel package set, including
+`kernel-modules-extra`; these RPMs add firmware files only and start no service.
+
+The offline image solver selects every manifest package and its dependency
+closure, verifies Fedora signatures, and confirms the full transaction from an
+empty install root. Stage validation rejects any declared firmware RPM missing
+from the generated Anaconda package selection. Installed-system acceptance
+checks all firmware packages listed in the immutable production manifest before
+opening the greeter, without maintaining a second runtime package list. Devices
+without matching hardware keep the same behavior; no hardware-specific policy
+or service is added.
+
+Firmware does not guarantee support for every revision or vendor-specific
+variant: the upstream kernel still needs a driver for the exact adapter. Some
+Broadcom devices rely on the proprietary `wl` driver or firmware not shipped by
+Fedora, and unsupported/newer chipsets may need a later kernel or vendor driver.
+GREYWARD does not install DKMS or proprietary drivers as part of this firmware
+baseline.
+
 The production cryptographic baseline is Fedora `DEFAULT` layered with the
 GREYWARD-owned `GREYWARD` policy module. Provisioning installs the module and
 applies `DEFAULT:GREYWARD` explicitly instead of inheriting the installer or
@@ -63,6 +91,16 @@ and for systems that expose no usable DRM render node, where an accelerated
 EGL/dma-buf path cannot be relied on during DMS startup. Bare-metal GPUs with a
 usable render node keep hardware acceleration; the production image does not
 globally disable graphics acceleration.
+
+The greeter uses the pinned GREYWARD QML shell under
+/usr/share/greyward/dms-greeter-ui, selected through DMS Greeter's
+--shell-dir option. Its Quickshell surface is instantiated for every
+Wayland output, while authentication input and shared account state remain on
+one primary surface. A visible, keyboard-accessible action returns to editable
+username entry after a mistyped name, even with only one local account. The
+greeter compositor launcher clears legacy software-rendering environment
+overrides on physical hardware, but keeps the Pixman fallback for known
+virtual GPUs and machines without a DRM render node.
 
 The baseline includes Firefox as an alternate browser, Nautilus,
 `Terminal`, GNOME Screenshot, OBS Studio, Papers, Loupe, File Roller, CUPS
@@ -154,6 +192,14 @@ through a root-owned helper before every `greetd` start. It also writes the
 wallpaper selection into `/var/cache/dms-greeter/session.json`, which the
 separately packaged Greeter 1.6.2 actually consumes. Production acceptance checks
 both the copied image and that selection. No separate greeter image is shipped.
+The login screen runs its own Labwc compositor, separate from the user's
+session. During first-boot provisioning, GREYWARD reads Anaconda's selected
+system-keyboard record from `/etc/X11/xorg.conf.d/00-keyboard.conf`, validates
+the XKB model, layout, variants and options, and writes root-owned keyboard
+settings. Those settings feed the greeter command, the seeded ordinary Labwc
+environment, and the protected compositor's immutable enrollment receipt.
+Production acceptance compares all three paths with the installed selection;
+the greeter no longer assumes French AZERTY on every system.
 The embedded greeter wallpaper uses a shader effect. Qt runs its RHI/OpenGL
 backend with `LIBGL_ALWAYS_SOFTWARE=1` and `QT_OPENGL=software`, so Mesa supplies
 CPU rendering; Labwc still uses Pixman. Qt's non-shader `software` scenegraph

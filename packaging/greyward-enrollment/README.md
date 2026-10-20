@@ -49,6 +49,12 @@ both updated inputs in those receipts, and refuses while the local graphical
 seat is active. Run it only after logging out; each replacement has rollback
 data until final receipt verification succeeds.
 
+When only the protected-seat verifier changes, run
+`greyward-migrate-protected-dms-shell --refresh-verifier-only` after logging out.
+This uses the same root-owned source and quiescent checks, updates only
+`verify.py` plus the desktop and Administration integrity receipts, and restores
+all three from the prior receipt if final verification fails.
+
 SELinux Enforcing, protected authentication, Administration approval, terminal-
 scoped sudo authentication and ordinary sensitive-resource denials remain required.
 Source runtime 34 retains explicit missing deputy/portal coverage; generic IDE,

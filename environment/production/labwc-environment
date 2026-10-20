@@ -1,8 +1,8 @@
 XDG_CURRENT_DESKTOP=Labwc:GREYWARD
 XDG_SESSION_DESKTOP=labwc
 XDG_DATA_DIRS=/usr/local/share:/var/lib/flatpak/exports/share:/usr/share
-XKB_DEFAULT_MODEL=pc105
-XKB_DEFAULT_LAYOUT=fr
+# XKB defaults are appended at installation from Anaconda's selected system
+# keyboard record in /etc/X11/xorg.conf.d/00-keyboard.conf.
 GDK_BACKEND=wayland,x11
 # Keep GTK 3 applications aligned with the system-wide dark Adwaita default.
 GTK_THEME=Adwaita:dark

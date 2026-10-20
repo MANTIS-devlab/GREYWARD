@@ -170,9 +170,10 @@ class RuleManager:
                 if provider == 'application':
                     if self.resolve_executable and rule['path'] != '*':
                         rule['path'] = self.resolve_executable(rule['path'])
-                    warnings.append('Executable-path scope follows replacement of that file and includes its helpers only when they use the same executable. It is not a code-generation grant.')
+                    if rule['path'] != '*':
+                        warnings.append('Executable-path scope follows replacement of that file and includes its helpers only when they use the same executable. It is not a code-generation grant.')
                     if rule['path'] == '*':
-                        warnings.append('This rule affects all applications in its selected user scope.')
+                        warnings.append('This IP rule affects all applications in its selected user scope. It shares outgoing order with application rules; earlier matching rules take precedence.')
                     if rule['scope'] == 'system':
                         warnings.append('This rule applies to all users, not just this account.')
                     if rule['action'] == 'allow':

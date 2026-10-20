@@ -69,6 +69,11 @@ class BuildInputVerificationTests(unittest.TestCase):
         self.assertIn('wlr-randr', production_packages)
         self.assertIn('policycoreutils wlr-randr wlopm', acceptance)
 
+    def test_session_rpm_normalizes_linux_launcher_shebang(self):
+        session_spec = (ROOT / 'packaging/greyward-session/greyward-session.spec').read_text()
+        self.assertIn("Release: 22%{?dist}", session_spec)
+        self.assertIn("sed -i 's/\\r$//' %{buildroot}/usr/local/libexec/greyward-start-labwc", session_spec)
+
     def test_iso_builder_rejects_stale_taskbar_default_migration(self):
         source = IMAGE_BUILDER.read_text()
         self.assertIn("session_pin_migration_path='./usr/local/libexec/greyward-dms-session-migrate'", source)
@@ -80,8 +85,8 @@ class BuildInputVerificationTests(unittest.TestCase):
         enrollment_spec = (ROOT / 'packaging/greyward-enrollment/greyward-enrollment.spec').read_text()
         self.assertIn('expected_dms_requirement="greyward-dms = $selected_dms_version"', source)
         self.assertIn('rpm_query -qp --requires "$enrollment_rpm"', source)
-        self.assertIn('Requires: greyward-application-security-experimental = 0.1.0-55%{?dist}', enrollment_spec)
-        self.assertIn('Requires: greyward-dms = 1.6.2-23%{?dist}', enrollment_spec)
+        self.assertIn('Requires: greyward-application-security-experimental = 0.1.0-66%{?dist}', enrollment_spec)
+        self.assertIn('Requires: greyward-dms = 1.6.2-26%{?dist}', enrollment_spec)
         build = (ROOT / 'packaging/greyward-dms/build.sh').read_text()
         self.assertIn('usbguard-approval-execute.go', build)
         self.assertIn('usbguardAuthApprovalSha256', (ROOT / 'packaging/greyward-dms/greyward-dms.spec').read_text())

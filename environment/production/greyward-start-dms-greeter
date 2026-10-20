@@ -1,0 +1,60 @@
+#!/bin/sh
+set -eu
+
+# The greeter owns a separate Labwc compositor. Keep the software fallback
+# local to known virtual GPUs or systems without a DRM render node; physical
+# multi-GPU laptops then expose their normal hardware output path at login.
+software_renderer=false
+for identity_file in \
+  /sys/class/dmi/id/sys_vendor \
+  /sys/class/dmi/id/product_name \
+  /sys/class/dmi/id/board_vendor; do
+  if [ -r "$identity_file" ] && /usr/bin/grep -Eiq 'vmware|hyper-?v|virtual machine' "$identity_file"; then
+    software_renderer=true
+    break
+  fi
+done
+
+for vendor_file in /sys/class/drm/card*/device/vendor; do
+  if [ -r "$vendor_file" ] && /usr/bin/grep -Eiq '^(0x)?(15ad|1414)$' "$vendor_file"; then
+    software_renderer=true
+    break
+  fi
+done
+
+has_render_node=false
+for render_node in /dev/dri/renderD*; do
+  if [ -e "$render_node" ]; then
+    has_render_node=true
+    break
+  fi
+done
+if [ "$has_render_node" != true ]; then
+  software_renderer=true
+fi
+
+if [ "$software_renderer" = true ]; then
+  export WLR_RENDERER=pixman
+  export WLR_RENDERER_ALLOW_SOFTWARE=1
+  export WLR_NO_HARDWARE_CURSORS=1
+  export WLR_DRM_NO_MODIFIERS=1
+  export LIBGL_ALWAYS_SOFTWARE=1
+  export QT_QUICK_BACKEND=rhi
+  export QSG_RHI_BACKEND=opengl
+  export QT_OPENGL=software
+  export QSG_RHI_PREFER_SOFTWARE_RENDERER=1
+else
+  # Match the renderer already validated by the protected desktop on hybrid
+  # GPUs. Leaving this to wlroots auto-selection let the greeter's separate
+  # Labwc compositor miss outputs attached to the secondary GPU.
+  export WLR_RENDERER=gles2
+  export WLR_NO_HARDWARE_CURSORS=1
+  export WLR_DRM_NO_MODIFIERS=1
+  # greetd service drop-ins and older installed configurations may still set
+  # software-renderer overrides. Do not let them force the QML client onto
+  # software GL on physical hardware.
+  unset WLR_RENDERER_ALLOW_SOFTWARE LIBGL_ALWAYS_SOFTWARE QT_QUICK_BACKEND \
+    QSG_RHI_BACKEND QT_OPENGL QSG_RHI_PREFER_SOFTWARE_RENDERER
+fi
+
+exec /usr/bin/dms-greeter "$@"

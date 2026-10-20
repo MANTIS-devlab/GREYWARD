@@ -1,6 +1,6 @@
 Name:           greyward-security-center
 Version:        0.1.0
-Release:        103%{?dist}
+Release:        115%{?dist}
 Summary:        GREYWARD local security posture and control application
 License:        GPL-3.0-only AND Apache-2.0 AND OFL-1.1 AND CC0-1.0
 Source0:        %{name}-%{version}.tar.gz
@@ -116,6 +116,43 @@ install -Dm0755 greyward-safe-open.so \
 %postun
 /usr/bin/fc-cache -f >/dev/null 2>&1 || :
 %changelog
+* Tue Oct 20 2026 MANTIS SYSTEMS - 0.1.0-115
+- Treat DNF5's successful empty security result as zero available updates.
+
+* Mon Oct 19 2026 MANTIS SYSTEMS - 0.1.0-114
+- Show which required session-protection checks are missing; reserve the portal limitation for verified baselines.
+
+* Mon Oct 19 2026 MANTIS SYSTEMS - 0.1.0-113
+- Open Update Center from Overview with a fresh resolve-only security update scan.
+- Parse DNF5 security updates from its JSON output without hiding provider errors.
+
+* Mon Oct 19 2026 MANTIS SYSTEMS - 0.1.0-112
+- Show measured and expected fwupd HSI attribute results in System Checks.
+
+* Sun Oct 18 2026 MANTIS SYSTEMS - 0.1.0-111
+- Refine Network Rules application selection and service review for the installed-app catalog.
+
+* Fri Oct 16 2026 MANTIS SYSTEMS - 0.1.0-110
+- Use CPU painting on display-only Hyper-V DRM devices; retain WebKit defaults for other GPUs and explicit overrides.
+
+* Fri Oct 16 2026 MANTIS SYSTEMS - 0.1.0-109
+- Remove expensive live backdrop blur from network dialogs; correct numeric service search, popup placement and Escape handling.
+
+* Fri Oct 16 2026 MANTIS SYSTEMS - 0.1.0-108
+- Preserve the service combobox accessible name while updating its result popup.
+
+* Fri Oct 16 2026 MANTIS SYSTEMS - 0.1.0-107
+- Keep focused search fields and dialogs alive while filtering applications and services.
+
+* Fri Oct 16 2026 MANTIS SYSTEMS - 0.1.0-106
+- Polish application selection, compact selected cards and use canonical menu icons.
+
+* Fri Oct 16 2026 MANTIS SYSTEMS - 0.1.0-105
+- Separate application and IP workspaces; add installed application selection and policy-table editing.
+
+* Fri Oct 16 2026 MANTIS SYSTEMS - 0.1.0-104
+- Unify network rules and add searchable native service and port selection.
+
 * Fri Oct 16 2026 MANTIS SYSTEMS - 0.1.0-103
 - Initialize the network editor after its helpers; exercise bundled bootstrap.
 

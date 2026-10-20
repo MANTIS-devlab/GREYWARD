@@ -1,6 +1,6 @@
 Name: greyward-application-enrollment
 Version: 0.1.0
-Release: 46%{?dist}
+Release: 60%{?dist}
 Summary: GREYWARD protected-session installation inputs
 License: GPL-2.0-only AND GPL-3.0-only AND MIT
 Source0: %{name}-%{version}.tar.gz
@@ -29,8 +29,8 @@ BuildRequires: pkgconfig(libsfdo-desktop)
 BuildRequires: pkgconfig(libsfdo-icon)
 BuildRequires: gettext
 BuildRequires: pkgconfig(cmocka)
-Requires: greyward-application-security-experimental = 0.1.0-55%{?dist}
-Requires: greyward-dms = 1.6.2-23%{?dist}
+Requires: greyward-application-security-experimental = 0.1.0-69%{?dist}
+Requires: greyward-dms = 1.6.2-26%{?dist}
 Requires: greyward-session >= 0.1.0-10
 Requires: selinux-policy-targeted = 44.11-1.fc44
 Requires: flatpak-selinux
@@ -107,6 +107,49 @@ install -Dm0644 security-center/packaging/application-security/greyward-maintena
 %{_unitdir}/greyward-maintenance-console.service
 
 %changelog
+* Tue Oct 20 2026 MANTIS SYSTEMS - 0.1.0-60
+- Require Application Security 69 for the uniform multi-display Polkit card.
+
+* Tue Oct 20 2026 MANTIS SYSTEMS - 0.1.0-59
+- Require the protected Polkit display update in Application Security 68.
+
+* Tue Oct 20 2026 MANTIS SYSTEMS - 0.1.0-58
+- Match Application Security 67 for the protected Polkit keyboard-input and layout indicator.
+
+* Mon Oct 19 2026 MANTIS SYSTEMS - 0.1.0-57
+- Match Application Security 66 to refresh the corrected Polkit multi-screen QML.
+
+* Mon Oct 19 2026 MANTIS SYSTEMS - 0.1.0-56
+- Match Application Security 65 so the protected Polkit shell refreshes with the secure-lock correction.
+
+* Mon Oct 19 2026 MANTIS SYSTEMS - 0.1.0-55
+- Package the protected Polkit authorization display with its matching Application Security shell.
+
+* Mon Oct 19 2026 MANTIS SYSTEMS - 0.1.0-54
+- Match the protected-session receipt to DMS 1.6.2-26 and Application Security 63.
+
+* Sun Oct 18 2026 MANTIS SYSTEMS - 0.1.0-53
+- Include the installed keyboard selection in protected-session enrollment and migration receipts.
+
+* Sun Oct 18 2026 MANTIS SYSTEMS - 0.1.0-52
+- Match the protected-session package tuple to Application Security 61.
+
+* Sun Oct 18 2026 MANTIS SYSTEMS - 0.1.0-51
+- Refresh the protected-seat verifier and its integrity receipts through explicit quiescent migration.
+- Require Application Security 60 with reviewed USB helper-domain coverage.
+
+* Sun Oct 18 2026 MANTIS SYSTEMS - 0.1.0-50
+- Require the matching Application Security 59 package with the LF-safe sudo handoff.
+
+* Sun Oct 18 2026 MANTIS SYSTEMS - 0.1.0-49
+- Require the matched DMS 1.6.2-25 / Application Security 58 package tuple.
+
+* Sun Oct 18 2026 MANTIS SYSTEMS - 0.1.0-48
+- Require the matched DMS 1.6.2-24 / Application Security 57 package tuple.
+
+* Sun Oct 18 2026 MANTIS SYSTEMS - 0.1.0-47
+- Match application-security renderer policy 56 in the protected-session package set.
+
 * Sun Oct 18 2026 MANTIS SYSTEMS - 0.1.0-46
 - Ship validated USB approval policy inputs and reject stale ISO package closure.
 

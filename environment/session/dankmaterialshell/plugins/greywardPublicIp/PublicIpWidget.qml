@@ -29,6 +29,10 @@ PluginComponent {
     property bool requestInFlight: false
     property int requestGeneration: 0
     property int transientRetryCount: 0
+    readonly property string runtimeStateKey: "networkIdentityRuntime"
+    readonly property string instanceToken: Math.random().toString(36).slice(2)
+    property bool runtimeOwner: false
+    property bool shuttingDown: false
 
     readonly property string publicDisplay: !stateInitialized ? qsTr("Starting")
         : !publicLookupEnabled ? qsTr("Off")
@@ -41,6 +45,117 @@ PluginComponent {
         root.barConfig?.fontScale,
         root.barConfig?.maximizeWidgetText
     )
+
+    function processCommandId(operation) {
+        const screenName = String(root.parentScreen?.name || "unknown")
+            .replace(/[^A-Za-z0-9_.-]/g, "_")
+        return "greywardPublicIp." + screenName + "." + root.instanceToken + "." + operation
+    }
+
+    function sharedRuntimeState() {
+        if (!root.pluginService || !root.pluginId)
+            return null
+        const state = root.pluginService.getGlobalVar(
+            root.pluginId, root.runtimeStateKey, null)
+        return state && typeof state === "object" ? state : null
+    }
+
+    function publishRuntimeState() {
+        if (!root.runtimeOwner || !root.pluginService || !root.pluginId)
+            return
+        root.pluginService.setGlobalVar(root.pluginId, root.runtimeStateKey, {
+            owner: root.instanceToken,
+            publicLookupEnabled: root.publicLookupEnabled,
+            publicIp: root.publicIp,
+            localAddress: root.localAddress,
+            countryCode: root.countryCode,
+            publicState: root.publicState
+        })
+    }
+
+    function syncRuntimeState() {
+        const state = root.sharedRuntimeState()
+        if (!state)
+            return false
+        root.publicLookupEnabled = state.publicLookupEnabled === true
+        const publicIp = String(state.publicIp || "").trim()
+        root.publicIp = root.isPublicAddress(publicIp) ? publicIp : ""
+        const countryCode = String(state.countryCode || "").trim().toUpperCase()
+        root.countryCode = /^[A-Z]{2}$/.test(countryCode) ? countryCode : ""
+        root.localAddress = root.chooseLocalAddress([state.localAddress])
+        root.publicState = ["OFF", "CHECKING", "AVAILABLE", "UNAVAILABLE"].includes(state.publicState)
+            ? state.publicState
+            : (root.publicLookupEnabled ? "CHECKING" : "OFF")
+        root.stateInitialized = true
+        return true
+    }
+
+    function acquireRuntimeOwnership() {
+        if (!root.stateInitialized || !root.pluginService || !root.pluginId || root.shuttingDown)
+            return
+        const state = root.sharedRuntimeState()
+        if (state && state.owner && state.owner !== root.instanceToken) {
+            root.runtimeOwner = false
+            root.syncRuntimeState()
+            return
+        }
+
+        root.runtimeOwner = true
+        if (state) {
+            root.syncRuntimeState()
+        } else {
+            root.publicIp = ""
+            root.localAddress = ""
+            root.countryCode = ""
+            root.publicState = root.publicLookupEnabled ? "CHECKING" : "OFF"
+            // Remove legacy address cache fields once. Runtime identity stays
+            // in PluginService's memory-only global vars, never plugin state.
+            root.pluginService.removePluginStateKey(root.pluginId, "publicIp")
+            root.pluginService.removePluginStateKey(root.pluginId, "countryCode")
+            root.pluginService.removePluginStateKey(root.pluginId, "cachedAt")
+            root.refreshLocalAddress()
+        }
+        root.publishRuntimeState()
+        if (root.publicLookupEnabled && (!state || root.publicState !== "AVAILABLE"))
+            initialFetchTimer.restart()
+    }
+
+    function releaseRuntimeOwnership() {
+        if (!root.runtimeOwner || !root.pluginService || !root.pluginId)
+            return
+        root.runtimeOwner = false
+        const state = root.sharedRuntimeState()
+        if (state && state.owner === root.instanceToken)
+            root.pluginService.setGlobalVar(root.pluginId, root.runtimeStateKey,
+                Object.assign({}, state, { owner: "" }))
+    }
+
+    function applyStoredPreference() {
+        if (!root.stateInitialized || !root.pluginService || !root.pluginId)
+            return
+        const stored = root.pluginService.loadPluginState(
+            root.pluginId, "publicLookupEnabled", true)
+        const enabled = stored === true || String(stored).toLowerCase() === "true"
+        if (enabled === root.publicLookupEnabled)
+            return
+        root.publicLookupEnabled = enabled
+        if (!root.runtimeOwner) {
+            root.syncRuntimeState()
+            return
+        }
+        root.requestGeneration += 1
+        root.requestInFlight = false
+        initialFetchTimer.stop()
+        networkRefreshTimer.stop()
+        transientRetryTimer.stop()
+        root.transientRetryCount = 0
+        root.publicIp = ""
+        root.countryCode = ""
+        root.publicState = enabled ? "CHECKING" : "OFF"
+        root.publishRuntimeState()
+        if (enabled)
+            Qt.callLater(root.fetchPublicIdentity)
+    }
 
     function isPublicAddress(value) {
         const ip = String(value || "").trim()
@@ -70,34 +185,13 @@ PluginComponent {
             || String(stored).toLowerCase() === "true"
         root.publicState = root.publicLookupEnabled ? "CHECKING" : "OFF"
         root.stateInitialized = true
-
-        // Remove legacy address cache fields. A network identity is sensitive
-        // and must not survive the shell process or be presented as current.
-        root.pluginService.removePluginStateKey(root.pluginId, "publicIp")
-        root.pluginService.removePluginStateKey(root.pluginId, "countryCode")
-        root.pluginService.removePluginStateKey(root.pluginId, "cachedAt")
-
-        root.refreshLocalAddress()
-        if (root.publicLookupEnabled)
-            initialFetchTimer.restart()
+        root.acquireRuntimeOwnership()
     }
 
     function setPublicLookupEnabled(enabled) {
         if (!root.stateInitialized)
             return
-        root.publicLookupEnabled = enabled
         root.pluginService.savePluginState(root.pluginId, "publicLookupEnabled", enabled)
-        root.requestGeneration += 1
-        root.requestInFlight = false
-        initialFetchTimer.stop()
-        networkRefreshTimer.stop()
-        transientRetryTimer.stop()
-        root.transientRetryCount = 0
-        root.publicIp = ""
-        root.countryCode = ""
-        root.publicState = enabled ? "CHECKING" : "OFF"
-        if (enabled)
-            Qt.callLater(root.fetchPublicIdentity)
     }
 
     function applyIdentity(identity, generation) {
@@ -111,13 +205,14 @@ PluginComponent {
         root.publicState = "AVAILABLE"
         root.transientRetryCount = 0
         transientRetryTimer.stop()
+        root.publishRuntimeState()
         return true
     }
 
     function requestProvider(provider, endpoint, callback) {
         // Start immediately so switching off cannot leave a provider launch
         // queued in Proc's debounce timer.
-        Proc.runCommand("greywardPublicIp." + provider, [
+        Proc.runCommand(root.processCommandId(provider), [
             "curl", "--silent", "--show-error",
             "--proto", "=https", "--tlsv1.2",
             "--header", "Accept: application/json",
@@ -145,16 +240,17 @@ PluginComponent {
                 }
             }
             callback({ status: status, identity: identity })
-        }, 0)
+        }, 0, undefined, root)
     }
 
     function finishFailure(generation, primaryStatus, fallbackStatus) {
-        if (generation !== root.requestGeneration || !root.publicLookupEnabled)
+        if (!root.runtimeOwner || generation !== root.requestGeneration || !root.publicLookupEnabled)
             return
         root.publicIp = ""
         root.countryCode = ""
         root.publicState = "UNAVAILABLE"
         root.requestInFlight = false
+        root.publishRuntimeState()
         console.info("[GREYWARD public IP] providers unavailable",
                      "primary=" + primaryStatus, "fallback=" + fallbackStatus)
         // A startup transport failure is different from provider rate limiting.
@@ -168,17 +264,18 @@ PluginComponent {
     }
 
     function fetchFallback(generation, primaryStatus) {
-        if (generation !== root.requestGeneration || !root.publicLookupEnabled)
+        if (!root.runtimeOwner || generation !== root.requestGeneration || !root.publicLookupEnabled)
             return
         if (Date.now() < root.fallbackBackoffUntil) {
             root.finishFailure(generation, primaryStatus, "backoff")
             return
         }
         root.requestProvider("fallback", root.fallbackEndpoint, function (result) {
-            if (generation !== root.requestGeneration || !root.publicLookupEnabled)
+            if (!root.runtimeOwner || generation !== root.requestGeneration || !root.publicLookupEnabled)
                 return
             if (result.identity && root.applyIdentity(result.identity, generation)) {
                 root.requestInFlight = false
+                root.publishRuntimeState()
                 return
             }
             root.fallbackBackoffUntil = Date.now()
@@ -188,7 +285,7 @@ PluginComponent {
     }
 
     function fetchPublicIdentity() {
-        if (!root.stateInitialized || !root.publicLookupEnabled || root.requestInFlight)
+        if (!root.runtimeOwner || !root.stateInitialized || !root.publicLookupEnabled || root.requestInFlight)
             return
 
         root.requestGeneration += 1
@@ -197,15 +294,17 @@ PluginComponent {
         root.publicIp = ""
         root.countryCode = ""
         root.publicState = "CHECKING"
+        root.publishRuntimeState()
         if (Date.now() < root.primaryBackoffUntil) {
             root.fetchFallback(generation, "backoff")
             return
         }
         root.requestProvider("primary", root.primaryEndpoint, function (result) {
-            if (generation !== root.requestGeneration || !root.publicLookupEnabled)
+            if (!root.runtimeOwner || generation !== root.requestGeneration || !root.publicLookupEnabled)
                 return
             if (result.identity && root.applyIdentity(result.identity, generation)) {
                 root.requestInFlight = false
+                root.publishRuntimeState()
                 return
             }
             if (result.status === 429) {
@@ -228,7 +327,7 @@ PluginComponent {
     function refreshLocalAddress() {
         // `ip route get` consults the local routing table; it does not send a
         // packet to the reserved TEST-NET destination used for route selection.
-        Proc.runCommand("greywardPublicIp.localRoute", [
+        Proc.runCommand(root.processCommandId("localRoute"), [
             "ip", "-json", "route", "get", "192.0.2.1"
         ], function (stdout, exitCode) {
             let nextLocal = ""
@@ -245,16 +344,20 @@ PluginComponent {
             }
             if (nextLocal !== "") {
                 root.localAddress = nextLocal
+                root.publishRuntimeState()
                 return
             }
-            Proc.runCommand("greywardPublicIp.localAddresses", ["hostname", "-I"], function (fallbackOutput, fallbackExitCode) {
+            Proc.runCommand(root.processCommandId("localAddresses"), ["hostname", "-I"], function (fallbackOutput, fallbackExitCode) {
                 root.localAddress = fallbackExitCode === 0
                     ? root.chooseLocalAddress(String(fallbackOutput || "").trim().split(/\s+/)) : ""
-            }, 250)
-        }, 250)
+                root.publishRuntimeState()
+            }, 250, undefined, root)
+        }, 250, undefined, root)
     }
 
     function scheduleNetworkRefresh() {
+        if (!root.runtimeOwner)
+            return
         root.refreshLocalAddress()
         if (!root.stateInitialized || !root.publicLookupEnabled)
             return
@@ -263,6 +366,7 @@ PluginComponent {
         root.publicIp = ""
         root.countryCode = ""
         root.publicState = "CHECKING"
+        root.publishRuntimeState()
         networkRefreshTimer.restart()
     }
 
@@ -282,7 +386,7 @@ PluginComponent {
     Timer {
         id: periodicRefreshTimer
         interval: root.refreshIntervalMs
-        running: root.stateInitialized && root.publicLookupEnabled
+        running: root.runtimeOwner && root.stateInitialized && root.publicLookupEnabled
         repeat: true
         onTriggered: root.fetchPublicIdentity()
     }
@@ -305,11 +409,37 @@ PluginComponent {
     Connections {
         target: DMSNetworkService
         function onConnectionChanged() {
-            root.scheduleNetworkRefresh()
+            if (root.runtimeOwner)
+                root.scheduleNetworkRefresh()
+        }
+    }
+
+    Connections {
+        target: root.pluginService
+        function onPluginStateChanged(changedPluginId) {
+            if (changedPluginId === root.pluginId)
+                root.applyStoredPreference()
+        }
+        function onGlobalVarChanged(changedPluginId, varName) {
+            if (root.shuttingDown || changedPluginId !== root.pluginId
+                    || varName !== root.runtimeStateKey)
+                return
+            const state = root.sharedRuntimeState()
+            if (state && state.owner === root.instanceToken)
+                return
+            root.runtimeOwner = false
+            if (state)
+                root.syncRuntimeState()
+            if (!state || !state.owner)
+                Qt.callLater(root.acquireRuntimeOwnership)
         }
     }
 
     Component.onCompleted: Qt.callLater(root.initializeState)
+    Component.onDestruction: {
+        root.shuttingDown = true
+        root.releaseRuntimeOwnership()
+    }
 
     horizontalBarPill: Component {
         Row {

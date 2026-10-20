@@ -41,11 +41,40 @@ def dms_build_command(repo, dms_inputs, output, builder, privileged_caller=False
     return [*command, 'bash', repo/'packaging/greyward-dms/build.sh', dms_inputs, output]
 
 
+def security_build_command(repo, source, output, builder, cargo_target, build_parent):
+    return ['runuser', '-u', builder, '--', 'env',
+            f'GREYWARD_SECURITY_CENTER_SOURCE={source}',
+            f'GREYWARD_SECURITY_CENTER_OUTPUT={output}',
+            f'GREYWARD_CARGO_TARGET_DIR={cargo_target}',
+            f'GREYWARD_RPMBUILD_PARENT={build_parent}',
+            'bash', repo/'environment/development/build-security-center.sh']
+
+
+def chown_build_tree(path, account, root):
+    path = Path(path)
+    resolved = path.resolve()
+    root = Path(root).resolve()
+    if path.is_symlink() or not resolved.is_relative_to(root) or resolved in {Path('/'), Path.home()}:
+        raise SystemExit('Refusing unsafe privileged build directory: ' + str(path))
+    if not resolved.exists():
+        resolved.mkdir(parents=True, mode=0o700)
+    paths = [resolved]
+    for directory, names, files in os.walk(resolved, followlinks=False):
+        parent = Path(directory)
+        for name in names + files:
+            child = parent / name
+            if child.is_symlink():
+                raise SystemExit('Refusing symlink in privileged build directory: ' + str(child))
+            paths.append(child)
+    for item in paths:
+        os.chown(item, account.pw_uid, account.pw_gid)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--dms-inputs', type=Path, required=True)
-    parser.add_argument('--builder-user', help='Unprivileged account used for isolated DMS builds when the component builder runs as root.')
+    parser.add_argument('--builder-user', help='Unprivileged account for DMS and Security Center builds when the component builder runs as root.')
     parser.add_argument('--only', default='dms,security,session,branding')
     args = parser.parse_args()
     output = args.output.resolve(); output.mkdir(parents=True, exist_ok=True)
@@ -114,7 +143,30 @@ def main():
             run('bash', REPO/'packaging/greyward-session/build.sh', entry/'build')
         elif name == 'security':
             env=dict(os.environ, GREYWARD_SECURITY_CENTER_SOURCE=str(REPO/'security-center'), GREYWARD_SECURITY_CENTER_OUTPUT=str(entry/'rpms'))
-            run('bash', REPO/'environment/development/build-security-center.sh', env=env)
+            if os.geteuid() == 0:
+                import pwd
+                if not args.builder_user:
+                    raise SystemExit('Root-run Security Center builds require --builder-user so Rust tests do not run as root.')
+                try:
+                    account = pwd.getpwnam(args.builder_user)
+                except KeyError as error:
+                    raise SystemExit('Unknown Security Center builder account: ' + args.builder_user) from error
+                if account.pw_uid == 0:
+                    raise SystemExit('Security Center RPM builds must use an unprivileged builder account.')
+                os.chown(entry, account.pw_uid, account.pw_gid)
+                cargo_target = Path(env.get('GREYWARD_CARGO_TARGET_DIR', str(Path.home()/'.cache/greyward/package-cargo-target')))
+                build_parent = Path(env.get('GREYWARD_RPMBUILD_PARENT', str(Path.home()/'.cache/greyward-build')))
+                chown_build_tree(cargo_target, account, output.parent)
+                chown_build_tree(build_parent, account, output.parent)
+                run(*security_build_command(REPO, REPO/'security-center', entry/'rpms', args.builder_user,
+                                            cargo_target, build_parent))
+            else:
+                if args.builder_user:
+                    import pwd
+                    account = pwd.getpwnam(args.builder_user)
+                    if account.pw_uid != os.geteuid():
+                        raise SystemExit('A non-root caller may build Security Center only as its own account.')
+                run('bash', REPO/'environment/development/build-security-center.sh', env=env)
         else:
             build=entry/'build'
             for folder in ('BUILD','BUILDROOT','SOURCES','SPECS','RPMS','SRPMS'): (build/folder).mkdir(parents=True, exist_ok=True)

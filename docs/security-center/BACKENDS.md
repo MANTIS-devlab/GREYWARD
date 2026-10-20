@@ -118,6 +118,11 @@ See [current audit and limits](APPLICATION_SECURITY_PLAN.md) and
   become `UNKNOWN`/`UNAVAILABLE` and never preserve a protected result.
 - Read daemon version, devices, cached update metadata, history, host-security
   attributes, and attribute-level recommendations.
+- Classify current posture from `SecurityAttributes` and their exact
+  `HsiResultSuccess` values. Do not infer current state from historical
+  `SecurityEvents`. In System checks, show each mismatched attribute's measured
+  and expected result plus safe `action-*` guidance; firmware changes remain a
+  user-controlled handoff, never an automatic action.
 - Treat absent plugins/hardware and HSI errors honestly.
 - No automatic remote refresh, firmware installation, BIOS setting mutation, or
   report upload in V0.

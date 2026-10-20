@@ -11,6 +11,15 @@ LOGO = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(LOGO)
 
 class BrandingTests(unittest.TestCase):
+    def test_sudo_handoff_shebang_is_lf_and_rpm_install_normalizes_it(self):
+        handoff = ROOT / 'security-center/packaging/application-security/administration/sudo-handoff'
+        contents = handoff.read_bytes()
+        self.assertTrue(contents.startswith(b'#!/usr/bin/python3 -I\n'))
+        self.assertNotIn(b'\r', contents)
+        spec = (ROOT / 'security-center/packaging/application-security/greyward-application-security-experimental.spec').read_text()
+        self.assertIn("replace(b'\\r\\n', b'\\n')", spec)
+        self.assertIn('Administration handoff requires LF line endings', spec)
+
     def test_canonical_symbol_bytes_are_embedded_exactly(self):
         source = ROOT / 'security-center/data/greyward-symbol.svg'
         self.assertEqual(source.read_bytes(), (ROOT / 'branding/source/greyward-symbol.svg').read_bytes())

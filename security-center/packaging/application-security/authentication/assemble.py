@@ -14,11 +14,12 @@ import shutil
 PREIMAGES = {
     "Modules/Lock/Lock.qml": "e9a7ef6fef68684e1f9b1a8385f3d958b4f3b8f68d5d32ddf837e91e008ac985",
     "Modules/Lock/Pam.qml": "d4a9f0a2b775d3117a0c405cef09173b38bb96bb1dc497cde67d0b664e2b0a1c",
+    "Modals/PolkitAuthContent.qml": "4f185cdfc1cba27e6e6f1a85444d40f90f172349b82afc7f09e33c7b34652cd8",
 }
 
 # Revision 8 changes build receipts/desktop plugins; the authentication inputs
 # remain exact-pinned below. A new release still requires explicit review.
-SUPPORTED_RELEASES = frozenset({"v1.6.2-6", "v1.6.2-8", "v1.6.2-10", "v1.6.2-11", "v1.6.2-12", "v1.6.2-13", "v1.6.2-14", "v1.6.2-15", "v1.6.2-17", "v1.6.2-18", "v1.6.2-19", "v1.6.2-20", "v1.6.2-21", "v1.6.2-22", "v1.6.2-23"})
+SUPPORTED_RELEASES = frozenset({"v1.6.2-6", "v1.6.2-8", "v1.6.2-10", "v1.6.2-11", "v1.6.2-12", "v1.6.2-13", "v1.6.2-14", "v1.6.2-15", "v1.6.2-17", "v1.6.2-18", "v1.6.2-19", "v1.6.2-20", "v1.6.2-21", "v1.6.2-22", "v1.6.2-23", "v1.6.2-24", "v1.6.2-25", "v1.6.2-26"})
 
 SHELL = '''//@ pragma UseQApplication
 //@ pragma AppId com.danklinux.dms
@@ -292,6 +293,16 @@ def replace_once(text, before, after):
     return text.replace(before, after, 1)
 
 
+def replace_region_once(text, start_marker, end_marker, replacement):
+    if text.count(start_marker) != 1 or text.count(end_marker) != 1:
+        raise ValueError("Authentication region changed")
+    start = text.index(start_marker)
+    end = text.index(end_marker, start)
+    if end <= start:
+        raise ValueError("Authentication region boundaries changed")
+    return text[:start] + replacement + text[end:]
+
+
 def block(text, signature, replacement):
     """Only used after an exact whole-file hash; refuses unmatched boundaries."""
     if text.count(signature) != 1:
@@ -318,6 +329,230 @@ def restricted_lock(text):
     return text
 
 
+def branded_authorization_content(text):
+    """Use the same bounded GREYWARD card on the input and mirror displays."""
+    text = replace_once(text, '    property string passwordInput: ""\n',
+                        '    property string passwordInput: ""\n'
+                        '    readonly property int passwordCharacterCount: passwordInput.length\n')
+    text = block(text, "    Item {\n        id: headerSection", "")
+    card = '''    Rectangle {
+        id: authorizationCard
+        anchors.centerIn: parent
+        width: Math.max(1, Math.min(720, parent.width))
+        height: Math.max(1, Math.min(440, parent.height))
+        radius: 24
+        color: "#141b22"
+        border.color: "#40545f"
+        border.width: 1
+        clip: true
+
+        Rectangle {
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.top: parent.top
+            height: 3
+            gradient: Gradient {
+                GradientStop { position: 0; color: "#34525e" }
+                GradientStop { position: 0.48; color: "#78d7df" }
+                GradientStop { position: 1; color: "#34525e" }
+            }
+        }
+
+        Column {
+            anchors.fill: parent
+            anchors.margins: 28
+            spacing: 13
+
+            Row {
+                width: parent.width
+                spacing: 12
+
+                Rectangle {
+                    width: 42
+                    height: 42
+                    radius: 14
+                    color: "#20343e"
+                    border.color: "#3f6472"
+                    border.width: 1
+
+                    DankIcon {
+                        anchors.centerIn: parent
+                        name: "shield_lock"
+                        size: 23
+                        color: "#8bd5df"
+                        filled: true
+                    }
+                }
+
+                Column {
+                    anchors.verticalCenter: parent.verticalCenter
+                    spacing: 3
+
+                    StyledText {
+                        text: "GREYWARD"
+                        font.pixelSize: Theme.fontSizeSmall
+                        font.weight: Font.DemiBold
+                        font.letterSpacing: 1.7
+                        color: "#e7eef1"
+                    }
+
+                    StyledText {
+                        text: "SECURE AUTHORIZATION"
+                        font.pixelSize: Theme.fontSizeSmall - 2
+                        font.weight: Font.Medium
+                        font.letterSpacing: 1
+                        color: "#8bd5df"
+                    }
+                }
+            }
+
+            StyledText {
+                width: parent.width
+                text: I18n.tr("Authentication Required")
+                font.pixelSize: Theme.fontSizeLarge
+                font.weight: Font.DemiBold
+                color: "#f1f5f7"
+            }
+
+            Rectangle {
+                width: parent.width
+                height: 76
+                radius: 15
+                color: "#1b252d"
+                border.color: "#344853"
+                border.width: 1
+                clip: true
+
+                Column {
+                    anchors.fill: parent
+                    anchors.margins: 13
+                    spacing: 4
+
+                    StyledText {
+                        text: "AUTHORIZATION REQUEST"
+                        font.pixelSize: Theme.fontSizeSmall - 2
+                        font.weight: Font.DemiBold
+                        font.letterSpacing: 1
+                        color: "#94aab5"
+                    }
+
+                    StyledText {
+                        width: parent.width
+                        text: root.currentFlow?.message ?? ""
+                        font.pixelSize: Theme.fontSizeMedium
+                        color: "#e0e8ec"
+                        wrapMode: Text.Wrap
+                        maximumLineCount: 2
+                        elide: Text.ElideRight
+                    }
+                }
+            }
+
+            DankTextField {
+                id: passwordField
+                width: parent.width
+                height: 68
+                radius: 15
+                cornerRadius: 15
+                backgroundColor: "#10171d"
+                focusedBorderColor: "#70cbd5"
+                normalBorderColor: passwordCharacterCount > 0 ? "#70cbd5" : "#42535d"
+                borderWidth: 1
+                focusedBorderWidth: 2
+                labelText: root.currentFlow?.inputPrompt ?? I18n.tr("Password")
+                placeholderText: I18n.tr("Enter your password")
+                hidePlaceholderOnFocus: false
+                leftIconName: "lock"
+                leftIconSize: 19
+                leftIconColor: "#8bd5df"
+                leftIconFocusedColor: "#8bd5df"
+                font.pixelSize: Theme.fontSizeMedium
+                textColor: "#edf3f5"
+                text: root.passwordInput
+                showPasswordToggle: false
+                echoMode: (root.currentFlow?.responseVisible ?? false) || passwordVisible ? TextInput.Normal : TextInput.Password
+                enabled: !root.isLoading
+                opacity: enabled ? 1 : 0.5
+                onTextEdited: root.passwordInput = text
+                onAccepted: root.submitAuth()
+            }
+
+            StyledText {
+                width: parent.width
+                text: I18n.tr("Authentication failed - try again")
+                font.pixelSize: Theme.fontSizeSmall
+                color: Theme.error
+                visible: PolkitService.authFailed
+            }
+
+            Item {
+                width: parent.width
+                height: 40
+
+                Row {
+                    anchors.right: parent.right
+                    spacing: 10
+
+                    Rectangle {
+                        width: 88
+                        height: 38
+                        radius: 12
+                        color: cancelButton.containsMouse ? "#27343d" : "#202a31"
+                        border.color: "#43555f"
+                        border.width: 1
+                        enabled: !root.isLoading
+                        opacity: enabled ? 1 : 0.5
+
+                        StyledText {
+                            anchors.centerIn: parent
+                            text: I18n.tr("Cancel")
+                            font.pixelSize: Theme.fontSizeSmall
+                            font.weight: Font.Medium
+                            color: "#d9e2e6"
+                        }
+
+                        MouseArea {
+                            id: cancelButton
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            enabled: parent.enabled
+                            onClicked: root.cancelAuth()
+                        }
+                    }
+
+                    Rectangle {
+                        width: 126
+                        height: 38
+                        radius: 12
+                        color: authenticateButton.containsMouse ? "#9ae0e5" : "#78d2db"
+                        enabled: !root.isLoading
+                        opacity: enabled ? 1 : 0.5
+
+                        StyledText {
+                            anchors.centerIn: parent
+                            text: I18n.tr("Authenticate")
+                            font.pixelSize: Theme.fontSizeSmall
+                            font.weight: Font.DemiBold
+                            color: "#112027"
+                        }
+
+                        MouseArea {
+                            id: authenticateButton
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            enabled: parent.enabled
+                            onClicked: root.submitAuth()
+                        }
+                    }
+                }
+            }
+        }
+    }
+'''
+    return block(text, "    Column {\n        id: bottomSection", card)
+
 def protected_authorization(text):
     """Use the native session-lock surface for both password-bearing flows.
 
@@ -325,24 +560,51 @@ def protected_authorization(text):
     cannot establish exclusive input. Completion releases only a lock acquired
     for this challenge; it never releases a pre-existing native session lock.
     """
-    text = replace_once(text, "import qs.Services\n", "import qs.Services\nimport QtQuick.Window\nimport qs.Modals\n")
+    text = replace_once(text, "import qs.Services\n", "import qs.Services\nimport QtQuick.Window\nimport qs.Modals\nimport qs.Widgets\n")
     text = replace_once(text, '    property bool shouldLock: false\n', '''    property bool shouldLock: false
     readonly property bool authenticationInputSecure: sessionLock.secure
     readonly property bool authorizationActive: PolkitService.agent?.isActive ?? false
     property bool authorizationPending: false
     property bool authorizationWasLocked: false
     property bool administrationActive: false
+    property string authorizationScreenName: ""
+    property int authorizationPasswordLength: 0
+    property var authorizationController: null
+
+    function reconcileAuthorizationScreen() {
+        const screens = Quickshell.screens ?? [];
+        for (const screen of screens) {
+            if (screen?.name === authorizationScreenName)
+                return;
+        }
+        authorizationScreenName = screens[0]?.name ?? "";
+    }
 
     onAuthorizationActiveChanged: {
         if (authorizationActive) {
+            // Keep one protected password-entry control for the Polkit
+            // challenge; every output mirrors only its masked character count.
+            authorizationScreenName = Quickshell.screens?.[0]?.name ?? "";
             authorizationWasLocked = shouldLock;
             authorizationPending = true;
             sharedPasswordBuffer = "";
+            authorizationPasswordLength = 0;
+            authorizationController = null;
             shouldLock = true;
         } else if (authorizationPending) {
             authorizationPending = false;
+            authorizationScreenName = "";
+            authorizationPasswordLength = 0;
+            authorizationController = null;
             if (!authorizationWasLocked)
                 shouldLock = false;
+        }
+    }
+
+    Connections {
+        target: Quickshell
+        function onScreensChanged() {
+            root.reconcileAuthorizationScreen();
         }
     }
 ''')
@@ -350,7 +612,7 @@ def protected_authorization(text):
     # while Administration temporarily owns a private terminal surface. It never
     # unlocks DMS, receives passwords, or substitutes a different locker.
     text = replace_once(text, '        locked: shouldLock && !lockRetryPending\n',
-                        '        locked: shouldLock && !lockRetryPending && !root.administrationActive\n')
+                        '        locked: root.authorizationActive || (shouldLock && !lockRetryPending && !root.administrationActive)\n')
     text = replace_once(text, '    function unlock() {\n', '    function unlock() {\n        if (authorizationActive)\n            return;\n')
     text = replace_once(text, '\n    function lock() {\n', '''\n    function lock() {
         if (authorizationActive) {
@@ -362,26 +624,61 @@ def protected_authorization(text):
     text = replace_once(text, '                visible: lockSurface.isActiveScreen\n', '                visible: lockSurface.isActiveScreen && !root.authorizationActive\n')
     text = replace_once(text, '            LockSurface {\n', '''            Rectangle {
                 anchors.fill: parent
-                color: Theme.background
+                color: "#10161b"
                 visible: root.authorizationActive
+
+                Column {
+                    anchors.centerIn: parent
+                    width: Math.min(520, parent.width - 40)
+                    spacing: 10
+                    visible: root.authorizationActive && !sessionLock.secure
+
+                    Text {
+                        width: parent.width
+                        text: "GREYWARD  ·  SECURE AUTHORIZATION"
+                        color: "#a8d7c7"
+                        font.pixelSize: 13
+                        font.weight: Font.DemiBold
+                        horizontalAlignment: Text.AlignHCenter
+                    }
+
+                    Text {
+                        width: parent.width
+                        text: "Securing the authorization screen…"
+                        color: "#e1e8ed"
+                        font.pixelSize: 18
+                        font.weight: Font.Medium
+                        horizontalAlignment: Text.AlignHCenter
+                        wrapMode: Text.Wrap
+                    }
+
+                    Text {
+                        width: parent.width
+                        text: "Password entry will appear after this screen is protected."
+                        color: "#adbac3"
+                        font.pixelSize: 14
+                        horizontalAlignment: Text.AlignHCenter
+                        wrapMode: Text.Wrap
+                    }
+                }
             }
 
             Loader {
                 id: authorizationContent
                 anchors.centerIn: parent
-                width: Math.min(720, parent.width - 32)
-                height: Math.min(420, parent.height - 32)
-                active: root.authorizationActive
-                visible: sessionLock.secure && root.authorizationActive
+                width: Math.max(1, Math.min(720, parent.width - 48))
+                height: Math.max(1, Math.min(440, parent.height - 48))
+                active: root.authorizationActive && lockSurface.screen?.name === root.authorizationScreenName
+                visible: sessionLock.secure && root.authorizationActive && lockSurface.screen?.name === root.authorizationScreenName
                 focus: visible
                 sourceComponent: PolkitAuthContent {
                     onCloseRequested: PolkitService.agent?.flow?.cancelAuthenticationRequest()
                 }
                 function focusAuthorization(reason) {
-                    if (!visible || !sessionLock.secure || !item)
+                    if (!visible || !sessionLock.secure || !item || lockSurface.screen?.name !== root.authorizationScreenName)
                         return;
                     Qt.callLater(() => {
-                        if (!visible || !sessionLock.secure || !item)
+                        if (!visible || !sessionLock.secure || !item || lockSurface.screen?.name !== root.authorizationScreenName)
                             return;
                         item.focusPasswordField();
                         // State only: never log keys, text or password length.
@@ -390,14 +687,195 @@ def protected_authorization(text):
                             "windowFocused=" + (authorizationContent.Window.window?.active ?? false));
                     });
                 }
-                onLoaded: focusAuthorization("loaded")
+                onLoaded: {
+                    root.authorizationController = item;
+                    root.authorizationPasswordLength = item.passwordCharacterCount;
+                    focusAuthorization("loaded");
+                }
                 onVisibleChanged: focusAuthorization("visible")
+            }
+
+            Connections {
+                target: authorizationContent.item
+                function onPasswordCharacterCountChanged() {
+                    root.authorizationPasswordLength = authorizationContent.item?.passwordCharacterCount ?? 0;
+                }
+            }
+
+            Rectangle {
+                id: remoteAuthorizationCard
+                anchors.centerIn: parent
+                width: Math.min(480, parent.width - 48)
+                height: 274
+                radius: 22
+                color: "#131b22"
+                border.color: "#526875"
+                border.width: 1
+                visible: sessionLock.secure && root.authorizationActive && lockSurface.screen?.name !== root.authorizationScreenName
+
+                Rectangle {
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    anchors.top: parent.top
+                    anchors.leftMargin: 24
+                    anchors.rightMargin: 24
+                    height: 2
+                    radius: 1
+                    gradient: Gradient {
+                        GradientStop { position: 0; color: "#24404b" }
+                        GradientStop { position: 0.5; color: "#70c7d5" }
+                        GradientStop { position: 1; color: "#24404b" }
+                    }
+                }
+
+                Column {
+                    anchors.fill: parent
+                    anchors.margins: 26
+                    spacing: 13
+
+                    Row {
+                        spacing: 10
+
+                        Rectangle {
+                            width: 38
+                            height: 38
+                            radius: 12
+                            color: "#20333c"
+                            border.color: "#426574"
+                            border.width: 1
+
+                            DankIcon {
+                                anchors.centerIn: parent
+                                name: "shield_lock"
+                                size: 21
+                                color: "#8bd5df"
+                                filled: true
+                            }
+                        }
+
+                        Column {
+                            anchors.verticalCenter: parent.verticalCenter
+                            spacing: 2
+
+                            StyledText {
+                                text: "GREYWARD"
+                                font.pixelSize: Theme.fontSizeSmall
+                                font.weight: Font.DemiBold
+                                font.letterSpacing: 1.5
+                                color: "#e4ebef"
+                            }
+
+                            StyledText {
+                                text: "SECURE AUTHORIZATION"
+                                font.pixelSize: Theme.fontSizeSmall - 2
+                                font.weight: Font.Medium
+                                font.letterSpacing: 1
+                                color: "#8bd5df"
+                            }
+                        }
+                    }
+
+                    StyledText {
+                        width: parent.width
+                        text: I18n.tr("Authentication Required")
+                        font.pixelSize: Theme.fontSizeLarge
+                        font.weight: Font.DemiBold
+                        color: "#f1f5f7"
+                    }
+
+                    Rectangle {
+                        width: parent.width
+                        height: 66
+                        radius: 13
+                        color: "#1a2730"
+                        border.color: "#344d59"
+                        border.width: 1
+
+                        Row {
+                            anchors.fill: parent
+                            anchors.leftMargin: 14
+                            anchors.rightMargin: 14
+                            spacing: 11
+
+                            DankIcon {
+                                anchors.verticalCenter: parent.verticalCenter
+                                name: "keyboard"
+                                size: 22
+                                color: "#8bd5df"
+                            }
+
+                            Column {
+                                anchors.verticalCenter: parent.verticalCenter
+                                spacing: 3
+
+                                StyledText {
+                                    text: "KEYBOARD INPUT ON"
+                                    font.pixelSize: Theme.fontSizeSmall - 2
+                                    font.weight: Font.DemiBold
+                                    font.letterSpacing: 1
+                                    color: "#a6b7c1"
+                                }
+
+                                StyledText {
+                                    text: root.authorizationScreenName || "Primary display"
+                                    font.pixelSize: Theme.fontSizeMedium
+                                    font.weight: Font.DemiBold
+                                    color: "#f1f5f7"
+                                }
+                            }
+                        }
+                    }
+
+                    Row {
+                        spacing: 8
+
+                        Rectangle {
+                            radius: 9
+                            width: layoutIndicatorContent.implicitWidth + 16
+                            implicitWidth: width
+                            height: 30
+                            color: "#202c34"
+                            border.color: "#3b505b"
+                            border.width: 1
+
+                            Row {
+                                id: layoutIndicatorContent
+                                anchors.centerIn: parent
+                                spacing: 6
+
+                                DankIcon {
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    name: "keyboard"
+                                    size: 14
+                                    color: "#b4c5ce"
+                                }
+
+                                StyledText {
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    text: root.keyboardLayoutLabel
+                                    font.pixelSize: Theme.fontSizeSmall - 1
+                                    font.weight: Font.DemiBold
+                                    color: "#d6e0e5"
+                                }
+                            }
+                        }
+
+                        StyledText {
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: "VIEW ONLY"
+                            font.pixelSize: Theme.fontSizeSmall - 2
+                            font.weight: Font.DemiBold
+                            font.letterSpacing: 1
+                            color: "#8e9ca5"
+                        }
+                    }
+                }
             }
 
             Connections {
                 target: sessionLock
                 function onSecureChanged() {
-                    if (sessionLock.secure && root.authorizationActive)
+                    if (sessionLock.secure && root.authorizationActive && authorizationContent.active)
                         authorizationContent.focusAuthorization("secured");
                 }
             }
@@ -407,7 +885,7 @@ def protected_authorization(text):
                 function onActiveChanged() {
                     // Wayland keyboard-enter can arrive after locked/loaded.
                     // Focus only on window entry; retain normal button/Tab use.
-                    if (authorizationContent.Window.window?.active === true)
+                    if (authorizationContent.active && authorizationContent.Window.window?.active === true)
                         authorizationContent.focusAuthorization("keyboard-enter");
                 }
             }
@@ -447,6 +925,252 @@ def protected_authorization(text):
                 }
             }
 ''')
+    remote_card = '''            Rectangle {
+                id: remoteAuthorizationCard
+                anchors.centerIn: parent
+                width: Math.max(1, Math.min(720, parent.width - 48))
+                height: Math.max(1, Math.min(440, parent.height - 48))
+                radius: 24
+                color: "#141b22"
+                border.color: "#40545f"
+                border.width: 1
+                clip: true
+                visible: sessionLock.secure && root.authorizationActive && lockSurface.screen?.name !== root.authorizationScreenName
+
+                Rectangle {
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    anchors.top: parent.top
+                    height: 3
+                    gradient: Gradient {
+                        GradientStop { position: 0; color: "#34525e" }
+                        GradientStop { position: 0.48; color: "#78d7df" }
+                        GradientStop { position: 1; color: "#34525e" }
+                    }
+                }
+
+                Column {
+                    anchors.fill: parent
+                    anchors.margins: 28
+                    spacing: 13
+
+                    Row {
+                        width: parent.width
+                        spacing: 12
+
+                        Rectangle {
+                            width: 42
+                            height: 42
+                            radius: 14
+                            color: "#20343e"
+                            border.color: "#3f6472"
+                            border.width: 1
+
+                            DankIcon {
+                                anchors.centerIn: parent
+                                name: "shield_lock"
+                                size: 23
+                                color: "#8bd5df"
+                                filled: true
+                            }
+                        }
+
+                        Column {
+                            anchors.verticalCenter: parent.verticalCenter
+                            spacing: 3
+
+                            StyledText {
+                                text: "GREYWARD"
+                                font.pixelSize: Theme.fontSizeSmall
+                                font.weight: Font.DemiBold
+                                font.letterSpacing: 1.7
+                                color: "#e7eef1"
+                            }
+
+                            StyledText {
+                                text: "SECURE AUTHORIZATION"
+                                font.pixelSize: Theme.fontSizeSmall - 2
+                                font.weight: Font.Medium
+                                font.letterSpacing: 1
+                                color: "#8bd5df"
+                            }
+                        }
+                    }
+
+                    StyledText {
+                        width: parent.width
+                        text: I18n.tr("Authentication Required")
+                        font.pixelSize: Theme.fontSizeLarge
+                        font.weight: Font.DemiBold
+                        color: "#f1f5f7"
+                    }
+
+                    Rectangle {
+                        width: parent.width
+                        height: 76
+                        radius: 15
+                        color: "#1b252d"
+                        border.color: "#344853"
+                        border.width: 1
+                        clip: true
+
+                        Column {
+                            anchors.fill: parent
+                            anchors.margins: 13
+                            spacing: 4
+
+                            StyledText {
+                                text: "AUTHORIZATION REQUEST"
+                                font.pixelSize: Theme.fontSizeSmall - 2
+                                font.weight: Font.DemiBold
+                                font.letterSpacing: 1
+                                color: "#94aab5"
+                            }
+
+                            StyledText {
+                                width: parent.width
+                                text: PolkitService.agent?.flow?.message ?? ""
+                                font.pixelSize: Theme.fontSizeMedium
+                                color: "#e0e8ec"
+                                wrapMode: Text.Wrap
+                                maximumLineCount: 2
+                                elide: Text.ElideRight
+                            }
+                        }
+                    }
+
+                    Rectangle {
+                        id: mirroredPasswordField
+                        width: parent.width
+                        height: 68
+                        radius: 15
+                        color: "#10171d"
+                        border.color: root.authorizationPasswordLength > 0 ? "#70cbd5" : "#42535d"
+                        border.width: root.authorizationPasswordLength > 0 ? 2 : 1
+
+                        Row {
+                            anchors.fill: parent
+                            anchors.leftMargin: 15
+                            anchors.rightMargin: 15
+                            spacing: 12
+
+                            DankIcon {
+                                anchors.verticalCenter: parent.verticalCenter
+                                name: "lock"
+                                size: 19
+                                color: "#8bd5df"
+                            }
+
+                            Column {
+                                anchors.verticalCenter: parent.verticalCenter
+                                spacing: 3
+
+                                StyledText {
+                                text: root.authorizationController?.currentFlow?.inputPrompt ?? I18n.tr("Password")
+                                    font.pixelSize: Theme.fontSizeSmall - 2
+                                    font.weight: Font.DemiBold
+                                    font.letterSpacing: 1
+                                    color: "#93a4ad"
+                                }
+
+                                StyledText {
+                                    width: mirroredPasswordField.width - 90
+                                    text: root.authorizationPasswordLength > 0
+                                        ? "\\u2022".repeat(root.authorizationPasswordLength)
+                                        : I18n.tr("Enter your password")
+                                    font.pixelSize: Theme.fontSizeMedium
+                                    font.weight: Font.Medium
+                                    color: "#edf3f5"
+                                    maximumLineCount: 1
+                                    elide: Text.ElideRight
+                                }
+                            }
+                        }
+
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.IBeamCursor
+                            onClicked: root.authorizationController?.focusPasswordField()
+                        }
+                    }
+
+                    StyledText {
+                        width: parent.width
+                        text: I18n.tr("Authentication failed - try again")
+                        font.pixelSize: Theme.fontSizeSmall
+                        color: Theme.error
+                        visible: PolkitService.authFailed
+                    }
+
+                    Item {
+                        width: parent.width
+                        height: 40
+
+                        Row {
+                            anchors.right: parent.right
+                            spacing: 10
+
+                            Rectangle {
+                                width: 88
+                                height: 38
+                                radius: 12
+                                color: cancelRemote.containsMouse ? "#27343d" : "#202a31"
+                                border.color: "#43555f"
+                                border.width: 1
+
+                                StyledText {
+                                    anchors.centerIn: parent
+                                    text: I18n.tr("Cancel")
+                                    font.pixelSize: Theme.fontSizeSmall
+                                    font.weight: Font.Medium
+                                    color: "#d9e2e6"
+                                }
+
+                                MouseArea {
+                                    id: cancelRemote
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    enabled: !(root.authorizationController?.isLoading ?? false)
+                                    onClicked: root.authorizationController?.cancelAuth()
+                                }
+                            }
+
+                            Rectangle {
+                                width: 126
+                                height: 38
+                                radius: 12
+                                color: authenticateRemote.containsMouse ? "#9ae0e5" : "#78d2db"
+                                enabled: !(root.authorizationController?.isLoading ?? false)
+                                opacity: enabled ? 1 : 0.5
+
+                                StyledText {
+                                    anchors.centerIn: parent
+                                    text: I18n.tr("Authenticate")
+                                    font.pixelSize: Theme.fontSizeSmall
+                                    font.weight: Font.DemiBold
+                                    color: "#112027"
+                                }
+
+                                MouseArea {
+                                    id: authenticateRemote
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    enabled: parent.enabled
+                                    onClicked: root.authorizationController?.submitAuth()
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+'''
+    text = replace_region_once(
+        text,
+        '            Rectangle {\n                id: remoteAuthorizationCard\n',
+        '\n            Connections {\n                target: sessionLock',
+        remote_card + '\n')
     return text
 
 
@@ -478,7 +1202,11 @@ def assemble(source, release_receipt, output):
     lock = protected_authorization(restricted_lock((source / "Modules/Lock/Lock.qml").read_text(encoding="utf-8")))
     pam = restricted_pam((source / "Modules/Lock/Pam.qml").read_text(encoding="utf-8"))
     shutil.copytree(source, output / "shell")
-    for name, text in {"shell.qml": SHELL, "Modules/Lock/Lock.qml": lock, "Modules/Lock/Pam.qml": pam}.items():
+    authorization_content = branded_authorization_content(
+        (source / "Modals/PolkitAuthContent.qml").read_text(encoding="utf-8"))
+    for name, text in {"shell.qml": SHELL, "Modules/Lock/Lock.qml": lock,
+                       "Modules/Lock/Pam.qml": pam,
+                       "Modals/PolkitAuthContent.qml": authorization_content}.items():
         (output / "shell" / name).write_bytes(text.encode())
     startup = output / "shell/startup"
     startup.mkdir()

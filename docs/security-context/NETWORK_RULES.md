@@ -21,10 +21,60 @@ An idle statistics stream does not disable editing. Loaded/Observed still need
 fresh revision/match evidence. Private synchronous calls use separate connections
 without GLib disconnect watches or process-exit-on-disconnect behavior.
 
-The Rules page offers application/incoming views, reviewed creation, edits,
-duplication, enable/disable, deletion, order, bulk changes, search, lifecycle
-filters, pagination and versioned reviewed import/export. Activity prefills
-the same editor; it never authenticates a historical application identity.
+The Rules page has separate **Application rules** and **IP filtering** workspaces.
+Applications use a searchable installed-app list with real icons/names rather than
+an editable path field. IP filtering presents incoming and outgoing rules in a
+policy table: position, enabled state, action, name, source, destination, service.
+Cells open a focused native HTML dialog; enable/disable still prepares a review,
+never an unauthenticated write. New IP drafts default to disabled. Configuration
+(enabled/disabled) remains separate from actual Saved/Loaded/Observed evidence.
+
+Incoming IP rules use native firewalld services/ports, source IP/subnet and local
+zone. Outgoing IP rules reuse the existing OpenSnitch all-applications matcher
+(`path="*"`, `all_applications=true`), limited in the editor to destination IP/CIDR.
+The source is this computer, with explicit current-user/all-user scope. No new
+firewall, database or policy tier is introduced. Outgoing IP and application rules
+share their existing first-match order; displayed OUT positions are global engine
+positions, including entries in the other workspace. Incoming IN positions remain
+separate. Provider-local reviewed batches do not imply cross-provider atomicity.
+This is a local-computer policy UI, not a routing/NAT/transit-filtering appliance.
+OpenSnitch connection decisions do not become packet inspection or retroactive
+termination of established connections merely because the UI says IP filtering.
+
+`network_applications.py` reads Gio desktop entries in the ordinary session
+Context, including installed Flatpak export directories. The list is bounded to
+256 entries/five seconds and cached for 30 seconds. Icons are decoded to bounded
+48px PNGs outside the root broker. Names/icons are display metadata, never
+application identity or authorization evidence. Native ELF targets resolve
+without executing launchers; a packaged wrapper may use a unique same-name ELF
+from its owning RPM. Shared interpreters, ambiguous launchers, home-only targets
+unavailable to the root service, and individual Flatpaks stay visibly unsupported.
+Selecting a desktop name cannot accidentally authorize every interpreter/Flatpak.
+The root broker independently resolves/reviews the executable and account scope.
+Existing executable scopes remain in technical detail; the app picker supplies
+no generic execution or arbitrary-file API and does not create AppSec grants.
+
+The page retains reviewed creation, edits, duplication, ordering, bulk management,
+search, lifecycle filters, pagination, undo and versioned import/export. Application
+and outgoing-IP exports filter the corresponding OpenSnitch rows; incoming exports
+retain the existing provider schema. Activity can prepare the application editor,
+without treating historical application names as verified identities.
+
+The service picker searches installed firewalld names, labels and port/protocol
+pairs. The root service reads `getServiceSettings2`; there is no new service
+database. Reads are bounded to 1,024 definitions, 64 port pairs per definition and
+a two-second collection budget, cached for 30 seconds. Incomplete metadata is
+explicit rather than replaced with guessed ports. Incoming services retain their
+full native semantics. Outgoing rules snapshot explicit ports/protocols only
+when every protocol has the same port set and no helper/include/source/destination
+condition would be lost. Asymmetric definitions cannot become a broader cross-
+product. Custom ports remain available. Incoming service definitions may change
+through native firewalld administration; outgoing snapshots retain reviewed ports.
+Application search and service focus/filtering update only their result lists;
+they preserve the focused input and existing modal instead of replacing the
+whole connected view. A regression test refuses connected-dialog replacement
+during these events. This avoids repeated focus churn, without claiming to fix
+every native WebKit clipboard failure.
 
 Application conditions combine with AND; values in destinations and port lists
 combine with OR. Application rules use explicit order and first-match behavior
@@ -73,6 +123,9 @@ adopted. Partial rollback failure is explicit and blocks editing until recovery.
 Native changes are capped at 128 affected entries per transaction (including
 runtime/permanent planes). Existing active-zone services, ports and unsupported
 rich rules have a separate bounded read-only disclosure; none are adopted.
+The D-Bus adapter follows firewalld's bus-name owner, so starting before firewalld
+or restarting that daemon does not leave this provider stuck in an unavailable
+state after the next refresh.
 
 Saved, Loaded by engine and Observed matching are distinct. Match counts and
 last observation exist only after actual control-plane decisions; they reset
@@ -89,9 +142,95 @@ GREYWARD-owned policy only. Global deny, VPN kill switches, NAT/forwarding,
 arbitrary rich expressions and interface-specific application rules are outside
 this delivery.
 
+## 18 October release reconciliation and `<validation-host>` installation
+
+Installed package versions diverged: `<development-host>` had Security Center 0.1.0-110 /
+Context 0.1.0-100, while `<validation-host>` had Security Center 0.1.0-100 / Context
+0.1.0-103. The `<development-host>` Security Center included rule creation, but its Context
+was older than the one already on `<validation-host>`. The current source was therefore
+packaged together as Security Center 0.1.0-111 / Context 0.1.0-105. This
+keeps the newer Context baseline and includes the rule editor's installed-app
+catalog and clearer IP-rule scope/order review.
+
+The canonical component builder passed on `<development-host>`; its Rust workspace tests
+passed. Focused validation also passed: 88 Fedora Context network tests, 21
+frontend tests, `tests/static.ps1`, and `tools/validate-repository.ps1`. Both
+RPMs were installed on `<validation-host>`. Installed NEVRA, payload ownership and `rpm -V`
+readback match the new releases; SELinux is Enforcing and firewalld, OpenSnitch
+and `greyward-opensnitch-policy` remain active. Package installation created
+or changed no firewall rule. The user has not yet visually checked the updated
+Security Center window, so package/readback validation is not visual acceptance.
+
+| Package | Installed NEVRA | SHA-256 |
+|---|---|---|
+| Security Center | `greyward-security-center-0.1.0-111.fc44.x86_64` | `b5d2d1e02a99e206d2a8fe76e1588289e9b04000c865edca1fb67e6f9becfb27` |
+| Security Context | `greyward-security-context-0.1.0-105.fc44.noarch` | `6e2b6b10ffba470c7e9820ae9530134207aff8d886b50d7d9a2ffc03b2df2f82` |
+
 ## Validation and rollout status
 
-Focused and regression suites pass: 386 Context tests on Fedora, 150 frontend
+Installed performance baseline on 16 October: a static open rule dialog consumed
+202.4% WebKit CPU over three seconds; closing it reduced the same process to
+0.3%. With compilation stopped, provider reads were 0.386s/0.451s cold and
+0.022–0.032s warm. The network-dialog backdrop is now a static dark layer without
+live blur; the raised obsidian surface and edge/shadow treatment remain.
+Numeric service searches match actual ports or containing ranges: searching
+443 no longer matches 8443 just because of its text. Suggestions can open above
+the field, and Escape closes suggestions before permitting native dialog
+cancellation. Removing blur alone only reduced the open-dialog load to
+178.0–179.6%. Thread readback located the sustained work in WebKit's threaded
+compositor and llvmpipe. An installed A/B launch with
+`WEBKIT_DISABLE_COMPOSITING_MODE=1` reduced the same open dialog to 1.0% WebKit
+CPU in two three-second samples. This changes compositing, never sandboxing.
+
+Center 110's canonical desktop launcher selects that documented WebKit mode
+only when every detected DRM card uses display-only `hyperv_drm`. An unknown,
+missing or different driver, including a mixed hardware-GPU setup, retains
+WebKit's normal default. An explicit environment override is respected.
+Normal installed launch confirms automatic selection and matching installed/
+running executable hashes. Final unlocked visual confirmation of this packaged
+launch remains pending; the desktop auto-locked during the last build.
+No security policy, DMA-device permission or system-wide rendering setting changed.
+
+Current installed separated workflow: 392 Fedora Context tests and 160 frontend
+checks pass (three optional browser checks skipped). The real unprivileged catalog
+returns 33 applications, 21 supported native targets, all with icons, in 0.419s.
+Firefox and Strata wrapper resolution uses the same generic RPM mechanism.
+Center 110 / Context 100 is installed. The normal session service returns 32
+applications, all with icons, including 21 supported native targets, in 0.432s.
+The root-independent prototype’s 33-entry result above was a separate environment
+snapshot; entry counts are not a fixed product claim. Actual outgoing-IP testing
+blocks HTTPS to one synthetic public destination while leaving that IP’s HTTP
+port available; root engine readback reports OBSERVED with three decisions.
+After exact rule removal, HTTPS succeeds again and original settings/rules match.
+No personal policy, SSH access, firewall engine or graphical session was changed.
+The installed application picker was visually inspected in VMConnect after
+unlocking. Full interaction and protected authentication acceptance remain
+pending: Center 105 and 107 crashed during automated text-entry checks. The SIGSEGV
+starts in WebKit `Clipboard::formats`, called by GTK's clipboard-target callback
+(WebKitGTK 2.54.1 / GTK 3.24.52). This establishes the failing native path, not
+the underlying cause. The application reopened through its normal route; the
+desktop and security services stayed running. Clipboard stability is unresolved;
+source tests and readback do not substitute for desktop acceptance.
+Actual keyboard filtering, Firefox selection with its icon, service suggestions
+and keyboard cancellation were exercised in the installed UI before locking.
+The upstream USBGuard unit fixture now explicitly selects its mocked upstream
+identity instead of accidentally depending on the host's enrolled login. Its
+separate enrolled-projection/no-fallback test remains enabled; 392 tests pass
+under the enrolled ordinary account without changing device permissions.
+The installed Center 104 / Context 99 evidence below is the prior mixed UI baseline.
+
+
+The previous unified workflow was installed as Center 104 / Context 99. Its tests passed:
+388 Context tests on Fedora, 156 frontend checks (three optional browser checks
+skipped), and 208 Rust tests (22 ignored). Static/repository gates pass. The
+installed Context payload differs only in `network_firewall.py`; engine code,
+authorization and policy are unchanged by installation. The normal-user typed
+read path returns all 265 actual installed definitions in 0.488 seconds, with
+both providers editable while unlocked. Running/installed Center hashes match.
+SSH, greetd, firewalld, OpenSnitch, control-plane, protected compositor and
+authentication processes remain unchanged, with SELinux Enforcing.
+Visual/keyboard and protected GUI authentication acceptance remain pending. The prior installed candidate passed 386 Context
+tests on Fedora, 150 frontend
 tests and 208 Rust tests (22 ignored). Static and repository validation pass.
 These checks cover matcher, migration, transaction, transport and packaging
 contracts; they do not replace the outstanding desktop acceptance below.
@@ -107,9 +246,9 @@ The normal Center 103 process was restarted and its executable hash matches the
 installed binary. Live accessibility readback from that exact process confirms
 Network protection and Rules render with the real backend, including the empty
 rule list and editor controls. This is installed UI evidence, not a screenshot
-or visual-quality acceptance; VMConnect remains minimized.
+or visual-quality acceptance; VMConnect was minimized at that check.
 
-Installed development candidate: Center 103 / Context 98. Actual installed
+Earlier Center 103 / Context 98 enforcement baseline. Actual installed
 OpenSnitch tests demonstrate a root-UID curl block, same-UID Python separation,
 different-UID curl access, disable/re-enable, policy-service restart persistence,
 stale/forged refusal and cleanup. Native incoming tests from a separate machine
@@ -127,7 +266,7 @@ refusal to a required AUTH_SELF challenge, with authorization remaining false.
 This verifies challenge eligibility without entering credentials. Successful
 protected GUI authentication, cancellation/wrong-password interaction, visual
 review, narrow-window/keyboard and actual WebKit import/export acceptance remain
-pending. The desktop is unlocked; the console must be visible for visual review.
+pending. Live visual review requires an unlocked desktop.
 IPv6/UDP packet, real-time expiry and
 clean-image acceptance are separate uncompleted gates; model/source tests do
 not substitute for them. Interactive prompts remain deferred.
@@ -148,3 +287,11 @@ then restore matched packages. Never feed v2 rules to the legacy matcher: UID,
 CIDR and protocol conditions would be misinterpreted. Do not reboot, reload
 firewalld, terminate the graphical session or change SSH during development
 validation. ISO composition and clean installation remain separate gates.
+
+## Workflow references
+
+The source/destination/service/action organization is informed by
+[Stormshield filtering-rule creation](https://documentation.stormshield.eu/SNS/v5/en/Content/HowTo_-_Implementing_a_filtering_rule/Adding-filter-rule.htm).
+GREYWARD retains its own visual assets and its two existing enforcement providers.
+The service read model follows the native
+[firewalld D-Bus contract](https://firewalld.org/documentation/man-pages/firewalld.dbus.html).

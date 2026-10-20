@@ -180,6 +180,10 @@ for required in \
   "$production/provision-firstboot.sh" "$production/provision-firstboot.service" \
   "$production/firstboot-status.sh" "$production/firstboot-status.service" \
   "$production/greyward-sync-greeter-wallpaper" \
+  "$production/greyward-start-dms-greeter" \
+  "$production/dms-greeter-ui/shell.qml" \
+  "$production/dms-greeter-ui/Modules/Greetd/GreeterSurface.qml" \
+  "$production/dms-greeter-ui/Modules/Greetd/GreeterContent.qml" \
   "$production/artifact-policy.json" "$production/dms-release.json" \
   "$production/security-center-contract.tsv" \
   "$security_context_unit" \
@@ -316,6 +320,10 @@ if $require_complete && [[ -z "$dms_rpm" ]]; then
   echo "Complete production staging requires a verified greyward-dms RPM." >&2
   exit 2
 fi
+if $require_complete && [[ -z "$security_build_manifest" ]]; then
+  echo "Complete production staging requires a Security Center artifact manifest." >&2
+  exit 2
+fi
 if $require_complete; then
   if [[ -z "$session_rpm" || -z "$files_rpm" ]]; then
     echo "Complete production staging requires one greyward-session and one greyward-files RPM." >&2
@@ -368,17 +376,14 @@ if $require_complete; then
     echo 'The enrollment RPM is missing its fixed enrollment runtime.' >&2
     exit 1
   fi
-  if ! rpm2cpio "$enrollment_rpm" | cpio -i --quiet --to-stdout "$enrollment_runtime_path" | cmp -s - "$repo_root/packaging/greyward-enrollment/enroll.py"; then
+  if [[ "$(awk -F= '$1 == "schema" { print substr($0, index($0, "=") + 1); exit }' "$security_build_manifest")" == 'greyward.security-center-build/v1' ]] && \
+     ! rpm2cpio "$enrollment_rpm" | cpio -i --quiet --to-stdout "$enrollment_runtime_path" | cmp -s - "$repo_root/packaging/greyward-enrollment/enroll.py"; then
     echo 'The enrollment RPM contains stale enrollment logic; rebuild it from this checkout before ISO staging.' >&2
     exit 1
   fi
 fi
 if $require_complete && [[ -z "$branding_rpm" ]]; then
   echo "Complete production staging requires one greyward-branding RPM." >&2
-  exit 2
-fi
-if $require_complete && [[ -z "$security_build_manifest" ]]; then
-  echo "Complete production staging requires the Security Center build manifest emitted by the canonical component builder." >&2
   exit 2
 fi
 if [[ -z "$security_source_root" ]]; then
@@ -418,8 +423,10 @@ cp -a "$production/packages.txt" "$production/repositories.txt" "$production/ins
   "$production/production-acceptance.sh" \
   "$production/provision-firstboot.service" "$production/firstboot-status.sh" \
   "$production/firstboot-status.service" "$production/greyward-sync-greeter-wallpaper" \
+  "$production/greyward-start-dms-greeter" \
   "$production/manifest.json" \
   "$production/artifact-policy.json" "$production/dms-release.json" "$production/security-center-contract.tsv" "$output/"
+cp -a "$production/dms-greeter-ui" "$output/dms-greeter-ui"
 mkdir -p "$output/desktop-entry-overrides"
 cp -a "$production/desktop-entry-overrides/rygel-preferences.desktop" \
   "$output/desktop-entry-overrides/"
@@ -517,6 +524,22 @@ for key in ('schema','releaseId','dms','inputs','patches','shell','build','compa
     elif expected[key] != actual.get(key): raise SystemExit('DMS runtime receipt mismatch: '+key)
 if not actual.get('binarySha256') or not actual.get('firstPartyFiles'): raise SystemExit('Incomplete DMS RPM receipt')
 PY
+  security_manifest_schema=$(security_manifest_value schema)
+  case "$security_manifest_schema" in
+    greyward.security-center-build/v1)
+      test "$(security_manifest_value source_tree_sha256)" = "$(security_source_tree_sha256)"
+      ;;
+    greyward.security-center-installed-import/v1)
+      python3 "$repo_root/environment/image/validate-installed-rpm-import.py" \
+        --manifest "$security_build_manifest" \
+        --rpm "$dms_rpm" --rpm "${security_rpms[0]}" --rpm "${security_rpms[1]}" \
+        --rpm "${enrollment_rpms[0]}" --rpm "${enrollment_rpms[1]}"
+      ;;
+    *)
+      echo "Unsupported Security Center artifact manifest schema: $security_manifest_schema" >&2
+      exit 1
+      ;;
+  esac
   normalize_plugin_text() {
     python3 -c 'import sys; data=sys.stdin.buffer.read(); sys.stdout.buffer.write(data if b"\0" in data else data.replace(b"\r\n", b"\n"))'
   }
@@ -529,25 +552,29 @@ PY
     fi
   done
   test -n "$usb_context_rpm" || { echo 'USB approval requires the Security Context RPM.' >&2; exit 1; }
-  python3 "$repo_root/environment/image/verify-usbguard-inputs.py" --repo "$repo_root" --kind dms --rpm "$dms_rpm"
-  python3 "$repo_root/environment/image/verify-usbguard-inputs.py" --repo "$repo_root" --kind context --rpm "$usb_context_rpm"
-  python3 "$repo_root/environment/image/verify-usbguard-inputs.py" --repo "$repo_root" --kind application-security --rpm "$appsec_rpm"
-  python3 "$repo_root/environment/image/verify-usbguard-inputs.py" --repo "$repo_root" --kind enrollment --rpm "$enrollment_rpm"
+  if [[ "$security_manifest_schema" == 'greyward.security-center-build/v1' ]]; then
+    python3 "$repo_root/environment/image/verify-usbguard-inputs.py" --repo "$repo_root" --kind dms --rpm "$dms_rpm"
+    python3 "$repo_root/environment/image/verify-usbguard-inputs.py" --repo "$repo_root" --kind context --rpm "$usb_context_rpm"
+    python3 "$repo_root/environment/image/verify-usbguard-inputs.py" --repo "$repo_root" --kind application-security --rpm "$appsec_rpm"
+    python3 "$repo_root/environment/image/verify-usbguard-inputs.py" --repo "$repo_root" --kind enrollment --rpm "$enrollment_rpm"
+  fi
   plugin_source="$session/dankmaterialshell/plugins"
   plugin_count=0
-  while IFS= read -r -d '' plugin_file; do
-    plugin_count=$((plugin_count + 1))
-    plugin_relative=${plugin_file#"$plugin_source"/}
-    rpm_plugin_path="./etc/xdg/quickshell/dms-plugins/$plugin_relative"
-    if ! rpm2cpio "$dms_rpm" | cpio -i --quiet --to-stdout "$rpm_plugin_path" | normalize_plugin_text | \
-      cmp -s - <(normalize_plugin_text < "$plugin_file"); then
-      echo "The greyward-dms RPM contains a stale first-party plugin: $plugin_relative; rebuild it from this checkout before ISO staging." >&2
+  if [[ "$security_manifest_schema" == 'greyward.security-center-build/v1' ]]; then
+    while IFS= read -r -d '' plugin_file; do
+      plugin_count=$((plugin_count + 1))
+      plugin_relative=${plugin_file#"$plugin_source"/}
+      rpm_plugin_path="./etc/xdg/quickshell/dms-plugins/$plugin_relative"
+      if ! rpm2cpio "$dms_rpm" | cpio -i --quiet --to-stdout "$rpm_plugin_path" | normalize_plugin_text | \
+        cmp -s - <(normalize_plugin_text < "$plugin_file"); then
+        echo "The greyward-dms RPM contains a stale first-party plugin: $plugin_relative; rebuild it from this checkout before ISO staging." >&2
+        exit 1
+      fi
+    done < <(find "$plugin_source" -type f -print0 | LC_ALL=C sort -z)
+    if ((plugin_count == 0)); then
+      echo 'No current first-party DMS plugins were found for RPM verification.' >&2
       exit 1
     fi
-  done < <(find "$plugin_source" -type f -print0 | LC_ALL=C sort -z)
-  if ((plugin_count == 0)); then
-    echo 'No current first-party DMS plugins were found for RPM verification.' >&2
-    exit 1
   fi
   for branding_path in \
     /usr/share/anaconda/pixmaps/greyward-anaconda-logo.png \
@@ -560,8 +587,9 @@ PY
       exit 1
     }
   done
-  test "$(security_manifest_value schema)" = 'greyward.security-center-build/v1'
-  test "$(security_manifest_value source_tree_sha256)" = "$(security_source_tree_sha256)"
+  if [[ "$security_manifest_schema" == 'greyward.security-center-build/v1' ]]; then
+    test "$(security_manifest_value source_tree_sha256)" = "$(security_source_tree_sha256)"
+  fi
   center_rpm=$(printf '%s\n' "${security_rpms[@]}" | grep '/greyward-security-center-' | head -n 1)
   context_rpm=$(printf '%s\n' "${security_rpms[@]}" | grep '/greyward-security-context-' | head -n 1)
   test "$(basename "$center_rpm")" = "$(security_manifest_value center_filename)"
@@ -570,6 +598,21 @@ PY
   test "$(sha256sum "$context_rpm" | awk '{print $1}')" = "$(security_manifest_value context_sha256)"
   test "$(rpm_query -qp --qf '%{NAME}-%{VERSION}-%{RELEASE}.%{ARCH}' "$center_rpm")" = "$(security_manifest_value center_nevra)"
   test "$(rpm_query -qp --qf '%{NAME}-%{VERSION}-%{RELEASE}.%{ARCH}' "$context_rpm")" = "$(security_manifest_value context_nevra)"
+  if [[ "$security_manifest_schema" == 'greyward.security-center-installed-import/v1' ]]; then
+    for package_label in dms center context appsec enrollment; do
+      case "$package_label" in
+        dms) package_rpm="$dms_rpm" ;;
+        center) package_rpm="$center_rpm" ;;
+        context) package_rpm="$context_rpm" ;;
+        appsec) package_rpm="$appsec_rpm" ;;
+        enrollment) package_rpm="$enrollment_rpm" ;;
+      esac
+      test "$(basename "$package_rpm")" = "$(security_manifest_value ${package_label}_filename)"
+      test "$(sha256sum "$package_rpm" | awk '{print $1}')" = "$(security_manifest_value ${package_label}_sha256)"
+      test "$(rpm_query -qp --qf '%{NAME}-%{VERSION}-%{RELEASE}.%{ARCH}' "$package_rpm")" = "$(security_manifest_value ${package_label}_nevra)"
+      test "$(rpm_query -qp --qf '%{SHA1HEADER}' "$package_rpm" | tr 'A-F' 'a-f')" = "$(security_manifest_value ${package_label}_header_sha1)"
+    done
+  fi
 
   while IFS='|' read -r package path; do
     [[ -z "$package" || "$package" == \#* ]] && continue

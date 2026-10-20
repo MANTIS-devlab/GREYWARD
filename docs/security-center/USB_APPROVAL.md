@@ -33,6 +33,15 @@ Five integration defects were corrected:
 - Rule parsing treated `parent-hash` as the device's own `hash`. Only the actual
   device hash or serial establishes its stable identity.
 
+The USB helper also has its own SELinux domain in the confined desktop role,
+but it is intentionally excluded from `greyward_as_ordinary`. The protected
+seat verifier tolerates only that reviewed non-ordinary domain when comparing
+policy revisions; it recognizes a running helper only for the exact executable,
+UID, SELinux context and active logind session scope. Ordinary role coverage
+must remain identical to the saved receipt. This keeps policy updates from
+mistaking the USB helper for a user application without weakening session
+coverage checks.
+
 Canonical owners are the two Go clients and verifier in `packaging/greyward-dms/`,
 `authentication/assemble.py` and `desktop/materialize.py` under
 `security-center/packaging/application-security/`, the USB approval SELinux
@@ -42,8 +51,8 @@ rule substitutes for the protected user decision.
 
 ## Next ISO inputs
 
-The canonical next-build tuple is DMS **1.6.2-23**, Security Context
-**0.1.0-104**, Application Security **0.1.0-55** and Enrollment **0.1.0-46**.
+The canonical source tuple is DMS **1.6.2-25**, Security Context
+**0.1.0-104**, Application Security **0.1.0-61** and Enrollment **0.1.0-52**.
 Enrollment requires the exact DMS/Application Security pair; DMS requires the
 fixed Context minimum. New revisions prevent reuse of previously built identities.
 The validated installation uses earlier RPMs with backed-up matched source

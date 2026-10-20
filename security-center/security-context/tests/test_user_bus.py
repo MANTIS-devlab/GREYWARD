@@ -194,17 +194,42 @@ class BoundedProbeCacheTests(unittest.TestCase):
         finally:
             user_bus._AUTHORITATIVE_POSTURE_CACHE = previous
 
-    def test_network_service_health_reuses_both_liveness_probes(self):
+    def test_network_service_health_reuses_service_and_socket_probes(self):
         previous = user_bus._NETWORK_HEALTH_CACHE
         try:
             user_bus._NETWORK_HEALTH_CACHE = None
-            with patch.object(user_bus, "_service_active", side_effect=[True, True]) as probe:
+            with patch.object(user_bus, "_service_active", side_effect=[True, True]) as probe, \
+                 patch.object(user_bus, "_opensnitch_control_connected", return_value=True) as connected:
                 first = user_bus._network_service_health()
                 second = user_bus._network_service_health()
 
-            self.assertEqual((True, True), first)
+            self.assertEqual((True, True, True), first)
             self.assertEqual(first, second)
             self.assertEqual(2, probe.call_count)
+            connected.assert_called_once()
+        finally:
+            user_bus._NETWORK_HEALTH_CACHE = previous
+
+    def test_open_snitch_socket_probe_requires_an_established_peer(self):
+        output = """u_str LISTEN 0 4096 /run/greyward-opensnitch/control-plane.sock 21255 * 0
+u_str ESTAB 0 0 /run/greyward-opensnitch/control-plane.sock 16082 * 22710
+"""
+        result = SimpleNamespace(returncode=0, stdout=output)
+        with patch.object(user_bus.subprocess, "run", return_value=result) as run:
+            self.assertTrue(user_bus._opensnitch_control_connected())
+        self.assertEqual(["/usr/bin/ss", "-xan"], run.call_args.args[0])
+
+        result.stdout = output.replace("u_str ESTAB", "u_str LISTEN")
+        with patch.object(user_bus.subprocess, "run", return_value=result):
+            self.assertFalse(user_bus._opensnitch_control_connected())
+
+    def test_network_service_health_refuses_missing_daemon_socket(self):
+        previous = user_bus._NETWORK_HEALTH_CACHE
+        try:
+            user_bus._NETWORK_HEALTH_CACHE = None
+            with patch.object(user_bus, "_service_active", return_value=True), \
+                 patch.object(user_bus, "_opensnitch_control_connected", return_value=False):
+                self.assertEqual((True, True, False), user_bus._network_service_health())
         finally:
             user_bus._NETWORK_HEALTH_CACHE = previous
 

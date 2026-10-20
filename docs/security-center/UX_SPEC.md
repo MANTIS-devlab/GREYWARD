@@ -18,6 +18,13 @@ These are source changes with local regression evidence, not a new `<development
 installed tuple. See the scoped receipt (private development evidence)
 for validation limits and matched deployment/rollback requirements.
 
+Protected Data shows the portal/deputy limitation only after the required
+session baseline is verified. When a provider reports `DEGRADED`, the page lists
+the required baseline checks whose coverage is false or missing. `UNKNOWN` and
+`UNAVAILABLE` keep their own state and do not display wording that implies the
+baseline is covered. This presentation does not turn missing evidence into a
+verified state.
+
 
 Status: canonical UX and content authority. Historical UX and visual plans
 provide supporting rationale; this document resolves presentation rules for

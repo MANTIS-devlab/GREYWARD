@@ -76,6 +76,12 @@ When public checking is enabled, the repository implementation:
 - keeps the current public IP and country only in shell memory, with no IP
   history or address cache persisted across restart.
 
+When several displays show a bar, their Network Identity widgets share the
+current result through a DMS memory-only global variable. A single widget makes
+the provider requests for the shell, and the others render the same live result;
+screen-specific command IDs prevent one display's callback from replacing
+another's.
+
 The connection necessarily reveals the device's public source IP, request time,
 TLS/transport metadata, and the configured `curl` user agent to each contacted
 provider. Security Center must show both providers and identify the persistent

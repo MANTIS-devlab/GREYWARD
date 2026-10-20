@@ -183,6 +183,40 @@ class OfflineTests(unittest.TestCase):
         self.assertIn('systemctl status --no-pager --full "$required_service"', provision)
         self.assertIn('systemctl is-active --quiet "$provider_service"', acceptance)
 
+    def test_wireless_firmware_families_are_selected_verified_and_required_offline(self):
+        production_packages = (ROOT / "environment/production/packages.txt").read_text()
+        acceptance = (ROOT / "environment/production/production-acceptance.sh").read_text()
+        builder = (ROOT / "environment/image/build-offline.py").read_text()
+        stage_validator = (ROOT / "environment/image/validate-production-stage.sh").read_text()
+        expected = {
+            "linux-firmware",
+            "iwlwifi-mvm-firmware",
+            "iwlbluetooth-firmware",
+            "iwlwifi-dvm-firmware",
+            "iwlegacy-firmware",
+            "realtek-firmware",
+            "mt7xxx-firmware",
+            "atheros-firmware",
+            "brcmfmac-firmware",
+            "libertas-firmware",
+            "nxpwireless-firmware",
+            "tiwilink-firmware",
+        }
+        selected = {
+            line.strip() for line in production_packages.splitlines()
+            if line.strip() and not line.lstrip().startswith("#") and line.strip().endswith("-firmware")
+        }
+        self.assertEqual(expected, selected)
+        self.assertIn("kernel-modules-extra", builder)
+        self.assertIn("selection = [p for p in lines(stage / 'packages.txt')", builder)
+        self.assertIn('--downloadonly', builder)
+        self.assertIn('verify_signatures(packages, staged, offline)', builder)
+        self.assertIn('%packages --exclude-weakdeps', builder)
+        self.assertIn('firmware_manifest=/usr/lib/greyward/installer/production/packages.txt', acceptance)
+        self.assertIn('rpm -q "$firmware_package"', acceptance)
+        self.assertIn('offline/installer-packages.ks', stage_validator)
+        self.assertIn('"$package.noarch"', stage_validator)
+
     def test_hardware_conditional_bluetooth_does_not_fail_vm_provisioning(self):
         provision = (ROOT / "environment/production/provision.sh").read_text()
         self.assertIn(
@@ -210,10 +244,15 @@ class OfflineTests(unittest.TestCase):
         self.assertIn("timeout --foreground 120s systemctl start greetd.service", firstboot)
         self.assertIn("timeout --foreground 120s systemctl enable --now", provision)
         self.assertIn("timeout --foreground 30s systemctl is-active", provision)
-        self.assertIn("/usr/bin/env WLR_RENDERER=pixman", provision)
+        self.assertIn('keyboard_helper=/usr/share/greyward-application-security/desktop/keyboard_config.py', provision)
+        self.assertIn('/usr/bin/python3 -I "$keyboard_helper" --write-installed', provision)
+        self.assertIn('XKB_DEFAULT_MODEL=$XKB_DEFAULT_MODEL XKB_DEFAULT_LAYOUT=$XKB_DEFAULT_LAYOUT', provision)
+        self.assertIn('/usr/bin/python3 -I /usr/share/greyward-application-security/desktop/keyboard_config.py \\\n  --verify-installed', acceptance)
         self.assertNotIn("WLR_DRM_DEVICES=", provision)
         self.assertIn("XDG_CONFIG_HOME=/var/cache/dms-greeter/.config", provision)
-        self.assertIn("only into that greeter process", provision)
+        self.assertIn("not inherited by this separate session", provision)
+        self.assertIn('/usr/share/greyward-application-security/desktop/keyboard_config.py', acceptance)
+        self.assertIn('--verify-installed', acceptance)
         self.assertIn('greyward-start-labwc', provision)
         self.assertIn('greyward-start-labwc', (ROOT / "environment/image/build.sh").read_text())
         self.assertIn('Exec=/usr/local/libexec/greyward-start-labwc', (ROOT / "environment/session/greyward-labwc.desktop").read_text())
@@ -416,6 +455,18 @@ class OfflineTests(unittest.TestCase):
         self.assertIn("session_monitors_path='./usr/share/greyward/defaults/dankmaterialshell/monitors.json'", stager)
         self.assertIn('rpm2cpio "$session_rpm" | cpio -i --quiet --to-stdout "$session_monitors_path" | cmp -s - "$session/dankmaterialshell/monitors.json"', stager)
         self.assertIn("rebuild it from this checkout before ISO staging", stager)
+
+    def test_iso_staging_rejects_stale_enrollment_runtime_payload(self):
+        stager = (ROOT / "environment/image/build.sh").read_text()
+        spec = (ROOT / "packaging/greyward-enrollment/greyward-enrollment.spec").read_text()
+        self.assertIn("enrollment_runtime_path='./usr/libexec/greyward-enrollment'", stager)
+        self.assertIn(
+            'rpm2cpio "$enrollment_rpm" | cpio -i --quiet --to-stdout "$enrollment_runtime_path" | cmp -s - "$repo_root/packaging/greyward-enrollment/enroll.py"',
+            stager,
+        )
+        self.assertIn("rebuild it from this checkout before ISO staging", stager)
+        self.assertIn("Release: 60%{?dist}", spec)
+        self.assertIn("Requires: greyward-application-security-experimental = 0.1.0-69%{?dist}", spec)
 
     def test_files_is_a_first_party_offline_package_and_desktop_default(self):
         builder = (ROOT / "environment/image/build.sh").read_text()

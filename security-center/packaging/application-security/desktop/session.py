@@ -10,6 +10,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import signal
 import select
 import subprocess
@@ -21,10 +22,78 @@ BASE = Path('/usr/lib/greyward/application-security/desktop')
 STATE = Path('/run/greyward-application-security')
 AUTH_CONTEXT = 'system_u:system_r:greyward_as_auth_t:s0'
 DISPLAY_CONTEXT = 'greyward_guard_u:greyward_guard_r:greyward_as_display_t:s0'
-DISPLAY_XKB_DEFAULTS = {
-    'XKB_DEFAULT_MODEL': 'pc105',
-    'XKB_DEFAULT_LAYOUT': 'fr',
-}
+def protected_keyboard_environment():
+    """Load the Anaconda-selected XKB settings from the immutable receipt."""
+    manifest = json.loads(private_file(BASE / 'desktop.json', 1024 * 1024))
+    files = manifest.get('files', {})
+    for name in ('keyboard.json', 'keyboard_config.py'):
+        if name not in files:
+            raise RuntimeError('Installed keyboard selection is missing from protected desktop')
+    helper_path = BASE / 'keyboard_config.py'
+    helper_bytes = private_file(helper_path, 128 * 1024)
+    if hashlib.sha256(helper_bytes).hexdigest() != files['keyboard_config.py']:
+        raise RuntimeError('Protected keyboard validator receipt mismatch')
+    namespace = {'__name__': 'greyward_protected_keyboard_config'}
+    exec(compile(helper_bytes, str(helper_path), 'exec'), namespace)
+    settings = json.loads(private_file(BASE / 'keyboard.json', 4096))
+    settings = namespace['validate_settings'](settings)
+    return namespace['environment'](settings)
+
+
+def requires_software_renderer(dmi_root=Path('/sys/class/dmi/id'),
+                               drm_root=Path('/sys/class/drm'),
+                               dri_root=Path('/dev/dri')):
+    """Keep the known virtual/no-render-node fallback local to this display.
+
+    The protected compositor has a fixed environment allowlist, so it must
+    make the same read-only hardware decision as the ordinary session launcher
+    instead of inheriting the user's renderer variables.
+    """
+    identities = []
+    for name in ('sys_vendor', 'product_name', 'board_vendor'):
+        try:
+            identities.append((dmi_root / name).read_text().casefold())
+        except OSError:
+            continue
+    if any(re.search(r'vmware|hyper-?v|virtual machine', value)
+           for value in identities):
+        return True
+
+    for vendor_file in drm_root.glob('card*/device/vendor'):
+        try:
+            vendor = vendor_file.read_text().strip().casefold()
+        except OSError:
+            continue
+        if re.fullmatch(r'(?:0x)?(?:15ad|1414)', vendor):
+            return True
+
+    return not any(dri_root.glob('renderD*'))
+
+
+def renderer_environment(kind, dmi_root=Path('/sys/class/dmi/id'),
+                         drm_root=Path('/sys/class/drm'),
+                         dri_root=Path('/dev/dri')):
+    """Use GLES2 on capable hardware; keep authentication and VM fallback CPU-only."""
+    if kind not in ('authentication', 'display'):
+        raise ValueError('Unknown protected renderer scope')
+    software = kind == 'authentication' or requires_software_renderer(
+        dmi_root, drm_root, dri_root)
+    values = {
+        'WLR_NO_HARDWARE_CURSORS': '1',
+        'WLR_DRM_NO_MODIFIERS': '1',
+    }
+    if software:
+        values.update({
+            'WLR_RENDERER': 'pixman',
+            'WLR_RENDERER_ALLOW_SOFTWARE': '1',
+            'LIBGL_ALWAYS_SOFTWARE': '1',
+        })
+    else:
+        # Pixman cannot import the client DMA-BUFs wlroots needs for outputs on
+        # a secondary GPU. GLES2 supplies that import path. Do not permit an
+        # accidental software GL fallback on a machine with usable render nodes.
+        values['WLR_RENDERER'] = 'gles2'
+    return values
 
 
 def private_file(path, maximum=65536, owner=0, retry_replaced=False):
@@ -52,6 +121,8 @@ def generation():
     manifest = json.loads(private_file(BASE / 'desktop.json', 1024 * 1024))
     if manifest['schema'] != 'greyward.protected-desktop/v1':
         raise RuntimeError('Unprepared desktop')
+    if not {'keyboard.json', 'keyboard_config.py'} <= set(manifest.get('files', {})):
+        raise RuntimeError('Installed keyboard selection is missing from protected desktop')
     for name, digest in manifest['files'].items():
         if name.startswith('/') or '..' in Path(name).parts:
             raise RuntimeError('Invalid fixed generation')
@@ -119,13 +190,12 @@ def worker(kind, uid, gid, sid):
            # Keep XDG_RUNTIME_DIR private. DMS's output-management client joins
            # it with WAYLAND_DISPLAY, so this must name the broker-created alias
            # below instead of repeating the absolute compositor socket path.
-           'WAYLAND_DISPLAY': 'wayland-0', 'WLR_RENDERER': 'pixman',
-           'WLR_RENDERER_ALLOW_SOFTWARE': '1', 'WLR_NO_HARDWARE_CURSORS': '1',
-           'WLR_DRM_NO_MODIFIERS': '1', 'QT_QUICK_BACKEND': 'software',
+           'WAYLAND_DISPLAY': 'wayland-0', 'QT_QUICK_BACKEND': 'software',
            'QT_QPA_PLATFORM': 'wayland', 'QT_QPA_PLATFORMTHEME': 'generic',
-           'QT_STYLE_OVERRIDE': 'Fusion', 'GDK_BACKEND': 'wayland', 'LIBGL_ALWAYS_SOFTWARE': '1',
+           'QT_STYLE_OVERRIDE': 'Fusion', 'GDK_BACKEND': 'wayland',
            'QV4_FORCE_INTERPRETER': '1', 'QML_DISABLE_DISK_CACHE': '1',
            'DMS_DISABLE_HOT_RELOAD': '1'}
+    env.update(renderer_environment(kind))
     if kind == 'authentication':
         # Qt's implicit clipboard is separate from DMS's disabled collector.
         # Keep focus/lock surfaces out of ordinary clipboard FD transfers.
@@ -139,9 +209,8 @@ def worker(kind, uid, gid, sid):
     elif kind == 'display':
         # The protected compositor uses its root-owned XDG config directory
         # and this explicit environment allowlist. Do not load user-writable
-        # Labwc environment files; pass the canonical French AZERTY defaults
-        # directly so wlroots does not silently fall back to US QWERTY.
-        env.update(DISPLAY_XKB_DEFAULTS)
+        # Labwc environment files; pass the root-prepared Anaconda selection.
+        env.update(protected_keyboard_environment())
         env.pop('WAYLAND_DISPLAY', None)
         env['PATH'] = '/usr/bin:/usr/sbin'
         env['XDG_CONFIG_HOME'] = str(BASE / 'labwc')
