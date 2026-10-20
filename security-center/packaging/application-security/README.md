@@ -54,6 +54,15 @@ Lifecycle, live coverage and policy/admission gates remain incomplete.
 Ordinary broker open refuses an older production database schema rather than
 silently invalidating rollback. No RPM activation/mapping change is supplied.
 
+The workflow broker also provides `GetSystemPosture() -> string`, a read-only
+aggregate for the protected DMS taskbar. It exposes only the global state and
+bounded review/unavailable counts from the existing core posture evaluator.
+It omits check evidence, paths, user activity, notifications and actions. The
+protected widget uses it only when its private session bus cannot reach the
+ordinary Security Context service; the taskbar remains non-actionable in this
+fallback. The broker refreshes the projection on demand in a separate worker,
+so a posture read cannot block administration or USB approval requests.
+
 `maintenance.py`, `greyward-maintenance.target` and its console service are
 source only and **excluded from this experimental spec**. They require explicit
 offline boot, trusted foreground tty1, no ordinary workloads and fresh LUKS
@@ -112,6 +121,16 @@ receipts remain historical (private development evidence).
 The protected login profile and readiness regression is checked from the
 repository root with
 `python3 -m unittest discover -s tests -p test_application_authentication.py`.
+The same regression verifies that Polkit authorization always requests the
+native Wayland lock, even while Administration is active or a lock retry is
+pending; password entry remains hidden until the compositor confirms the lock.
+Protected Polkit now keeps one real password field and mirrors its masked
+character count, authorization request and Cancel/Authenticate actions on the
+other protected displays. Secondary displays never receive the password text.
+The installer-selected XKB layout is still applied to the protected
+compositor, but the Polkit UI does not display a keyboard-layout label.
+`tests/test_protected_keyboard_layout.py` checks the XKB selection; the
+authentication regression checks the multi-display mask and action routing.
 
 Latest source workflow evidence is in the plan, including actual kernel grants,
 Safe Open, graphical payloads and GUI review/cancel. Full GUI commit, matched

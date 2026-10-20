@@ -128,6 +128,26 @@ compositor autostart then corrects only the known virtual-output fallback
 before the ordinary desktop is admitted. The protected Polkit readiness gate
 still must complete before the normal desktop is admitted.
 
+## Protected rendering on hybrid-GPU hardware
+
+The protected Labwc worker selects wlroots GLES2 when the machine has a usable
+DRM render node and is not a known VMware/Hyper-V virtual machine. This lets
+wlroots import client DMA-BUFs when one GPU renders and another GPU drives an
+output. The previous fixed Pixman renderer could not import those buffers; on
+`<validation-host>` its display log recorded `Renderer did not support importing DMA-BUFs`.
+
+Authentication surfaces keep their software-rendering environment. Known
+virtual GPUs and systems without a render node keep the Pixman fallback, chosen
+from read-only DMI/DRM facts rather than user-controlled variables. Cursor
+software rendering and existing compositor restrictions remain enabled. This
+renderer selection changes no SELinux rule or device-access grant.
+
+This addresses the shared rendering failure on `<validation-host>`'s AMD/Nouveau hybrid
+graphics path. The kernel also logged Nouveau DisplayPort link-training and
+watermark failures; those are independent and may still affect DP after the
+compositor begins submitting frames. Hardware validation must check each
+physical output and the pointer after a new protected login.
+
 ## ISO inclusion and validation
 
 `packaging/greyward-enrollment/build.sh` includes the Labwc patch in the

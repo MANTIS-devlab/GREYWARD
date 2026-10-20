@@ -158,6 +158,7 @@ mod tests {
             AdapterFacts::Firmware(FirmwareFacts {
                 fwupd_available: true,
                 security: FirmwareSecurityState::Unavailable,
+                security_attributes: Vec::new(),
                 updates: FirmwareUpdateState::NoneKnown,
             }),
             AdapterFacts::SecurityUpdates(SecurityUpdatesFacts {

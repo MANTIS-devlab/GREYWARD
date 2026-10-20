@@ -148,6 +148,7 @@ pub fn collect_device_facts() -> Vec<AdapterFacts> {
         &FirmwareFacts {
             fwupd_available: false,
             security: FirmwareSecurityState::Unknown,
+            security_attributes: Vec::new(),
             updates: FirmwareUpdateState::Unknown,
         },
     );
@@ -191,6 +192,7 @@ fn collect_firmware() -> FirmwareFacts {
         return FirmwareFacts {
             fwupd_available: false,
             security: FirmwareSecurityState::Unsupported,
+            security_attributes: Vec::new(),
             updates: FirmwareUpdateState::Unavailable,
         };
     }
@@ -198,15 +200,16 @@ fn collect_firmware() -> FirmwareFacts {
     // stable evidence contracts. Until the planned libfwupd binding exists,
     // use only the client's structured JSON output and fail closed when its
     // schema is absent or changes.
-    let security_state = match bounded_output("fwupdmgr", &["security", "--json"]) {
-        Ok(output) if output.status.success() => {
-            serde_json::from_slice::<serde_json::Value>(&output.stdout)
-                .map(|value| firmware_security_from_json(&value))
-                .unwrap_or(FirmwareSecurityState::Unknown)
-        }
-        Ok(_) => FirmwareSecurityState::Unavailable,
-        Err(_) => FirmwareSecurityState::Unknown,
-    };
+    let (security_state, security_attributes) =
+        match bounded_output("fwupdmgr", &["security", "--json"]) {
+            Ok(output) if output.status.success() => {
+                serde_json::from_slice::<serde_json::Value>(&output.stdout)
+                    .map(|value| firmware_security_report_from_json(&value))
+                    .unwrap_or((FirmwareSecurityState::Unknown, Vec::new()))
+            }
+            Ok(_) => (FirmwareSecurityState::Unavailable, Vec::new()),
+            Err(_) => (FirmwareSecurityState::Unknown, Vec::new()),
+        };
     let update_state = match bounded_output("fwupdmgr", &["get-updates", "--json"]) {
         Ok(output) if output.status.success() => {
             serde_json::from_slice::<serde_json::Value>(&output.stdout)
@@ -218,30 +221,8 @@ fn collect_firmware() -> FirmwareFacts {
     FirmwareFacts {
         fwupd_available: true,
         security: security_state,
+        security_attributes,
         updates: update_state,
-    }
-}
-fn json_strings_for_keys(value: &serde_json::Value, keys: &[&str], output: &mut Vec<String>) {
-    match value {
-        serde_json::Value::Object(map) => {
-            for (key, child) in map {
-                if keys
-                    .iter()
-                    .any(|candidate| key.eq_ignore_ascii_case(candidate))
-                {
-                    if let Some(text) = child.as_str() {
-                        output.push(text.to_ascii_lowercase());
-                    }
-                }
-                json_strings_for_keys(child, keys, output);
-            }
-        }
-        serde_json::Value::Array(items) => {
-            for item in items {
-                json_strings_for_keys(item, keys, output);
-            }
-        }
-        _ => {}
     }
 }
 fn json_array_presence(value: &serde_json::Value, keys: &[&str]) -> (bool, bool) {
@@ -275,33 +256,86 @@ fn json_array_presence(value: &serde_json::Value, keys: &[&str]) -> (bool, bool)
         _ => (false, false),
     }
 }
+fn bounded_json_string(value: &serde_json::Value, key: &str, max_chars: usize) -> String {
+    value
+        .get(key)
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or_default()
+        .chars()
+        .take(max_chars)
+        .collect()
+}
+
+fn firmware_security_report_from_json(
+    value: &serde_json::Value,
+) -> (FirmwareSecurityState, Vec<FirmwareSecurityAttribute>) {
+    // Only SecurityAttributes describe the current measured posture.
+    // SecurityEvents is historical and can contain prior boot results.
+    let attributes: Vec<FirmwareSecurityAttribute> = value
+        .get("SecurityAttributes")
+        .or_else(|| value.get("Attributes"))
+        .and_then(serde_json::Value::as_array)
+        .into_iter()
+        .flatten()
+        .take(64)
+        .filter_map(|attribute| {
+            if !attribute.is_object() {
+                return None;
+            }
+            let flags = attribute
+                .get("Flags")
+                .and_then(serde_json::Value::as_array)
+                .into_iter()
+                .flatten()
+                .filter_map(serde_json::Value::as_str)
+                .filter(|flag| flag.len() <= 48 && flag.starts_with("action-"))
+                .take(8)
+                .map(str::to_owned)
+                .collect();
+            Some(FirmwareSecurityAttribute {
+                id: bounded_json_string(attribute, "AppstreamId", 160),
+                name: bounded_json_string(attribute, "Name", 120),
+                result: bounded_json_string(attribute, "HsiResult", 64).to_ascii_lowercase(),
+                expected: bounded_json_string(attribute, "HsiResultSuccess", 64)
+                    .to_ascii_lowercase(),
+                summary: bounded_json_string(attribute, "Summary", 240),
+                description: bounded_json_string(attribute, "Description", 480),
+                flags,
+            })
+        })
+        .collect();
+    if attributes.is_empty() {
+        return (FirmwareSecurityState::Unknown, attributes);
+    }
+
+    let mut unsupported = false;
+    let mut unknown = false;
+    let mut insecure = false;
+    for attribute in &attributes {
+        if attribute.result.is_empty() || attribute.expected.is_empty() {
+            unknown = true;
+        } else if attribute.result == attribute.expected {
+            continue;
+        } else if matches!(attribute.result.as_str(), "not-supported" | "unsupported") {
+            unsupported = true;
+        } else {
+            insecure = true;
+        }
+    }
+    let state = if insecure {
+        FirmwareSecurityState::Insecure
+    } else if unknown {
+        FirmwareSecurityState::Unknown
+    } else if unsupported {
+        FirmwareSecurityState::Unsupported
+    } else {
+        FirmwareSecurityState::Secure
+    };
+    (state, attributes)
+}
+
 fn firmware_security_from_json(value: &serde_json::Value) -> FirmwareSecurityState {
-    let mut results = Vec::new();
-    json_strings_for_keys(
-        value,
-        &["HsiResult", "Result", "ResultFallback"],
-        &mut results,
-    );
-    if results
-        .iter()
-        .any(|result| matches!(result.as_str(), "invalid" | "not-valid" | "failed" | "fail"))
-    {
-        return FirmwareSecurityState::Insecure;
-    }
-    if !results.is_empty()
-        && results
-            .iter()
-            .all(|result| matches!(result.as_str(), "valid" | "success" | "passed" | "pass"))
-    {
-        return FirmwareSecurityState::Secure;
-    }
-    if results
-        .iter()
-        .any(|result| matches!(result.as_str(), "not-supported" | "unsupported"))
-    {
-        return FirmwareSecurityState::Unsupported;
-    }
-    FirmwareSecurityState::Unknown
+    firmware_security_report_from_json(value).0
 }
 fn firmware_updates_from_json(value: &serde_json::Value) -> FirmwareUpdateState {
     let (release_seen, release_nonempty) = json_array_presence(value, &["Releases", "releases"]);
@@ -319,25 +353,19 @@ fn firmware_updates_from_json(value: &serde_json::Value) -> FirmwareUpdateState 
     }
 }
 fn collect_security_updates() -> SecurityUpdatesFacts {
-    match bounded_output("dnf5", &["-q", "check-update", "--security"]) {
+    match bounded_output("dnf5", &["check-upgrade", "--json", "--security"]) {
         Ok(output) => {
-            let text = String::from_utf8_lossy(&output.stdout);
-            let count = text
-                .lines()
-                .filter(|line| {
-                    !line.trim().is_empty()
-                        && !line.starts_with("Last metadata")
-                        && !line.starts_with("Upgrades")
-                })
-                .count();
-            let count = u32::try_from(count).unwrap_or(u32::MAX);
-            let backend = match output.status.code() {
-                Some(0 | 100) => UpdateBackendState::Operational,
-                _ => UpdateBackendState::Error,
+            let exit_code = output.status.code();
+            let backend_operational = matches!(exit_code, Some(0 | 100));
+            let count = security_update_count(exit_code, &output.stdout);
+            let backend = if backend_operational && count.is_some() {
+                UpdateBackendState::Operational
+            } else {
+                UpdateBackendState::Error
             };
             SecurityUpdatesFacts {
                 backend,
-                available_count: Some(count),
+                available_count: if backend_operational { count } else { None },
             }
         }
         Err(_) => SecurityUpdatesFacts {
@@ -345,6 +373,23 @@ fn collect_security_updates() -> SecurityUpdatesFacts {
             available_count: None,
         },
     }
+}
+
+fn security_update_count(exit_code: Option<i32>, stdout: &[u8]) -> Option<u32> {
+    let value = serde_json::from_slice::<serde_json::Value>(stdout).ok()?;
+    if let Some(upgrades) = value.get("upgrades").and_then(serde_json::Value::as_array) {
+        return u32::try_from(upgrades.len()).ok();
+    }
+
+    // DNF5 5.4 emits an empty object when a successful security-only query
+    // finds no matching upgrades. Accept only that exact empty response and
+    // only for exit status 0; a missing schema on other statuses remains an
+    // error instead of being mistaken for a clean system.
+    if exit_code == Some(0) && value.as_object().is_some_and(|object| object.is_empty()) {
+        return Some(0);
+    }
+
+    None
 }
 pub fn collect_network_facts() -> NetworkFacts {
     let active = bounded_output(
@@ -736,9 +781,34 @@ mod firmware_tests {
     use super::*;
 
     #[test]
+    fn successful_empty_dnf5_security_result_means_no_updates() {
+        assert_eq!(security_update_count(Some(0), b"{}"), Some(0));
+        assert_eq!(
+            security_update_count(Some(0), br#"{"upgrades":[]}"#),
+            Some(0)
+        );
+        assert_eq!(
+            security_update_count(Some(100), br#"{"upgrades":[{},{}]}"#),
+            Some(2)
+        );
+        assert_eq!(security_update_count(Some(100), b"{}"), None);
+        assert_eq!(security_update_count(Some(1), b"{}"), None);
+        assert_eq!(security_update_count(Some(0), b"not-json"), None);
+        assert_eq!(
+            security_update_count(Some(0), br#"{"message":"no updates"}"#),
+            None
+        );
+    }
+
+    #[test]
     fn structured_hsi_results_are_conservative() {
         let valid = serde_json::json!({
-            "Attributes": [{"HsiResult": "valid"}, {"HsiResult": "success"}]
+            "SecurityAttributes": [
+                {"AppstreamId":"org.fwupd.hsi.Uefi.SecureBoot", "Name":"UEFI Secure Boot", "HsiResult":"enabled", "HsiResultSuccess":"enabled"},
+                {"AppstreamId":"org.fwupd.hsi.Kernel.Tainted", "Name":"Linux kernel", "HsiResult":"not-tainted", "HsiResultSuccess":"not-tainted"},
+                {"AppstreamId":"org.fwupd.hsi.Kernel.Swap", "Name":"Linux swap", "HsiResult":"encrypted", "HsiResultSuccess":"encrypted"}
+            ],
+            "SecurityEvents": [{"HsiResult":"not-valid"}]
         });
         assert_eq!(
             firmware_security_from_json(&valid),
@@ -746,14 +816,44 @@ mod firmware_tests {
         );
 
         let failed = serde_json::json!({
-            "Attributes": [{"HsiResult": "valid"}, {"HsiResult": "not-valid"}]
+            "SecurityAttributes": [
+                {"AppstreamId":"org.fwupd.hsi.Uefi.Db", "Name":"UEFI db", "HsiResult":"not-valid", "HsiResultSuccess":"valid", "Summary":"UEFI db", "Description":"The trusted EFI certificate database.", "Flags":["runtime-issue", "action-config-fw"]},
+                {"AppstreamId":"org.fwupd.hsi.EncryptedRam", "Name":"Encrypted RAM", "HsiResult":"not-supported", "HsiResultSuccess":"encrypted", "Flags":["action-config-fw"]}
+            ]
         });
         assert_eq!(
             firmware_security_from_json(&failed),
             FirmwareSecurityState::Insecure
         );
+        let (_, attributes) = firmware_security_report_from_json(&failed);
+        assert_eq!(attributes.len(), 2);
+        assert_eq!(attributes[0].name, "UEFI db");
+        assert_eq!(attributes[0].flags, vec!["action-config-fw".to_string()]);
         assert_eq!(
             firmware_security_from_json(&serde_json::json!({})),
+            FirmwareSecurityState::Unknown
+        );
+    }
+
+    #[test]
+    fn hsi_requires_a_current_report_and_a_matching_expected_result() {
+        assert_eq!(
+            firmware_security_from_json(&serde_json::json!({
+                "SecurityAttributes": [{"HsiResult":"not-valid","HsiResultSuccess":"valid"}],
+                "SecurityEvents": [{"HsiResult":"valid"}]
+            })),
+            FirmwareSecurityState::Insecure
+        );
+        assert_eq!(
+            firmware_security_from_json(&serde_json::json!({
+                "SecurityAttributes": [{"HsiResult":"not-supported","HsiResultSuccess":"encrypted"}]
+            })),
+            FirmwareSecurityState::Unsupported
+        );
+        assert_eq!(
+            firmware_security_from_json(&serde_json::json!({
+                "SecurityAttributes": [{"HsiResult":"valid"}]
+            })),
             FirmwareSecurityState::Unknown
         );
     }

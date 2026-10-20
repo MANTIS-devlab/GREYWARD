@@ -1,6 +1,6 @@
 Name: greyward-session
 Version: 0.1.0
-Release: 21%{?dist}
+Release: 22%{?dist}
 Summary: GREYWARD static desktop session policy and factory defaults
 License: GPL-3.0-only
 BuildArch: noarch
@@ -31,6 +31,8 @@ for file in greyward-dms-session-migrate greyward-dms-state-migrate greyward-dms
  install -Dm0755 environment/session/$file %{buildroot}/usr/local/libexec/$file
 done
 install -Dm0755 environment/production/greyward-start-labwc %{buildroot}/usr/local/libexec/greyward-start-labwc
+# A Windows-hosted source tree may carry CRLF into the tarball; Linux needs a byte-exact shebang.
+sed -i 's/\r$//' %{buildroot}/usr/local/libexec/greyward-start-labwc
 for unit in greyward-dms.service; do
  install -Dm0644 environment/session/$unit %{buildroot}/usr/lib/systemd/user/$unit
 done
@@ -65,6 +67,9 @@ done
 /usr/share/greyward/defaults
 
 %changelog
+* Mon Oct 19 2026 MANTIS SYSTEMS - 0.1.0-22
+- Normalize the protected session launcher to LF so its shebang works in installed systems.
+
 * Wed Oct 14 2026 MANTIS SYSTEMS - 0.1.0-21
 - Keep the packaged migration byte-identical by using Fedora's Bash interpreter path.
 

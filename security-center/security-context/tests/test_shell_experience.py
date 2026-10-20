@@ -102,9 +102,19 @@ class ShellExperienceTests(unittest.TestCase):
         self.assertTrue(any(item['id'] == 'usb-unavailable' for item in value['items']))
 
     def test_positive_display_uses_original_evidence_expiry(self):
-        deadline = "2026-10-08T11:59:59Z"
-        value = self.render(shell={"posture": {"state": "PROTECTED"}, "fresh_until": deadline})
+        import datetime as dt
+        now = dt.datetime(2026, 10, 8, 12, 0, tzinfo=dt.timezone.utc)
+        deadline = "2026-10-08T12:00:15Z"
+        value = self.render(shell={"posture": {"state": "PROTECTED"}, "fresh_until": deadline}, now_value=now)
         self.assertEqual(value['display_fresh_until'], deadline)
+        self.assertEqual(value['fresh_until'], deadline)
+
+    def test_confirmed_status_survives_bounded_collection_gap_without_extending_actions(self):
+        import datetime as dt
+        now = dt.datetime(2026, 10, 8, 12, 0, tzinfo=dt.timezone.utc)
+        deadline = "2026-10-08T12:00:05Z"
+        value = self.render(shell={"posture": {"state": "PROTECTED"}, "fresh_until": deadline}, now_value=now)
+        self.assertEqual(value['display_fresh_until'], "2026-10-08T12:00:12Z")
         self.assertEqual(value['fresh_until'], deadline)
 
     def test_missing_detection_is_history_but_unknown_source_remains_reviewable(self):

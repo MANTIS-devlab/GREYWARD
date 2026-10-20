@@ -20,11 +20,15 @@ use std::time::{Duration, Instant};
 pub const DEVELOPMENT_BROKER_BUS: &str = "systems.mantis.greyward.ApplicationSecurityDevelopment1";
 const WAIT: Duration = Duration::from_secs(6);
 const QUEUE: usize = 8;
+const SYSTEM_POSTURE_FRESHNESS: Duration = Duration::from_secs(20);
+const SYSTEM_POSTURE_DISPLAY_GRACE: Duration = Duration::from_secs(15);
+const SYSTEM_POSTURE_INITIAL_DISPLAY_GRACE: Duration = Duration::from_secs(20);
 const WORKFLOW_METHODS: &str = r#"
 <method name="StartDesktop"><arg type="b" direction="out"/></method>
 <method name="RequestAdministration"><arg type="as" direction="in"/><arg type="b" direction="out"/></method>
 <method name="GetAdministrationState"><arg type="s" direction="out"/></method>
 <method name="GetDeviceProtection"><arg type="s" direction="out"/></method>
+<method name="GetSystemPosture"><arg type="s" direction="out"/></method>
 <method name="RequestSessionLock"><arg type="b" direction="out"/></method>
 <method name="GetSessionLock"><arg type="b" direction="out"/></method>
 <method name="ReadSecurityEvents"><arg type="t" direction="in"/><arg type="u" direction="in"/><arg type="s" direction="out"/></method>
@@ -48,6 +52,7 @@ pub enum WorkflowRequest {
     Administration(Vec<String>),
     AdministrationState,
     Devices,
+    SystemPosture,
     Lock,
     LockStatus,
     Events {
@@ -161,6 +166,9 @@ impl WorkflowRequest {
         }
         if message.member().as_deref() == Some("GetDeviceProtection") && types(message, &[]) {
             return Ok(Self::Devices);
+        }
+        if message.member().as_deref() == Some("GetSystemPosture") && types(message, &[]) {
+            return Ok(Self::SystemPosture);
         }
         if message.member().as_deref() == Some("GetAdministrationState") && types(message, &[]) {
             return Ok(Self::AdministrationState);
@@ -362,6 +370,134 @@ struct Job {
     message: Option<Message>,
     deadline: Instant,
 }
+
+#[derive(Clone)]
+struct CachedSystemPosture {
+    observed: Instant,
+    value: serde_json::Value,
+}
+
+/// Read-only, system-wide status for the taskbar in the protected desktop.
+/// The normal Security Context session bus is deliberately not shared with
+/// DMS there. This projection contains only aggregate state and counts; it
+/// cannot carry user activity, notifications, file metadata or actions.
+struct SystemPostureReader {
+    cache: Arc<Mutex<Option<CachedSystemPosture>>>,
+    refresh: mpsc::SyncSender<()>,
+    last_refresh_request: Mutex<Option<Instant>>,
+}
+
+fn system_posture_projection(digest: &serde_json::Value) -> serde_json::Value {
+    let posture = digest.get("posture").cloned().unwrap_or_default();
+    let metrics = digest.get("metrics").cloned().unwrap_or_default();
+    let state = posture
+        .get("state")
+        .and_then(serde_json::Value::as_str)
+        .filter(|state| {
+            matches!(
+                *state,
+                "SECURE" | "PROTECTED" | "REVIEW NEEDED" | "UNAVAILABLE"
+            )
+        })
+        .unwrap_or("UNAVAILABLE");
+    serde_json::json!({
+        "schema": "greyward.security.system-posture/v1",
+        "state": state,
+        "review_needed": metrics.get("review_needed").and_then(serde_json::Value::as_u64).unwrap_or(0).min(255),
+        "unavailable": metrics.get("unavailable").and_then(serde_json::Value::as_u64).unwrap_or(0).min(255),
+    })
+}
+
+fn duration_millis(duration: Duration) -> u64 {
+    u64::try_from(duration.as_millis()).unwrap_or(u64::MAX)
+}
+
+impl SystemPostureReader {
+    fn start() -> Self {
+        let cache = Arc::new(Mutex::new(None));
+        let worker_cache = Arc::clone(&cache);
+        let (refresh, requests) = mpsc::sync_channel(1);
+        let _ = std::thread::Builder::new()
+            .name("system-posture-reader".into())
+            .spawn(move || {
+                while requests.recv().is_ok() {
+                    let snapshot = greyward_security_backends::collect_core_snapshot();
+                    let digest = greyward_security_backends::posture_digest(&snapshot);
+                    let value = system_posture_projection(&digest);
+                    if let Ok(mut current) = worker_cache.lock() {
+                        *current = Some(CachedSystemPosture {
+                            observed: Instant::now(),
+                            value,
+                        });
+                    }
+                }
+            });
+        Self {
+            cache,
+            refresh,
+            last_refresh_request: Mutex::new(None),
+        }
+    }
+
+    fn read(&self) -> Result<String, WorkflowError> {
+        let cached = self
+            .cache
+            .lock()
+            .map_err(|_| WorkflowError::Unavailable)?
+            .clone();
+        let now = Instant::now();
+        if let Ok(mut last) = self.last_refresh_request.lock()
+            && last.is_none_or(|requested| {
+                now.saturating_duration_since(requested) >= Duration::from_secs(5)
+            })
+        {
+            if self.refresh.try_send(()).is_ok() {
+                *last = Some(now);
+            }
+        }
+        let (mut value, age) = if let Some(cached) = cached {
+            (cached.value, now.saturating_duration_since(cached.observed))
+        } else {
+            (
+                serde_json::json!({
+                    "schema": "greyward.security.system-posture/v1",
+                    "state": "UNAVAILABLE",
+                    "review_needed": 0,
+                    "unavailable": 1,
+                    "loading": true,
+                }),
+                Duration::ZERO,
+            )
+        };
+        let loading = value
+            .get("loading")
+            .and_then(serde_json::Value::as_bool)
+            .unwrap_or(false);
+        let fresh_for = if loading {
+            Duration::from_secs(2)
+        } else {
+            SYSTEM_POSTURE_FRESHNESS.saturating_sub(age)
+        };
+        let display_for = if loading {
+            SYSTEM_POSTURE_INITIAL_DISPLAY_GRACE
+        } else {
+            SYSTEM_POSTURE_FRESHNESS
+                .saturating_add(SYSTEM_POSTURE_DISPLAY_GRACE)
+                .saturating_sub(age)
+        };
+        if let Some(object) = value.as_object_mut() {
+            object.insert(
+                "fresh_for_ms".into(),
+                serde_json::json!(duration_millis(fresh_for)),
+            );
+            object.insert(
+                "display_for_ms".into(),
+                serde_json::json!(duration_millis(display_for)),
+            );
+        }
+        serde_json::to_string(&value).map_err(|_| WorkflowError::Unavailable)
+    }
+}
 struct LaunchRecord {
     actor: ExecutionIdentity,
     exit: Option<i32>,
@@ -400,6 +536,7 @@ fn worker(
     operations: &Arc<Mutex<OperationTable>>,
     resolver: &SystemPeerResolver,
     launches: &LaunchTable,
+    system_posture: &SystemPostureReader,
 ) {
     let mut owners = BTreeMap::new();
     while let Ok(job) = jobs.recv() {
@@ -442,6 +579,10 @@ fn worker(
                         .ok_or(WorkflowError::Unavailable)?
                         .return_with_args((crate::administration::devices()?,)),
                 ));
+            }
+            if matches!(job.request, WorkflowRequest::SystemPosture) {
+                let message = job.message.as_ref().ok_or(WorkflowError::Unavailable)?;
+                return Ok(Some(message.return_with_args((system_posture.read()?,))));
             }
             if matches!(job.request, WorkflowRequest::AdministrationState) {
                 if workflow.is_some() {
@@ -695,6 +836,8 @@ fn serve_workflows(production: bool) -> Result<(), BrokerError> {
     let (jobs, receiver) = mpsc::sync_channel(QUEUE);
     let (replies, response) = mpsc::sync_channel(QUEUE);
     let worker_launches = Arc::clone(&launches);
+    let system_posture = SystemPostureReader::start();
+    let worker_system_posture = system_posture;
     std::thread::Builder::new()
         .name("application-policy-worker".into())
         .spawn(move || {
@@ -705,6 +848,7 @@ fn serve_workflows(production: bool) -> Result<(), BrokerError> {
                 &worker_operations,
                 &worker_resolver,
                 &worker_launches,
+                &worker_system_posture,
             );
         })
         .map_err(|_| BrokerError::Transport)?;
@@ -836,6 +980,46 @@ fn serve_workflows(production: bool) -> Result<(), BrokerError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn protected_desktop_posture_query_is_exact_and_sanitized() {
+        let request = Message::new_method_call(
+            DEVELOPMENT_BROKER_BUS,
+            BROKER_PATH,
+            BROKER_INTERFACE,
+            "GetSystemPosture",
+        )
+        .unwrap();
+        assert!(matches!(
+            WorkflowRequest::decode(&request),
+            Ok(WorkflowRequest::SystemPosture)
+        ));
+        let request = Message::new_method_call(
+            DEVELOPMENT_BROKER_BUS,
+            BROKER_PATH,
+            BROKER_INTERFACE,
+            "GetSystemPosture",
+        )
+        .unwrap()
+        .append1("untrusted");
+        assert!(matches!(
+            WorkflowRequest::decode(&request),
+            Err(BrokerError::UnknownMethod)
+        ));
+
+        let digest = serde_json::json!({
+            "schema": "greyward.security.posture/v1",
+            "posture": {"state": "REVIEW NEEDED"},
+            "metrics": {"review_needed": 2, "unavailable": 1},
+            "checks": [{"check_id": "sensitive.path", "evidence": "/private/user/file"}],
+        });
+        let projection = system_posture_projection(&digest);
+        assert_eq!(projection["schema"], "greyward.security.system-posture/v1");
+        assert_eq!(projection["state"], "REVIEW NEEDED");
+        assert_eq!(projection["review_needed"], 2);
+        assert!(projection.get("checks").is_none());
+        assert!(projection.get("evidence").is_none());
+    }
+
     #[test]
     fn queued_replies_preserve_the_bus_call_serial() {
         let mut call = Message::new_method_call(

@@ -334,7 +334,10 @@ function findingMarkup(finding, index) {
   const title = copy(finding.title_key || "", values) || finding.title || copy("overview.finding.unnamed");
   const summary = copy(finding.summary_key || "", values) || finding.summary || copy("overview.finding.noSummary");
   const context = copy(finding.context_key || "", values) || finding.context || copy("overview.finding.noContext");
-  return `<button class="finding-row" data-page="${esc(normalizePage(finding.destination || "system"))}"><span class="finding-copy"><strong>${esc(title)}</strong><span>${esc(summary)}</span><small>${esc(context)}</small></span><span class="finding-state">${status(finding.state || "REVIEW NEEDED", finding.tone, {canonical:true})}${icon("arrow")}</span></button>`;
+  const action = finding.destination === "updates"
+    ? "data-review-updates"
+    : `data-page="${esc(normalizePage(finding.destination || "system"))}"`;
+  return `<button class="finding-row" ${action}><span class="finding-copy"><strong>${esc(title)}</strong><span>${esc(summary)}</span><small>${esc(context)}</small></span><span class="finding-state">${status(finding.state || "REVIEW NEEDED", finding.tone, {canonical:true})}${icon("arrow")}</span></button>`;
 }
 function domainMarkup(domain) {
   const destination = domain.destination || "protection";
@@ -374,14 +377,41 @@ function evidenceValues(row) {
 function evidenceCopy(row, key, fallback) {
   return copy(row?.[key] || fallback, evidenceValues(row));
 }
+function firmwareSecurityAttributesMarkup(row) {
+  const encoded = row?.copy_values?.firmware_attributes;
+  if (!encoded) return "";
+  let attributes = [];
+  try { attributes = JSON.parse(encoded); } catch (error) { return ""; }
+  if (!Array.isArray(attributes) || !attributes.length) return "";
+  const actionCopy = {
+    "action-config-fw": "firmware.attribute.action.firmware",
+    "action-config-os": "firmware.attribute.action.system",
+    "action-contact-oem": "firmware.attribute.action.oem",
+  };
+  const rows = attributes.map((attribute) => {
+    const name = String(attribute.name || attribute.id || copy("ui.unknown"));
+    const measured = String(attribute.result || copy("ui.unknown"));
+    const expected = String(attribute.expected || copy("firmware.attribute.expectedUnknown"));
+    const summary = String(attribute.summary || "");
+    const description = String(attribute.description || "");
+    const actions = (Array.isArray(attribute.flags) ? attribute.flags : [])
+      .map((flag) => actionCopy[flag]).filter(Boolean).map((key) => copy(key));
+    return `<li><strong>${esc(name)}</strong>${summary ? `<p>${esc(summary)}</p>` : ""}<small>${esc(copy("firmware.attribute.observed", {measured, expected}))}</small>${description ? `<p>${esc(description)}</p>` : ""}${actions.length ? `<small>${esc(copy("firmware.attribute.next", {actions: actions.join(", ")}))}</small>` : ""}</li>`;
+  }).join("");
+  return `<section class="firmware-attribute-list"><h3>${esc(copy("firmware.attribute.title", {count: attributes.length}))}</h3><ul>${rows}</ul></section>`;
+}
 function evidenceNextStep(row) {
   const remediation = row?.remediation;
-  return remediation?.route && remediation?.action_key
-    ? `<button class="text-button evidence-next-action" data-page="${esc(remediation.route)}">${esc(copy(remediation.action_key, evidenceValues(row)))} ${icon("arrow")}</button>`
-    : `<span class="evidence-next-copy">${esc(evidenceCopy(row, "no_remediation_key", "evidence.remediation.noDirect"))}</span>`;
+  if (!remediation?.route || !remediation?.action_key) {
+    return `<span class="evidence-next-copy">${esc(evidenceCopy(row, "no_remediation_key", "evidence.remediation.noDirect"))}</span>`;
+  }
+  if (row.check_id === "system.security-updates" && remediation.route === "updates") {
+    return `<button class="text-button evidence-next-action" data-review-updates>${esc(copy(remediation.action_key, evidenceValues(row)))} ${icon("arrow")}</button>`;
+  }
+  return `<button class="text-button evidence-next-action" data-page="${esc(remediation.route)}">${esc(copy(remediation.action_key, evidenceValues(row)))} ${icon("arrow")}</button>`;
 }
 function evidenceResolutionMarkup(row) {
-  return `<article class="evidence-resolution-card tone-${tone(row.tone)}"><div class="evidence-resolution-top"><div class="evidence-resolution-title"><strong>${esc(evidenceCopy(row, "title_key", "system.checks.unnamed"))}</strong></div>${status(row.state, row.tone, {canonical:true})}${row.accepted_deviation ? `<span class="section-meta">${esc(copy("evidence.limitation.accepted"))}</span>` : ""}</div><div class="evidence-resolution-summary"><p>${esc(evidenceCopy(row, "summary_key", "system.checks.noSummary"))}</p></div><div class="evidence-next-step"><p>${esc(evidenceCopy(row, "recommendation_key", "system.checks.noAction"))}</p><div class="evidence-next-actions">${evidenceNextStep(row)}${deviationAction(row)}</div></div></article>`;
+  return `<article class="evidence-resolution-card tone-${tone(row.tone)}"><div class="evidence-resolution-top"><div class="evidence-resolution-title"><strong>${esc(evidenceCopy(row, "title_key", "system.checks.unnamed"))}</strong></div>${status(row.state, row.tone, {canonical:true})}${row.accepted_deviation ? `<span class="section-meta">${esc(copy("evidence.limitation.accepted"))}</span>` : ""}</div><div class="evidence-resolution-summary"><p>${esc(evidenceCopy(row, "summary_key", "system.checks.noSummary"))}</p>${row.check_id === "system.firmware.hsi" ? firmwareSecurityAttributesMarkup(row) : ""}</div><div class="evidence-next-step"><p>${esc(evidenceCopy(row, "recommendation_key", "system.checks.noAction"))}</p><div class="evidence-next-actions">${evidenceNextStep(row)}${deviationAction(row)}</div></div></article>`;
 }
 function evidenceTechnicalMarkup(row) {
   const technical = row.technical || {};
@@ -405,7 +435,10 @@ function overviewMarkup(data, digest = {}, guard = {}) {
   const nextTitle = next ? (copy(next.title_key || "", nextValues) || next.title || copy("overview.finding.unnamed")) : "";
   const nextSummary = next ? (copy(next.summary_key || "", nextValues) || next.summary || copy("overview.finding.noSummary")) : "";
   const limited = Number(overview.metrics?.unavailable || 0) > 0 && ["PROTECTED", "SECURE"].includes(posture.state);
-  const decision = next ? `<div class="brief-decision"><div class="eyebrow">${esc(t("overview.next"))}</div><h2>${esc(nextTitle)}</h2><p>${esc(nextSummary)}</p>${actionButton(copy("overview.reviewAction", {name: nextTitle}), copy("overview.reviewAction.detail"), "primary", `data-page="${esc(normalizePage(next.destination || "system"))}"`, "arrow")}</div>` : `<div class="brief-decision ${posture.state === "UNAVAILABLE" || limited ? "review" : "calm"}"><div class="eyebrow">${esc(t("overview.next"))}</div><h2>${esc(copy(posture.state === "UNAVAILABLE" ? "overview.unavailable.title" : limited ? "overview.limited.title" : "overview.noAction.title"))}</h2>${actionButton(t("overview.viewSystem"), copy("overview.viewSystem.detail"), "secondary", 'data-page="system"', "shield")}</div>`;
+  const nextAction = next?.destination === "updates"
+    ? "data-review-updates"
+    : `data-page="${esc(normalizePage(next?.destination || "system"))}"`;
+  const decision = next ? `<div class="brief-decision"><div class="eyebrow">${esc(t("overview.next"))}</div><h2>${esc(nextTitle)}</h2><p>${esc(nextSummary)}</p>${actionButton(copy("overview.reviewAction", {name: nextTitle}), copy("overview.reviewAction.detail"), "primary", nextAction, "arrow")}</div>` : `<div class="brief-decision ${posture.state === "UNAVAILABLE" || limited ? "review" : "calm"}"><div class="eyebrow">${esc(t("overview.next"))}</div><h2>${esc(copy(posture.state === "UNAVAILABLE" ? "overview.unavailable.title" : limited ? "overview.limited.title" : "overview.noAction.title"))}</h2>${actionButton(t("overview.viewSystem"), copy("overview.viewSystem.detail"), "secondary", 'data-page="system"', "shield")}</div>`;
   const findingsSection = remainingFindings.length ? `<section class="overview-section priority-section"><div class="section-heading"><div><div class="eyebrow">${esc(copy("overview.more.eyebrow"))}</div><h2>${esc(copy("overview.more.count", {count: remainingFindings.length}))}</h2></div></div><div class="finding-list">${remainingFindings.map((finding, index) => findingMarkup(finding, index + 2)).join("")}</div></section>` : "";
   const administration = `<section class="overview-protection"><span class="guard-item-icon" aria-hidden="true">${icon("terminal")}</span><div><strong>${esc(copy("administration.title"))}</strong><p>${esc(copy("administration.copy"))}</p><p id="administration-status" role="status"></p></div><button class="secondary" data-administration-open disabled>${esc(copy("administration.open"))}</button></section>`;
   return `${pageHeader(copy("overview.eyebrow"), t("nav.overview"), "", actionButton(t("ui.refresh"), copy("overview.refresh.detail"), "secondary", "data-refresh", "refresh"))}<section class="overview-brief tone-${tone(posture.tone)}"><div class="brief-index"><div class="eyebrow">${esc(copy("overview.posture.eyebrow"))}</div></div><div class="brief-main"><div class="brief-state"><div class="eyebrow">${esc(copy("design.overview.scope"))}</div><h2>${esc(copy(`design.posture.${posture.state === "SECURE" ? "secure" : posture.state === "PROTECTED" ? "protected" : posture.state === "REVIEW NEEDED" ? "review" : "unavailable"}`))}</h2></div>${posture.state === "REVIEW NEEDED" ? "" : `<p>${esc(postureMessage)}</p>`}<div class="brief-context"><span>${esc(copy(posture.care_key || "", postureValues) || posture.care || copy("overview.posture.unavailable.care"))}</span><time>${esc(t("ui.checked", {time: localizedTime(posture.evaluated_at, copy("ui.unknown"))}))}</time></div></div>${decision}</section>${findingsSection}<section id="guard-overview" aria-live="polite">${applicationView.overviewSummary(guard)}</section><div class="overview-lower product-overview"><section class="overview-section domain-section"><div class="section-heading"><div><div class="eyebrow">${esc(copy("overview.domains.eyebrow"))}</div><h2>${esc(copy("overview.domains.title"))}</h2></div><button class="text-button" data-page="system">${esc(copy("overview.domains.action"))} ${icon("arrow")}</button></div><div class="domain-list">${domains.map(domainMarkup).join("")}</div></section>${administration}${overviewActivitySection(overview, digest)}</div>`;
@@ -1870,6 +1903,7 @@ function bindContent() {
   app.querySelector("[data-guard-run]")?.addEventListener("click", event => runGuardLaunch(event.currentTarget));
   app.querySelectorAll("[data-guard-revoke]").forEach(button => button.addEventListener("click", () => runGuardReview("revocation", button)));
   app.querySelector("[data-guard-more]")?.addEventListener("click", (event) => loadMoreGuard(event.currentTarget));
+  app.querySelectorAll("[data-review-updates]").forEach((button) => button.addEventListener("click", reviewUpdates));
   app.querySelectorAll("[data-page]:not(.nav-item)").forEach((element) => element.addEventListener("click", () => loadPage(element.dataset.page)));
   app.querySelector("[data-file-context-back]")?.addEventListener("click", () => { fileContextDismissed = true; loadPage("overview"); });
   app.querySelector("[data-retry]")?.addEventListener("click", () => loadPage(currentPage, {force: true}));
@@ -2018,6 +2052,15 @@ function actionError(error, fallback) {
 }
 function beginButton(button, label) { if (!button) return; if (button.classList.contains("is-busy")) return; button.dataset.originalContent = button.innerHTML; button.disabled = true; button.setAttribute("aria-busy", "true"); button.classList.add("is-busy"); const iconSlot = button.querySelector(".action-icon"); if (iconSlot) iconSlot.innerHTML = '<span class="button-spinner" aria-hidden="true"></span>'; const labelSlot = button.querySelector(".action-label"); if (labelSlot) labelSlot.textContent = label; else button.textContent = label; }
 function endButton(button) { if (!button || !button.classList.contains("is-busy")) return; if (button.dataset.originalContent) button.innerHTML = button.dataset.originalContent; delete button.dataset.originalContent; button.disabled = false; button.removeAttribute("aria-busy"); button.classList.remove("is-busy"); }
+async function reviewUpdates() {
+  await loadPage("updates", {force: true});
+  if (currentPage !== "updates") return;
+  const data = pageCache.get("updates")?.data;
+  const presentation = data ? updatePresentation(data) : null;
+  if (presentation?.transactionActive || presentation?.phase === "READY_TO_RESTART") return;
+  const button = app.querySelector("[data-updates-refresh]");
+  if (button) await runUpdateAction("resolve_system_update", button, "CHECKING");
+}
 async function runUpdateAction(command, button, phase) { const buttons = [...app.querySelectorAll(".action-button")]; buttons.forEach((item) => { item.disabled = true; }); const pending = UPDATE_PHASE_PRESENTATION[phase] || UPDATE_PHASE_PRESENTATION.CHECKING; beginButton(button, copy(pending.stateKey)); setStatus("[data-update-status]", copy(pending.messageKey)); try { await invokeBounded(command, undefined, 15000); pageCache.delete("updates"); await loadPage("updates"); } catch (error) { setStatus("[data-update-status]", actionError(error, copy("feedback.update"))); buttons.forEach((item) => { item.disabled = false; }); endButton(button); } }
 async function probeNetwork(button) { beginButton(button, copy("network.feedback.testing")); setStatus("#network-action-status", copy("network.feedback.probing")); try { const result = await invokeBounded("get_network_protection", undefined, 9000); result.probe_feedback = copy("network.feedback.probeComplete"); pageCache.set("network", {data: result, loadedAt: Date.now()}); const frame = app.querySelector(".content-frame"); if (frame && currentPage === "network") { frame.innerHTML = renderContent("network", result); bindContent(); } } catch (error) { setStatus("#network-action-status", actionError(error, copy("network.feedback.probeAction"))); endButton(button); } }
 async function changeZone(target) { const buttons = [...app.querySelectorAll("[data-zone]")]; const button = buttons.find((item) => item.dataset.zone === target); buttons.forEach((item) => { item.disabled = true; }); beginButton(button, target === "trusted" ? copy("network.zone.trusting") : copy("network.zone.restoring")); setStatus("#network-action-status, #action-status", copy("network.zone.changing")); try { const network = await invokeBounded("get_network", undefined, 9000); if (!network.interface) throw new Error("No active connection is available."); const result = await invokeBounded("set_network_trust_zone", {interface: network.interface, target}, 15000); if (!result.ok) throw new Error(result.message || "The network zone could not be changed."); setStatus("#network-action-status, #action-status", copy("network.zone.updated")); await loadPage("network", {force: true}); } catch (error) { setStatus("#network-action-status, #action-status", actionError(error, copy("network.zone.action"))); buttons.forEach((item) => { item.disabled = false; }); endButton(button); } }

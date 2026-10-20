@@ -10,5 +10,15 @@ regexes = [
   '^8b124b52da2b0c8a54b338969ebc108488ca1caf718fb45ba6ffee6c7adfcbe0$',
   '^57ae10ee0b4c1339056ce10f9450597b95ca796bbfae65ca1d2348040e194cd5$',
   '^a7eeba0607f0e166beb7f426aac87670fd39c66f9e76bac859ffb72cfca26aea$',
+  '^4f185cdfc1cba27e6e6f1a85444d40f90f172349b82afc7f09e33c7b34652cd8$',
   '^ghp_123456789012345678$'
+]
+
+[[allowlists]]
+description = "Artifact fingerprints in the canonical DMS release manifest"
+paths = ['^environment/production/dms-release\.json$']
+regexTarget = "line"
+regexes = [
+  '^\s*"[^"]+\.(?:js|qml|json|svg|png)": "[0-9a-f]{64}",?$',
+  '^\s*"(?:usbguardAuthApprovalSha256|usbguardAuthApprovalSourceSha256)": "[0-9a-f]{64}",?$'
 ]

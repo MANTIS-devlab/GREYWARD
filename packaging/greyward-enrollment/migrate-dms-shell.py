@@ -4,7 +4,7 @@
 This is an explicit root migration. It refuses to touch a running protected
 desktop, validates the current immutable receipts and the selected DMS release,
 then updates the copied DMS executable, authentication shell, protected login
-inputs and dependent receipts as one rollback-capable operation.
+inputs, seat verifier and dependent receipts as one rollback-capable operation.
 """
 import argparse
 import hashlib
@@ -68,7 +68,8 @@ def trusted_tree(root, manifest):
 
 
 def update_desktop_manifest(manifest, release_id, binary_digest, shell_root,
-                            authentication, authentication_worker, materialize, session):
+                            authentication, authentication_worker, materialize,
+                            keyboard_json, keyboard_config, session, verifier):
     updated = json.loads(json.dumps(manifest))
     updated.setdefault('source', {})['dms'] = release_id
     files = updated['files']
@@ -85,7 +86,10 @@ def update_desktop_manifest(manifest, release_id, binary_digest, shell_root,
     files['authentication-input/authentication.json'] = digest(authentication)
     files['authentication.py'] = digest(authentication_worker)
     files['materialize.py'] = digest(materialize)
+    files['keyboard.json'] = digest(keyboard_json)
+    files['keyboard_config.py'] = digest(keyboard_config)
     files['session.py'] = digest(session)
+    files['verify.py'] = digest(verifier)
     return updated
 
 
@@ -103,9 +107,20 @@ def update_admin_manifest(manifest, new_desktop):
     return updated
 
 
+def update_verifier_manifest(manifest, verifier):
+    """Bind a refreshed seat verifier into the immutable desktop receipt."""
+    updated = json.loads(json.dumps(manifest))
+    if (updated.get('schema') != 'greyward.protected-desktop/v1'
+            or not isinstance(updated.get('files'), dict)):
+        raise RuntimeError('Protected desktop receipt is invalid')
+    updated['files']['verify.py'] = digest(verifier)
+    return updated
+
+
 def payload_matches_current(desktop, release_id, binary_digest, shell_root,
-                            authentication, authentication_worker, materialize, session):
-    """Return true only when DMS and its protected login inputs match."""
+                            authentication, authentication_worker, materialize,
+                            keyboard_json, keyboard_config, session, verifier):
+    """Return true only when DMS and protected login/verifier inputs match."""
     files = desktop.get('files', {})
     current_shell = {name[len('shell/'):]: expected for name, expected in files.items()
                      if name.startswith('shell/')}
@@ -116,7 +131,10 @@ def payload_matches_current(desktop, release_id, binary_digest, shell_root,
             and files.get('authentication-input/authentication.json') == digest(authentication)
             and files.get('authentication.py') == digest(authentication_worker)
             and files.get('materialize.py') == digest(materialize)
+            and files.get('keyboard.json') == digest(keyboard_json)
+            and files.get('keyboard_config.py') == digest(keyboard_config)
             and files.get('session.py') == digest(session)
+            and files.get('verify.py') == digest(verifier)
             and current_shell == assembled_shell)
 
 
@@ -279,6 +297,79 @@ def copy_metadata(source, target):
     os.chmod(target, 0o444)
 
 
+def migrate_verifier_only(base=BASE, admin=ADMIN,
+                          desktop_source=DESKTOP_SOURCE):
+    """Refresh only verify.py and its two receipts, with a quiescent rollback."""
+    import fcntl
+    base, admin, desktop_source = map(Path, (base, admin, desktop_source))
+    lock_fd = os.open(LOCK, os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600)
+    work = None
+    commit_started = False
+    try:
+        metadata = os.fstat(lock_fd)
+        if (not stat.S_ISREG(metadata.st_mode) or metadata.st_uid != 0
+                or metadata.st_nlink != 1 or metadata.st_mode & 0o077):
+            raise RuntimeError('Unsafe migration lock')
+        fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        desktop_path = base / 'desktop.json'
+        admin_path = admin / 'manifest.json'
+        desktop_bytes = trusted_file(desktop_path, 1024 * 1024)
+        desktop = json.loads(desktop_bytes)
+        if desktop.get('schema') != 'greyward.protected-desktop/v1':
+            raise RuntimeError('Existing protected desktop receipt is unsupported')
+        trusted_tree(base, desktop)
+        if 'verify.py' not in desktop['files']:
+            raise RuntimeError('Protected verifier is missing from its receipt')
+        accounts = {item.get('name') for item in desktop.get('accounts', {}).values()
+                    if isinstance(item, dict) and isinstance(item.get('name'), str)}
+        if not accounts:
+            raise RuntimeError('Protected desktop account receipt is missing')
+        ensure_quiescent(accounts)
+
+        admin_bytes = trusted_file(admin_path, 1024 * 1024)
+        admin_manifest = json.loads(admin_bytes)
+        verify_admin_tree(admin_manifest, admin)
+        verifier_source = desktop_source / 'verify.py'
+        verifier_bytes = trusted_file(verifier_source, 128 * 1024)
+        compile(verifier_bytes, str(verifier_source), 'exec')
+        previous_verifier = trusted_file(base / 'verify.py', 128 * 1024)
+        if digest(verifier_bytes) == digest(previous_verifier):
+            return 'Protected seat verifier already matches the verified source.'
+
+        new_desktop = update_verifier_manifest(desktop, verifier_bytes)
+        new_desktop_bytes = (json.dumps(new_desktop, indent=2) + '\n').encode()
+        new_admin = update_admin_manifest(admin_manifest, new_desktop_bytes)
+        new_admin_bytes = (json.dumps(new_admin, indent=2) + '\n').encode()
+        work = Path(tempfile.mkdtemp(prefix='.verifier-migration-', dir=base.parent))
+        os.chown(work, 0, 0)
+        os.chmod(work, 0o700)
+        ensure_quiescent(accounts)
+
+        commit_started = True
+        atomic_write(base / 'verify.py', verifier_bytes, 0o444, base / 'verify.py')
+        atomic_write(desktop_path, new_desktop_bytes, 0o444, desktop_path)
+        atomic_write(admin_path, new_admin_bytes, 0o444, admin_path)
+
+        refreshed = json.loads(trusted_file(desktop_path, 1024 * 1024))
+        trusted_tree(base, refreshed)
+        refreshed_admin = json.loads(trusted_file(admin_path, 1024 * 1024))
+        verify_admin_tree(refreshed_admin, admin)
+        if refreshed_admin.get('desktop') != digest(trusted_file(desktop_path, 1024 * 1024)):
+            raise RuntimeError('Administration receipt did not refresh')
+        return 'Protected seat verifier and dependent receipts refreshed. Log in again to use the update.'
+    except Exception:
+        if commit_started:
+            atomic_write(base / 'verify.py', previous_verifier, 0o444, base / 'verify.py')
+            atomic_write(base / 'desktop.json', desktop_bytes, 0o444, base / 'desktop.json')
+            atomic_write(admin / 'manifest.json', admin_bytes, 0o444,
+                         admin / 'manifest.json')
+        raise
+    finally:
+        if work is not None:
+            shutil.rmtree(work, ignore_errors=True)
+        os.close(lock_fd)
+
+
 def migrate(assembler=ASSEMBLER, base=BASE, admin=ADMIN,
             desktop_source=DESKTOP_SOURCE):
     import fcntl
@@ -319,6 +410,20 @@ def migrate(assembler=ASSEMBLER, base=BASE, admin=ADMIN,
         authentication_worker_bytes = trusted_file(authentication_source, 128 * 1024)
         session_source = desktop_source / 'session.py'
         session_bytes = trusted_file(session_source, 128 * 1024)
+        keyboard_config_source = desktop_source / 'keyboard_config.py'
+        keyboard_config_bytes = trusted_file(keyboard_config_source, 128 * 1024)
+        keyboard_result = subprocess.run(
+            ['/usr/bin/python3', '-I', str(keyboard_config_source), '--print-installed-json'],
+            check=True, capture_output=True, timeout=5)
+        keyboard_json_bytes = keyboard_result.stdout
+        keyboard_data = json.loads(keyboard_json_bytes)
+        # Validate against the just-read root-owned systemd-localed source.
+        namespace = {'__name__': 'greyward_keyboard_config'}
+        exec(compile(keyboard_config_bytes, str(keyboard_config_source), 'exec'), namespace)
+        keyboard_data = namespace['validate_settings'](keyboard_data)
+        keyboard_json_bytes = namespace['canonical_json'](keyboard_data)
+        verifier_source = desktop_source / 'verify.py'
+        verifier_bytes = trusted_file(verifier_source, 128 * 1024)
 
         work = Path(tempfile.mkdtemp(prefix='.dms-migration-', dir=base.parent))
         os.chown(work, 0, 0)
@@ -357,7 +462,9 @@ def migrate(assembler=ASSEMBLER, base=BASE, admin=ADMIN,
             new_binary_digest = digest(new_binary.read_bytes())
             if payload_matches_current(desktop, dms.name, new_binary_digest, new_shell,
                                        auth_bytes, authentication_worker_bytes,
-                                       materialize_bytes, session_bytes):
+                                       materialize_bytes, keyboard_json_bytes,
+                                       keyboard_config_bytes, session_bytes,
+                                       verifier_bytes):
                 return f'Protected desktop already matches {dms.name} and its verified authentication and session inputs.'
 
             subprocess.run(['/usr/bin/chcon', '-R', '-t', 'greyward_as_auth_runtime_t', str(new_shell)],
@@ -367,7 +474,9 @@ def migrate(assembler=ASSEMBLER, base=BASE, admin=ADMIN,
             new_desktop = update_desktop_manifest(desktop, dms.name, new_binary_digest,
                                                   new_shell, auth_bytes,
                                                   authentication_worker_bytes,
-                                                  materialize_bytes, session_bytes)
+                                                  materialize_bytes, keyboard_json_bytes,
+                                                  keyboard_config_bytes, session_bytes,
+                                                  verifier_bytes)
             new_desktop_bytes = (json.dumps(new_desktop, indent=2) + '\n').encode()
             new_admin = update_admin_manifest(admin_manifest, new_desktop_bytes)
             new_admin_bytes = (json.dumps(new_admin, indent=2) + '\n').encode()
@@ -385,7 +494,12 @@ def migrate(assembler=ASSEMBLER, base=BASE, admin=ADMIN,
             previous_auth = trusted_file(base / 'authentication-input/authentication.json', 1024 * 1024)
             previous_authentication_worker = trusted_file(base / 'authentication.py', 128 * 1024)
             previous_materialize = trusted_file(base / 'materialize.py', 128 * 1024)
+            previous_keyboard_json = (trusted_file(base / 'keyboard.json', 4096)
+                                      if (base / 'keyboard.json').exists() else None)
+            previous_keyboard_config = (trusted_file(base / 'keyboard_config.py', 128 * 1024)
+                                        if (base / 'keyboard_config.py').exists() else None)
             previous_session = trusted_file(base / 'session.py', 128 * 1024)
+            previous_verifier = trusted_file(base / 'verify.py', 128 * 1024)
 
             commit_started = True
             atomic_write(base / 'bin/dms', new_binary.read_bytes(), 0o555, base / 'bin/dms')
@@ -401,8 +515,14 @@ def migrate(assembler=ASSEMBLER, base=BASE, admin=ADMIN,
                          base / 'authentication.py')
             atomic_write(base / 'materialize.py', materialize_bytes, 0o444,
                          base / 'materialize.py')
+            atomic_write(base / 'keyboard.json', keyboard_json_bytes, 0o444,
+                         base / 'session.py')
+            atomic_write(base / 'keyboard_config.py', keyboard_config_bytes, 0o444,
+                         base / 'session.py')
             atomic_write(base / 'session.py', session_bytes, 0o444,
                          base / 'session.py')
+            atomic_write(base / 'verify.py', verifier_bytes, 0o444,
+                         base / 'verify.py')
             atomic_write(desktop_path, new_desktop_bytes, 0o444, desktop_path)
             atomic_write(admin_path, new_admin_bytes, 0o444, admin_path)
 
@@ -438,8 +558,19 @@ def migrate(assembler=ASSEMBLER, base=BASE, admin=ADMIN,
                              base / 'authentication.py')
                 atomic_write(base / 'materialize.py', previous_materialize, 0o444,
                              base / 'materialize.py')
+                for path, previous in ((base / 'keyboard.json', previous_keyboard_json),
+                                       (base / 'keyboard_config.py', previous_keyboard_config)):
+                    if previous is None:
+                        try:
+                            path.unlink()
+                        except FileNotFoundError:
+                            pass
+                    else:
+                        atomic_write(path, previous, 0o444, path)
                 atomic_write(base / 'session.py', previous_session, 0o444,
                              base / 'session.py')
+                atomic_write(base / 'verify.py', previous_verifier, 0o444,
+                             base / 'verify.py')
                 atomic_write(desktop_path, desktop_bytes, 0o444, desktop_path)
                 atomic_write(admin_path, admin_bytes, 0o444, admin_path)
             raise
@@ -453,9 +584,16 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--assembler', type=Path, default=ASSEMBLER,
                         help='installed trusted assembler; development migration only')
+    parser.add_argument('--refresh-verifier-only', action='store_true',
+                        help='refresh only the protected-seat verifier and its receipts')
+    parser.add_argument('--desktop-source', type=Path, default=DESKTOP_SOURCE,
+                        help='trusted root-owned desktop input directory')
     options = parser.parse_args()
     try:
-        print(migrate(options.assembler))
+        if options.refresh_verifier_only:
+            print(migrate_verifier_only(desktop_source=options.desktop_source))
+        else:
+            print(migrate(options.assembler))
     except (OSError, RuntimeError, subprocess.SubprocessError, ValueError) as error:
         parser.exit(2, f'Protected DMS migration refused: {error}\n')
 

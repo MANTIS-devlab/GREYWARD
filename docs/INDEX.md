@@ -1,15 +1,154 @@
 # GREYWARD documentation index
 
+For the canonical installer composition process, source-built package path and
+the narrowly scoped exact-installed-RPM test import, see
+[ISO creation](architecture/ISO_CREATION.md).
+
+The [post-0.3.8 bare-metal follow-up](patch-notes/post-0.3.8-bare-metal-follow-up.md)
+records the feature workflows user-confirmed as tested on physical `<validation-host>`, the
+HP OMEN hardware configuration, and the remaining build and clean-install gates.
+It is not an ISO release announcement.
+
+20 October Security Center and Polkit corrections are installed on `<validation-host>`.
+The live Fedora DNF5 security query returns `{}` with exit code 0 when no
+security updates are available; Security Center now reports that as zero
+updates instead of UNKNOWN. Nonzero exits and malformed results still remain
+unverified. Polkit now uses one bounded GREYWARD authorization card on every
+protected output; a single protected field owns the password, while the other
+outputs mirror only masked character count and send focus/actions to the same
+request. Security Center 115, Application Security 69 and Enrollment 60 are
+installed, and protected DMS 1.6.2-26 was migrated successfully. The package
+and QML structure checks pass; visual confirmation across all three physical
+screens awaits a fresh login and authorization prompt. No ISO contains these
+changes. See [current status](STATUS.md).
+
+19 October Network Protection and Protected Data correction: `<validation-host>` showed a
+stale OpenSnitch heartbeat after quiet time, although its daemon stayed
+connected. Security Context now checks the established local socket and reports
+an idle stream as healthy. Protected Data now shows the portal/deputy caveat
+only after baseline coverage is verified; a degraded state lists unconfirmed
+required checks. Correction: an earlier SSH-root `GetCoverage` query returned
+all six controls false, but it measured UID 0 in `unconfined_t`, not `example-user`'s
+protected desktop. The active `<validation-host>` seat verifier returns true in the broker's
+SELinux service context; the account-origin receipt and local account match,
+and all 312 enrollment-boundary policy readbacks pass. A coverage response from
+the real protected desktop client and the tested ISO is still needed to name
+the ISO's missing check. The candidate is not yet installed or included in an
+ISO. See
+[OpenSnitch](security-context/OPENSNITCH.md),
+[UX specification](security-center/UX_SPEC.md) and [current status](STATUS.md).
+
+19 October Greeter and Polkit display correction: production selects the pinned
+multi-screen DMS Greeter UI, provides an accessible username correction action,
+and uses the same GLES2 path validated for the protected compositor on physical
+hardware. The GREYWARD UI and launcher are deployed on `<validation-host>`; greetd loads the
+custom shell. At the latest DRM readback only the built-in display was connected,
+so the three-screen greeter result is not yet confirmed. The protected Polkit
+prompt also identifies the only screen that accepts password input. No new ISO
+has been validated. See [current status](STATUS.md),
+[desktop architecture](architecture/ARCHITECTURE.md) and
+[repository map](REPOSITORY_MAP.md).
+
+Polkit follow-up: the deployed Application Security 65 / Enrollment 56 pair
+still produces a blank authorization display. Investigation found that the
+generated lock QML refers to a nonexistent screen delegate property and emits
+an invalid multiline string; output removal can also leave the target screen
+stale. Source now uses the lock surface's screen and retargets on hotplug. The
+matched Application Security 66 / Enrollment 57 pair was superseded on
+20 October by Application Security 67 / Enrollment 58, then by the installed
+68 / 59 pair. The protected desktop migration is complete; visual acceptance
+across the physical displays awaits a fresh login. Security Context 108 is
+installed, and its incoming firewall API now returns the catalog with editing
+available. See [current status](STATUS.md).
+
+19 October Secure Boot / firmware review: `<validation-host>` now reports Secure Boot as
+secure while still showing an HSI firmware review and other independent review
+items. Source now exposes the measured and expected fwupd values in System
+Checks and keeps firmware setting changes manual. The protected DMS taskbar also
+has a source-only read-only posture fallback for its separate private bus; no
+packages have been installed for this fix yet. The matched candidate source
+tuple is Security Center 114, Security Context 107, DMS 1.6.2-26, Application
+Security 64 and Enrollment 55; it has not been built or installed. See [current status](STATUS.md),
+[backend contract](security-center/BACKENDS.md) and [live taskbar presentation](security-context/LIVE_PRIVACY_CAPSULE.md).
+
+18 October broad Wi-Fi/Bluetooth firmware baseline: future production ISOs now
+select Fedora firmware for Intel, Realtek, MediaTek, Qualcomm/Atheros,
+Broadcom/Cypress, NXP, TI WiLink and legacy Marvell Libertas devices. The
+offline stage rejects a declared firmware package missing from Anaconda's
+transaction. Installed acceptance checks the same manifest. The nine newly
+selected RPMs add 103.4 MiB of package data; Intel firmware dependencies already in the
+baseline are excluded from that total. `<validation-host>` validated Intel firmware and
+radio discovery only; the new families and a clean ISO remain untested. See
+[production package contract](../environment/production/README.md),
+[hardware testing](../HARDWARE_TESTING.md) and [current status](STATUS.md).
+
+18 October keyboard correction: `<validation-host>` is working with its installed French
+AZERTY selection. Future first boots now read the XKB selection written by
+Anaconda/systemd-localed and pass it to the greeter, normal Labwc session and
+protected compositor, with an acceptance check for mismatches. See
+[production setup](../environment/production/README.md) and [current status](STATUS.md).
+
+18 October DMS multi-display fix: the `<validation-host>` packages are now DMS 1.6.2-25,
+Application Security 0.1.0-61 and Enrollment 0.1.0-52. The protected desktop
+migration completed at the greeter; receipts and the full DMS verifier pass,
+RPM verification is clean and SELinux remains Enforcing. The next login loads
+the updated widgets; their external-display behavior still needs user
+confirmation. See [current status](STATUS.md) and [live taskbar presentation](security-context/LIVE_PRIVACY_CAPSULE.md).
+
+18 October Administration follow-up: `<validation-host>`'s retry exposed a second fail-closed
+condition after the `sudo` shebang repair. The installed policy has one newer
+role domain for the taskbar USB approval helper; saved ordinary-domain
+coverage is unchanged. Source now permits only that reviewed non-ordinary
+domain and the exact helper in the active seat scope. Application Security 61 /
+Enrollment 52 are installed on `<validation-host>`; its protected desktop migration is
+complete. The user later confirmed that the protected Administration console
+opened after the verifier correction. The candidate verifier returned
+`verified: true` against the active `<validation-host>` session and kernel policy.
+See [current status](STATUS.md) and the [USB approval contract](security-center/USB_APPROVAL.md).
+
+18 October DMS multi-display behavior: the user confirmed Network Identity and
+Security Center widgets work across the external displays after the DMS
+1.6.2-25 migration. See [desktop architecture](architecture/ARCHITECTURE.md),
+[live taskbar presentation](security-context/LIVE_PRIVACY_CAPSULE.md), and the
+[bare-metal follow-up](patch-notes/post-0.3.8-bare-metal-follow-up.md).
+
+18 October Security Center reconciliation: `<validation-host>` now has Security Center
+0.1.0-111 and Security Context 0.1.0-105, combining the firewall rule editor
+with its installed-application catalog. RPM verification and source checks pass;
+the updated window still needs visual confirmation. Details are in
+[Network Rules](security-context/NETWORK_RULES.md).
+
+18 October protected desktop renderer: capable bare-metal systems use wlroots
+GLES2 for cross-GPU DMA-BUF import; authentication and known virtual/no-render
+node systems retain Pixman. Source targets Application Security 59 / Enrollment
+50. The migration is active on `<validation-host>`; the user confirmed both external screens
+now display the desktop. Active Labwc uses GLES2. See [DMS monitor
+configuration](architecture/DMS_MONITOR_CONFIGURATION.md) and [current
+status](STATUS.md).
+
 18 October USBGuard Trust always: the installed `<validation-host>` workflow is validated
 by device/kernel/persistent-rule readback, successful protected PAM records and
 the user's confirmation of keyboard entry and matching-alert removal. Scoped
 corrections cover atomic typed readiness, private Qt IPC buffers, the Python CLI
 entrypoint, late window focus and device-hash parsing. SELinux remains Enforcing;
 unapproved devices remain blocked. Installed RPMs remain 21/53/43 (Context 103),
-with backed-up source hotfixes; next-build targets DMS 23 / Context 104 / Application Security 55 / Enrollment 46. Unplug/replug and reboot
+with backed-up source hotfixes; next-build targets DMS 25 / Context 104 / Application Security 59 / Enrollment 50. Unplug/replug and reboot
 persistence remain untested. See [current status](STATUS.md) and
 [Security Center architecture](security-context/ARCHITECTURE.md). The
 [USB approval contract](security-center/USB_APPROVAL.md) defines the next-ISO gates.
+
+
+17 October Update Center diagnosis: `<validation-host>` resolved system updates, but Apply
+failed because the root-only worker socket kept its generic SELinux label when
+enrollment loaded the dedicated label policy later in first boot. The live
+socket label is corrected; the read-only worker preflight succeeds. Enrollment
+now reapplies the label after policy installation. The desktop Apply action has
+not yet been exercised again. See [Update Center architecture](architecture/UPDATE_CENTER_ARCHITECTURE.md).
+
+Network Rules has separate application and IP workspaces, an installed-app
+selector and searchable native service definitions. Installed evidence, the
+Hyper-V rendering correction and outstanding acceptance gates are recorded in
+[network rules](security-context/NETWORK_RULES.md).
 
 16 October network-rule implementation candidate: reviewed application and
 incoming transactions reuse OpenSnitch, firewalld and protected Polkit.

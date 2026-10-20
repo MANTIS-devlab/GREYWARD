@@ -1,5 +1,407 @@
 # GREYWARD current status
 
+## Current production reference: `<validation-host>` — 20 October
+
+Use the bare-metal `<validation-host>` installation as the version authority for production:
+DMS 1.6.2-26, GREYWARD Files 1.0.0-17, Session 0.1.0-22, Security Center
+0.1.0-115, Security Context 0.1.0-108, Application Security 0.1.0-69,
+Enrollment 0.1.0-60 and Branding 0.1.0-16. The next ISO candidate must be
+composed from RPM payloads verified against that installation and pass
+embedded-package and runtime-baseline checks; matching version labels by
+themselves are not enough. The five DMS/Security Center/AppSec/Enrollment RPMs
+are imported byte-for-byte from `<validation-host>`; their import receipt explicitly records
+that source reproducibility was not verified. Session 22 is rebuilt from its
+exact installed package-owned defaults because its original RPM was unavailable.
+The internal `0.4.2-Dawn` ISO candidate passed embedded-payload validation and
+booted in a Hyper-V test VM through GRUB into the Fedora Anaconda installer. The
+installer opened its disk-encryption passphrase dialog; no installation was
+started. Its provenance records `installed_system_tested: false`, so this proves
+boot-to-installer only, not a clean installation or post-install runtime
+acceptance. The candidate is not a release image.
+
+### Security Center update status and Polkit display correction
+
+The Security Center **System checks** warning came from DNF5's real output on
+`<validation-host>`: `dnf5 check-upgrade --json --security` exits successfully and prints
+`{}` when there are no security updates. The parser previously required an
+`upgrades` field and treated this valid empty result as unknown. Security Center
+115 now interprets only that successful empty object as zero updates; an
+unsuccessful command, malformed JSON or unknown result shape still produces an
+unverified status. The exact `<validation-host>` command was rerun after installation and
+returned `{}` with exit code 0.
+
+The previous `<validation-host>` Polkit change showed a keyboard-language label and marked
+other displays view-only. That missed the requested behavior. The replacement
+keeps one protected password field as the authority and mirrors the same
+authorization request, action buttons and masked character count on every
+other protected display. Secondary surfaces receive only the count used to
+draw bullets, never the password string. Clicking a mirrored field returns
+focus to the protected input; Cancel and Authenticate invoke the same active
+Polkit request. The request summary is now a bounded, styled card so long
+network-policy details do not stretch or clip the dialog. The selected XKB
+layout still configures the protected compositor but is no longer shown in the
+Polkit prompt. The primary and mirror cards use the same bounded GREYWARD
+layout; only one surface receives the protected text input.
+
+Security Center 0.1.0-115, Application Security 0.1.0-69 and Enrollment
+0.1.0-60 are installed on `<validation-host>`; Security Context 0.1.0-108 was already
+installed. RPM verification is clean, the protected migration completed to
+DMS 1.6.2-26, and the deployed QML has the bounded primary card and masked
+multi-output mirror. Authentication tests, package builds, and repository
+gates pass. Structural checks do not prove the actual rendered result: visual
+confirmation on all three physical screens still needs a fresh login and a
+Polkit prompt. The migration asks for a fresh login to load the new protected
+shell. Candidate 0.4.2 includes the installed packages and has booted to the
+installer in a Hyper-V test VM, but it has not been installed or visually
+accepted.
+
+The first screenshot's firewalld warning is also resolved in the current
+`<validation-host>` API state: Security Context 108 is installed and its service is active.
+`GetRules(provider=incoming)` returns the firewalld catalog, `detail: null`,
+and `capabilities.edit: true`. The screenshot was captured before this state
+was refreshed; the visible page still needs a refresh after login.
+
+The dated entries below preserve what was known at each point in time. Their
+candidate tuples and pending/deployed labels are historical; use this section
+and the latest ISO-candidate record above for current state.
+
+## 19 October 0.4.1 ISO package mismatch — cause found; corrected rebuild pending
+
+Both 0.4.1 candidate ISOs used the same DMS 1.6.2-26, Security Center 113 and
+Security Context 106 RPM bytes. Their SHA-256 values did not match the RPMs
+installed on bare-metal `<validation-host>`, despite identical displayed versions. The
+previous “exact150” copy was placed in an unused import directory; composition
+continued selecting the older cached RPMs. The images also use Application
+Security 63 / Enrollment 54, which do match `<validation-host>`, and Session 22, retained for
+the corrected protected Labwc startup. Source now has an explicit installed-RPM
+import path that checks SHA-256 and RPM header identity and marks source
+validation as not performed. No corrected ISO has been built or boot-validated
+yet. See [ISO creation](architecture/ISO_CREATION.md).
+
+The user confirms that the feature workflows in the
+[post-0.3.8 bare-metal follow-up](patch-notes/post-0.3.8-bare-metal-follow-up.md)
+were tested on physical `<validation-host>` (an HP OMEN laptop), including its AMD/NVIDIA
+graphics, two external displays, Intel AX200 Wi-Fi, Intel Bluetooth, and USB
+hub. The matched source package set has not yet been composed into a new ISO;
+bare-metal testing of the installed system is distinct from clean-install
+acceptance of that future image.
+
+## 19 October Polkit blank authorization surface — defect traced; corrected package pending
+
+The `<validation-host>` desktop was on Application Security 65 / Enrollment 56 / DMS
+1.6.2-26, but the Polkit authorization display remained blank on an external
+screen. The installed generated lock QML used `modelData.name` inside a
+`WlSessionLockSurface` (whose screen is exposed as `screen`) and contained a
+literal line break inside a quoted QML string. Both can prevent the protected
+authorization card from rendering. A monitor disappearing during the prompt
+also left its selected screen name stale. Source now reads
+`lockSurface.screen.name`, retargets when Quickshell reports screen changes,
+and emits a valid escaped newline. The previous source correction only forced
+the lock and added a readiness message; it did not fix these render defects.
+
+The 66 / 57 pair was the first corrected candidate. It was superseded by
+Application Security 67 / Enrollment 58, then by 68 / 59 on 20 October. The
+68 / 59 pair is now installed and migrated on `<validation-host>`. Visual acceptance still
+requires a fresh login and authorization prompt. No ISO validation is claimed.
+
+## 19 October Network Rules firewalld status — startup race fixed in source; live API recovered
+
+The first Network Rules screenshot showed the incoming firewalld provider as
+unavailable, even though firewalld was running. A direct call to firewalld
+worked; GREYWARD's incoming-rules API did not. The root service only created its
+firewalld D-Bus adapter if firewalld already owned its bus name at service
+startup, and kept `None` permanently if it started a moment earlier. The
+adapter now uses lazy D-Bus proxies that follow firewalld name-owner changes.
+On `<validation-host>`, the incoming-rules API returned the firewalld catalog, external
+zone state and editing capability after restarting only
+`greyward-opensnitch-policy.service`. Context 0.1.0-108 built successfully;
+firewall adapter, rule transaction and normalization tests pass. Installation
+of Context 108 and a boot-startup readback remain pending.
+
+## 19 October Network Protection and Protected Data status — source correction validated; deployment pending
+
+On `<validation-host>`, the Security Center screenshot's stale-heartbeat warning was
+reproduced after a quiet period: the OpenSnitch summary stopped changing, while
+both system services remained active and `ss` showed an established
+`opensnitchd` connection to GREYWARD's root-only Unix socket. The old check used
+the timestamp of the last daemon statistics report as a heartbeat, so ordinary
+quiet time looked like a monitoring failure. Source now confirms the connected
+socket and labels a quiet stream as idle; it keeps the warning when that peer is
+gone. A real `<validation-host>` check ran the candidate as the ordinary `example-user` user and
+returned `OPERATING / IDLE / FRESH` after 42 seconds without application
+traffic. The 30 network tests and 14 user-bus tests pass on Fedora `<validation-host>`; the
+frontend's 107 tests, `cargo fmt`, `tests/static.ps1` and
+`tools/validate-repository.ps1` pass. The candidate tuple is Security Center
+0.1.0-114 and Security Context 0.1.0-107. It is not installed: `<validation-host>` has no
+`rpm-build`, and no package or service was changed.
+
+Correction to the earlier `<validation-host>` coverage note: the `GetCoverage` probe ran as
+SSH root (UID 0, SELinux `unconfined_t`), so its `UNAVAILABLE` result and six
+false fields described root, not `example-user`'s protected desktop. The active
+UID-1000 seat verifier returns `verified: true` when run in the broker's
+`unconfined_service_t` context. The installer-origin receipt matches the local
+account, the enrollment record is `PENDING_SESSION` (accepted by the provider),
+and a read-only replay of the 312 SELinux enrollment-boundary policy decisions
+found no failures. This rules out the seat verifier and those policy-boundary
+checks as the cause on `<validation-host>`; it does not substitute for a coverage snapshot
+from the real protected desktop client.
+
+The tested ISO screenshot reports `DEGRADED`, but it does not contain the
+runtime coverage fields. Its old portal/deputy sentence was static UI copy, not
+proof that baseline coverage had passed. The current source only shows that
+caveat after baseline verification and lists missing required checks for a
+degraded response. The exact ISO check remains unknown until `GetCoverage` is
+read from that ISO's real protected session; no `<validation-host>` result can stand in for
+it. This UI correction does not mark protection available.
+
+The 19 October sections below preserve the source-review snapshot as it stood
+before the subsequent bare-metal results were reported. The follow-up note is
+the current summary of those user-confirmed feature tests and the remaining
+ISO-build gates.
+
+## 19 October Greeter and protected Polkit multi-display work — deployed on .150; external outputs not currently visible to DRM
+
+Read-only inspection of .150 found /etc/greetd/config.toml still explicitly
+set WLR_RENDERER=pixman and launched the embedded DMS Greeter UI. The GREYWARD
+QML surface and username correction already existed in the production source,
+but were not deployed to the machine. The first live deployment copied those
+files to their persistent `/usr/share` and `/usr/local/libexec` locations; they
+are not RPM-owned, matching the existing production provisioner. The greetd
+configuration now selects that external shell, and its journal confirms the
+custom shell loads. The first load exposed an invalid visual `Repeater` for
+nonvisual `TextMetrics`; source now uses `Instantiator`, and the fresh `<validation-host>`
+load completed without that QML delegate warning.
+
+The previous external-display fix selected wlroots GLES2 for the protected
+desktop worker, but the greeter starts its own Labwc compositor and had been
+left to auto-select a renderer. Its production launcher now explicitly selects
+the same validated GLES2 path on physical systems, with Pixman retained for
+known virtual GPUs or systems without DRM render nodes. The source launcher was
+installed atomically on .150 and greetd restarted from the greeter. The active
+Labwc process receives `WLR_RENDERER=gles2`. At the latest readback, however,
+DRM reported only the built-in eDP panel; the two external connectors had no
+EDID and Nouveau logged DisplayPort training failures. The per-output QML and
+renderer path are present, but three-screen behavior cannot be claimed until
+the external links are detected again.
+
+The stale `/var/lib/greyward/application-security/installation/source` tree is
+not the active source: its October 12 `session.py` predates the renderer fix,
+has no RPM owner, and has no runtime consumer in the installed service or
+launcher paths. The active package source and integrity-checked protected copy
+have matching October 19 hashes. The stale tree was left untouched rather than
+deleted; current deployments use the package-owned Application Security source
+and the canonical production overlay.
+
+The protected DMS Polkit form now has GREYWARD's dark security styling. One
+display owns the password field for each authorization request; other protected
+surfaces show the selected display name and state that they are informational
+only. The PAM/Polkit flow and password value remain in the existing protected
+form and are never rendered on secondary screens. The installed Application
+Security 0.1.0-64 / Enrollment 0.1.0-55 tuple contains this Polkit change.
+No new ISO has been built or validated.
+
+## 19 October firmware review and protected taskbar fallback — source changed, live install pending
+
+The firmware adapter now compares each current fwupd HSI `HsiResult` with its
+`HsiResultSuccess`; it no longer recursively mixes current attributes with
+historical security events or assumes every successful result is the literal
+string `valid`. System Checks lists the failing/unsupported attribute names,
+measured and expected values, descriptions and supported configuration hints.
+Firmware security review no longer links to Updates when no firmware release
+is available. GREYWARD will not change UEFI settings automatically.
+
+The DMS presentation keeps a confirmed status visible across its bounded
+10-second collector cycle. The widget labels that gap as refreshing and disables
+attention/actions; the separate `fresh_until` evidence/action deadline is
+unchanged. This addresses the verified 5-second evidence lease versus 10-second
+collector cadence. It is a source change only: no package was installed on
+`<validation-host>`, and neither live DMS behavior nor the revised firmware UI has been
+validated. The protected widget now has a read-only `GetSystemPosture()` system-
+bus fallback for the known private-bus mismatch. It projects only global state
+and bounded counts; no per-user activity, notifications or actions cross the
+boundary. The root broker refreshes this projection in a separate, on-demand
+worker so posture reads cannot block administration or USB approval. Initial
+collection has a 20-second display window; a one-off system-bus read failure
+keeps only the last confirmed aggregate visible for at most 12 seconds, with
+actions and alerts cleared. This is display smoothing, not extended evidence.
+
+Read-only inspection of `<validation-host>` on 19 October confirms Secure Boot is enabled and
+the root posture helper reports `system.boot.secure-boot` as `SECURE`, while
+`system.firmware.hsi` and security updates independently need review and portal
+health is unavailable. Installed versions remain Security Center 0.1.0-111,
+Security Context 0.1.0-105, DMS 1.6.2-25 and Application Security experimental
+0.1.0-61. These source changes are not yet built or installed, and no fresh
+login, package, hardware or ISO validation is claimed.
+
+`mokutil --sb-state` and the current `fwupdmgr security` report confirm Secure
+Boot is enabled. The current HSI report still has distinct findings: Platform
+Secure Boot and SPI write protection are disabled; UEFI db is invalid; UEFI NX
+protection is disabled. Other HSI checks are not supported or have their own
+firmware/OS settings. These are the specific rows the updated System Checks
+view is designed to expose; no firmware setting was changed.
+
+At the time of this firmware-review change, the candidate package tuple was
+Security Center 0.1.0-112, Security Context 0.1.0-106, DMS 1.6.2-26,
+Application Security experimental 0.1.0-63 and Enrollment 0.1.0-54. The newer
+matched candidate tuple is recorded above. Package builds and protected-session
+migration remain pending; installed versions above are unchanged.
+
+## 18 October broad Wi-Fi/Bluetooth firmware baseline — source complete
+
+The production manifest selects Fedora 44 firmware for Intel MVM/DVM and legacy
+Intel, Realtek, MediaTek, Qualcomm/Atheros, Broadcom/Cypress, NXP, Texas
+Instruments WiLink and legacy Marvell Libertas adapters. Fedora resolves
+`iwlwifi-mld-firmware` through the existing `iwlwifi-mvm-firmware` selection;
+the shared `linux-firmware-whence` dependency is already pulled by
+`linux-firmware`. Selection is independent of build-host hardware, and these
+RPMs add no background service.
+
+The production kernel closure already includes `kernel`, `kernel-modules` and
+`kernel-modules-extra`. Offline Fedora-signed package resolution stays
+centralized on `packages.txt`; stage validation now checks that every declared
+firmware package appears in the generated Anaconda selection, while installed
+acceptance checks the same immutable package manifest. Fedora 44 Updates
+Fedora 44 Updates metadata revision `1792283140` lists 108,400,809 RPM bytes for
+the nine new direct packages (103.4 MiB). Already-selected Intel RPMs and shared
+dependencies are excluded, as is the small generated repository-metadata
+change. A composed ISO's exact byte delta is not measured.
+
+Focused image tests (40), static validation and repository validation pass.
+The local Windows environment has no Fedora DNF/RPM toolchain, so a real offline
+transaction and generated Anaconda payload were not built. No `<validation-host>` system was
+changed for this broader selection, and no ISO was built.
+Only Intel radio discovery has bare-metal evidence; clean-install and other
+vendor hardware acceptance remain pending.
+
+## 18 October `<validation-host>` Wi-Fi/Bluetooth — firmware fix installed, discovery verified
+
+The active bare-metal system has an Intel Wi-Fi 6 AX200 and an Intel Bluetooth
+controller. Their kernel drivers were present, but the kernel could not find
+the requested firmware files. Fedora 44 provides them in
+`iwlwifi-mvm-firmware` and `iwlbluetooth-firmware`, with
+`iwlwifi-mld-firmware` selected as a dependency. GREYWARD had only listed the
+base `linux-firmware` package. This was a production package-manifest omission,
+not a DMS, rfkill, SELinux or USBGuard block.
+
+Local commit `44f88c0` adds both direct firmware packages to the production
+manifest; the offline builder resolves and verifies their signed dependency
+closure, and production acceptance fails if either is absent. The 40 offline
+image tests, static checks and repository validation passed.
+
+On `<validation-host>`, DNF installed the three Fedora firmware packages and targeted
+controller re-probes succeeded. The kernel loaded Wi-Fi firmware, NetworkManager
+exposed the Wi-Fi interface and a scan found nearby networks. The Bluetooth
+firmware loaded, BlueZ reported a powered controller, and a scan discovered
+nearby devices. No network connection or Bluetooth pairing was attempted.
+Ethernet/SSH and DNS remained functional; NetworkManager, Bluetooth, USBGuard,
+firewalld and SSH remained active; SELinux stayed Enforcing; the integrated
+Bluetooth device remained allowed by USBGuard. No targeted SELinux AVCs were
+observed after the repair. Clean-ISO hardware acceptance, Wi-Fi connection,
+Bluetooth pairing/reconnection, roaming and suspend/resume remain untested.
+
+## 18 October keyboard layout — installer selection carried through
+
+`<validation-host>` currently uses the French AZERTY layout selected during its install; its
+greeter fix is active. The earlier source fix had hardcoded that layout, which
+would be wrong for a future installation selecting another keyboard. Production
+provisioning now reads Anaconda/systemd-localed's root-owned XKB record and
+validates the model, layout, variant and options. It feeds the same values to
+the greetd compositor, ordinary Labwc session defaults and the root-owned
+protected-session receipt. The protected compositor does not read user-writable
+environment files. Production acceptance compares the greeter and both session
+paths with Anaconda's installed selection. Source-level tests cover alternate
+layouts and reject malformed values; no new ISO has been built or installed.
+
+## 18 October DMS multi-display fix — installed on `<validation-host>`
+
+The previous `<validation-host>` session used DMS 1.6.2-21 while the plugin source fixes
+were in DMS 1.6.2-25. DMS 25 requires matching protected-session packages, so
+Application Security 0.1.0-61 and Enrollment 0.1.0-52 were built and installed
+with it. At the user's greeter, the existing quiescent migration refreshed the
+protected desktop and its receipts to DMS 1.6.2-25. The full DMS verifier and
+RPM verification pass; SELinux remains Enforcing. No desktop session was
+restarted by the migration. The next user login loads the new plugins; their
+behavior on both external displays still needs visual confirmation.
+
+## 18 October Administration console — launch error diagnosed
+
+The user's `<validation-host>` screenshot showed Python rejecting the `sudo` handoff before
+it could contact the protected broker. `/usr/bin/greyward-administration` was
+installed with CRLF line endings; Linux passed the trailing carriage return in
+its `#!/usr/bin/python3 -I` shebang as part of `-I`, producing Python's
+“Unknown option” error. A direct interpreter reproduction confirmed the cause.
+The source now enforces LF in Windows checkouts and both RPM payload copies,
+with Application Security 59 matched to Enrollment 50. The live `<validation-host>` wrapper
+is normalized with a root-only backup; no service, session or protection policy
+was restarted or weakened. The wrapper's RPM verification will show the live
+hotfix until a matched package set is built and installed. Source tests pass;
+the user still needs to retry an actual graphical `sudo` request.
+
+The user's retry then exposed a separate protected-session verifier failure:
+`greyward_usbguard_approval_t` was added to the confined role by the USB
+approval policy, but the verifier required the entire role-domain list to
+remain equal to its saved snapshot. The `greyward_as_ordinary` set itself is
+unchanged. Source now accepts that single reviewed non-ordinary domain and
+recognizes a running helper only when UID, SELinux context, executable and
+active logind session cgroup all match. Any other role addition, ordinary-set
+change or helper mismatch still fails closed. Application Security 61 /
+Enrollment 52 are source targets; `<validation-host>` remains on 53 / 43. Its running
+protected generation has an integrity receipt, so it must be refreshed through
+the existing quiescent migration before the desktop retry. No live protected
+files have been changed for this follow-up. The candidate verifier returned
+`verified: true` when run in a transient unconfined service against `<validation-host>`'s
+active seat and actual SELinux policy; the installed graphical Administration
+retry remains pending migration and user confirmation.
+
+## 18 October DMS multi-display fix — user confirmed working
+
+The user confirmed that Network Identity and Security Center plugins work on
+the external displays. The DMS 1.6.2-25 correction scopes Security Center
+process callbacks per output and widget; Network Identity shares one fresh
+address snapshot across outputs. The protected desktop migration and package
+integrity checks passed. Later DMS source/package revisions are documented
+separately; see the [bare-metal follow-up](patch-notes/post-0.3.8-bare-metal-follow-up.md).
+
+## 18 October Security Center package reconciliation — installed on `<validation-host>`
+
+The installed releases had diverged: `<development-host>` had Security Center 0.1.0-110 /
+Context 0.1.0-100, while `<validation-host>` had Security Center 0.1.0-100 / Context
+0.1.0-103. The `<development-host>` Security Center contained the firewall rule editor, and
+the newer `<validation-host>` Context release did not replace that missing UI. Current source
+was built as Security Center 0.1.0-111 / Context 0.1.0-105, combining the rule
+editor with the installed-application catalog and reviewed IP-rule behavior.
+
+The canonical `environment/development/build-security-center.sh` build passed
+on `<development-host>`; its Rust workspace tests passed, 88 Fedora Context network tests and
+21 frontend rule-editor tests passed, as did `tests/static.ps1` and
+`tools/validate-repository.ps1`. RPMs were installed on `<validation-host>`; `rpm -V` is
+clean, SELinux remains Enforcing, and firewalld, OpenSnitch and its policy
+service remain active. The editor/API files are present in Context 105. No
+firewall rule was created or changed. The normal Security Center window has not
+yet been visually checked after the update.
+
+| Package | NEVRA | SHA-256 |
+|---|---|---|
+| Security Center | `greyward-security-center-0.1.0-111.fc44.x86_64` | `b5d2d1e02a99e206d2a8fe76e1588289e9b04000c865edca1fb67e6f9becfb27` |
+| Security Context | `greyward-security-context-0.1.0-105.fc44.noarch` | `6e2b6b10ffba470c7e9820ae9530134207aff8d886b50d7d9a2ffc03b2df2f82` |
+
+## 18 October `<validation-host>` hybrid-GPU display fix — external screens validated
+
+The protected display worker now selects wlroots GLES2 on capable physical
+systems, while authentication surfaces and known VMware/Hyper-V or systems
+without DRM render nodes retain Pixman. `<validation-host>` is a physical HP OMEN laptop
+with AMD and NVIDIA GPUs and two DRM render nodes; it previously logged
+`Renderer did not support importing DMA-BUFs`. The backed-up worker source was
+migrated into the active protected desktop generation while the greeter was
+active. The user confirmed both external screens display the desktop after
+reconnecting, and the running Labwc process reports `WLR_RENDERER=gles2`.
+SELinux remains Enforcing; no device permissions or policy changed. Live RPMs
+remain Application Security 53 / Enrollment 43; source targets 57 / 48. Kernel
+logs also contain Nouveau DisplayPort training/watermark warnings, but both
+screens currently work. Reconnect/reboot persistence is untested. This is a
+bare-metal result, not a VM test. The next matched source tuple is Application
+Security 59 / Enrollment 50.
+
 ## 18 October `<validation-host>` Trust always — installed workflow validated
 
 The user confirms successful reconnection, physical-keyboard password entry,
@@ -44,12 +446,85 @@ Two explicitly approved graphical-session closures activated the corrections.
 SSH, USBGuard, Polkit and greetd remain active; SELinux stays Enforcing. Installed
 RPMs remain DMS 21 / Application Security 53 / Enrollment 43 / Context 103:
 these are backed-up matched source hotfixes, not newly built 22/54/45 RPMs.
-Canonical next-build inputs are DMS 23 / Context 104 / Application Security 55 /
-Enrollment 46; complete ISO staging rejects stale USB approval payloads. See
+Canonical next-build inputs are DMS 25 / Context 104 / Application Security 59 /
+Enrollment 50; complete ISO staging rejects stale USB approval payloads. See
 [the USB approval contract](security-center/USB_APPROVAL.md).
 No reboot, GitHub publication or agent-created trust decision occurred.
 Persistence across actual unplug/replug or reboot remains untested. No further
 logout is authorized; this result does not establish ISO/release acceptance.
+
+## 18 October `<validation-host>` session start — DMS verifier hotfix
+
+The 09:38 login remained on “Starting your secure desktop” because the ordinary
+DMS selector, running as the confined desktop user, tried to hash
+`/usr/libexec/greyward-usbguard-auth-approval`. SELinux correctly denied this
+cross-domain read, so `greyward-dms.service` exited and retried continuously;
+the desktop-icons service consequently could not find a ready DMS backend.
+This was a verifier integration bug, not a missing executable or a reason to
+loosen SELinux.
+
+The source verifier now hashes the protected helper only for root full
+verification. Ordinary DMS startup still verifies its selected shell and
+unprivileged taskbar helper but does not inspect the authentication-only
+executable. On `<validation-host>`, the verifier was replaced directly with this source fix
+and relabeled with `restorecon`; SELinux stayed Enforcing. The next DMS attempt
+logged `Ready!`, Quickshell `Configuration Loaded`, a connected DMS API v34,
+and the runtime checker reported `SHELL_READY` with `pong: true` at 09:47:18.
+Those are service-level signals; the user has not yet confirmed that the normal
+desktop is visible. The live RPM remains DMS 1.6.2-21 / Application Security
+0.1.0-53 / Enrollment 0.1.0-43; source targets 1.6.2-22 / 0.1.0-54 / 0.1.0-45.
+No USB approval was requested and no USBGuard rule was changed.
+
+## 18 October USBGuard approval workflow — migration and login history
+
+Before migration, the Trust always click reached the taskbar helper but failed
+before Polkit: SELinux denied its read of `authentication-ready.json`, which
+still had the general authentication-runtime label. The screenshot's
+“protected authorization session is unavailable” was that fail-closed
+response. No USB approval request or rule change occurred.
+
+The installed tuple was DMS 1.6.2-21 / Application Security 0.1.0-53 /
+Enrollment 0.1.0-43. The user logged out, and a closing-but-abandoned session
+left Labwc and DMS processes behind. After the user authorized cleanup of only
+that inactive session, migration completed and the greeter remained active.
+SELinux is Enforcing; helper executable labels match their separate domains.
+Existing readiness, instance-lock and IPC socket endpoints in `/run` also
+needed targeted relabeling because they survived the old session. Their
+expected labels now verify.
+
+The next login attempt exposed a separate packaging defect: Python interpreted
+`\\r`/`\\n` inside the generated QML template, splitting a JavaScript regular
+expression and preventing Quickshell from loading `shell.qml`. The source fix
+uses an LF character split and adds a generated-output regression check.
+Application Security 0.1.0-54 and Enrollment 0.1.0-45 are prepared in source;
+they are not yet built or installed on `<validation-host>`. No USB device is trusted yet,
+and the Trust always / Polkit / rule-readback test remains pending. See
+[Security Center architecture](security-context/ARCHITECTURE.md) and the
+[ISO runbook](architecture/ISO_CREATION.md).
+
+## 17 October Update Center on `<validation-host>`
+
+The resolved system update plan failed at Apply because the update socket had
+been created before enrollment loaded its dedicated SELinux file-context rule.
+Its stale `var_run_t` label blocked the authenticated confined helper even
+after Polkit authentication. On `<validation-host>`, the existing root-owned mode-0600
+socket was relabeled to `greyward_update_runtime_t`; SELinux remains Enforcing,
+the socket remains active, and the read-only worker preflight reports
+`AVAILABLE`. No packages were prepared or installed. Enrollment now reapplies
+the label after loading policy so a fresh installation does not repeat the
+first-boot ordering bug. The Security Center desktop Apply action still needs
+user confirmation after this repair. See [Update Center architecture](architecture/UPDATE_CENTER_ARCHITECTURE.md).
+
+Center 110 / Context 100 is installed on the development desktop. Separate
+application/IP workspaces use real installed applications and native services.
+Checks pass: 392 Context, 160 frontend (three optional browser checks skipped),
+208 Rust (22 ignored). A real outgoing-IP block/control/removal passes.
+A static rule dialog used 202.4% WebKit CPU; the tested Hyper-V CPU-painting
+mode used 1.0%. The packaged launcher now selects it automatically only when
+all detected DRM cards use hyperv_drm; its normal installed launch is verified.
+Final unlocked visual acceptance and protected GUI authentication remain pending;
+the native WebKit clipboard crash remains open. See
+[network rules](security-context/NETWORK_RULES.md).
 
 ## 16 October network rules — installed development candidate
 

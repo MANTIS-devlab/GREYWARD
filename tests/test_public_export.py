@@ -31,7 +31,10 @@ class PublicationBoundaryTests(unittest.TestCase):
         for path in ('environment/greyward.pkr.hcl', 'environment/development/provision-overlay.sh',
                      'tools/greyward-dev/common.ps1', 'tools/greyward-dev/destroy.ps1',
                      'docs/history/security-center/internal-report.md', '.secrets/id_ed25519',
-                     'output/receipt.json', 'desktop-current.png', 'id_rsa', 'server.key'):
+                     'tests/security/exploit_priv_esc.sh',
+                     'tests/security/results.md', 'output/receipt.json',
+                     '.codex-attachments/request.png', 'desktop-current.png',
+                     'id_rsa', 'server.key'):
             with self.subTest(path=path):
                 self.assertTrue(EXPORT.excluded(path, POLICY))
 

@@ -134,6 +134,12 @@ idle/current state. Thus a completed older transaction cannot replace a current
 available-update state. The user-facing Check action invokes the resolve-only
 workflow; applying and restarting remain separate actions.
 
+Selecting the Overview's security-update review action opens Updates and starts
+that same resolve-only check automatically. The Overview signal and the Update
+Center inventory are collected independently, so navigation alone can otherwise
+show an old or not-yet-resolved package list. The action never applies updates;
+the user must review the refreshed provider results and choose Apply separately.
+
 ## Provider state
 
 Every provider reports one of these states:
@@ -257,6 +263,12 @@ Result: SUCCESS
   snapshot creation without granting administrative capabilities or systemd
   service control to ordinary confined applications. Completion requires an
   explicit worker exit result; a lost handoff cannot report success.
+  The production finalizer starts this socket before account enrollment loads
+  the session SELinux policy. Enrollment therefore reapplies the policy's
+  dedicated socket file context to the already-created root-owned, mode-0600
+  socket. Its creation-time type transition still labels sockets created on
+  later boots. This keeps the existing authenticated handoff available without
+  widening the confined application's policy or granting DAC override.
   While the same helper is still authorized, it asks DNF5 to
   create `/system-update` with `DNF_SYSTEM_UPGRADE_NO_REBOOT=1` and verifies
   that the link targets the stored offline transaction. The later visible

@@ -1,0 +1,104 @@
+[
+  {
+    "term": "Authenticating...",
+    "context": "Authenticating...",
+    "reference": "Modules/Greetd/GreeterContent.qml:1185",
+    "comment": ""
+  },
+  {
+    "term": "Authentication error - try again",
+    "context": "Authentication error - try again",
+    "reference": "Modules/Greetd/GreeterContent.qml:253",
+    "comment": ""
+  },
+  {
+    "term": "Authentication failed - attempt %1 of %2",
+    "context": "Authentication failed - attempt %1 of %2",
+    "reference": "Modules/Greetd/GreeterContent.qml:261",
+    "comment": ""
+  },
+  {
+    "term": "Authentication failed - lockout can occur",
+    "context": "Authentication failed - lockout can occur",
+    "reference": "Modules/Greetd/GreeterContent.qml:263",
+    "comment": ""
+  },
+  {
+    "term": "Authentication failed - try again",
+    "context": "Authentication failed - try again",
+    "reference": "Modules/Greetd/GreeterContent.qml:265",
+    "comment": ""
+  },
+  {
+    "term": "Auto-login",
+    "context": "Auto-login",
+    "reference": "Modules/Greetd/GreeterUserPicker.qml:223",
+    "comment": ""
+  },
+  {
+    "term": "Awaiting fingerprint authentication",
+    "context": "Awaiting fingerprint authentication",
+    "reference": "Modules/Greetd/GreeterContent.qml:78",
+    "comment": ""
+  },
+  {
+    "term": "Awaiting fingerprint or security key authentication",
+    "context": "Awaiting fingerprint or security key authentication",
+    "reference": "Modules/Greetd/GreeterContent.qml:76",
+    "comment": ""
+  },
+  {
+    "term": "Awaiting security key authentication",
+    "context": "Awaiting security key authentication",
+    "reference": "Modules/Greetd/GreeterContent.qml:79",
+    "comment": ""
+  },
+  {
+    "term": "Back to user list",
+    "context": "Back to user list",
+    "reference": "Modules/Greetd/GreeterContent.qml:1341",
+    "comment": "greeter link to return from manual username entry to user picker"
+  },
+  {
+    "term": "Change username",
+    "context": "Change username",
+    "reference": "Modules/Greetd/GreeterContent.qml:1341",
+    "comment": "greeter action to correct a manually entered username"
+  },
+  {
+    "term": "Logging in...",
+    "context": "Logging in...",
+    "reference": "Modules/Greetd/GreeterContent.qml:1182",
+    "comment": ""
+  },
+  {
+    "term": "Not listed?",
+    "context": "Not listed?",
+    "reference": "Modules/Greetd/GreeterUserPicker.qml:184",
+    "comment": "greeter link to switch to manual username entry"
+  },
+  {
+    "term": "Password...",
+    "context": "Password...",
+    "reference": "Modules/Greetd/GreeterContent.qml:1188",
+    "comment": ""
+  },
+  {
+    "term": "Select user...",
+    "context": "Select user...",
+    "reference": "Modules/Greetd/GreeterUserPicker.qml:73",
+    "comment": "greeter user picker placeholder"
+  },
+  {
+    "term": "Too many failed attempts - account may be locked",
+    "context": "Too many failed attempts - account may be locked",
+    "reference": "Modules/Greetd/GreeterContent.qml:255",
+    "comment": ""
+  },
+  {
+    "term": "Username...",
+    "context": "Username...",
+    "reference": "Modules/Greetd/GreeterContent.qml:1193",
+    "comment": ""
+  }
+]

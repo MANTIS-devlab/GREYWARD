@@ -1,6 +1,6 @@
 Name:           greyward-security-context
 Version:        0.1.0
-Release:        104%{?dist}
+Release:        108%{?dist}
 Summary:        GREYWARD OpenSnitch control plane and Security Context session bus
 License:        GPL-3.0-only
 Source0:        %{name}-%{version}.tar.gz
@@ -8,6 +8,7 @@ Source0:        %{name}-%{version}.tar.gz
 BuildArch:      noarch
 BuildRequires:  python3
 Requires:       opensnitch
+Requires:       iproute
 Recommends:     libmaxminddb-utils
 Requires:       python3-dbus
 Requires:       python3-gobject-base
@@ -190,6 +191,18 @@ install -Dm0644 security-context/tmpfiles.d/greyward-secure-dns.conf %{buildroot
 
 
 %changelog
+* Mon Oct 19 2026 MANTIS SYSTEMS - 0.1.0-108
+- Keep firewall rules live across early boot races and firewalld restarts.
+
+* Mon Oct 19 2026 MANTIS SYSTEMS - 0.1.0-107
+- Treat an established GREYWARD OpenSnitch socket as healthy while the event stream is idle.
+
+* Mon Oct 19 2026 MANTIS SYSTEMS - 0.1.0-106
+- Keep confirmed taskbar posture visible during the bounded collector refresh gap.
+
+* Sun Oct 18 2026 MANTIS SYSTEMS - 0.1.0-105
+- Project installed applications safely and clarify IP rule scope/order in review.
+
 * Sun Oct 18 2026 MANTIS SYSTEMS - 0.1.0-104
 - Invoke and regression-test the fixed protected USB approval CLI entrypoint.
 

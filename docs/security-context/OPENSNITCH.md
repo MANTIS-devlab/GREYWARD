@@ -56,6 +56,14 @@ The projection includes, when the daemon reports them:
 - current OpenSnitch rules, with GREYWARD-owned typed policy rules marked
   mutable and upstream rules marked read-only.
 
+The daemon's statistics timestamp is not a periodic heartbeat: it can remain
+unchanged during ordinary quiet periods. Security Context therefore checks
+that both system services are active and that `ss` sees an established
+OpenSnitch client on GREYWARD's root-owned, mode-0600 control socket. A live
+peer with no recent connection events is shown as idle; a missing peer remains
+degraded or unavailable. The activity timestamp remains separate from this
+connection check, so idle does not invent traffic or refresh historical events.
+
 GREYWARD never copies process arguments, environment, cwd, raw protobuf
 messages, or raw nftables. firewalld remains the system/inbound owner and
 OpenSnitch remains the application interception owner; neither source is used

@@ -6,6 +6,14 @@
   const providerGlyphs = Object.freeze({RPM: "package", FLATPAK: "applications", APP_IMAGE: "package", SCRIPT: "script", MANUAL: "file"});
   const coverageKeys = ["graphical_session", "user_manager", "direct_exec", "services_and_scheduled_jobs",
     "enrolled_remote_sessions", "protected_resource_labels"];
+  const coverageLabels = Object.freeze({
+    graphical_session: "guard.coverage.graphicalSession",
+    user_manager: "guard.coverage.userManager",
+    direct_exec: "guard.coverage.applicationLaunches",
+    services_and_scheduled_jobs: "guard.coverage.backgroundServices",
+    enrolled_remote_sessions: "guard.coverage.remoteSessions",
+    protected_resource_labels: "guard.coverage.sensitiveDataLabels"
+  });
   function protection(snapshot) {
     const profile = snapshot?.effective_profile;
     const verified = snapshot?.health === "AVAILABLE" && ["PROTECTED", "ISOLATED", "TRUSTED"].includes(profile)
@@ -39,7 +47,15 @@
       const connection = connected ? "connected" : data?.coverage || data?.envelope ? "unavailable" : "reading";
       const value = protection(snapshot);
       if (!snapshot && data?.coverage?.source_state?.state === "UNAVAILABLE") value.state = "UNAVAILABLE";
-      return `<article class="guard-hero"><span class="guard-emblem" aria-hidden="true">${icon("shield")}</span><div class="guard-hero-main"><div class="eyebrow">${esc(copy("guard.protection"))}</div><h2>${esc(copy(`guard.session.${value.state}`))}</h2><p>${esc(copy(value.verified ? "guard.verified" : `guard.session.copy.${value.state}`))}</p><p class="guard-limits">${esc(copy("guard.portal.unverified"))}</p><p class="guard-connection" data-guard-connection="${connection}">${esc(copy(`guard.connection.${connection}`))}</p></div>${badge(value.state, value.verified)}<div class="guard-hero-foot"><span>${icon("lock")} ${esc(copy("guard.scope.data"))}</span><span>${icon("applications")} ${esc(copy("guard.scope.tools"))}</span><span>${icon("activity")} ${esc(copy("guard.scope.activity"))}</span></div></article>`;
+      const missingCoverage = value.state === "DEGRADED" && snapshot
+        ? coverageKeys.filter(key => snapshot.coverage?.[key] !== true).map(key => copy(coverageLabels[key]))
+        : [];
+      const limitation = value.verified
+        ? copy("guard.portal.unverified")
+        : missingCoverage.length
+          ? copy("guard.coverage.missing", {checks: missingCoverage.join(", ")})
+          : "";
+      return `<article class="guard-hero"><span class="guard-emblem" aria-hidden="true">${icon("shield")}</span><div class="guard-hero-main"><div class="eyebrow">${esc(copy("guard.protection"))}</div><h2>${esc(copy(`guard.session.${value.state}`))}</h2><p>${esc(copy(value.verified ? "guard.verified" : `guard.session.copy.${value.state}`))}</p>${limitation ? `<p class="guard-limits">${esc(limitation)}</p>` : ""}<p class="guard-connection" data-guard-connection="${connection}">${esc(copy(`guard.connection.${connection}`))}</p></div>${badge(value.state, value.verified)}<div class="guard-hero-foot"><span>${icon("lock")} ${esc(copy("guard.scope.data"))}</span><span>${icon("applications")} ${esc(copy("guard.scope.tools"))}</span><span>${icon("activity")} ${esc(copy("guard.scope.activity"))}</span></div></article>`;
     }
     function overviewSummary(data) {
       const value = protection(live(data?.coverage)?.protection);

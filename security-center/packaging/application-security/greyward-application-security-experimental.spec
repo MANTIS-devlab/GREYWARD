@@ -1,6 +1,6 @@
 Name:           greyward-application-security-experimental
 Version:        0.1.0
-Release:        55%{?dist}
+Release:        69%{?dist}
 Summary:        Experimental GREYWARD application-security runtime and Guard CLI
 License:        GPL-3.0-only AND MIT
 Source0:        %{name}-%{version}.tar.gz
@@ -81,6 +81,23 @@ install -m0444 packaging/application-security/administration/*.py packaging/appl
 install -m0555 packaging/application-security/administration/sudo-handoff \
     %{buildroot}%{_datadir}/greyward-application-security/administration/
 install -Dm0555 packaging/application-security/administration/sudo-handoff %{buildroot}%{_bindir}/greyward-administration
+# This extensionless executable has an isolated-mode argument in its shebang.
+# Normalize even archives produced outside a Git checkout so CRLF cannot turn
+# `-I` into an invalid Python option at runtime.
+python3 - <<'PY'
+from pathlib import Path
+for name in (
+    '%{buildroot}%{_datadir}/greyward-application-security/administration/sudo-handoff',
+    '%{buildroot}%{_bindir}/greyward-administration',
+):
+    path = Path(name)
+    contents = path.read_bytes().replace(b'\r\n', b'\n')
+    if b'\r' in contents:
+        raise SystemExit('Administration handoff requires LF line endings')
+    path.chmod(0o755)
+    path.write_bytes(contents)
+    path.chmod(0o555)
+PY
 install -Dm0555 greyward-admin-terminal %{buildroot}%{_libexecdir}/greyward-admin-terminal
 install -d %{buildroot}%{_datadir}/greyward-application-security/desktop
 install -m0444 packaging/application-security/desktop/*.py packaging/application-security/desktop/labwc-*.patch \
@@ -140,6 +157,50 @@ install -Dm0644 packaging/application-security/systems.mantis.greyward.Applicati
 %{_datadir}/dbus-1/system.d/systems.mantis.greyward.ApplicationSecurityDevelopment1.conf
 
 %changelog
+* Tue Oct 20 2026 MANTIS SYSTEMS - 0.1.0-69
+- Use the same centered authorization card on the protected input and mirror displays.
+- Keep one protected password field; mirror only masked input feedback and the same actions.
+
+* Tue Oct 20 2026 MANTIS SYSTEMS - 0.1.0-68
+- Mirror masked password-entry feedback and authorization actions across protected displays.
+- Replace the dense request text with a bounded, styled authorization summary.
+- Remove keyboard-layout labels from the Polkit prompt; retain the selected XKB input configuration.
+
+* Tue Oct 20 2026 MANTIS SYSTEMS - 0.1.0-67
+- Replace Polkit secondary-display text with a keyboard-routing and layout indicator.
+
+* Mon Oct 19 2026 MANTIS SYSTEMS - 0.1.0-66
+- Render Polkit on the lock surface screen and recover the target after monitor hotplug.
+- Emit valid QML for the informational displays.
+
+* Mon Oct 19 2026 MANTIS SYSTEMS - 0.1.0-65
+- Keep Polkit authentication visible by always requesting the secure Wayland lock and showing lock readiness.
+
+* Mon Oct 19 2026 MANTIS SYSTEMS - 0.1.0-64
+- Brand protected Polkit authorization and clarify the active display without changing the PAM flow.
+
+* Mon Oct 19 2026 MANTIS SYSTEMS - 0.1.0-63
+- Expose a bounded read-only system-posture projection for protected DMS.
+
+* Sun Oct 18 2026 MANTIS SYSTEMS - 0.1.0-62
+- Carry Anaconda's selected XKB layout into greetd and the protected compositor receipt.
+
+* Sun Oct 18 2026 MANTIS SYSTEMS - 0.1.0-61
+- Normalize the installed sudo handoff script before restoring its immutable mode.
+
+* Sun Oct 18 2026 MANTIS SYSTEMS - 0.1.0-60
+- Accept only the reviewed non-ordinary USB approval domain in protected-session verification.
+* Sun Oct 18 2026 MANTIS SYSTEMS - 0.1.0-59
+- Normalize the sudo handoff shebang in source checkouts and built RPM payloads.
+* Sun Oct 18 2026 MANTIS SYSTEMS - 0.1.0-58
+- Accept the matched DMS 1.6.2-25 shell receipt for protected-session assembly.
+
+* Sun Oct 18 2026 MANTIS SYSTEMS - 0.1.0-57
+- Match the protected-session package tuple to DMS 1.6.2-24.
+
+* Sun Oct 18 2026 MANTIS SYSTEMS - 0.1.0-56
+- Use hardware GLES2 rendering for the protected desktop on capable bare metal; retain Pixman for authentication and virtual/no-render-node systems.
+
 * Sun Oct 18 2026 MANTIS SYSTEMS - 0.1.0-55
 - Preserve protected Polkit keyboard focus after late window activation.
 

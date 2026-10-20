@@ -17,6 +17,32 @@ sys.dont_write_bytecode = True
 sys.path.insert(0, '/usr/lib/greyward/application-security/desktop')
 from session import BASE, STATE, AUTH_CONTEXT, DISPLAY_CONTEXT, generation, private_file, process
 
+REVIEWED_NON_ORDINARY_ROLE_TYPES = frozenset({'greyward_usbguard_approval_t'})
+USB_APPROVAL_CONTEXT = 'greyward_guard_u:greyward_guard_r:greyward_usbguard_approval_t:s0'
+USB_APPROVAL_EXECUTABLE = '/usr/libexec/greyward-usbguard-approval'
+
+
+def role_inventory_matches(expected_domains, actual_domains, expected_ordinary, actual_ordinary):
+    """Allow only the reviewed USB helper outside the immutable ordinary set."""
+    expected_domains = set(expected_domains)
+    actual_domains = set(actual_domains)
+    expected_ordinary = set(expected_ordinary)
+    actual_ordinary = set(actual_ordinary)
+    return (expected_domains <= actual_domains
+            and actual_domains - expected_domains <= REVIEWED_NON_ORDINARY_ROLE_TYPES
+            and expected_ordinary == actual_ordinary
+            and actual_ordinary <= actual_domains
+            and actual_ordinary.isdisjoint(REVIEWED_NON_ORDINARY_ROLE_TYPES))
+
+
+def reviewed_usbguard_approval(process_uid, expected_uid, context, cgroup,
+                               session_scope, executable):
+    """Admit only the fixed USB client in the active user's logind session."""
+    return (process_uid == expected_uid
+            and context == USB_APPROVAL_CONTEXT
+            and cgroup == f'0::/user.slice/user-{expected_uid}.slice/{session_scope}'
+            and str(executable) == USB_APPROVAL_EXECUTABLE)
+
 
 def kernel_decision(subject, target, cls, rights):
     root = Path('/sys/fs/selinux/class') / cls
@@ -103,7 +129,8 @@ def verify(uid):
         domains = sorted(str(t) for t in policy.lookup_role('greyward_guard_r').types()
                          if any(str(a) == 'domain' for a in t.attributes()))
         ordinary = sorted(str(t) for t in policy.lookup_typeattr('greyward_as_ordinary').expand())
-        if domains != prepared['domains'] or ordinary != prepared['ordinary']:
+        if not role_inventory_matches(prepared['domains'], domains,
+                                      prepared['ordinary'], ordinary):
             raise RuntimeError('Ordinary role coverage changed')
         if os.getxattr('/dev/tty1', 'security.selinux').decode().strip('\0') != 'system_u:object_r:greyward_as_seat_tty_t:s0':
             raise RuntimeError('Physical authentication input unavailable')
@@ -161,6 +188,10 @@ def verify(uid):
                 if context in ordinary_contexts:
                     continue
                 cgroup = (path / 'cgroup').read_text().strip()
+                if context == USB_APPROVAL_CONTEXT and reviewed_usbguard_approval(
+                        path.stat().st_uid, uid, context, cgroup, seat['scope'],
+                        (path / 'exe').resolve()):
+                    continue
                 if context in {AUTH_CONTEXT, DISPLAY_CONTEXT} and cgroup.endswith('/' + seat['scope']):
                     if context == DISPLAY_CONTEXT:
                         if int(path.name) != seat['workers'][0]['pid'] or (path / 'exe').resolve() != BASE / 'bin/labwc':

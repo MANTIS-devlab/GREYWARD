@@ -61,3 +61,18 @@ class ComponentCacheTests(unittest.TestCase):
         with self.assertRaisesRegex(SystemExit, 'Increment package revision'):
             self.invoke()
         self.assertEqual(self.builds, 1)
+
+
+
+class ComponentBuildCommandTests(unittest.TestCase):
+    def test_root_security_build_drops_to_the_selected_unprivileged_account(self):
+        repo = Path('test-repo')
+        output = Path('component-cache')
+        command = components.security_build_command(
+            repo, repo/'security-center', output/'security/rpms',
+            'builder', output.parent/'cargo-target', output.parent/'rpmbuild-work',
+        )
+        self.assertEqual(command[:5], ['runuser', '-u', 'builder', '--', 'env'])
+        self.assertIn(f'GREYWARD_SECURITY_CENTER_SOURCE={repo / "security-center"}', command)
+        self.assertIn(f'GREYWARD_SECURITY_CENTER_OUTPUT={output / "security" / "rpms"}', command)
+        self.assertEqual(command[-2:], ['bash', repo/'environment/development/build-security-center.sh'])

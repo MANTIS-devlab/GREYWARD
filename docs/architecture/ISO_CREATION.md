@@ -1,3 +1,25 @@
+# GREYWARD ISO candidate — 20 October 2026
+
+The internal `0.4.2-Dawn` offline installer ISO was composed using the package
+versions recorded for the bare-metal `<validation-host>` production reference.
+Five installed component RPMs were imported by verified hash; their source
+reproducibility was not performed. Session 22 was rebuilt from the installed
+package-owned defaults because its original RPM was unavailable.
+
+| Evidence | Result |
+| --- | --- |
+| ISO | `GREYWARD-0.4.2-Dawn-x86_64.iso` |
+| SHA-256 | `f181bb79c84b98fb90096e4f76664bf50a5e78b47843248c5785033b7ef2a8a1` |
+| Size | 5,423,562,752 bytes |
+| Fedora Everything input SHA-256 | `bd285201494dd0ba09b54d05ac707de1401668b8512a573edb5922dcf9d7067e` |
+| Production package tuple | DMS 1.6.2-26; Files 1.0.0-17; Session 0.1.0-22; Security Center 0.1.0-115; Security Context 0.1.0-108; Application Security 0.1.0-69; Enrollment 0.1.0-60; Branding 0.1.0-16 |
+| Image checks | Production stage and extracted-stage validation passed; transferred SHA-256 matched; VMware ISO validation passed (`required_paths=40`) |
+| Test-VM boot | GRUB appeared, then Anaconda reached Installation Summary and opened its disk-encryption passphrase dialog. No install was started. |
+| Install/runtime acceptance | Not performed. The ISO manifest has `installed_system_tested: false`; installer dependency resolution passed and network is not required. |
+
+This confirms boot into the installer only. It does not establish clean-install
+or installed-desktop acceptance. The candidate remains internal and unreleased.
+
 # Installer source build
 
 The public installer implementation is `environment/image/`. Its entry point

@@ -11,7 +11,7 @@ BuildRequires: golang >= 1.26.5
 BuildRequires: python3
 BuildRequires: make
 Requires: quickshell >= 0.3.1
-Requires: greyward-security-context >= 0.1.0-104%{?dist}
+Requires: greyward-security-context >= 0.1.0-106%{?dist}
 Requires: python3
 Requires: bash
 Requires: jq
@@ -118,6 +118,15 @@ PY
 /etc/xdg/quickshell/dms-plugins
 
 %changelog
+* Mon Oct 19 2026 GREYWARD <build@mantis.systems> - 1.6.2-26
+- Provide protected DMS a read-only aggregate posture source on the system bus.
+
+* Sun Oct 18 2026 GREYWARD <build@mantis.systems> - 1.6.2-25
+- Scope Security Center plugin process IDs to each display and widget instance.
+
+* Sun Oct 18 2026 GREYWARD <build@mantis.systems> - 1.6.2-24
+- Share one memory-only Network Identity lookup across displays and scope process IDs per bar instance.
+
 * Sun Oct 18 2026 GREYWARD <build@mantis.systems> - 1.6.2-22
 - Keep the confined desktop selector from reading the protected USB approval helper.
 - Consume the private atomic USB availability projection; disable unnecessary Go cgroup CPU discovery.

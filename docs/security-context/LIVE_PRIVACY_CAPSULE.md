@@ -33,11 +33,13 @@ no frontend security monitor or notification emitter is installed.
 
 The presentation has separate deadlines: `fresh_until` remains the evidence
 and action lease; additive `display_fresh_until` permits a confirmed unavailable
-observation to explain its warnings for 30 seconds. It never renews positive
-security evidence or enables actions. Deadline-only renewal does not change the
-content revision or repeat notifications. Transport failure expires the display;
-missing detection source files remain in history but leave active shell alerts.
-Both GLib D-Bus entrypoints initialize threading before starting observers.
+observation to explain its warnings for 30 seconds and keeps a confirmed status
+visible through the bounded 10-second collection cycle. During that short gap,
+the taskbar says it is refreshing and disables actions/attention. This never
+renews positive security evidence or enables actions. Deadline-only renewal does
+not change the content revision or repeat notifications. Missing detection
+source files remain in history but leave active shell alerts. Both GLib D-Bus
+entrypoints initialize threading before starting observers.
 See the development stability receipt (private development evidence).
 
 Secure DNS, firewall and device-protection warning items carry a
@@ -61,6 +63,16 @@ Missing shared checks remain unavailable rather than inheriting overall success.
 Security Context owns collection, event generations, freshness, aggregation,
 and policy interpretation. DMS owns only presentation, accessibility, flyout
 navigation, and typed action dispatch.
+
+The protected DMS compositor has its own private session bus and intentionally
+cannot subscribe to the ordinary user's Security Context bus. When that private
+bus has no `GetShellPresentation()` owner, the taskbar reads
+`ApplicationSecurity1.GetSystemPosture()` over the system bus. This fallback
+contains only aggregate system posture and bounded counts, never per-user
+activity, notification items or actions. A confirmed result remains displayable
+through a short read-refresh gap; its evidence lease is not extended. If both
+providers are unavailable, the taskbar reports that state consistently and
+retries without creating alerts.
 
 ## Taskbar presentation
 
@@ -86,6 +98,20 @@ Graphite opaque surfaces, silver
 edges, 16/14/13/12-pixel type and 34-pixel action targets are shared with the
 GREYWARD-only DMS notification patch. DMS's None animation setting removes the
 widget's size and color transitions. Deferred capabilities remain hidden.
+
+### Multiple displays
+
+Each DMS output creates its own `greywardSecure` widget, while DMS's process
+service is shared by the whole shell and indexes pending commands by request
+ID. Reusing a fixed ID let one output replace another output's completion
+callback, leaving some taskbar instances without refreshed status or action
+feedback. The widget now scopes every DMS process request to both its output
+name and a per-instance token. Each output reads the same Security Context
+presentation and keeps its own action feedback; a click dispatches once through
+the existing protected path. This changes callback routing only: it adds no
+authority, persistent data or security-policy exception. The source regression
+check is in `tests/test_application_authentication.py` and `tests/static.ps1`;
+the live multi-display check on `<validation-host>` remains pending.
 
 ## Shared lifecycle and actions
 

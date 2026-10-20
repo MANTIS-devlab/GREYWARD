@@ -16,6 +16,95 @@ SESSION_SPEC.loader.exec_module(session)
 
 
 class DesktopLifetime(unittest.TestCase):
+    def test_hybrid_gpu_display_uses_gles2_but_authentication_stays_software(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            dmi = root / 'sys/class/dmi/id'
+            drm = root / 'sys/class/drm'
+            dri = root / 'dev/dri'
+            dmi.mkdir(parents=True)
+            (dmi / 'sys_vendor').write_text('ASUSTeK COMPUTER INC.')
+            (dmi / 'product_name').write_text('ROG laptop')
+            (dmi / 'board_vendor').write_text('ASUSTeK')
+            (drm / 'card1/device').mkdir(parents=True)
+            (drm / 'card1/device/vendor').write_text('0x10de')
+            (drm / 'card2/device').mkdir(parents=True)
+            (drm / 'card2/device/vendor').write_text('0x1002')
+            dri.mkdir(parents=True)
+            (dri / 'renderD128').touch()
+            (dri / 'renderD129').touch()
+
+            args = (dmi, drm, dri)
+            display = session.renderer_environment('display', *args)
+            authentication = session.renderer_environment('authentication', *args)
+
+            self.assertEqual(display['WLR_RENDERER'], 'gles2')
+            self.assertNotIn('LIBGL_ALWAYS_SOFTWARE', display)
+            self.assertNotIn('WLR_RENDERER_ALLOW_SOFTWARE', display)
+            self.assertEqual(display['WLR_NO_HARDWARE_CURSORS'], '1')
+            self.assertEqual(display['WLR_DRM_NO_MODIFIERS'], '1')
+            self.assertEqual(authentication['WLR_RENDERER'], 'pixman')
+            self.assertEqual(authentication['LIBGL_ALWAYS_SOFTWARE'], '1')
+
+    def test_protected_display_keeps_pixman_for_virtual_and_no_render_node_systems(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            dmi = root / 'sys/class/dmi/id'
+            drm = root / 'sys/class/drm'
+            dri = root / 'dev/dri'
+            dmi.mkdir(parents=True)
+            (dmi / 'sys_vendor').write_text('Microsoft Corporation')
+            (dmi / 'product_name').write_text('Virtual Machine')
+            (dmi / 'board_vendor').write_text('Microsoft')
+            (drm / 'card0/device').mkdir(parents=True)
+            (drm / 'card0/device/vendor').write_text('0x1414')
+            dri.mkdir(parents=True)
+            (dri / 'renderD128').touch()
+
+            display = session.renderer_environment('display', dmi, drm, dri)
+
+            self.assertEqual(display['WLR_RENDERER'], 'pixman')
+            self.assertEqual(display['LIBGL_ALWAYS_SOFTWARE'], '1')
+
+            (dmi / 'product_name').write_text('Physical Workstation')
+            (dmi / 'sys_vendor').write_text('Example Hardware')
+            (dmi / 'board_vendor').write_text('Example Hardware')
+            (drm / 'card0/device/vendor').write_text('0x1002')
+            (dri / 'renderD128').unlink()
+            self.assertEqual(
+                session.renderer_environment('display', dmi, drm, dri)['WLR_RENDERER'],
+                'pixman')
+
+    def test_worker_sets_renderer_per_protected_scope(self):
+        library = SimpleNamespace(setexeccon=lambda value: 0)
+
+        def capture(kind):
+            captured = {}
+            def execve(command, args, env):
+                captured.update(env)
+            with mock.patch.object(session, 'generation', return_value={'accounts': {
+                    '1001': {'name': 'user', 'home': '/home/user'}}}), \
+                 mock.patch.object(session.os, 'read', return_value=b'G'), \
+                 mock.patch.object(session.os, 'close'), \
+                 mock.patch.object(session.os, 'setgroups', create=True), \
+                 mock.patch.object(session.os, 'setgid', create=True), \
+                 mock.patch.object(session.os, 'setuid', create=True), \
+                 mock.patch.object(session.ctypes, 'CDLL', return_value=library), \
+                 mock.patch.object(session, 'requires_software_renderer', return_value=False), \
+                 mock.patch.object(session, 'protected_keyboard_environment', return_value={
+                     'XKB_DEFAULT_MODEL': 'pc105', 'XKB_DEFAULT_LAYOUT': 'us'}), \
+                 mock.patch.object(session.os, 'execve', side_effect=execve):
+                session.worker(kind, 1001, 1001, 'test-session')
+            return captured
+
+        display = capture('display')
+        authentication = capture('authentication')
+        self.assertEqual(display['WLR_RENDERER'], 'gles2')
+        self.assertEqual(display['XKB_DEFAULT_LAYOUT'], 'us')
+        self.assertNotIn('LIBGL_ALWAYS_SOFTWARE', display)
+        self.assertEqual(authentication['WLR_RENDERER'], 'pixman')
+        self.assertEqual(authentication['LIBGL_ALWAYS_SOFTWARE'], '1')
+
     def test_qt_clipboard_protocol_suppression_is_private_and_keeps_native_authentication(self):
         captured = {}
         def capture(command, args, env): captured.update(env)
@@ -29,6 +118,8 @@ class DesktopLifetime(unittest.TestCase):
                  mock.patch.object(session.os,'setgid',create=True), \
                  mock.patch.object(session.os,'setuid',create=True), \
                  mock.patch.object(session.ctypes,'CDLL',return_value=library), \
+                 mock.patch.object(session,'protected_keyboard_environment',return_value={
+                     'XKB_DEFAULT_MODEL':'pc105','XKB_DEFAULT_LAYOUT':'fr'}), \
                  mock.patch.object(session.os,'execve',side_effect=capture):
                 session.worker(kind,1001,1001,'test-session')
             if kind=='authentication':

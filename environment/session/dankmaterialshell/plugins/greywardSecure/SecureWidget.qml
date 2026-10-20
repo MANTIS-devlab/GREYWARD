@@ -13,7 +13,17 @@ PluginComponent {
     layerNamespacePlugin: "greyward-secure"
     readonly property string busName: "systems.mantis.greyward.SecurityContext1"
     readonly property string objectPath: "/systems/mantis/greyward/SecurityContext1"
+    readonly property string systemBusName: "systems.mantis.greyward.ApplicationSecurity1"
+    readonly property string systemObjectPath: "/systems/mantis/greyward/ApplicationSecurity1"
     readonly property string usbguardApproval: "/usr/libexec/greyward-usbguard-approval"
+    readonly property string instanceToken: Math.random().toString(36).slice(2)
+    // DMS Proc is shared across output bars, so every callback ID needs a
+    // screen and widget scope to prevent one bar replacing another's callback.
+    readonly property string processCommandPrefix: {
+        const screenName = String(parentScreen?.name || "unknown")
+            .replace(/[^A-Za-z0-9_.-]/g, "_")
+        return "greywardSecure." + screenName + "." + instanceToken + "."
+    }
     // The shell projection itself has a 30-second bounded freshness lease.
     // Do not place recovery on the same edge: a missed D-Bus signal previously
     // made the pill discard its live content before the fallback read returned.
@@ -53,9 +63,9 @@ PluginComponent {
     readonly property var items: showingSnapshot ? presentation.notification_items || [] : []
     readonly property var activities: showingSnapshot ? presentation.activity || [] : []
     readonly property var primaryItem: items.length ? items[0] : null
-    readonly property string statusLabel: displayFresh ? presentation.label || qsTr("Status unavailable") : initialized ? qsTr("Status unavailable") : qsTr("Connecting")
-    readonly property string statusReason: displayFresh ? presentation.reason || "" : initialized ? qsTr("Current security status cannot be confirmed") : qsTr("Reading security status")
-    readonly property color accent: !displayFresh ? "#aebbc4" : presentation.severity === "CRITICAL" ? "#eeaaa7" : ["ACTION", "WARNING"].includes(presentation.severity) ? "#e5c084" : "#c5d4de"
+    readonly property string statusLabel: !displayFresh ? initialized ? qsTr("Status unavailable") : qsTr("Connecting") : !fresh ? qsTr("Refreshing security status") : presentation.label || qsTr("Status unavailable")
+    readonly property string statusReason: !displayFresh ? initialized ? qsTr("Current security status cannot be confirmed") : qsTr("Reading security status") : !fresh ? qsTr("The last confirmed status is shown. Actions are paused while GREYWARD refreshes it.") : presentation.reason || ""
+    readonly property color accent: !fresh ? "#aebbc4" : presentation.severity === "CRITICAL" ? "#eeaaa7" : ["ACTION", "WARNING"].includes(presentation.severity) ? "#e5c084" : "#c5d4de"
     readonly property var liveIcons: {
         const result = []; const seen = {};
         for (const item of activities) {
@@ -75,10 +85,77 @@ PluginComponent {
         try { return JSON.parse(match[1].replace(/\\'/g, "'").replace(/\\\\/g, "\\")); } catch (error) { return null; }
     }
     function variantString(value) { return '"' + String(value).replace(/\\/g, "\\\\").replace(/"/g, '\\"') + '"'; }
+    function processCommandId(operation) { return root.processCommandPrefix + operation; }
     function call(method, args, callback) {
-        Proc.runCommand("greywardSecure." + method, ["/usr/bin/gdbus", "call", "--session", "--timeout", "6", "--dest", busName, "--object-path", objectPath, "--method", busName + "." + method].concat(args || []), function(stdout, code) {
+        Proc.runCommand(root.processCommandId(method), ["/usr/bin/gdbus", "call", "--session", "--timeout", "6", "--dest", busName, "--object-path", objectPath, "--method", busName + "." + method].concat(args || []), function(stdout, code) {
             callback(code === 0 ? root.decodeGdbusJson(stdout) : null);
-        });
+        }, 0, 10000, root);
+    }
+    function readProtectedDesktopPosture(generation, callback) {
+        Proc.runCommand(root.processCommandId("system-posture." + generation), ["/usr/bin/gdbus", "call", "--system", "--timeout", "6", "--dest", systemBusName, "--object-path", systemObjectPath, "--method", "systems.mantis.greyward.ApplicationSecurity1.GetSystemPosture"], function(stdout, code) {
+            const posture = code === 0 ? root.decodeGdbusJson(stdout) : null;
+            callback(posture?.schema === "greyward.security.system-posture/v1" ? posture : null);
+        }, 0, 10000, root);
+    }
+    function applyProtectedDesktopPosture(posture) {
+        const now = Date.now();
+        const loading = posture.loading === true;
+        const state = String(posture.state || "UNAVAILABLE").toUpperCase();
+        const label = loading ? qsTr("Connecting") : ["SECURE", "PROTECTED"].includes(state) ? qsTr("Protected") : state === "REVIEW NEEDED" ? qsTr("Review needed") : qsTr("Status unavailable");
+        const reason = loading ? qsTr("Reading system security status") : state === "REVIEW NEEDED" ? qsTr("Review the system findings in Security Center") : ["SECURE", "PROTECTED"].includes(state) ? qsTr("System security status is confirmed") : qsTr("Current system security status cannot be confirmed");
+        const freshMs = Math.max(0, Number(posture.fresh_for_ms || 0));
+        const displayMs = Math.max(freshMs, Number(posture.display_for_ms || 0));
+        root.presentation = {
+            schema: "greyward.security.experience/v1",
+            posture: state,
+            label,
+            reason,
+            severity: state === "REVIEW NEEDED" ? "WARNING" : "INFO",
+            items: [], notification_items: [], activity: [], details: [], operations: [],
+            fresh_until: new Date(now + (loading ? Math.max(freshMs, 1000) : freshMs)).toISOString(),
+            display_fresh_until: new Date(now + (loading ? Math.max(displayMs, 6000) : displayMs)).toISOString(),
+        };
+        root.initialized = true;
+        root.clockNow = now;
+        root.attentionId = "";
+        root.previousIds = [];
+    }
+    function markPostureUnavailable() {
+        const now = Date.now();
+        const previous = root.presentation || {};
+        const previousPosture = String(previous.posture || "").toUpperCase();
+        const previousDisplayUntil = Date.parse(previous.display_fresh_until || previous.fresh_until || "");
+        if (root.initialized && ["SECURE", "PROTECTED", "REVIEW NEEDED"].includes(previousPosture)
+                && Number.isFinite(previousDisplayUntil) && previousDisplayUntil > now) {
+            root.presentation = {
+                schema: "greyward.security.experience/v1",
+                posture: previousPosture,
+                label: previous.label || qsTr("Status unavailable"),
+                reason: qsTr("The last confirmed status is shown. Actions are paused while GREYWARD refreshes it."),
+                severity: previous.severity || "INFO",
+                items: [], notification_items: [], activity: [], details: [], operations: [],
+                fresh_until: new Date(now).toISOString(),
+                display_fresh_until: new Date(Math.min(previousDisplayUntil, now + 12000)).toISOString(),
+            };
+            root.clockNow = now;
+            root.attentionId = "";
+            root.previousIds = [];
+            return;
+        }
+        root.presentation = {
+            schema: "greyward.security.experience/v1",
+            posture: "UNAVAILABLE",
+            label: qsTr("Status unavailable"),
+            reason: qsTr("Current system security status cannot be confirmed"),
+            severity: "INFO",
+            items: [], notification_items: [], activity: [], details: [], operations: [],
+            fresh_until: new Date(now).toISOString(),
+            display_fresh_until: new Date(now).toISOString(),
+        };
+        root.initialized = true;
+        root.clockNow = now;
+        root.attentionId = "";
+        root.previousIds = [];
     }
     function refreshSummary() {
         if (requestPending) return;
@@ -87,8 +164,16 @@ PluginComponent {
         requestTimeout.restart();
         call("GetShellPresentation", [], function(next) {
             if (generation !== root.requestGeneration) return;
+            if (!next || next.schema !== "greyward.security.experience/v1") {
+                readProtectedDesktopPosture(generation, function(posture) {
+                    if (generation !== root.requestGeneration) return;
+                    requestTimeout.stop(); root.requestPending = false;
+                    if (posture) root.applyProtectedDesktopPosture(posture);
+                    else root.markPostureUnavailable();
+                });
+                return;
+            }
             requestTimeout.stop(); root.requestPending = false; root.clockNow = Date.now();
-            if (!next || next.schema !== "greyward.security.experience/v1") return;
             const nextFreshUntil = Date.parse(next.fresh_until || "");
             const eligibleItems = next.notification_items || [];
             const ids = eligibleItems.filter(item => item.severity !== "INFO").map(item => item.id);
@@ -199,7 +284,7 @@ PluginComponent {
             // unique ID and a bounded timeout that covers lookup, approval,
             // and readback without allowing one device's callback to replace
             // another's.
-            Proc.runCommand("greywardSecure.usb." + mode + "." + String(item.connection_ref) + "." + (++usbActionGeneration),
+            Proc.runCommand(root.processCommandId("usb." + mode + "." + String(item.connection_ref) + "." + (++usbActionGeneration)),
                 [usbguardApproval, String(item.connection_ref), mode],
                 function(stdout, code) {
                     usbActionTimeout.stop();

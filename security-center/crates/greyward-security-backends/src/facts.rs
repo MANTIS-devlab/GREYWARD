@@ -84,9 +84,20 @@ pub enum FirmwareUpdateState {
     Unknown,
 }
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct FirmwareSecurityAttribute {
+    pub id: String,
+    pub name: String,
+    pub result: String,
+    pub expected: String,
+    pub summary: String,
+    pub description: String,
+    pub flags: Vec<String>,
+}
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct FirmwareFacts {
     pub fwupd_available: bool,
     pub security: FirmwareSecurityState,
+    pub security_attributes: Vec<FirmwareSecurityAttribute>,
     pub updates: FirmwareUpdateState,
 }
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]

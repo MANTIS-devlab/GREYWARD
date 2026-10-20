@@ -828,6 +828,13 @@ input::placeholder { color: #9aaab5; }
 .evidence-group + .evidence-group { margin-top: 14px; }
 .evidence-group summary { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 17px 0; cursor: pointer; list-style: none; }
 .evidence-group summary::-webkit-details-marker { display: none; }
+.firmware-attribute-list { margin: 1rem 0 0; padding: 1rem; border: 1px solid var(--line); border-radius: var(--radius-md); background: rgba(5, 8, 11, .3); }
+.firmware-attribute-list h3 { margin: 0 0 .75rem; font-size: .9rem; }
+.firmware-attribute-list ul { display: grid; gap: .65rem; margin: 0; padding: 0; list-style: none; }
+.firmware-attribute-list li { padding-bottom: .65rem; border-bottom: 1px solid var(--line); }
+.firmware-attribute-list li:last-child { padding-bottom: 0; border-bottom: 0; }
+.firmware-attribute-list p { margin: .3rem 0; color: var(--text-secondary); }
+.firmware-attribute-list small { display: block; margin-top: .3rem; color: var(--text-secondary); }
 .evidence-group summary > span:first-child { display: grid; gap: 3px; }
 .evidence-group summary strong { color: var(--text); font-size: 15px; font-weight: 620; }
 .evidence-group summary::after { color: var(--subtle); content: "+"; font-size: 18px; line-height: 1; }

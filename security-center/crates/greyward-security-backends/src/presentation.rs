@@ -62,25 +62,62 @@ pub fn evidence_presentation(
             remediation: None,
             no_remediation_key: Some("evidence.remediation.noDirect"),
         },
-        "system.firmware.hsi" => EvidencePresentation {
-            domain_key,
-            title_key: "evidence.finding.firmwareSecurity.title",
-            summary_key: if lower.contains("secure") {
-                "evidence.finding.firmwareSecurity.secure"
-            } else if lower.contains("unavailable") || lower.contains("unsupported") {
-                "evidence.finding.firmwareSecurity.unavailable"
-            } else {
-                "evidence.finding.firmwareSecurity.review"
-            },
-            recorded_result_key: recorded_result_key(check),
-            recommendation_key: "evidence.finding.firmwareSecurity.recommendation",
-            values: BTreeMap::new(),
-            remediation: Some(EvidenceRemediation {
-                route: "updates",
-                action_key: "system.checks.openUpdates",
-            }),
-            no_remediation_key: None,
-        },
+        "system.firmware.hsi" => {
+            let report = serde_json::from_str::<serde_json::Value>(&evidence).ok();
+            let state = report
+                .as_ref()
+                .and_then(|value| value.get("state"))
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or(&evidence)
+                .to_ascii_lowercase();
+            let attributes: Vec<serde_json::Value> = report
+                .as_ref()
+                .and_then(|value| value.get("attributes"))
+                .and_then(serde_json::Value::as_array)
+                .into_iter()
+                .flatten()
+                .filter(|attribute| {
+                    let result = attribute
+                        .get("result")
+                        .and_then(serde_json::Value::as_str)
+                        .unwrap_or_default();
+                    let expected = attribute
+                        .get("expected")
+                        .and_then(serde_json::Value::as_str)
+                        .unwrap_or_default();
+                    result != expected || result.is_empty() || expected.is_empty()
+                })
+                .take(64)
+                .cloned()
+                .collect();
+            let mut values = BTreeMap::new();
+            if !attributes.is_empty() {
+                values.insert(
+                    "firmware_attributes".into(),
+                    serde_json::to_string(&attributes).unwrap_or_else(|_| "[]".into()),
+                );
+                values.insert(
+                    "firmware_attribute_count".into(),
+                    attributes.len().to_string(),
+                );
+            }
+            EvidencePresentation {
+                domain_key,
+                title_key: "evidence.finding.firmwareSecurity.title",
+                summary_key: if state == "secure" {
+                    "evidence.finding.firmwareSecurity.secure"
+                } else if matches!(state.as_str(), "unavailable" | "unsupported") {
+                    "evidence.finding.firmwareSecurity.unavailable"
+                } else {
+                    "evidence.finding.firmwareSecurity.review"
+                },
+                recorded_result_key: recorded_result_key(check),
+                recommendation_key: "evidence.finding.firmwareSecurity.recommendation",
+                values,
+                remediation: None,
+                no_remediation_key: Some("evidence.finding.firmwareSecurity.noAutomaticAction"),
+            }
+        }
         "system.firmware.updates" => EvidencePresentation {
             domain_key,
             title_key: "evidence.finding.firmwareUpdates.title",
@@ -444,6 +481,50 @@ mod tests {
         assert_eq!(value.title_key, "evidence.finding.securityUpdates.title");
         assert_eq!(value.values.get("count"), Some(&"3".to_string()));
         assert_eq!(value.remediation.unwrap().route, "updates");
+    }
+
+    #[test]
+    fn firmware_insecure_is_not_mistaken_for_secure_and_lists_review_items() {
+        let value = evidence_presentation(
+            &check(
+                "system.firmware.hsi",
+                Domain::System,
+                r#"{"state":"Insecure","attributes":[{"id":"org.fwupd.hsi.Uefi.Db","name":"UEFI db","result":"not-valid","expected":"valid","summary":"UEFI db","description":"Trusted EFI certificate database.","flags":["action-config-fw"]}]}"#,
+            ),
+            &[],
+        );
+        assert_eq!(
+            value.summary_key,
+            "evidence.finding.firmwareSecurity.review"
+        );
+        assert_eq!(value.remediation, None);
+        let attributes: serde_json::Value =
+            serde_json::from_str(value.values.get("firmware_attributes").unwrap()).unwrap();
+        assert_eq!(attributes[0]["name"], "UEFI db");
+    }
+
+    #[test]
+    fn firmware_hsi_only_reports_secure_for_exact_secure_state() {
+        let value = evidence_presentation(
+            &check("system.firmware.hsi", Domain::System, "Insecure"),
+            &[],
+        );
+        assert_eq!(
+            value.summary_key,
+            "evidence.finding.firmwareSecurity.review"
+        );
+        let secure = evidence_presentation(
+            &check(
+                "system.firmware.hsi",
+                Domain::System,
+                r#"{"state":"Secure","attributes":[]}"#,
+            ),
+            &[],
+        );
+        assert_eq!(
+            secure.summary_key,
+            "evidence.finding.firmwareSecurity.secure"
+        );
     }
 
     #[test]

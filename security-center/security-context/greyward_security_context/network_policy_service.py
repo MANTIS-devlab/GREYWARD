@@ -66,8 +66,9 @@ class OpenSnitchPolicy(dbus.service.Object):
     def __init__(self, bus):
         super().__init__(bus, OBJECT_PATH)
         self.bus = bus
-        firewall = Firewall(bus) if bus.name_has_owner('org.fedoraproject.FirewallD1') else None
-        self.manager = RuleManager(PolicyStore(POLICY_PATH), firewall, resolve_executable)
+        # Keep lazy firewalld proxies even when its D-Bus name is not present
+        # yet.  The daemon may start just after this service during boot.
+        self.manager = RuleManager(PolicyStore(POLICY_PATH), Firewall(bus), resolve_executable)
         self.manager.recover()
         self.workers = concurrent.futures.ThreadPoolExecutor(max_workers=2)
         self.slots = threading.BoundedSemaphore(2)

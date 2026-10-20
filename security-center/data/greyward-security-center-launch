@@ -28,6 +28,31 @@ export GREYWARD_LABWC_SERVER_DECORATIONS=1
 # GTK otherwise installs a client-side header bar; let labwc own the native frame.
 export GTK_CSD=0
 
+# Hyper-V's display-only DRM device has no accelerated 3D renderer. WebKit's
+# threaded GL compositor otherwise runs through llvmpipe even for a static
+# modal. Keep the native CPU painting path on that hardware; never disable
+# sandboxing or alter the compositor/SELinux boundary to obtain acceleration.
+greyward_software_compositing() {
+    [[ $# -gt 0 ]] || return 1
+    local driver
+    for driver in "$@"; do
+        [[ "$driver" == hyperv_drm ]] || return 1
+    done
+    return 0
+}
+if [[ ! ${WEBKIT_DISABLE_COMPOSITING_MODE+x} ]]; then
+    drivers=()
+    for card in /sys/class/drm/card[0-9]*; do
+        [[ "${card##*/}" =~ ^card[0-9]+$ ]] || continue
+        driver=$(readlink "$card/device/driver" 2>/dev/null || true)
+        drivers+=("${driver##*/}")
+    done
+    if greyward_software_compositing "${drivers[@]}"; then
+        export WEBKIT_DISABLE_COMPOSITING_MODE=1
+    fi
+    unset card driver drivers
+fi
+
 if [[ "${1:-}" == "--file-context" && -n "${2:-}" ]]; then
     export GREYWARD_CONTEXT_FILE="$2"
     shift 2

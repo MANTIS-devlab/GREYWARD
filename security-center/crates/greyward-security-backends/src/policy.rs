@@ -84,6 +84,7 @@ pub fn evaluate_facts_with_deviations(
     let mut firmware = FirmwareFacts {
         fwupd_available: false,
         security: FirmwareSecurityState::Unknown,
+        security_attributes: Vec::new(),
         updates: FirmwareUpdateState::Unknown,
     };
     let mut updates = SecurityUpdatesFacts {
@@ -202,7 +203,7 @@ pub fn evaluate_facts_with_deviations(
         },
         EvidenceValue::Text(format!("{se:?}")),
     ));
-    checks.push(make(
+    let mut firmware_hsi = make(
         "system.firmware.hsi",
         Domain::System,
         Requiredness::Recommended,
@@ -216,8 +217,15 @@ pub fn evaluate_facts_with_deviations(
             FirmwareSecurityState::Insecure => PredicateResult::Failed,
             _ => PredicateResult::Indeterminate,
         },
-        EvidenceValue::Text(format!("{:?}", firmware.security)),
-    ));
+        EvidenceValue::Text(
+            serde_json::json!({
+                "state": format!("{:?}", firmware.security),
+                "attributes": firmware.security_attributes,
+            })
+            .to_string(),
+        ),
+    );
+    checks.push(firmware_hsi);
     checks.push(make(
         "system.firmware.updates",
         Domain::System,

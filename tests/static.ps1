@@ -38,6 +38,7 @@ $firstbootServicePath = Join-Path $repo 'environment\production\provision-firstb
 $firstbootStatusScriptPath = Join-Path $repo 'environment\production\firstboot-status.sh'
 $firstbootStatusServicePath = Join-Path $repo 'environment\production\firstboot-status.service'
 $greeterWallpaperSyncPath = Join-Path $repo 'environment\production\greyward-sync-greeter-wallpaper'
+$greeterRendererLauncherPath = Join-Path $repo 'environment\production\greyward-start-dms-greeter'
 $autoUpdateScriptPath = Join-Path $repo 'security-center\security-context\bin\greyward-auto-update'
 $autoUpdateServicePath = Join-Path $repo 'security-center\security-context\systemd\greyward-auto-update.service'
 $autoUpdateTimerPath = Join-Path $repo 'security-center\security-context\systemd\greyward-auto-update.timer'
@@ -128,7 +129,7 @@ $dmsTrayIconFallbackPatchPath = Join-Path $repo 'environment\patches\dms\greywar
 $securityContractPath = Join-Path $repo 'environment\production\security-center-contract.tsv'
 $anacondaCssPath = Join-Path $repo 'packaging\greyward-branding\SOURCES\greyward-anaconda.css'
 $anacondaConfPath = Join-Path $repo 'packaging\greyward-branding\SOURCES\greyward-anaconda.conf'
-foreach ($required in @($defaultAppsPath, $mimeAppsPath, $braveFlagsPath, $softwareWrapperPath, $softwareDesktopPath, $softwareRuntimeDesktopPath, $productionProvisionPath, $productionManifestPath, $productionAcceptancePath, $productionAcceptanceImplementationPath, $imageEntryPoint, $imageIsoEntryPoint, $imageKickstartPath, $firstbootScriptPath, $firstbootServicePath, $greeterWallpaperSyncPath, $autoUpdateScriptPath, $autoUpdateServicePath, $autoUpdateTimerPath, $labwcEnvironmentPath, $sessionDesktopPath, $labwcSessionLauncherPath, $dmsServicePath, $artifactPolicyPath, $auditRulesPath, $greeterSelinuxPath, $uwsmLabwcPatchPath, $dmsSettingsPatchPath, $dmsLabwcRuntimePatchPath, $dmsLauncherHitboxPatchPath, $dmsSettingsPath, $dmsMonitorDefaultsPath, $applicationSecuritySpecPath, $enrollmentSpecPath, $securityCenterRoutePath, $securePluginManifestPath, $securePluginWidgetPath, $networkTrafficPluginManifestPath, $networkTrafficPluginWidgetPath, $networkTrafficPluginModelPath, $networkTrafficPluginMathPath, $publicIpPluginManifestPath, $publicIpPluginWidgetPath, $session10ReportPath, $session10GatePath, $interactionTestPath, $portalConfigPath, $rygelOverridePath, $blackboxDesktopOverridePath, $blackboxSchemePath, $blackboxDarkPastelSchemePath, $blackboxParaisoSchemePath, $blackboxSetiSchemePath, $blackboxVibrantInkSchemePath, $blackboxDconfPath, $terminalIconPath, $zshConfiguratorPath, $zshSourcesPath, $zshrcPath, $p10kPath, $terminalBriefPath, $terminalBriefTestPath, $devDeployPath, $cryptoPolicyDocPath, $cryptoPolicyModulePath, $dmsAppsDockSpacingPatchPath, $dmsStateMigrationPath, $dmsFlatpakIconResolutionPatchPath, $dmsTrayIconFallbackPatchPath)) {
+foreach ($required in @($defaultAppsPath, $mimeAppsPath, $braveFlagsPath, $softwareWrapperPath, $softwareDesktopPath, $softwareRuntimeDesktopPath, $productionProvisionPath, $productionManifestPath, $productionAcceptancePath, $productionAcceptanceImplementationPath, $imageEntryPoint, $imageIsoEntryPoint, $imageKickstartPath, $firstbootScriptPath, $firstbootServicePath, $greeterWallpaperSyncPath, $greeterRendererLauncherPath, $autoUpdateScriptPath, $autoUpdateServicePath, $autoUpdateTimerPath, $labwcEnvironmentPath, $sessionDesktopPath, $labwcSessionLauncherPath, $dmsServicePath, $artifactPolicyPath, $auditRulesPath, $greeterSelinuxPath, $uwsmLabwcPatchPath, $dmsSettingsPatchPath, $dmsLabwcRuntimePatchPath, $dmsLauncherHitboxPatchPath, $dmsSettingsPath, $dmsMonitorDefaultsPath, $applicationSecuritySpecPath, $enrollmentSpecPath, $securityCenterRoutePath, $securePluginManifestPath, $securePluginWidgetPath, $networkTrafficPluginManifestPath, $networkTrafficPluginWidgetPath, $networkTrafficPluginModelPath, $networkTrafficPluginMathPath, $publicIpPluginManifestPath, $publicIpPluginWidgetPath, $session10ReportPath, $session10GatePath, $interactionTestPath, $portalConfigPath, $rygelOverridePath, $blackboxDesktopOverridePath, $blackboxSchemePath, $blackboxDarkPastelSchemePath, $blackboxParaisoSchemePath, $blackboxSetiSchemePath, $blackboxVibrantInkSchemePath, $blackboxDconfPath, $terminalIconPath, $zshConfiguratorPath, $zshSourcesPath, $zshrcPath, $p10kPath, $terminalBriefPath, $terminalBriefTestPath, $devDeployPath, $cryptoPolicyDocPath, $cryptoPolicyModulePath, $dmsAppsDockSpacingPatchPath, $dmsStateMigrationPath, $dmsFlatpakIconResolutionPatchPath, $dmsTrayIconFallbackPatchPath)) {
     if (-not (Test-Path -LiteralPath $required)) {
         $relative = [IO.Path]::GetRelativePath($repo, $required).Replace('\', '/')
         $publication = Get-Content -Raw -LiteralPath (Join-Path $repo 'tools/publication-policy.json') | ConvertFrom-Json
@@ -313,15 +314,32 @@ if ($firstbootStatusService -notmatch 'ConditionPathExists=/var/lib/greyward/ins
 $labwcEnvironment = Get-Content -Raw -LiteralPath $labwcEnvironmentPath
 $sessionDesktop = Get-Content -Raw -LiteralPath $sessionDesktopPath
 $labwcSessionLauncher = Get-Content -Raw -LiteralPath $labwcSessionLauncherPath
-if ($productionProvision -notmatch '/usr/bin/env WLR_RENDERER=pixman' -or
+$greeterRendererLauncher = Get-Content -Raw -LiteralPath $greeterRendererLauncherPath
+$protectedSessionPath = Join-Path $repo 'security-center\packaging\application-security\desktop\session.py'
+$protectedSession = Get-Content -Raw -LiteralPath $protectedSessionPath
+if ($productionProvision -notmatch 'keyboard_helper=/usr/share/greyward-application-security/desktop/keyboard_config\.py' -or
+    $productionProvision -notmatch '/usr/bin/python3 -I "\$keyboard_helper" --write-installed' -or
+    $productionProvision -notmatch 'XKB_DEFAULT_MODEL=\$XKB_DEFAULT_MODEL XKB_DEFAULT_LAYOUT=\$XKB_DEFAULT_LAYOUT' -or
     $productionProvision -match 'WLR_DRM_DEVICES=' -or
-    $productionProvision -notmatch 'WLR_RENDERER_ALLOW_SOFTWARE=1' -or
-    $productionProvision -notmatch 'QT_QUICK_BACKEND=rhi' -or
-    $productionProvision -notmatch 'QSG_RHI_BACKEND=opengl' -or
-    $productionProvision -notmatch 'QT_OPENGL=software' -or
-    $productionProvision -notmatch 'LIBGL_ALWAYS_SOFTWARE=1' -or
     $productionProvision -notmatch 'XDG_CONFIG_HOME=/var/cache/dms-greeter/\.config' -or
-    $productionProvision -notmatch 'only into that greeter process' -or
+    $productionProvision -notmatch 'not inherited by this separate session' -or
+    $productionProvision -notmatch '/usr/local/libexec/greyward-start-dms-greeter' -or
+    $productionProvision -notmatch '--shell-dir /usr/share/greyward/dms-greeter-ui' -or
+    $greeterRendererLauncher -notmatch 'export WLR_RENDERER=pixman' -or
+    $greeterRendererLauncher -notmatch 'export WLR_RENDERER=gles2' -or
+    $greeterRendererLauncher -notmatch 'export WLR_NO_HARDWARE_CURSORS=1' -or
+    $greeterRendererLauncher -notmatch 'export WLR_DRM_NO_MODIFIERS=1' -or
+    $greeterRendererLauncher -notmatch 'export WLR_RENDERER_ALLOW_SOFTWARE=1' -or
+    $greeterRendererLauncher -notmatch 'export QT_QUICK_BACKEND=rhi' -or
+    $greeterRendererLauncher -notmatch 'export QSG_RHI_BACKEND=opengl' -or
+    $greeterRendererLauncher -notmatch 'export QT_OPENGL=software' -or
+    $greeterRendererLauncher -notmatch 'export LIBGL_ALWAYS_SOFTWARE=1' -or
+    $greeterRendererLauncher -notmatch 'unset WLR_RENDERER_ALLOW_SOFTWARE LIBGL_ALWAYS_SOFTWARE QT_QUICK_BACKEND' -or
+    $greeterRendererLauncher -notmatch 'exec /usr/bin/dms-greeter' -or
+    $productionAcceptance -notmatch '--verify-installed' -or
+    $productionAcceptance -notmatch '/etc/greyward/keyboard\.json' -or
+    $protectedSession -notmatch 'env\.update\(protected_keyboard_environment\(\)\)' -or
+    $labwcEnvironment -match '(?m)^XKB_DEFAULT_LAYOUT=fr\s*$' -or
     $labwcEnvironment -match '(?m)^WLR_RENDERER=pixman\s*$' -or
     $sessionDesktop -notmatch '(?m)^Exec=/usr/local/libexec/greyward-start-labwc\s*$' -or
     $labwcSessionLauncher -notmatch '/sys/class/dmi/id/sys_vendor' -or
@@ -330,7 +348,7 @@ if ($productionProvision -notmatch '/usr/bin/env WLR_RENDERER=pixman' -or
     $labwcSessionLauncher -notmatch '/dev/dri/renderD\*' -or
     $labwcSessionLauncher -notmatch 'export WLR_RENDERER=pixman' -or
     $labwcSessionLauncher -notmatch 'exec uwsm start -D Labwc:GREYWARD labwc') {
-    $errors.Add('The greeter must keep its software fallback, while the installed Labwc session must select Pixman only for unsupported virtual/no-render-node graphics and retain hardware rendering on capable bare metal.')
+    $errors.Add('The greeter, ordinary Labwc session, and protected compositor must use the validated Anaconda keyboard selection while keeping the existing renderer boundaries.')
 }
 $greeterCheckIndex = $firstbootScript.IndexOf('if [[ "$greeter_ready" != true ]]')
 $cleanupMarkerIndex = $firstbootScript.IndexOf('rm -f "$pending"')
@@ -561,6 +579,14 @@ if (Test-Path -LiteralPath $securePluginWidgetPath) {
     if ($securePluginWidget -notmatch '/usr/bin/gdbus') {
         $errors.Add('The GREYWARD Secure DMS plugin must use the packaged absolute gdbus path.')
     }
+    if ($securePluginWidget -notmatch 'readonly property string instanceToken: Math\.random\(\)\.toString\(36\)\.slice\(2\)' -or
+        $securePluginWidget -notmatch 'String\(parentScreen\?\.name \|\| "unknown"\)' -or
+        $securePluginWidget -notmatch 'function processCommandId\(operation\)' -or
+        $securePluginWidget -notmatch 'Proc\.runCommand\(root\.processCommandId\(method\)' -or
+        $securePluginWidget -notmatch 'root\.processCommandId\("usb\." \+ mode' -or
+        $securePluginWidget -match 'Proc\.runCommand\("greywardSecure\.') {
+        $errors.Add('Security Center DMS process requests must use IDs unique to each display and widget instance.')
+    }
     if ($securePluginWidget -notmatch 'presentation\.notification_items' -or
         $securePluginWidget -notmatch 'next\.notification_items' -or
         $securePluginWidget -match 'notificationStabilityMs|deferredAttentionSince|root\.presentation\.severity\)') {
@@ -705,7 +731,7 @@ $mutableInputRoots = @(
 )
 foreach ($mutableRoot in $mutableInputRoots) {
     if (-not (Test-Path -LiteralPath $mutableRoot)) { continue }
-    Get-ChildItem -LiteralPath $mutableRoot -Recurse -File | Where-Object { $_.Extension -notin @('.md', '.png', '.svg') } | ForEach-Object {
+    Get-ChildItem -LiteralPath $mutableRoot -Recurse -File | Where-Object { $_.Extension -notin @('.md', '.png', '.svg', '.ttf', '.otf', '.woff', '.woff2', '.jpg', '.jpeg', '.webp', '.ico', '.gif', '.bin') } | ForEach-Object {
         $lineNumber = 0
         foreach ($line in (Get-Content -LiteralPath $_.FullName)) {
             $lineNumber++
@@ -963,11 +989,22 @@ if ((Test-Path -LiteralPath $publicIpPluginManifestPath) -and (Test-Path -Litera
         $publicIpWidget -notmatch 'text: qsTr\("Public IP check"\)') {
         $errors.Add('The public-IP lookup must use a fail-closed, persistent, user-visible pill switch.')
     }
-    if ($publicIpWidget -notmatch 'function fetchPublicIdentity\(\)\s*\{\s*if \(!root\.stateInitialized \|\| !root\.publicLookupEnabled \|\| root\.requestInFlight\)' -or
-        $publicIpWidget -notmatch 'function fetchFallback\(generation, primaryStatus\)\s*\{\s*if \(generation !== root\.requestGeneration \|\| !root\.publicLookupEnabled\)' -or
-        $publicIpWidget -notmatch 'running: root\.stateInitialized && root\.publicLookupEnabled' -or
+    if ($publicIpWidget -notmatch 'function fetchPublicIdentity\(\)\s*\{\s*if \(!root\.runtimeOwner \|\| !root\.stateInitialized \|\| !root\.publicLookupEnabled \|\| root\.requestInFlight\)' -or
+        $publicIpWidget -notmatch 'function fetchFallback\(generation, primaryStatus\)\s*\{\s*if \(!root\.runtimeOwner \|\| generation !== root\.requestGeneration \|\| !root\.publicLookupEnabled\)' -or
+        $publicIpWidget -notmatch 'running: root\.runtimeOwner && root\.stateInitialized && root\.publicLookupEnabled' -or
         $publicIpWidget -notmatch 'generation !== root\.requestGeneration \|\| !root\.publicLookupEnabled') {
         $errors.Add('Every automatic public-IP request path must honor initialization, the saved opt-out, and canceled request generations.')
+    }
+    if ($publicIpWidget -notmatch 'function processCommandId\(operation\)' -or
+        $publicIpWidget -notmatch 'root\.parentScreen\?\.name' -or
+        $publicIpWidget -notmatch 'return "greywardPublicIp\." \+ screenName \+ "\." \+ root\.instanceToken \+ "\." \+ operation' -or
+        $publicIpWidget -notmatch 'root\.pluginService\.getGlobalVar\(\s*root\.pluginId, root\.runtimeStateKey' -or
+        $publicIpWidget -notmatch 'root\.pluginService\.setGlobalVar\(root\.pluginId, root\.runtimeStateKey' -or
+        $publicIpWidget -notmatch 'Qt\.callLater\(root\.acquireRuntimeOwnership\)' -or
+        $publicIpWidget -notmatch 'root\.releaseRuntimeOwnership\(\)' -or
+        $publicIpWidget -notmatch 'running: root\.runtimeOwner && root\.stateInitialized && root\.publicLookupEnabled' -or
+        $publicIpWidget -match 'Proc\.runCommand\("greywardPublicIp\.') {
+        $errors.Add('Network Identity screen instances must use unique command IDs and share one memory-only runtime owner.')
     }
     if ($publicIpWidget -notmatch '"--proto", "=https", "--tlsv1\.2"' -or
         $publicIpWidget -match 'http://' -or
@@ -1007,8 +1044,9 @@ if (Test-Path -LiteralPath $dmsThemePath) {
 
 if (Test-Path -LiteralPath $labwcThemePath) {
     $labwcTheme = Get-Content -Raw -LiteralPath $labwcThemePath
-    if ($labwcTheme -notmatch '(?m)^window\.active\.title\.bg\.color:\s*#[0-9a-fA-F]{8}\s*$') {
-        $errors.Add('The Labwc titlebar must retain its translucent frosted material color.')
+    if ($labwcTheme -notmatch '(?m)^window\.active\.title\.bg:\s*Solid\s*$' -or
+        $labwcTheme -notmatch '(?m)^window\.active\.title\.bg\.color:\s*#20242a\s*$') {
+        $errors.Add('The Labwc titlebar must match the verified .150 production theme.')
     }
 }
 
