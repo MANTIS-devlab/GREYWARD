@@ -55,8 +55,8 @@ class ProtectedCompositorDisplayTests(unittest.TestCase):
 
         application_security = (ROOT / 'security-center/packaging/application-security/greyward-application-security-experimental.spec').read_text()
         enrollment = (ROOT / 'packaging/greyward-enrollment/greyward-enrollment.spec').read_text()
-        self.assertRegex(application_security, r'(?m)^Release:\s+66')
-        self.assertIn('greyward-application-security-experimental = 0.1.0-66%{?dist}', enrollment)
+        self.assertRegex(application_security, r'(?m)^Release:\s+69')
+        self.assertIn('greyward-application-security-experimental = 0.1.0-69%{?dist}', enrollment)
 
     def test_existing_enrollments_have_a_quiescent_dms_shell_migration(self):
         spec = (ROOT / 'packaging/greyward-enrollment/greyward-enrollment.spec').read_text()

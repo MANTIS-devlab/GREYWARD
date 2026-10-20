@@ -20,10 +20,10 @@ class InstalledRpmImportTests(unittest.TestCase):
             root = Path(temporary)
             artifacts = {
                 "greyward-dms": ("greyward-dms-1.6.2-26.fc44.x86_64.rpm", "d" * 40),
-                "greyward-security-center": ("greyward-security-center-0.1.0-113.fc44.x86_64.rpm", "c" * 40),
-                "greyward-security-context": ("greyward-security-context-0.1.0-106.fc44.noarch.rpm", "e" * 40),
-                "greyward-application-security-experimental": ("greyward-application-security-experimental-0.1.0-63.fc44.x86_64.rpm", "a" * 40),
-                "greyward-application-enrollment": ("greyward-application-enrollment-0.1.0-54.fc44.x86_64.rpm", "b" * 40),
+                "greyward-security-center": ("greyward-security-center-0.1.0-115.fc44.x86_64.rpm", "c" * 40),
+                "greyward-security-context": ("greyward-security-context-0.1.0-108.fc44.noarch.rpm", "e" * 40),
+                "greyward-application-security-experimental": ("greyward-application-security-experimental-0.1.0-69.fc44.x86_64.rpm", "a" * 40),
+                "greyward-application-enrollment": ("greyward-application-enrollment-0.1.0-60.fc44.x86_64.rpm", "b" * 40),
             }
             selected = []
             lines = [
@@ -66,10 +66,10 @@ class InstalledRpmImportTests(unittest.TestCase):
             root = Path(temporary)
             artifacts = {
                 "greyward-dms": ("greyward-dms-1.6.2-26.fc44.x86_64.rpm", "d" * 40),
-                "greyward-security-center": ("greyward-security-center-0.1.0-113.fc44.x86_64.rpm", "c" * 40),
-                "greyward-security-context": ("greyward-security-context-0.1.0-106.fc44.noarch.rpm", "e" * 40),
-                "greyward-application-security-experimental": ("greyward-application-security-experimental-0.1.0-63.fc44.x86_64.rpm", "a" * 40),
-                "greyward-application-enrollment": ("greyward-application-enrollment-0.1.0-54.fc44.x86_64.rpm", "b" * 40),
+                "greyward-security-center": ("greyward-security-center-0.1.0-115.fc44.x86_64.rpm", "c" * 40),
+                "greyward-security-context": ("greyward-security-context-0.1.0-108.fc44.noarch.rpm", "e" * 40),
+                "greyward-application-security-experimental": ("greyward-application-security-experimental-0.1.0-69.fc44.x86_64.rpm", "a" * 40),
+                "greyward-application-enrollment": ("greyward-application-enrollment-0.1.0-60.fc44.x86_64.rpm", "b" * 40),
             }
             selected = []
             lines = [

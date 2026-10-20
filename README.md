@@ -20,13 +20,13 @@
 </p>
 
 <p align="center">
-  <a href="https://sourceforge.net/projects/greyward/files/v0.3.5/">
-    <img alt="Download GREYWARD 0.3.5 Dawn" src="https://img.shields.io/badge/Download-0.3.5%20Dawn-C9CCD1?style=for-the-badge&labelColor=24262A">
+  <a href="https://sourceforge.net/projects/greyward/files/v0.3.8/">
+    <img alt="Download GREYWARD 0.3.8 Dawn" src="https://img.shields.io/badge/Download-0.3.8%20Dawn-C9CCD1?style=for-the-badge&labelColor=24262A">
   </a>
 </p>
 
 <p align="center">
-  <sub>Latest linked published image: 0.3.5 Dawn. Features described below may reflect newer development builds and are not necessarily included in this ISO.</sub>
+  <sub>Latest linked published image: 0.3.8 Dawn. Features described below may reflect newer development builds and are not necessarily included in this ISO.</sub>
 </p>
 
 <p align="center">
@@ -45,6 +45,10 @@
   · <a href="#security-center">Security Center</a>
   · <a href="#a-desktop-of-its-own">Desktop</a>
   · <a href="#current-state-and-limitations">Status</a>
+</p>
+
+<p align="center">
+  <img src="docs/assets/screenshots/greyward-desktop-network-activity.png" alt="GREYWARD desktop with Security Center Network activity and Strata" width="960">
 </p>
 
 <p align="center">

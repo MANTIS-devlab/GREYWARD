@@ -85,7 +85,7 @@ class BuildInputVerificationTests(unittest.TestCase):
         enrollment_spec = (ROOT / 'packaging/greyward-enrollment/greyward-enrollment.spec').read_text()
         self.assertIn('expected_dms_requirement="greyward-dms = $selected_dms_version"', source)
         self.assertIn('rpm_query -qp --requires "$enrollment_rpm"', source)
-        self.assertIn('Requires: greyward-application-security-experimental = 0.1.0-66%{?dist}', enrollment_spec)
+        self.assertIn('Requires: greyward-application-security-experimental = 0.1.0-69%{?dist}', enrollment_spec)
         self.assertIn('Requires: greyward-dms = 1.6.2-26%{?dist}', enrollment_spec)
         build = (ROOT / 'packaging/greyward-dms/build.sh').read_text()
         self.assertIn('usbguard-approval-execute.go', build)
