@@ -32,8 +32,9 @@ booted from this ISO and its GREYWARD GRUB menu was observed in VMConnect;
 this establishes media boot only, not completed installation or enrollment.
 
 Clean installation, recovery and physical three-screen acceptance are **not
-verified** for this ISO. Public `main` CI has a pre-existing failed run; these
-local changes are unpublished. Full media path, hash, input provenance and
+verified** for this ISO. At composition time, public `main` CI had a pre-existing
+failed run. Public source CI remains separate from image acceptance. Full media
+path, hash, input provenance and
 limits: [ISO creation](architecture/ISO_CREATION.md). Runtime details:
 [desktop integration](architecture/FILE_MANAGER_DESKTOP.md).
 
