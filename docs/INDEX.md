@@ -1,5 +1,13 @@
 # GREYWARD documentation index
 
+21 October source update: Files 18 now replaces the provisional desktop binary
+on the production reference; the corrected 0.4.5 internal candidate contains
+the R6 greeter/ordinary-role and per-screen icon fixes. Media checks and installed
+package integrity pass. Clean-install, recovery and physical three-screen
+acceptance remain separate. The dated entries below preserve earlier evidence;
+use [current status](STATUS.md) for the latest component tuple and limitations.
+Public source publication does not publish an ISO release.
+
 For the canonical installer composition process, source-built package path and
 the narrowly scoped exact-installed-RPM test import, see
 [ISO creation](architecture/ISO_CREATION.md).
@@ -243,7 +251,7 @@ Earlier entries below are dated evidence, not current acceptance claims.
 
 10 October r5 candidate: Enrollment 5 corrects the confirmed mode-0700 program-directory login failure. The repaired r4 installation reaches the desktop (user confirmation and console evidence). R5 composition, embedded payload checks and Windows SHA-256 verification pass; fresh r5 installation, default session selection and installed security acceptance remain pending. See the candidate evidence (private development evidence).
 
-10 October installed r4 acceptance: installation completed according to the user, but GREYWARD Labwc login fails and the greeter defaults to Hyprland. R4 is not accepted. Only the new test VM is in an approved rescue investigation; .149 remains the unchanged build host. See the failure evidence (private development evidence).
+10 October installed r4 acceptance: installation completed according to the user, but GREYWARD Labwc login fails and the greeter defaults to Hyprland. R4 is not accepted. Only the new test VM is in an approved rescue investigation; <development-host> remains the unchanged build host. See the failure evidence (private development evidence).
 
 10 October ISO rebuild: r3 failed clean installation because private installer-origin storage was missing; it is rejected. Enrollment revision 4 is rebuilt, eleven lifecycle tests pass, and the actual packaged broker reproduces the missing-directory failure then succeeds with corrected private storage in a synthetic clean root. The r4 ISO has built, passed payload checks, and hash-matched on Windows. It is attached to the new empty test VM without runtime activation on `<development-host>`. Clean-install acceptance remains pending. See the candidate evidence (private development evidence).
 

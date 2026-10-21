@@ -28,6 +28,19 @@ fi
 checkpoint 'required production packages and login boundary'
 rpm -q greyward-application-security-experimental greyward-application-enrollment >/dev/null || fail 'enrollment package closure is missing'
 /usr/libexec/greyward-enrollment check || fail 'installer enrollment is not prepared'
+if [[ "$require_marker" == false ]]; then
+  test "$(systemctl get-default)" = multi-user.target || \
+    fail 'first-boot default target must remain text-only until enrollment completes'
+  for login_unit in greetd.service display-manager.service gdm.service sddm.service lightdm.service \
+    initial-setup.service initial-setup-reconfiguration.service gnome-initial-setup.service \
+    gnome-initial-setup-first-login.service gnome-initial-setup-copy-worker.service \
+    user@.service; do
+    gate="/etc/systemd/system/$login_unit.d/greyward-production-install-gate.conf"
+    test -s "$gate" || fail "first-boot login gate is missing: $login_unit"
+    grep -qx 'ConditionPathExists=/etc/greyward-production-complete' "$gate" || \
+      fail "first-boot login gate is invalid: $login_unit"
+  done
+fi
 rpm -q dms-greeter greyward-session greyward-security-center greyward-security-context audit audit-rules policycoreutils wlr-randr wlopm net-tools >/dev/null || fail 'required production package is missing'
 firmware_manifest=/usr/lib/greyward/installer/production/packages.txt
 test -r "$firmware_manifest" || fail 'immutable production package manifest is missing'

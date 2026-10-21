@@ -5,6 +5,7 @@ import json
 import os
 from pathlib import Path
 import socket
+import subprocess
 import sys
 from types import SimpleNamespace
 import tempfile
@@ -180,7 +181,7 @@ class DmsShellMigrationTests(unittest.TestCase):
     @unittest.skipUnless(os.name != 'nt' and hasattr(os, 'geteuid')
                          and os.geteuid() == 0
                          and Path('/usr/bin/chcon').is_file(),
-                         'requires root Fedora SELinux migration primitives')
+                         'requires root Linux migration primitives')
     def test_verifier_only_migration_refreshes_linked_receipts_atomically(self):
         with tempfile.TemporaryDirectory(prefix='greyward-verifier-migration-',
                                           dir='/root') as directory:
@@ -212,8 +213,25 @@ class DmsShellMigrationTests(unittest.TestCase):
             (admin / 'manifest.json').write_bytes(admin_bytes)
             (admin / 'manifest.json').chmod(0o444)
 
+            # Ubuntu CI has chcon but no SELinux labels. Emulate only that
+            # syscall boundary there; on a SELinux host retain real chcon.
+            # Root ownership, atomic replacement and linked receipts remain
+            # exercised on both platforms. Production never bypasses chcon.
+            real_run = migration.subprocess.run
+            label_copies = []
+            def copy_label(command, **kwargs):
+                if command[0] == '/usr/bin/chcon':
+                    self.assertEqual(command[1], '--reference')
+                    self.assertTrue(kwargs['check'])
+                    self.assertEqual(Path(command[2]).parent, Path(command[3]).parent)
+                    label_copies.append(command)
+                    if not Path('/sys/fs/selinux/enforce').exists():
+                        return subprocess.CompletedProcess(command, 0)
+                return real_run(command, **kwargs)
+
             with patch.object(migration, 'LOCK', root / 'migration.lock'), \
-                    patch.object(migration, 'ensure_quiescent'):
+                    patch.object(migration, 'ensure_quiescent'), \
+                    patch.object(migration.subprocess, 'run', side_effect=copy_label):
                 result = migration.migrate_verifier_only(base, admin, source)
 
             refreshed_desktop = json.loads((base / 'desktop.json').read_bytes())
@@ -222,6 +240,20 @@ class DmsShellMigrationTests(unittest.TestCase):
             self.assertEqual((base / 'verify.py').read_bytes(), new_verifier)
             self.assertEqual(refreshed_desktop['files']['verify.py'], sha(new_verifier))
             self.assertEqual(refreshed_admin['desktop'], sha((base / 'desktop.json').read_bytes()))
+            self.assertEqual(len(label_copies), 3)
+
+    @unittest.skipUnless(os.name != 'nt' and hasattr(os, 'geteuid') and os.geteuid() == 0,
+                         'requires root Linux ownership primitives')
+    def test_atomic_write_keeps_original_when_label_copy_fails(self):
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory) / 'verify.py'
+            target.write_bytes(b'previous verifier')
+            with patch.object(migration.subprocess, 'run', side_effect=
+                              subprocess.CalledProcessError(1, 'chcon')):
+                with self.assertRaises(subprocess.CalledProcessError):
+                    migration.atomic_write(target, b'candidate', 0o444, target)
+            self.assertEqual(target.read_bytes(), b'previous verifier')
+            self.assertEqual(list(Path(directory).iterdir()), [target])
 
     def test_verifier_only_migration_is_quiescent_and_updates_linked_receipts(self):
         source = SOURCE.read_text()

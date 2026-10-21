@@ -39,6 +39,58 @@ prepares root-issued installer enrollment, and maps those accounts before openin
 login. Existing accounts require deliberate migration. Missing or changed inputs
 leave login gated; stored enrollment never establishes PROTECTED coverage.
 
+The ordinary-role generator retains the reviewed USB approval client in the
+role inventory but excludes it from `greyward_as_ordinary`, alongside the
+protected display domain. Its exact executable/context/session admission is
+checked separately by the unchanged live verifier. R6's fresh installation
+previously included the helper in ordinary coverage and therefore failed that
+check; the migrated `<validation-host>` reference did not exercise the same generation path.
+Generated CIL/JSON regression tests cover both cases. ISO staging checks the
+generator and verifier inside the selected RPM even on an installed-RPM import;
+the existing AppSec 69 RPM must be rebuilt in a matched candidate before the
+next image can contain this fix. Repairing an existing installation requires
+an offline policy/receipt migration, not editing the inventory alone.
+
+On retry, a `PENDING_SESSION` receipt is validated before the quiescence check.
+That phase only reads back the prepared enrollment, so a normal user process
+must not strand first boot after a previous attempt completed the mapping.
+`PREPARING` and `PREPARED_INPUTS` retain the quiescence requirement because they
+can still assemble policy or activate account mappings. The receipt does not
+replace live graphical-session coverage verification.
+
+20 October source/media verification: the helper extracted from candidate
+0.4.4's Enrollment 60 RPM still checks quiescence first. Its RPM SHA-256 is
+`79562e1872292f401e5fc2f154a3c8ca73c33296edce1b73b9c2b7ebca1a1980`.
+The pending-session regression fails against those actual packaged bytes and
+passes with the source correction. All 23 installer-enrollment tests pass in
+an isolated Linux/Python 3.12 environment, including invalid mapping, account,
+input digest, schema, enforcement and service readbacks. This is a source
+validation result, not Fedora SELinux enforcement or installed acceptance.
+The candidate's first-boot, provisioner, zsh configurator and acceptance scripts
+match current production source after line-ending normalization. No new RPM
+or ISO contains the retry correction. R6's protected transaction phase and
+seat-verifier failure remain unobserved; the retry defect must not be presented
+as their established cause. See [current status](../../docs/STATUS.md).
+
+21 October follow-up: R6's offline readback confirms `PENDING_SESSION`, all
+three enrollment-input digests, 1,014 protected desktop files, matching local
+account/origin records and the configured login mapping. Its setup log reaches
+final checks three times without committing completion. The first-boot
+readiness predicate incorrectly requires `dms-greeter`: the pinned 1.6.2
+[launcher](https://raw.githubusercontent.com/AvengeMedia/dank-greeter/v1.6.2/core/internal/launcher/logging.go) replaces itself with Labwc and starts Quickshell. Source now checks
+the greeter's compositor plus UI, and accepts an already logged-in desktop
+only through the existing root seat verifier. Six Linux shell-boundary tests
+pass. This does not establish that R6's protected-seat degradation is fixed.
+The same AppSec/Enrollment/DMS/Session versions on `<validation-host>` verify successfully
+in the broker's SELinux context in about 0.6 seconds. R6's subsequent rescue
+hot patch reached the desktop, but its live verifier rejected the ordinary
+role closure. A second approved offline migration corrected only the helper's
+attribute membership and dependent receipts, with file/store backups and
+without remapping accounts or changing the broker journal. After normal
+reboot/login, six live verifier readbacks pass, SELinux is Enforcing, and the
+user confirms that the authenticated Administration console opens.
+No new ISO has been validated; see [current status](../../docs/STATUS.md).
+
 For an already enrolled development system, the explicit protected DMS migration
 refreshes the root-owned authentication profile and session worker from the
 matched Application Security RPM. The session worker must use the private

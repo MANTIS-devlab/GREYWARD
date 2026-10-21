@@ -45,6 +45,8 @@ def sanitized_text(text, relative, excluded_files):
         text = text.replace('`.149`', '`<development-host>`')
         text = text.replace('192.168.1.150', '<validation-host>')
         text = text.replace('`.150`', '`<validation-host>`')
+        text = re.sub(r'(?<![\w.])\.149(?![\w.])', '<development-host>', text)
+        text = re.sub(r'(?<![\w.])\.150(?![\w.])', '<validation-host>', text)
         text = text.replace('GREYWARD-ALPHA-GEN2-20260828', '<development VM>')
         text = text.replace('GREYWARD ALPHA GEN2', '<development VM>')
         text = text.replace('antoi', '<local-user>')

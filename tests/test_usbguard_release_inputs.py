@@ -58,6 +58,21 @@ class UsbApprovalReleaseInputs(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'helper source receipt'):
                 CHECK.verify(ROOT, Path('same-version.rpm'), 'dms', lambda rpm, path: payloads[path])
 
+    def test_reviewed_crlf_helper_receipts_match_lf_checkout(self):
+        payloads = self.payloads('dms')
+        path = next(path for path in payloads if path.endswith('/release.json'))
+        receipt = {}
+        for key, source in [('usbguardApprovalSourceSha256', 'usbguard-approval.go'),
+                            ('usbguardAuthApprovalSourceSha256', 'usbguard-approval-execute.go')]:
+            content = CHECK.normalized((ROOT / 'packaging/greyward-dms' / source).read_bytes())
+            receipt[key] = hashlib.sha256(content.replace(b'\n', b'\r\n')).hexdigest()
+        payloads[path] = json.dumps(receipt).encode()
+        CHECK.verify(ROOT, Path('reviewed-crlf.rpm'), 'dms', lambda rpm, name: payloads[name])
+        receipt['usbguardApprovalSourceSha256'] = hashlib.sha256(content + b'changed').hexdigest()
+        payloads[path] = json.dumps(receipt).encode()
+        with self.assertRaisesRegex(ValueError, 'helper source receipt'):
+            CHECK.verify(ROOT, Path('changed.rpm'), 'dms', lambda rpm, name: payloads[name])
+
     def test_complete_iso_staging_invokes_all_package_checks(self):
         build = (ROOT / 'environment/image/build.sh').read_text()
         for kind in CHECK.SOURCES:
@@ -67,6 +82,22 @@ class UsbApprovalReleaseInputs(unittest.TestCase):
         dms = (ROOT / 'packaging/greyward-dms/greyward-dms.spec').read_text()
         self.assertIn("m['usbguardApprovalSourceSha256']", dms)
         self.assertIn("m['usbguardAuthApprovalSourceSha256']", dms)
+
+    def test_stale_fresh_enrollment_generator_is_rejected(self):
+        payloads = self.payloads('ordinary-role')
+        path = '/usr/share/greyward-application-security/desktop/ordinary-policy.py'
+        payloads[path] = b'ordinary = [t for t in domains if t != "greyward_as_display_t"]\n'
+        with self.assertRaisesRegex(ValueError, 'Stale or missing'):
+            CHECK.verify(ROOT, Path('installed-reference.rpm'), 'ordinary-role', lambda rpm, path: payloads[path])
+
+    def test_role_closure_check_also_runs_for_installed_imports(self):
+        build = (ROOT / 'environment/image/build.sh').read_text()
+        start = build.index('test -n "$usb_context_rpm"')
+        role = build.index('--kind ordinary-role --rpm "$appsec_rpm"', start)
+        condition = build.find('if [[ "$security_manifest_schema"', start)
+        if condition >= 0:
+            self.assertLess(role, condition)
+        self.assertLess(role, build.index('--kind dms --rpm ', start))
 
 
 if __name__ == '__main__':

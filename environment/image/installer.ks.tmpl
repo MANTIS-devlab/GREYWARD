@@ -146,6 +146,10 @@ ln -sfn ../firstboot-status.service \
 # boundary used by the first-boot services.
 install -d -m 0755 /mnt/sysroot/var/lib/greyward/installer
 /usr/bin/python3 "$target_stage/installer-accounts.py"
+# Never trust a completion marker left behind by an earlier installation on a
+# reused target. This image must enroll this Anaconda-created account before
+# any installed-system login provider is allowed to start.
+rm -f /mnt/sysroot/etc/greyward-production-complete
 # Keep every stock console login route gated until installer enrollment is
 # prepared. No PAM edits, predefined accounts or authentication bypass.
 for login_template in getty@ serial-getty@; do
@@ -162,13 +166,22 @@ done
 # the marker is absent or the installed closure is incomplete.
 touch /mnt/sysroot/var/lib/greyward/installer/anaconda-package-closure-installed
 touch /mnt/sysroot/var/lib/greyward/installer/production-pending
-# The offline RPM transaction already installed greetd. Hold login even if its
-# package preset enabled it; Type=exec ordering alone does not await setup.
-install -d -m 0755 /mnt/sysroot/etc/systemd/system/greetd.service.d
-cat > /mnt/sysroot/etc/systemd/system/greetd.service.d/greyward-production-firstboot.conf <<'EOF'
+# Ordering `Before=` is not a login gate: systemd continues with later units
+# after a failed first-boot service. Hold every installed login/setup route
+# until enrollment and production acceptance create this marker. Keep this
+# filename separate from provision.sh's runtime dependency drop-ins.
+for login_unit in \
+  greetd.service display-manager.service gdm.service sddm.service lightdm.service \
+  initial-setup.service initial-setup-reconfiguration.service \
+  gnome-initial-setup.service \
+  gnome-initial-setup-first-login.service gnome-initial-setup-copy-worker.service \
+  user@.service; do
+  install -d -m 0755 "/mnt/sysroot/etc/systemd/system/$login_unit.d"
+  cat > "/mnt/sysroot/etc/systemd/system/$login_unit.d/greyward-production-install-gate.conf" <<'EOF'
 [Unit]
 ConditionPathExists=/etc/greyward-production-complete
 EOF
+done
 # The first-boot gate owns the visible setup experience.  tty1 has its own
 # independent getty target, so gate it as well or users see a misleading login
 # prompt while the installed system is still being finalized.
@@ -179,7 +192,10 @@ ConditionPathExists=!/var/lib/greyward/installer/production-pending
 EOF
 # Avoid asking systemctl to talk to a bus in the installer environment; this
 # is the same on-disk default-target link that systemctl set-default creates.
-ln -sfn /usr/lib/systemd/system/graphical.target /mnt/sysroot/etc/systemd/system/default.target
+# Keep first installed boot in text mode until production provisioning,
+# enrollment and acceptance all pass. The finalizer selects graphical.target
+# only after the completion checks succeed.
+ln -sfn /usr/lib/systemd/system/multi-user.target /mnt/sysroot/etc/systemd/system/default.target
 # Do not mask Initial Setup in this post section: Anaconda must finish its
 # account workflow first. The first-boot finalizer masks any residual setup
 # path only after reboot and before it releases the GREYWARD login boundary.

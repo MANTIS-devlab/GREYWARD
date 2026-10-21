@@ -43,7 +43,7 @@ checks to Fedora's existing `system-auth` stack. It does not rewrite authselect,
 login, greeter PAM or enable authentication synchronization. An actual native password unlock was observed on .149. The 1.6.2-6 candidate
 also restored a secure native surface automatically after a shell restart while
 the logind session remained locked. Repeated authenticated cycles, failed-password
-behaviour and suspend/resume remain acceptance gates; .149 is not rebooted.
+behaviour and suspend/resume remain acceptance gates; <development-host> is not rebooted.
 
 ## Package and runtime contract
 
@@ -138,7 +138,7 @@ replace outstanding promotion gates or establish graphical authentication succes
 | 3: desktop parity | Theme/bar/settings/launcher/AppsDock/Polkit/popouts; delete obsolete hunks; equal-resolution/scaling captures and direct interaction |
 | 4: authoritative integration | Four plugins/reload/freshness/routes/USB/privacy/notifications; every lock entrypoint; repeated lock/unlock, failed locker, suspend/resume; Update Center only |
 | 5: upstream benefits | Internal dgop, screenshot metadata, state migration, narrower icons, lazy geolocation, no duplicate delivery/discovery assumptions or new default requests |
-| 6: regression/performance | Full matrices below on .149, then fresh installation and applicable hardware; no unresolved mandatory failure; demonstrated rollback |
+| 6: regression/performance | Full matrices below on <development-host>, then fresh installation and applicable hardware; no unresolved mandatory failure; demonstrated rollback |
 | 7: promotion | Change tested production/image inputs and current docs together only after upstream-review contract and all applicable gates; retain previous artifacts through login/reboot/rollback |
 
 Working-tree edits never reset or silently include unrelated changes. The migration

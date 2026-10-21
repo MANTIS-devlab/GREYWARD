@@ -1,6 +1,6 @@
 Name: greyward-session
 Version: 0.1.0
-Release: 22%{?dist}
+Release: 23%{?dist}
 Summary: GREYWARD static desktop session policy and factory defaults
 License: GPL-3.0-only
 BuildArch: noarch
@@ -67,6 +67,10 @@ done
 /usr/share/greyward/defaults
 
 %changelog
+* Wed Oct 21 2026 MANTIS SYSTEMS - 0.1.0-23
+- Rebuild canonical LF defaults for exact installer payload verification.
+- Retain native window snapping and the current session integration inputs.
+
 * Mon Oct 19 2026 MANTIS SYSTEMS - 0.1.0-22
 - Normalize the protected session launcher to LF so its shebang works in installed systems.
 

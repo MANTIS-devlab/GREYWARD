@@ -489,7 +489,16 @@ if [[ "$target_install" != 1 ]]; then
     production_home=$(getent passwd "$production_user" | awk -F: '{ print $6 }')
     production_group=$(id -gn "$production_user")
     test -n "$production_home"
-    /usr/local/libexec/greyward-configure-zsh "$production_user"
+    if [[ "${GREYWARD_FIRSTBOOT_FINALIZE:-0}" == 1 ]]; then
+      # Enrollment must inspect a quiescent account. Select its final shell
+      # now without starting a user process; configure the user's Git-based
+      # shell assets only after enrollment succeeds.
+      usermod --shell /usr/bin/zsh "$production_user"
+      printf 'GREYWARD provisioning: deferring interactive shell setup for %s until enrollment completes\n' \
+        "$production_user"
+    else
+      /usr/local/libexec/greyward-configure-zsh "$production_user"
+    fi
     # Anaconda or an earlier package may have created .local as root before
     # the account was finalized.  DMS writes its session state below
     # .local/state, so repair only the user-owned session roots here without
@@ -676,7 +685,11 @@ else
   # The native Anaconda workflow owns completion and reboot.
   rm -f /etc/systemd/system/getty@tty1.service.d/autologin.conf
   systemctl disable --now getty@tty1.service 2>/dev/null || true
-  systemctl set-default graphical.target
+  if [[ "${GREYWARD_FIRSTBOOT_FINALIZE:-0}" == 1 ]]; then
+    systemctl set-default multi-user.target
+  else
+    systemctl set-default graphical.target
+  fi
   # The production login contract is greetd -> DMS Greeter -> Labwc. Remove
   # any residual GDM/Initial Setup packages after Anaconda has finished, with
   # autoremove disabled so unrelated desktop libraries and user applications

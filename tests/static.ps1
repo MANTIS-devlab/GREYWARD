@@ -282,8 +282,11 @@ if ((Test-Path -LiteralPath $productionProvisionPath) -and (Test-Path -LiteralPa
     if ($firstbootScript -notmatch 'reset-failed greetd\.service' -or
         $firstbootScript -notmatch 'systemctl start greetd\.service' -or
         $firstbootScript -notmatch 'is-active --quiet greetd\.service' -or
-        $firstbootScript -notmatch 'pgrep -u greeter -x dms-greeter' -or
+        -not $firstbootScript.Contains("pgrep -u greeter -x 'qs|quickshell'") -or
         $firstbootScript -notmatch 'pgrep -u greeter -x labwc' -or
+        $firstbootScript -notmatch 'protected_session_is_ready' -or
+        $firstbootScript -notmatch '/usr/lib/greyward/application-security/desktop/verify.py' -or
+        $firstbootScript -match 'pgrep -u greeter -x dms-greeter' -or
         $firstbootScript -notmatch 'greetd-failure\.txt') {
         $errors.Add('First-boot finalization must verify the actual DMS Greeter/Labwc hand-off after acceptance succeeds.')
     }
@@ -632,6 +635,18 @@ if (Test-Path -LiteralPath $imageKickstartPath) {
     if ($installer -notmatch 'install -d -m 0755 /mnt/sysroot/var/lib/greyward/installer' -or
         $installer -notmatch 'touch /mnt/sysroot/var/lib/greyward/installer/production-pending') {
         $errors.Add('The installer must create the first-boot marker directory before writing production-pending.')
+    }
+    if ($installer -notmatch 'rm -f /mnt/sysroot/etc/greyward-production-complete' -or
+        $installer -notmatch 'greyward-production-install-gate.conf' -or
+        $installer -notmatch 'display-manager.service' -or
+        $installer -notmatch 'gdm.service' -or
+        $installer -notmatch 'initial-setup-reconfiguration.service' -or
+        $installer -notmatch 'user@.service' -or
+        $installer -notmatch 'ConditionPathExists=/etc/greyward-production-complete' -or
+        $productionAcceptance -notmatch 'greyward-production-install-gate.conf' -or
+        $productionAcceptance -notmatch 'user@.service' -or
+        $productionAcceptance -notmatch 'ConditionPathExists=/etc/greyward-production-complete') {
+        $errors.Add('The installer must keep all graphical login and setup routes gated until enrollment and acceptance complete.')
     }
     if ($installer -match 'liveinst|greyward-live|account-handoff|account-contract') {
         $errors.Add('The installer-only Kickstart must not carry a live desktop or temporary-account hand-off.')

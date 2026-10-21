@@ -1,6 +1,6 @@
 Name:           greyward-application-security-experimental
 Version:        0.1.0
-Release:        69%{?dist}
+Release:        70%{?dist}
 Summary:        Experimental GREYWARD application-security runtime and Guard CLI
 License:        GPL-3.0-only AND MIT
 Source0:        %{name}-%{version}.tar.gz
@@ -157,6 +157,10 @@ install -Dm0644 packaging/application-security/systems.mantis.greyward.Applicati
 %{_datadir}/dbus-1/system.d/systems.mantis.greyward.ApplicationSecurityDevelopment1.conf
 
 %changelog
+* Wed Oct 21 2026 MANTIS SYSTEMS - 0.1.0-70
+- Keep the reviewed USB approval helper outside generated ordinary coverage.
+- Carry the protected-seat regression fix into fresh installations.
+
 * Tue Oct 20 2026 MANTIS SYSTEMS - 0.1.0-69
 - Use the same centered authorization card on the protected input and mirror displays.
 - Keep one protected password field; mirror only masked input feedback and the same actions.

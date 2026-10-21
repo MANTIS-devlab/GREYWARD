@@ -1,6 +1,81 @@
 # File manager and desktop integration
 
-## Current development proof — 14 October
+## Multiple screens — Files 18 candidate, 21 October
+
+The private PCManFM desktop now uses LayerBottom, above DMS wallpaper and below
+normal application windows. Both had used the background layer; DMS surface
+recreation after hotplug could obscure transparent icons depending on map order.
+Output reconciliation creates exactly one desktop per connected named output and
+removes obsolete surfaces after Qt publishes a connection change.
+
+Each Desktop entry has one screen owner in the ordinary user's profile file
+`desktop-outputs.conf`. Unassigned entries start on the primary output. Dragging
+an existing Desktop entry onto another screen changes placement only, without
+copying or deleting its file. The context menu also offers **Move to Screen**,
+with model and connector labels. If a screen disconnects, its icons appear on
+one available screen; their preference remains saved for reconnection. Existing
+per-output grid positions and user settings are preserved. Connector identity is
+used; moving a monitor to a different connector does not preserve its identity.
+This display state grants no file, policy or authentication permissions.
+
+Ownership: `environment/session/desktop/output-layout.h` and
+`packaging/greyward-files/pcmanfm-multi-output.patch`, applied after the existing
+FileManager1 desktop-only patch to the manifest-pinned PCManFM 2.4.1 archive.
+The Qt desktop is a PIE executable built with Fedora compiler/linker hardening.
+The spec explicitly preserves those linker options and enables PIE. A direct
+native build must retain the same contract; the integration runner rejects a
+non-PIE ELF or failed Qt signal connections. Its private D-Bus omits service
+autostarts, so portals/GVfs cannot create incidental FUSE mounts in the fixture.
+The spec runs `tests/test_desktop_output_layout.cpp`. For actual native models,
+drag events and output changes, run `python3 tests/run_desktop_outputs.py
+--build BUILD --source PATCHED-PCMANFM --work NEW-DIRECTORY` on Linux with Labwc
+and wlr-randr. This creates a private headless three-output seat, never attaches
+to a user's display or bus, and ends only its own test process group.
+
+Native compilation and 23 layout checks passed; the native
+three-output integration passed unique visibility, metadata-only drag, actual
+output disable/re-enable, fallback, restored ownership and live file creation/
+deletion. The final PIE run completes without Qt signal-binding errors. This synthetic
+seat does not establish physical monitor acceptance. The earlier `<validation-host>` snapshot reports all three
+connectors connected, a true installed verifier and SELinux Enforcing.
+Historical provisional deployment: the base package was Files 17. Only its private desktop executable was
+replaced with the validated Fedora-hardened PIE candidate (SHA-256
+`5707299880a930aab6de7772345104edcd863a2f268080b69f4171b916862bcf`).
+The original executable and profile are backed up. Root ownership, mode and the
+SELinux label are preserved. RPM verification reports exactly this one expected
+modified file; Strata and all other Files payloads remain unchanged. The seat
+readback is true and SELinux remains Enforcing. Activation through the existing
+ordinary icon service and physical three-screen acceptance await the user.
+Deployment itself restarted no processes, shell, compositor or authentication
+service. A preliminary non-PIE direct build was withdrawn and is not eligible.
+
+Full Files 18 RPM construction now passes its normal offline build and `%check`:
+23 layout checks and three Rust metadata tests. The final bounded build uses
+3 GiB RAM and 3 GiB swap ceilings while retaining the desktop reserve; no user
+session is closed. Earlier bounded attempts failed or stopped and are superseded
+by this completed build. RPM SHA-256:
+`5d75cd44b87bd74902de913c5aa4567b4ad06712e2ac2cfc776aa41e4f3286d7`.
+The packaged desktop is PIE; all 835 icon assets match Files 17. This exact RPM
+is now installed on `<validation-host>`, superseding the provisional executable replacement.
+The dependency dry run and upgrade passed; RPM verification is clean, both
+installed executable hashes match the build evidence, and no desktop dependency
+is missing. The old RPM, native executable and profile backups are retained.
+SELinux remains Enforcing. Installation took place at the greeter, with no
+service/session/compositor restart; the next normal login loads this desktop.
+A live protected-seat and physical placement check are not claimed at the greeter.
+The actual packaged ELF also passes a private headless three/two/three-output
+reconciliation check without Qt signal-binding errors. Physical acceptance
+remains deferred by the user.
+
+The normal offline source/Rust/Qt RPM build remains authoritative. ISO staging
+now also compares the installed Files `source.json` with the canonical manifest,
+which pins both desktop patches and the shared layout header,
+so a cached package missing the multi-output patch cannot silently enter a new
+image. Files 18 is included in the verified 0.4.5 internal media candidate
+recorded in [ISO creation](ISO_CREATION.md); physical hotplug, installed workflow
+and clean-install acceptance remain separate gates.
+
+## Historical development proof — 14 October
 
 ### ISO 0.4.0 candidate integration
 

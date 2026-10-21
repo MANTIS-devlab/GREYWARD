@@ -11,7 +11,7 @@ The retained September artifact is
 SHA-256 `fb578bfd6797b9cc6d1e5bef7b52620a5622ea7bfc5ba0a4e2f631f13630b953`.
 The inspected October artifact is `greyward-installer-20261004-6-6-53-58.iso`,
 SHA-256 `30db0c70ca747ca9e56f9ae8a1aff8ab7c6a036829b6eff7a39faf0288cbe25a`.
-Both were read directly on .149, without changing a running test installation.
+Both were read directly on <development-host>, without changing a running test installation.
 
 Git commit `2c83da1` (6 September) already records the direct Fedora Everything
 Anaconda workflow, graphical account ownership, encrypted Btrfs and `updates.img`.
@@ -155,7 +155,7 @@ Evidence: `logs/fresh-install-package-extraction.log`,
 `logs/fresh-install-packaged-context-tests.log`,
 `logs/fresh-install-packaged-context-imports.json` and
 `logs/fresh-install-component-reuse.json`. Read-only extracted-module checks
-on .149 report ClamAV CURRENT and Secure DNS SecureProvider; these are explicitly
+on <development-host> report ClamAV CURRENT and Secure DNS SecureProvider; these are explicitly
 development-host observations, not fresh-install acceptance. No changed package
 was installed and no running service was restarted. Secure DNS's actual installed
 state and service logs have been requested; its warning is not suppressed merely
@@ -192,12 +192,12 @@ restoration for `home.arpa` and `mshome.net`; the host's resolver/interfaces rem
 untouched. Evidence: `logs/portable-dns-resolved-home-arpa.log`,
 `logs/portable-dns-resolved-mshome-net.log`, `logs/portable-dns-source-context-tests.log`.
 Center 57/Context 62 built and pass 239 extracted/installed-package tests with
-31 project imports pinned to RPM bytes. The actual root service on .149 passes
+31 project imports pinned to RPM bytes. The actual root service on <development-host> passes
 public encryption, private resolution, scoped admission, no public query at the
 private fixture, and restoration; no recent AVC was found and the DMS PID stayed
 unchanged. Evidence: `logs/portable-dns-installed-service-canary.log`,
 `logs/portable-dns-installed-context-tests.log`, `logs/portable-dns-avc-recent.log`.
-Only .149's paired Security packages were updated; the user's installation VM is
+Only <development-host>'s paired Security packages were updated; the user's installation VM is
 untouched. Replacement-image acceptance remains open. The [Secure DNS contract](../security/SECURE_DNS_IMPLEMENTATION_PLAN.md)
 records the runtime scope and precise permission/rollback boundary.
 

@@ -1,8 +1,17 @@
 # GREYWARD file integration candidate
 
-Candidate only; production package closure and real workflow acceptance remain
+Candidate only; installed workflow and clean-install acceptance remain
 pending. The owning evidence and rollout gates are in
 [file manager and desktop integration](../../docs/architecture/FILE_MANAGER_DESKTOP.md).
+
+Revision 18 adds unique per-screen desktop icon ownership, native cross-screen
+drag and a Move to Screen menu, with disconnect fallback and reconnect restoration.
+The pinned PCManFM patch places icons above DMS wallpaper and reconciles surfaces
+after output changes. The ordinary user's settings and file contents are retained.
+The QtCore layout test runs in RPM `%check`; the explicit private three-output
+Wayland test is `tests/run_desktop_outputs.py`. Its synthetic results and physical
+acceptance are tracked separately in the owning architecture document. ISO staging
+compares the packaged source manifest, including both desktop patch digests.
 
 Revision 17 retains revision 15's source-built executable and strengthens the
 shared semantic icon glyphs with balanced colors and darker tinted badges;

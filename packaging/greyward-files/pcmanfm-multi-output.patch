@@ -1,0 +1,416 @@
+--- a/pcmanfm/application.h
++++ b/pcmanfm/application.h
+@@ -22,6 +22,8 @@
+ #define PCMANFM_APPLICATION_H
+ 
+ #include <QApplication>
++#include <memory>
++#include "greyward-output-layout.h"
+ #include "settings.h"
+ #include <libfm-qt6/libfmqt.h>
+ #include <libfm-qt6/editbookmarksdialog.h>
+@@ -97,6 +99,12 @@
+         return enableDesktopManager_;
+     }
+ 
++    Greyward::DesktopOutputLayout& desktopOutputLayout();
++    QStringList desktopOutputNames() const;
++    QString desktopItemOutput(const QString& name);
++    bool moveDesktopItems(const QStringList& names, const QString& output);
++    void refreshDesktopLayouts();
++
+     void updateFromSettings();
+     void updateDesktopsFromSettings(bool changeSlide = true, bool allowShortcutRemoval = false);
+ 
+@@ -120,6 +128,7 @@
+     void onVirtualGeometryChanged(const QRect& rect);
+     void onAvailableGeometryChanged(const QRect& rect);
+     void onScreenDestroyed(QObject* screenObj);
++    void syncWaylandDesktops();
+     void onScreenAdded(QScreen* newScreen);
+     void onScreenRemoved(QScreen* oldScreen);
+     void reloadDesktopsAsNeeded();
+@@ -150,6 +159,7 @@
+     bool daemonMode_;
+     bool enableDesktopManager_;
+     QVector<DesktopWindow*> desktopWindows_;
++    std::unique_ptr<Greyward::DesktopOutputLayout> desktopOutputLayout_;
+     QPointer<PreferencesDialog> preferencesDialog_;
+     QPointer<DesktopPreferencesDialog> desktopPreferencesDialog_;
+     QPointer<Fm::EditBookmarksDialog> editBookmarksialog_;
+--- a/pcmanfm/application.cpp
++++ b/pcmanfm/application.cpp
+@@ -33,6 +33,9 @@
+ #include <QCommandLineParser>
+ #include <QSocketNotifier>
+ #include <QScreen>
++#include <QTimer>
++#include <QSet>
++#include <QDebug>
+ #include <QWindow>
+ #include <QFileSystemWatcher>
+ 
+@@ -459,6 +462,7 @@
+                     connect(screen, &QObject::destroyed, this, &Application::onScreenDestroyed);
+                 }
+             }
++            connect(this, &QApplication::primaryScreenChanged, this, &Application::refreshDesktopLayouts);
+             connect(this, &QApplication::screenAdded, this, &Application::onScreenAdded);
+             connect(this, &QApplication::screenRemoved, this, &Application::onScreenRemoved);
+ 
+@@ -470,6 +474,10 @@
+                 DesktopWindow* window = createDesktopWindow(-1);
+                 desktopWindows_.push_back(window);
+             }
++            else if(underWayland_) {
++                // Reconcile after Qt has finished publishing the real outputs.
++                QTimer::singleShot(0, this, &Application::syncWaylandDesktops);
++            }
+             else {
+                 int n = std::max(allScreens.size(), (qsizetype) 1);
+                 desktopWindows_.reserve(n);
+@@ -496,6 +504,7 @@
+                     disconnect(screen, &QObject::destroyed, this, &Application::onScreenDestroyed);
+                 }
+             }
++            disconnect(this, &QApplication::primaryScreenChanged, this, &Application::refreshDesktopLayouts);
+             disconnect(this, &QApplication::screenAdded, this, &Application::onScreenAdded);
+             disconnect(this, &QApplication::screenRemoved, this, &Application::onScreenRemoved);
+             // removeNativeEventFilter(this);
+@@ -947,12 +956,80 @@
+ }
+ #endif
+ 
++Greyward::DesktopOutputLayout& Application::desktopOutputLayout() {
++    if(!desktopOutputLayout_) {
++        desktopOutputLayout_ = std::make_unique<Greyward::DesktopOutputLayout>(
++            settings_.profileDir(profileName_) + QStringLiteral("/desktop-outputs.conf"));
++    }
++    return *desktopOutputLayout_;
++}
++
++QStringList Application::desktopOutputNames() const {
++    QStringList names;
++    for(auto screen : screens()) {
++        if(!screen->name().isEmpty() && !screen->geometry().isEmpty() && !names.contains(screen->name())) {
++            names.append(screen->name());
++        }
++    }
++    return names;
++}
++
++QString Application::desktopItemOutput(const QString& name) {
++    return desktopOutputLayout().owner(name, desktopOutputNames(),
++        primaryScreen() ? primaryScreen()->name() : QString());
++}
++
++bool Application::moveDesktopItems(const QStringList& names, const QString& output) {
++    if(!desktopOutputLayout().assign(names, output, desktopOutputNames())) {
++        return false;
++    }
++    refreshDesktopLayouts();
++    return true;
++}
++
++void Application::refreshDesktopLayouts() {
++    if(underWayland_ && enableDesktopManager_) {
++        for(auto window : std::as_const(desktopWindows_)) {
++            window->refreshOutputLayout();
++        }
++    }
++}
++
++void Application::syncWaylandDesktops() {
++    if(!underWayland_ || !enableDesktopManager_) {
++        return;
++    }
++    const auto names = desktopOutputNames();
++    QSet<QString> retained;
++    for(int i = desktopWindows_.size() - 1; i >= 0; --i) {
++        const auto name = desktopWindows_.at(i)->screenName();
++        if(!names.contains(name) || retained.contains(name)) {
++            delete desktopWindows_.takeAt(i);
++        }
++        else {
++            retained.insert(name);
++        }
++    }
++    for(auto screen : screens()) {
++        if(names.contains(screen->name()) && !retained.contains(screen->name())) {
++            desktopWindows_.append(createDesktopWindow(screens().indexOf(screen), screen->name()));
++            retained.insert(screen->name());
++        }
++    }
++    refreshDesktopLayouts();
++    qInfo() << "GREYWARD desktop outputs:" << retained.size() << names;
++}
++
+ void Application::onScreenAdded(QScreen* newScreen) {
+     if(enableDesktopManager_) {
+         connect(newScreen, &QScreen::virtualGeometryChanged, this, &Application::onVirtualGeometryChanged);
+         connect(newScreen, &QScreen::availableGeometryChanged, this, &Application::onAvailableGeometryChanged);
+         if(!underWayland_) {
+             connect(newScreen, &QObject::destroyed, this, &Application::onScreenDestroyed);
++        }
++        if(underWayland_) {
++            QTimer::singleShot(0, this, &Application::syncWaylandDesktops);
++            return;
+         }
+         const auto siblings = primaryScreen()->virtualSiblings();
+         if(!underWayland_ // Under Wayland, separate desktops are created for avoiding problems.
+@@ -981,6 +1058,10 @@
+         disconnect(oldScreen, &QScreen::availableGeometryChanged, this, &Application::onAvailableGeometryChanged);
+         if(!underWayland_) {
+             disconnect(oldScreen, &QObject::destroyed, this, &Application::onScreenDestroyed);
++        }
++        if(underWayland_) {
++            QTimer::singleShot(0, this, &Application::syncWaylandDesktops);
++            return;
+         }
+         if(desktopWindows_.isEmpty()) {
+             return;
+--- a/pcmanfm/desktopwindow.h
++++ b/pcmanfm/desktopwindow.h
+@@ -21,6 +21,7 @@
+ #define PCMANFM_DESKTOPWINDOW_H
+ 
+ #include "view.h"
++#include <libfm-qt6/proxyfoldermodel.h>
+ #include "launcher.h"
+ #include <unordered_map>
+ #include <string>
+@@ -42,7 +43,7 @@
+ 
+ class Settings;
+ 
+-class DesktopWindow : public View {
++class DesktopWindow : public View, public Fm::ProxyFolderModelFilter {
+     Q_OBJECT
+ public:
+     friend class Application;
+@@ -88,6 +89,8 @@
+     }
+ 
+     QScreen* getDesktopScreen() const;
++    void refreshOutputLayout();
++    bool filterAcceptsRow(const Fm::ProxyFolderModel*, const std::shared_ptr<const Fm::FileInfo>& info) const override;
+ 
+ protected:
+     virtual void prepareFolderMenu(Fm::FolderMenu* menu) override;
+@@ -198,6 +201,7 @@
+ 
+     int screenNum_; // for X11
+     QString screenName_; // for Wayland
++    QStringList pendingOutputItems_;
+     std::unordered_map<std::string, QPoint> customItemPos_; // real custom positions
+     std::unordered_map<std::string, QPoint> customPosStorage_; // savable custom positions
+     QTimer* relayoutTimer_;
+--- a/pcmanfm/desktopwindow.cpp
++++ b/pcmanfm/desktopwindow.cpp
+@@ -64,6 +64,7 @@
+ #include "desktopentrydialog.h"
+ 
+ #include <QScreen>
++#include <QMessageBox>
+ #include <xcb/xcb.h>
+ #include <X11/Xlib.h>
+ 
+@@ -135,6 +136,9 @@
+         connect(folder_.get(), &Fm::Folder::finishLoading, this, &DesktopWindow::onFolderFinishLoading);
+ 
+         proxyModel_ = new Fm::ProxyFolderModel();
++        if(static_cast<Application*>(qApp)->underWayland()) {
++            proxyModel_->addFilter(this);
++        }
+         proxyModel_->setSourceModel(model_);
+         proxyModel_->setShowThumbnails(settings.showThumbnails());
+         proxyModel_->setBackupAsHidden(settings.backupAsHidden());
+@@ -205,7 +209,9 @@
+         winId();
+         if(QWindow* win = windowHandle()) {
+             if(LayerShellQt::Window* layershell = LayerShellQt::Window::get(win)) {
+-                layershell->setLayer(LayerShellQt::Window::Layer::LayerBackground);
++                // DMS owns the background. Keep transparent icons above wallpaper
++                // even when DMS remaps it after output hotplug or wake.
++                layershell->setLayer(LayerShellQt::Window::Layer::LayerBottom);
+                 LayerShellQt::Window::Anchors anchors = {LayerShellQt::Window::AnchorTop
+                                                          | LayerShellQt::Window::AnchorBottom
+                                                          | LayerShellQt::Window::AnchorLeft
+@@ -219,7 +225,7 @@
+                 if(screen != nullptr) {
+                     win->setScreen(screen);
+                     layershell->setWantsToBeOnActiveScreen(false);
+-                    layershell->setScreen(nullptr);
++                    layershell->setScreen(screen);
+                 }
+                 else {
+                     layershell->setWantsToBeOnActiveScreen(true);
+@@ -229,7 +235,22 @@
+     }
+ }
+ 
++bool DesktopWindow::filterAcceptsRow(const Fm::ProxyFolderModel*, const std::shared_ptr<const Fm::FileInfo>& info) const {
++    auto app = static_cast<Application*>(qApp);
++    return !app->underWayland() || (info && app->desktopItemOutput(QString::fromStdString(info->name())) == screenName_);
++}
++
++void DesktopWindow::refreshOutputLayout() {
++    if(proxyModel_) {
++        proxyModel_->updateFilters();
++        queueRelayout();
++    }
++}
++
+ DesktopWindow::~DesktopWindow() {
++    if(proxyModel_) {
++        proxyModel_->removeFilter(this);
++    }
+     if(trashMonitor_) {
+         g_signal_handlers_disconnect_by_func(trashMonitor_, (gpointer)G_CALLBACK(onTrashChanged), this);
+         g_object_unref(trashMonitor_);
+@@ -532,6 +553,9 @@
+ 
+     if(proxyModel_ == nullptr) {
+         proxyModel_ = new Fm::ProxyFolderModel();
++        if(static_cast<Application*>(qApp)->underWayland()) {
++            proxyModel_->addFilter(this);
++        }
+         setModel(proxyModel_);
+         connect(proxyModel_, &Fm::ProxyFolderModel::rowsInserted, this, &DesktopWindow::onRowsInserted);
+         connect(proxyModel_, &Fm::ProxyFolderModel::rowsAboutToBeRemoved, this, &DesktopWindow::onRowsAboutToBeRemoved);
+@@ -1097,6 +1121,26 @@
+ void DesktopWindow::prepareFileMenu(Fm::FileMenu* menu) {
+     // qDebug("DesktopWindow::prepareFileMenu");
+     PCManFM::View::prepareFileMenu(menu);
++    auto app = static_cast<Application*>(qApp);
++    if(app->underWayland() && app->desktopOutputNames().size() > 1) {
++        auto outputs = new QMenu(tr("Move to Screen"), menu);
++        QStringList names;
++        for(const auto& file : menu->files()) {
++            names.append(QString::fromStdString(file->name()));
++        }
++        for(auto screen : qApp->screens()) {
++            if(!app->desktopOutputNames().contains(screen->name())) continue;
++            const auto output = screen->name();
++            const auto label = screen->model().isEmpty() ? output : QStringLiteral("%1 (%2)").arg(screen->model(), output);
++            auto action = outputs->addAction(label);
++            connect(action, &QAction::triggered, this, [this, names, output, app] {
++                if(!app->moveDesktopItems(names, output)) {
++                    QMessageBox::warning(this, tr("Desktop"), tr("Could not save the desktop arrangement."));
++                }
++            });
++        }
++        menu->insertMenu(menu->separator2(), outputs);
++    }
+ 
+     if(!static_cast<Application*>(qApp)->settings().allSticky()) {
+         QAction* action = new QAction(tr("Stic&k to Current Position"), menu);
+@@ -1339,6 +1383,11 @@
+ }
+ 
+ void DesktopWindow::onInlineRenaming(const QString& oldName, const QString& newName) {
++    auto app = static_cast<Application*>(qApp);
++    if(app->underWayland()) {
++        app->desktopOutputLayout().renamed(oldName, newName);
++        QTimer::singleShot(0, app, &Application::refreshDesktopLayouts);
++    }
+     // preserve custom position on inline renaming
+     auto old_name = oldName.toStdString();
+     for(auto it = customItemPos_.cbegin(); it != customItemPos_.cend(); ++it) {
+@@ -2023,7 +2072,7 @@
+     auto delegate = static_cast<Fm::FolderItemDelegate*>(listView_->itemDelegateForColumn(0));
+     auto grid = delegate->itemSize();
+     QRect workArea = getWorkArea(screen);
+-    bool isTrash;
++    bool isTrash = false;
+     QRect oldDropRect = dropRect_;
+     dropRect_ = QRect();
+     QModelIndex dropIndex = indexForPos(&isTrash, e->position().toPoint(), workArea, grid);
+@@ -2051,6 +2100,16 @@
+     if(oldDropRect != dropRect_) {
+         listView_->viewport()->update();
+     }
++    if(static_cast<Application*>(qApp)->underWayland() && e->source() != listView_
++       && e->modifiers() == Qt::NoModifier && !isTrash) {
++        const auto info = proxyModel_->fileInfoFromIndex(dropIndex);
++        if((!info || !info->isDir()) && !Greyward::DesktopOutputLayout::desktopDropItems(
++                e->mimeData()->urls(), XdgDir::readDesktopDir()).isEmpty()) {
++            e->setDropAction(Qt::CopyAction); // layout metadata only; never request source deletion
++            e->accept();
++            return;
++        }
++    }
+ }
+ 
+ void DesktopWindow::paintDropIndicator()
+@@ -2073,6 +2132,37 @@
+     auto grid = delegate->itemSize();
+     QRect workArea = getWorkArea(screen);
+     const QMimeData* mimeData = e->mimeData();
++    if(static_cast<Application*>(qApp)->underWayland() && e->source() != listView_
++       && e->modifiers() == Qt::NoModifier) {
++        bool isTrash = false;
++        const auto index = indexForPos(&isTrash, e->position().toPoint(), workArea, grid);
++        const auto info = proxyModel_->fileInfoFromIndex(index);
++        const auto names = Greyward::DesktopOutputLayout::desktopDropItems(mimeData->urls(), XdgDir::readDesktopDir());
++        if(!isTrash && (!info || !info->isDir()) && !names.isEmpty()) {
++            auto app = static_cast<Application*>(qApp);
++            if(!app->moveDesktopItems(names, screenName_)) {
++                e->ignore();
++                QMessageBox::warning(this, tr("Desktop"), tr("Could not save the desktop arrangement."));
++                return;
++            }
++            QPoint pos = e->position().toPoint();
++            if(layoutDirection() == Qt::RightToLeft) pos.setX(width() - pos.x());
++            bool last = false;
++            std::set<std::string> placed;
++            for(const auto& name : names) {
++                last = stickToPosition(name.toStdString(), pos, workArea, grid, last, placed);
++                placed.insert(name.toStdString());
++            }
++            storeCustomPos();
++            saveItemPositions();
++            queueRelayout();
++            dropRect_ = QRect();
++            listView_->viewport()->update();
++            e->setDropAction(Qt::CopyAction);
++            e->accept();
++            return;
++        }
++    }
+     bool moveItem = false;
+     QModelIndex curIndx = listView_->currentIndex();
+     if(e->source() == listView_ && e->modifiers() == Qt::NoModifier) {
+@@ -2217,6 +2307,15 @@
+             }
+         }
+ 
++        pendingOutputItems_.clear();
++        if(static_cast<Application*>(qApp)->underWayland() && mimeData->hasUrls()) {
++            const auto info = proxyModel_->fileInfoFromIndex(dropIndex);
++            if(!info || !info->isDir()) {
++                for(const auto& url : mimeData->urls()) {
++                    if(!url.fileName().isEmpty()) pendingOutputItems_.append(url.fileName());
++                }
++            }
++        }
+         // store current positions before the drop; see DesktopWindow::onDecidingDrop()
+         storeCustomPos();
+ 
+@@ -2264,12 +2363,16 @@
+ 
+ void DesktopWindow::onDecidingDrop(bool accepted) {
+     if(accepted) {
++        if(!pendingOutputItems_.isEmpty()) {
++            static_cast<Application*>(qApp)->moveDesktopItems(pendingOutputItems_, screenName_);
++        }
+         storeCustomPos();
+     }
+     else {
+         customItemPos_.clear();
+         customItemPos_ = customPosStorage_;
+     }
++    pendingOutputItems_.clear();
+ }
+ 
+ // NOTE: This function positions items from top to bottom and left to right,

@@ -116,7 +116,7 @@ bus and resolver, leaving the host's resolver and interfaces untouched. These ar
 candidate checks, not acceptance of the user's installed ISO.
 
 Center 57/Context 62 package receipts match their payloads. All 239 tests also
-pass with 31 imports pinned to extracted and installed RPM modules. On .149,
+pass with 31 imports pinned to extracted and installed RPM modules. On <development-host>,
 the actual constrained system unit passed a bounded `mshome.net` canary: public
 DoT/DNSSEC, local resolution, scoped OpenSnitch admission, no public query at the
 private server, and restoration. Its runtime public file disappeared after stop

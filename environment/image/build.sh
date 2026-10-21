@@ -267,6 +267,7 @@ if [[ -n "$files_rpm" ]]; then
   fi
   for file_contract in \
     './usr/bin/strata|/usr/bin/strata' \
+    './usr/share/greyward/files/source.json|/usr/share/greyward/files/source.json' \
     './usr/lib/systemd/user/greyward-desktop-icons.service|/usr/lib/systemd/user/greyward-desktop-icons.service' \
     './usr/local/libexec/greyward-desktop-icons|/usr/local/libexec/greyward-desktop-icons' \
     './usr/local/libexec/greyward-desktop-shortcut|/usr/local/libexec/greyward-desktop-shortcut'; do
@@ -281,6 +282,7 @@ if [[ -n "$files_rpm" ]]; then
       /usr/local/libexec/greyward-desktop-icons) source_file="$repo_root/environment/session/greyward-desktop-icons" ;;
       /usr/local/libexec/greyward-desktop-shortcut) source_file="$repo_root/environment/session/greyward-desktop-shortcut" ;;
       /usr/bin/strata) source_file="$repo_root/environment/session/desktop/strata-launcher" ;;
+      /usr/share/greyward/files/source.json) source_file="$repo_root/packaging/greyward-files/source.json" ;;
     esac
     if ! rpm2cpio "$files_rpm" | cpio -i --quiet --to-stdout "./${source_path#/}" | cmp -s - "$source_file"; then
       echo "The greyward-files RPM contains stale integration code at $source_path." >&2
@@ -552,6 +554,9 @@ PY
     fi
   done
   test -n "$usb_context_rpm" || { echo 'USB approval requires the Security Context RPM.' >&2; exit 1; }
+  # A migrated reference does not exercise first-install role assembly. Never
+  # import its stale generator merely because its active seat verifies.
+  python3 "$repo_root/environment/image/verify-usbguard-inputs.py" --repo "$repo_root" --kind ordinary-role --rpm "$appsec_rpm"
   if [[ "$security_manifest_schema" == 'greyward.security-center-build/v1' ]]; then
     python3 "$repo_root/environment/image/verify-usbguard-inputs.py" --repo "$repo_root" --kind dms --rpm "$dms_rpm"
     python3 "$repo_root/environment/image/verify-usbguard-inputs.py" --repo "$repo_root" --kind context --rpm "$usb_context_rpm"

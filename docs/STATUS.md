@@ -1,5 +1,149 @@
 # GREYWARD current status
 
+## 21 October desktop icons on multiple outputs — 0.4.5 media verified
+
+Files 18 separates icons from DMS wallpaper and reconciles connected outputs.
+Each entry has unique screen ownership, drag/menu placement, disconnect fallback
+and restored preference on reconnection. The four native headless scenarios and
+23 layout checks pass; the actual packaged PIE desktop also reconciles three,
+two and three outputs without Qt signal errors. All 835 icon assets match Files
+17. These are synthetic results; physical acceptance is deferred by the user.
+The earlier `<validation-host>` snapshot showed three connected outputs and a verified seat.
+The provisional Files 17 executable replacement is now superseded by the full
+Files 18 RPM, identical to the 0.4.5 image input. Installed RPM verification is
+clean, both executable hashes match the build evidence, and SELinux remains
+Enforcing. Installation occurred at the greeter without restarting any service;
+the next normal login loads the packaged desktop. Physical placement and
+hotplug acceptance remain pending; no active-seat check is claimed at the greeter.
+
+The requested internal ISO **0.4.5** is now built and copied to Windows. Its
+offline dependency checks, composed/extracted payload validation, recursive-copy
+verification and Windows 40-path/hash validator pass. All eight selected RPM
+hashes match in both the staged and installer-repository copies (16 checks),
+including canonical first-boot/provisioner bytes. The candidate contains Files
+18, Session 23, Application Security 70 and Enrollment 61; DMS 26, Center 115,
+Context 108 and Branding 16 are retained. Package checks pass: three Rust file
+metadata tests, 210 Application Security tests with 22 privileged tests ignored,
+three Enrollment Meson tests and six exact Session payload checks. Session 23
+normalizes the otherwise equivalent factory-default line endings through a
+canonical rebuild. No user session/compositor was restarted; `<development-host>` retained
+its active session throughout. No new VM was created. The existing R6 was later
+booted from this ISO and its GREYWARD GRUB menu was observed in VMConnect;
+this establishes media boot only, not completed installation or enrollment.
+
+Clean installation, recovery and physical three-screen acceptance are **not
+verified** for this ISO. Public `main` CI has a pre-existing failed run; these
+local changes are unpublished. Full media path, hash, input provenance and
+limits: [ISO creation](architecture/ISO_CREATION.md). Runtime details:
+[desktop integration](architecture/FILE_MANAGER_DESKTOP.md).
+
+## 21 October R6 first-boot and role-closure defects — live seat verified
+
+The approved second rescue repair snapshots both SELinux stores and the
+affected files, removes only the reviewed USB helper's ordinary-attribute
+membership, and refreshes the ordinary, desktop, Administration and installer
+input receipts. The offline compiled-policy and file readbacks passed. Account
+mappings and the broker enrollment journal were preserved; that journal's
+initial generation remains historical, with the migration binding old/new
+file hashes separately. The first-boot helper is restored to canonical corrected
+source, without its temporary appended observer.
+
+After the user's normal reboot/login, the installed verifier returns true
+three times through the broker's exact bounded path (0.848, 0.513 and 0.517
+seconds), and three direct diagnostic readbacks also return true. `getenforce`
+reports `Enforcing`. The user confirms that Administration opens after normal
+authentication. These are observed live-seat/Administration results on repaired
+R6. The user confirms removal of the temporary observer unit/script and a
+successful daemon reload; the report and repair backups are retained. The
+repair DVD is ejected and the installed disk's boot priority restored. These
+results do not establish a clean installation from an unmodified ISO.
+Ten verifier/generator tests, eight RPM
+payload-gate tests, 41 offline-image contracts and both repository gates pass;
+three isolated Linux migration tests cover successful backup, compilation
+failure and incorrect compiled membership with rollback.
+
+Earlier evidence, before the role-closure repair:
+
+With approval, R6's first-boot script was backed up and hot-patched in rescue;
+the user rebooted and reached the installed Labwc desktop. A bounded root
+observer then returned `verified: false` three times in 0.37–0.50 seconds.
+The unsuppressed verifier error was `Ordinary role coverage changed` on all
+three samples. This rules out its three-second deadline for those samples;
+Protected Data and Administration acceptance remain unpassed.
+
+R6's installed `ordinary.json` lists `greyward_usbguard_approval_t` in both
+the role domains and ordinary types. The verifier deliberately rejects this
+helper in ordinary coverage. Read-only comparison confirms `<validation-host>` has the
+helper in its live role but neither its ordinary attribute nor saved ordinary
+inventory. The fresh-enrollment generator previously excluded only the display
+domain. Source now also excludes the reviewed USB helper, retaining it in the
+role inventory and retaining every other ordinary domain and restriction.
+The new regression fails against the previous generator and passes after the
+correction; the live verifier is unchanged. The subsequent offline migration
+and live-seat result are recorded above.
+
+The ISO builder now checks this generator and verifier inside the selected
+Application Security RPM for both source builds and installed-RPM imports.
+The old `<validation-host>` RPM is therefore not sufficient input for the next image:
+rebuild matched packages containing the correction. The corrected package/image
+follow-up is tracked in the 0.4.5 candidate entry above. No publication is authorized.
+
+R6's initial rescue readback confirmed installer and broker phase `PENDING_SESSION`,
+matching account/origin records, all three enrollment-input digests and all
+1,014 protected desktop file digests. The completion marker was absent, while
+pending and production-ready were present. The retained setup log reaches
+final checks three times, then refuses later retries with an active desktop.
+The retained failure file shows an active greetd and a seat0 greeter session;
+it contains no greetd startup error. These observations do not prove a healthy
+rendered greeter or live protected-seat coverage.
+
+A definite first-boot predicate defect was identified: it requires a live
+`dms-greeter` process, but the pinned 1.6.2 launcher execs Labwc and starts
+Quickshell. The correction checks the greeter-owned compositor and UI instead.
+A completed user handoff requires the existing root-only live seat verifier;
+arbitrary Labwc/DMS processes cannot satisfy it. Six isolated Linux shell tests
+pass, including missing UI/compositor, false/malformed/timed-out verification,
+failed session enumeration and wrong-seat/nonhuman cases. The 41 offline-image
+contracts also pass. The rescue hot patch above is installed on R6; no newly
+composed installer ISO contains the source correction.
+
+Read-only SSH comparison of `<validation-host>` confirms AppSec 69 / Enrollment 60 /
+DMS 1.6.2-26 / Session 22, the same verifier/session sources and a 1,014-file
+manifest. Its live verifier returns true twice, in approximately 0.61 seconds,
+under the broker's SELinux context. `<validation-host>` remains Enforcing and unchanged.
+This working installed/migrated reference does not establish clean-install
+acceptance for R6. The later R6 readback above identifies its role-closure failure.
+
+The multi-output greeter UI was added on 19 October; the obsolete readiness
+predicate is already present in the 11 October revision. The later physical-GPU renderer change
+retains the VM's Pixman branch. Their temporal relationship alone does not
+establish that multi-output rendering caused R6's failure. Keep the feature
+while validating the corrected readiness predicate separately. See the
+[enrollment package](../packaging/greyward-enrollment/README.md) and
+[ISO creation](architecture/ISO_CREATION.md).
+
+## 20 October R6 enrollment investigation — source retry fix only
+
+Read-only Hyper-V metadata confirms that R6 has the 0.4.4 candidate attached;
+it does not establish which ISO populated its installed disk. The user reports
+R6 is running the `example-user` desktop without working root access. The user
+supplied `id -Z`: `greyward_guard_u:greyward_guard_r:greyward_guard_t:s0`.
+This confirms that shell's confinement, not the protected seat or account receipt.
+No screen control, SSH, reboot, session change or deployment was performed in this
+continuation. The protected installation transaction and live seat failure
+remain unknown.
+
+Direct extraction confirms that 0.4.4 contains the current first-boot,
+provisioner, zsh configurator and acceptance scripts, but Enrollment 60 lacks
+the `PENDING_SESSION` retry correction. The regression fails against the
+helper extracted from that RPM and passes against corrected source. All 23
+installer-enrollment tests pass under isolated Linux/Python 3.12; 61 image
+contracts pass on Windows with nine additional Linux-only checks skipped, and static and
+repository checks pass. These are source/media observations, not installed
+Fedora enforcement evidence. The correction is not yet packaged, deployed or
+included in a new ISO and is not established as the cause of R6's initial
+failure or degraded seat. See the [enrollment package](../packaging/greyward-enrollment/README.md).
+
 ## Current production reference: `<validation-host>` — 20 October
 
 Use the bare-metal `<validation-host>` installation as the version authority for production:
@@ -12,12 +156,30 @@ themselves are not enough. The five DMS/Security Center/AppSec/Enrollment RPMs
 are imported byte-for-byte from `<validation-host>`; their import receipt explicitly records
 that source reproducibility was not verified. Session 22 is rebuilt from its
 exact installed package-owned defaults because its original RPM was unavailable.
-The internal `0.4.2-Dawn` ISO candidate passed embedded-payload validation and
-booted in a Hyper-V test VM through GRUB into the Fedora Anaconda installer. The
-installer opened its disk-encryption passphrase dialog; no installation was
-started. Its provenance records `installed_system_tested: false`, so this proves
-boot-to-installer only, not a clean installation or post-install runtime
-acceptance. The candidate is not a release image.
+The 0.4.2 ISO was installed on R6 and failed on first boot: enrollment refused
+with `Account has live workloads; enrollment refused`, leaving Protected Data
+degraded and Administration unavailable. The 0.4.3 ISO added static login
+gates, but the user installed it and confirmed the same symptoms. The gate
+change did not fix enrollment itself. Source review found that the first-boot
+provisioner runs account-owned zsh/Git setup before enrollment, while
+enrollment deliberately refuses to change an account mapping if any process
+belongs to that account. The R6 journal did not capture the blocking PID. On
+`<development-host>`, `/etc/pam.d/runuser` does not load `pam_systemd`, so the earlier theory
+that `runuser` alone left a user manager is not proven.
+
+Candidate 0.4.4 keeps the login boundary gated and the default target in text
+mode until acceptance passes. It selects the final zsh shell without running
+as the account, prepares enrollment while the account is quiescent, then runs
+the user-owned zsh/Git setup and checks enrollment again. The configurator uses
+`setpriv` rather than PAM to switch credentials. If enrollment still finds
+processes, first boot records their PID and process name. The build and media
+checks now pass. The candidate is at
+`<local workspace>`,
+SHA-256 `edf89ce48bd8a966b9b2d9e45a1a44df9e5558302a56fa852d034c37e9eb09d0`.
+Installation and runtime acceptance on R6 are still required; this ISO is a
+test candidate, not a confirmed fix or release. Both earlier candidates remain
+unaccepted. See
+[ISO creation](architecture/ISO_CREATION.md).
 
 ### Security Center update status and Polkit display correction
 
@@ -51,9 +213,9 @@ multi-output mirror. Authentication tests, package builds, and repository
 gates pass. Structural checks do not prove the actual rendered result: visual
 confirmation on all three physical screens still needs a fresh login and a
 Polkit prompt. The migration asks for a fresh login to load the new protected
-shell. Candidate 0.4.2 includes the installed packages and has booted to the
-installer in a Hyper-V test VM, but it has not been installed or visually
-accepted.
+shell. Candidate 0.4.2 includes the installed packages but its R6 installation
+failed during first-boot enrollment as described above; it has not passed
+installed-system acceptance.
 
 The first screenshot's firewalld warning is also resolved in the current
 `<validation-host>` API state: Security Context 108 is installed and its service is active.
@@ -159,9 +321,9 @@ before the subsequent bare-metal results were reported. The follow-up note is
 the current summary of those user-confirmed feature tests and the remaining
 ISO-build gates.
 
-## 19 October Greeter and protected Polkit multi-display work — deployed on .150; external outputs not currently visible to DRM
+## 19 October Greeter and protected Polkit multi-display work — deployed on <validation-host>; external outputs not currently visible to DRM
 
-Read-only inspection of .150 found /etc/greetd/config.toml still explicitly
+Read-only inspection of <validation-host> found /etc/greetd/config.toml still explicitly
 set WLR_RENDERER=pixman and launched the embedded DMS Greeter UI. The GREYWARD
 QML surface and username correction already existed in the production source,
 but were not deployed to the machine. The first live deployment copied those
@@ -177,7 +339,7 @@ desktop worker, but the greeter starts its own Labwc compositor and had been
 left to auto-select a renderer. Its production launcher now explicitly selects
 the same validated GLES2 path on physical systems, with Pixman retained for
 known virtual GPUs or systems without DRM render nodes. The source launcher was
-installed atomically on .150 and greetd restarted from the greeter. The active
+installed atomically on <validation-host> and greetd restarted from the greeter. The active
 Labwc process receives `WLR_RENDERER=gles2`. At the latest readback, however,
 DRM reported only the built-in eDP panel; the two external connectors had no
 EDID and Nouveau logged DisplayPort training failures. The per-output QML and
@@ -887,7 +1049,7 @@ mode-change acceptance need a fresh interactive login. No new ISO was built. See
 
 10 October r5 candidate: Enrollment 5 corrects the confirmed mode-0700 program-directory login failure. The repaired r4 installation reaches the desktop (user confirmation and console evidence). R5 composition, embedded payload checks and Windows SHA-256 verification pass; fresh r5 installation, default session selection and installed security acceptance remain pending. See the candidate evidence (private development evidence).
 
-10 October installed r4 acceptance: installation completed according to the user, but GREYWARD Labwc login fails and the greeter defaults to Hyprland. R4 is not accepted. Only the new test VM is in an approved rescue investigation; .149 remains the unchanged build host. See the failure evidence (private development evidence).
+10 October installed r4 acceptance: installation completed according to the user, but GREYWARD Labwc login fails and the greeter defaults to Hyprland. R4 is not accepted. Only the new test VM is in an approved rescue investigation; <development-host> remains the unchanged build host. See the failure evidence (private development evidence).
 
 10 October ISO rebuild: r3 failed clean installation because private installer-origin storage was missing; it is rejected. Enrollment revision 4 is rebuilt, eleven lifecycle tests pass, and the actual packaged broker reproduces the missing-directory failure then succeeds with corrected private storage in a synthetic clean root. The r4 ISO has built, passed payload checks, and hash-matched on Windows. It is attached to the new empty test VM without runtime activation on `<development-host>`. Clean-install acceptance remains pending. See the candidate evidence (private development evidence).
 
@@ -1299,7 +1461,7 @@ replacement for the domain specifications listed in [INDEX.md](INDEX.md).
   user's DNS remains unaccepted. Earlier 54/59 and diagnostics-only 56/61 inputs
   are historical; the new paired candidates are Center 57/Context 62. They built
   and pass 239 extracted/installed-package tests with 31 imports pinned to RPM
-  bytes. The actual .149 root service passes a bounded private-domain canary and
+  bytes. The actual <development-host> root service passes a bounded private-domain canary and
   restoration, without restarting DMS or changing profiles; no recent AVC was
   found. The paired Security packages are installed only on .149. A fresh ISO
   from DMS 6/session 7/Center 57/Context 62/branding 15 passed factory checks and
@@ -1308,7 +1470,7 @@ replacement for the domain specifications listed in [INDEX.md](INDEX.md).
   prior restoration checks did not cover that global route. Center 59/Context 64
   explicitly clear and observe it before removing the override. All 242 source
   tests and real isolated resolver restoration pass. The final packages are installed
-  on .149 with clean integrity, 242 tests pinned to installed RPM modules, two
+  on <development-host> with clean integrity, 242 tests pinned to installed RPM modules, two
   complete mode/restoration cycles, unchanged DMS PID and no recent audit-log AVC.
   The fresh `greyward-installer-20261005-portable-dns-6-7-59-64.iso` passed factory
   checks (SHA-256 `736b87cefbe9ef3ed0c4b766538f9ab1d606400643d9aad673451f0f998f7a94`)
@@ -1317,20 +1479,20 @@ replacement for the domain specifications listed in [INDEX.md](INDEX.md).
 
 - The user selected the **native DMS lock screen** as canonical on 4 October,
   superseding the migration's earlier swaylock/swayidle choice. Session RPM
-  `0.1.0-6` and DMS runtime `v1.6.2-6` are installed on .149: native lock routing,
+  `0.1.0-6` and DMS runtime `v1.6.2-6` are installed on <development-host>: native lock routing,
   600-second idle locking, 900-second blanking, Fedora system-auth delegation and
   DMS's logind sleep inhibitor are active. The obsolete external-lock QML patch
   and idle coordinator are retired. Package integrity, backend readiness and
   source gates passed. An actual native password unlock was observed; the -6
   runtime restored a secure native surface automatically after a locked-session
   shell restart. Repeated authentication and suspend/resume remain acceptance
-  gates. SSH remained available and .149 was not rebooted.
+  gates. SSH remained available and <development-host> was not rebooted.
   See the [current migration contract](architecture/DMS_1_6_MIGRATION_PLAN.md).
 
 - The 4 October [architecture audit](architecture/FINAL_ARCHITECTURE_AUDIT.md)
   and [build/ISO audit](architecture/BUILD_ISO_AUDIT.md) are delivered; their
   [implementation backlog](plans/PRE_RELEASE_IMPROVEMENTS.md) is in progress.
-  Read-only .149 checks reproduced DMS rejection of a changed Quickshell RPM
+  Read-only <development-host> checks reproduced DMS rejection of a changed Quickshell RPM
   release while cached repositories offer newer Quickshell/Greeter inputs than
   the candidate's exact tuple. The solver now enforces the exact manifest tuple alongside baseline floors;
   actual closure and fresh-image validation remain in progress.
@@ -1344,7 +1506,7 @@ replacement for the domain specifications listed in [INDEX.md](INDEX.md).
   generated explicit shell, twelve patches across twenty-one upstream files, system
   plugins, restrictive state backups, explicit selected routing and production lock
   defaults. Offline Fedora package build/backend tests and source migration fixtures
-  passed during development. The .149 candidate also passed installed integrity,
+  passed during development. The <development-host> candidate also passed installed integrity,
   API 34/internal sampler and first-party plugins. Earlier simulated external-lock,
   guest acceptance and old-runtime/state rollback checks are historical evidence
   for the superseded lock configuration. Native-lock restart recovery is now
@@ -1356,7 +1518,7 @@ replacement for the domain specifications listed in [INDEX.md](INDEX.md).
   Matched post-cycle cgroup measurements observed lower CPU and about 32% lower
   median combined RSS; protocol startup/restart remain near the acceptance
   threshold and do not establish complete performance acceptance.
-  The .149 1.5.3 baseline and private backups remain recovery inputs. No 1.6 release
+  The <development-host> 1.5.3 baseline and private backups remain recovery inputs. No 1.6 release
   acceptance is implied by the earlier ISO records below.
 
 - Security Center shell redesign is implemented in source and running in the
