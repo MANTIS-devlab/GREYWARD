@@ -20,13 +20,13 @@
 </p>
 
 <p align="center">
-  <a href="https://sourceforge.net/projects/greyward/files/v0.3.8/">
-    <img alt="Download GREYWARD 0.3.8 Dawn" src="https://img.shields.io/badge/Download-0.3.8%20Dawn-C9CCD1?style=for-the-badge&labelColor=24262A">
+  <a href="https://sourceforge.net/projects/greyward/files/v0.4.5/GREYWARD-0.4.5-Dawn-x86_64.iso/download">
+    <img alt="Download GREYWARD 0.4.5 Dawn" src="https://img.shields.io/badge/Download-0.4.5%20Dawn-C9CCD1?style=for-the-badge&labelColor=24262A">
   </a>
 </p>
 
 <p align="center">
-  <sub>Latest linked published image: 0.3.8 Dawn. Features described below may reflect newer development builds and are not necessarily included in this ISO.</sub>
+  <sub>Latest linked published image: 0.4.5 Dawn. Features described below may reflect newer development builds and are not necessarily included in this ISO.</sub>
 </p>
 
 <p align="center">
