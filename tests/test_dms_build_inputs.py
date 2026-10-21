@@ -2,6 +2,7 @@
 import importlib.util
 import json
 from pathlib import Path
+import re
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -71,7 +72,8 @@ class BuildInputVerificationTests(unittest.TestCase):
 
     def test_session_rpm_normalizes_linux_launcher_shebang(self):
         session_spec = (ROOT / 'packaging/greyward-session/greyward-session.spec').read_text()
-        self.assertIn("Release: 22%{?dist}", session_spec)
+        revision = int(re.search(r'(?m)^Release:\s+(\d+)', session_spec)[1])
+        self.assertGreaterEqual(revision, 22)
         self.assertIn("sed -i 's/\\r$//' %{buildroot}/usr/local/libexec/greyward-start-labwc", session_spec)
 
     def test_iso_builder_rejects_stale_taskbar_default_migration(self):
@@ -85,7 +87,9 @@ class BuildInputVerificationTests(unittest.TestCase):
         enrollment_spec = (ROOT / 'packaging/greyward-enrollment/greyward-enrollment.spec').read_text()
         self.assertIn('expected_dms_requirement="greyward-dms = $selected_dms_version"', source)
         self.assertIn('rpm_query -qp --requires "$enrollment_rpm"', source)
-        self.assertIn('Requires: greyward-application-security-experimental = 0.1.0-69%{?dist}', enrollment_spec)
+        runtime_spec = (ROOT / 'security-center/packaging/application-security/greyward-application-security-experimental.spec').read_text()
+        runtime_revision = re.search(r'(?m)^Release:\s+(\d+)', runtime_spec)[1]
+        self.assertIn(f'Requires: greyward-application-security-experimental = 0.1.0-{runtime_revision}%{{?dist}}', enrollment_spec)
         self.assertIn('Requires: greyward-dms = 1.6.2-26%{?dist}', enrollment_spec)
         build = (ROOT / 'packaging/greyward-dms/build.sh').read_text()
         self.assertIn('usbguard-approval-execute.go', build)

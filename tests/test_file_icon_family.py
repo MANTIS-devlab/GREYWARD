@@ -85,6 +85,12 @@ class FileIconFamily(unittest.TestCase):
         for name,digest in source['sourcePatches'].items():
             patch=(ROOT/'packaging/greyward-files'/name).read_bytes().replace(b'\r\n',b'\n')
             self.assertEqual(hashlib.sha256(patch).hexdigest(),digest,name)
+        for name,digest in source['inputs']['desktop']['patches'].items():
+            data=(ROOT/'packaging/greyward-files'/name).read_bytes().replace(b'\r\n',b'\n')
+            self.assertEqual(hashlib.sha256(data).hexdigest(),digest,name)
+        for name,digest in source['inputs']['desktop']['integrationInputs'].items():
+            data=(ROOT/name).read_bytes().replace(b'\r\n',b'\n')
+            self.assertEqual(hashlib.sha256(data).hexdigest(),digest,name)
         self.assertEqual(len(source['inputs']['vendor']['sha256']),64)
         self.assertIn('/usr/share/icons/Greyward',spec)
         self.assertIn('icons-build/LICENSES',spec)

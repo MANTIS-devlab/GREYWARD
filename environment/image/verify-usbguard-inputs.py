@@ -8,6 +8,14 @@ import subprocess
 
 
 SOURCES = {
+    # Required for both source builds and installed-RPM imports: a migrated
+    # desktop can work while the same RPM's fresh-enrollment generator is stale.
+    'ordinary-role': {
+        'security-center/packaging/application-security/desktop/ordinary-policy.py':
+            '/usr/share/greyward-application-security/desktop/ordinary-policy.py',
+        'security-center/packaging/application-security/desktop/verify.py':
+            '/usr/share/greyward-application-security/desktop/verify.py',
+    },
     'dms': {'packaging/greyward-dms/verify.py': '/usr/libexec/greyward-dms-verify'},
     'context': {
         'security-center/security-context/greyward_security_context/usbguard.py':
@@ -61,8 +69,13 @@ def verify(repo, package, kind, read=rpm_file):
         receipt = json.loads(read(package, '/usr/lib/greyward/dms/' + release + '/release.json'))
         for key, source in [('usbguardApprovalSourceSha256', 'usbguard-approval.go'),
                             ('usbguardAuthApprovalSourceSha256', 'usbguard-approval-execute.go')]:
-            expected = hashlib.sha256((repo / 'packaging/greyward-dms' / source).read_bytes()).hexdigest()
-            if receipt.get(key) != expected:
+            # Older reviewed builds recorded CRLF checkout bytes. Bind the
+            # receipt to exactly the canonical LF or CRLF representation;
+            # neither missing evidence nor actual source drift is accepted.
+            content = normalized((repo / 'packaging/greyward-dms' / source).read_bytes())
+            expected = {hashlib.sha256(value).hexdigest() for value in
+                        (content, content.replace(b'\n', b'\r\n'))}
+            if receipt.get(key) not in expected:
                 raise ValueError('Stale or missing USB approval helper source receipt: ' + key)
 
 

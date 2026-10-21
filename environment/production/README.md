@@ -237,9 +237,13 @@ Anaconda creates the real first user and the standard Kickstart requests the
 post-install reboot. The first-boot finalizer masks any remaining Initial Setup
 units, completes deferred local package work, removes any GNOME session
 entry, and runs the production acceptance contract before releasing greetd.
-While the pending marker exists, both greetd and the tty1 getty are gated. The
-first-boot status service writes a clear wait message directly to tty1, so the
-user sees setup status rather than a misleading terminal login prompt or a
+The installer clears any stale completion marker and puts a file-existence gate
+on greetd, Fedora's display-manager/GDM path, GNOME Initial Setup and the
+per-user systemd manager. These gates remain closed if first-boot provisioning
+fails; `Before=` ordering alone would allow a later login job to run after the
+finalizer failed. Console gettys are gated separately by the pending marker.
+The first-boot status service writes a clear wait message directly to tty1, so
+the user sees setup status rather than a misleading terminal login prompt or a
 blank screen.
 The immutable staged production payload is copied to
 `/usr/lib/greyward/installer/production` on the installed root filesystem;

@@ -18,17 +18,24 @@ fi
 
 passwd_entry=$(getent passwd "$target_user")
 test -n "$passwd_entry"
-IFS=: read -r _ _ uid _ _ target_home _ <<< "$passwd_entry"
-test "$uid" -ge 1000
+IFS=: read -r _ _ target_uid target_gid _ target_home _ <<< "$passwd_entry"
+test "$target_uid" -ge 1000
 target_group=$(id -gn "$target_user")
 test -d "$target_home"
 test -x /usr/bin/git
 test -x /usr/bin/zsh
+test -x /usr/bin/setpriv
 
 source /usr/share/greyward/zsh/sources.env
 
 run_as_user() {
-  runuser -u "$target_user" -- env HOME="$target_home" "$@"
+  # runuser opens a PAM session. During first boot that can start a
+  # user@UID manager and leave account-owned processes alive just before
+  # enrollment, which deliberately refuses to change mappings while the
+  # account has live workloads. setpriv switches credentials without PAM or
+  # creating a logind session.
+  /usr/bin/setpriv --reuid="$target_uid" --regid="$target_gid" --init-groups -- \
+    /usr/bin/env HOME="$target_home" "$@"
 }
 
 clone_at_ref() {

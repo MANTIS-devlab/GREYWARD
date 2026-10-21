@@ -1,5 +1,6 @@
 """Installer provenance and fail-closed lifecycle checks; no host mutation."""
 import importlib.util
+import hashlib
 import json
 import os
 import stat
@@ -305,6 +306,100 @@ class InstallerEnrollment(unittest.TestCase):
         with mock.patch.object(Path, 'iterdir', return_value=[process]):
             with self.assertRaises(RuntimeError):
                 enroll.quiescent([{'uid': 1000}])
+
+    def test_pending_session_retry_checks_receipt_before_quiescence(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            state = Path(temporary) / 'installation'
+            state.mkdir()
+            transaction = state / 'transaction.json'
+            transaction.write_text('{}')
+            original_is_file = Path.is_file
+            original_exists = Path.exists
+
+            def is_file(path):
+                if path == Path('/var/lib/greyward/installer/production-pending'):
+                    return True
+                return original_is_file(path)
+
+            def exists(path):
+                if path == Path('/etc/greyward-production-complete'):
+                    return False
+                return original_exists(path)
+
+            receipt = {'schema': 'greyward.installer-enrollment/v1',
+                       'phase': 'PENDING_SESSION'}
+            with mock.patch.object(enroll, 'STATE', state), \
+                 mock.patch.object(Path, 'is_file', new=is_file), \
+                 mock.patch.object(Path, 'exists', new=exists), \
+                 mock.patch.object(enroll, 'installer_accounts', return_value=[{'uid': 1000}]), \
+                 mock.patch.object(enroll, 'trusted', return_value=json.dumps(receipt).encode()), \
+                 mock.patch.object(enroll, 'quiescent', side_effect=AssertionError('must not require quiescence')) as quiescent, \
+                 mock.patch.object(enroll, 'check', return_value='checked') as check:
+                self.assertEqual(enroll.prepare(), 'checked')
+            quiescent.assert_not_called()
+            check.assert_called_once_with()
+
+    def test_pending_retry_revalidates_enforcement_identity_inputs_and_service(self):
+        accounts = [{'name': 'user', 'uid': 1000}]
+        payload = b'prepared immutable input'
+        receipt = {'schema': 'greyward.installer-enrollment/v1',
+                   'phase': 'PENDING_SESSION', 'accounts': accounts,
+                   'inputs': {'/prepared/input': hashlib.sha256(payload).hexdigest()}}
+        valid_mapping = {'seuser': 'greyward_guard_u', 'range': 's0'}
+        for case in ['valid', 'schema', 'identity', 'enforcement', 'mapping', 'input', 'service']:
+            with self.subTest(case=case):
+                current = {**receipt}
+                if case == 'schema':
+                    current['schema'] = 'unrecognized'
+                if case == 'identity':
+                    current['accounts'] = [{'name': 'other', 'uid': 1000}]
+
+                def trusted(path):
+                    if str(path) == '/prepared/input':
+                        return b'changed input' if case == 'input' else payload
+                    return json.dumps(current).encode()
+
+                def run(*args):
+                    if args == ('/usr/sbin/getenforce',):
+                        return 'Permissive' if case == 'enforcement' else 'Enforcing'
+                    self.assertEqual(args, ('/usr/bin/systemctl', 'is-active',
+                                            'greyward-application-security-workflows.service'))
+                    if case == 'service':
+                        raise RuntimeError('inactive workflow service')
+                    return 'active'
+
+                with mock.patch.object(Path, 'is_file', return_value=True), \
+                     mock.patch.object(Path, 'exists', side_effect=[False, True]), \
+                     mock.patch.object(enroll, 'installer_accounts', return_value=accounts), \
+                     mock.patch.object(enroll, 'trusted', side_effect=trusted), \
+                     mock.patch.object(enroll, 'run', side_effect=run), \
+                     mock.patch.object(enroll, 'mapping', return_value=(
+                         {'seuser': 'unconfined_u', 'range': 's0'} if case == 'mapping' else valid_mapping)), \
+                     mock.patch.object(enroll, 'quiescent', side_effect=AssertionError('read-only retry')), \
+                     mock.patch.object(enroll, 'write_json', side_effect=AssertionError('no write')), \
+                     mock.patch.object(enroll, 'prepare_inputs', side_effect=AssertionError('no assembly')), \
+                     mock.patch.object(enroll, 'finish_preparation', side_effect=AssertionError('no activation')):
+                    if case == 'valid':
+                        enroll.prepare()
+                    else:
+                        with self.assertRaises(RuntimeError):
+                            enroll.prepare()
+
+    def test_unfinished_preparation_still_refuses_live_workloads(self):
+        for phase in [None, 'PREPARING', 'PREPARED_INPUTS']:
+            with self.subTest(phase=phase), \
+                 mock.patch.object(Path, 'is_file', return_value=True), \
+                 mock.patch.object(Path, 'exists', side_effect=[False, phase is not None]), \
+                 mock.patch.object(enroll, 'installer_accounts', return_value=[{'uid': 1000}]), \
+                 mock.patch.object(enroll, 'trusted', return_value=json.dumps({'phase': phase}).encode()), \
+                 mock.patch.object(enroll, 'quiescent', side_effect=RuntimeError('live workload')) as quiescent, \
+                 mock.patch.object(enroll, 'run') as run, \
+                 mock.patch.object(enroll, 'check') as check:
+                with self.assertRaisesRegex(RuntimeError, 'live workload'):
+                    enroll.prepare()
+                quiescent.assert_called_once_with([{'uid': 1000}])
+                run.assert_not_called()
+                check.assert_not_called()
 
     def test_normal_boot_cannot_invoke_offline_rollback(self):
         with mock.patch.object(Path, 'read_text', return_value='quiet'), mock.patch.object(enroll, 'run') as run:

@@ -22,6 +22,11 @@ class PublicationBoundaryTests(unittest.TestCase):
         self.assertNotIn('cicada', cleaned)
         self.assertIn('<validation-host>', cleaned)
 
+    def test_plain_host_shorthand_is_sanitized_without_changing_versions(self):
+        text = 'On .150 and .149; package 1.150.2 is retained.'
+        cleaned = EXPORT.sanitized_text(text, 'docs/STATUS.md', set())
+        self.assertEqual(cleaned, 'On <validation-host> and <development-host>; package 1.150.2 is retained.')
+
     def test_extensionless_installed_scripts_keep_linux_line_endings(self):
         attributes = (ROOT / '.gitattributes').read_text()
         self.assertIn('environment/production/greyward-* text eol=lf', attributes)

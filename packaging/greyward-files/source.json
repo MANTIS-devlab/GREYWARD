@@ -18,7 +18,17 @@
       "url": "https://github.com/lxqt/pcmanfm-qt/releases/download/2.4.1/pcmanfm-qt-2.4.1.tar.xz",
       "provenance": "Source archive extracted from Fedora pcmanfm-qt-2.4.1-1.fc44.src.rpm; RPM digests verified, no SRPM signature claimed",
       "patchPreimage": {
-        "pcmanfm/application.cpp": "f289df0777b4e989bc6a6dab5baf508c96bc2e00fbc1b58afed6ff58f6a958ba"
+        "pcmanfm/application.cpp": "f289df0777b4e989bc6a6dab5baf508c96bc2e00fbc1b58afed6ff58f6a958ba",
+        "pcmanfm/application.h": "539a2dd970462f2cfa26650e17a2f77bf23b1917cb00952f5b74980e52b95c34",
+        "pcmanfm/desktopwindow.cpp": "31addf7ab218f27b4480bca6375da21a608e74b857709156f0ca3ca6d4b8a90f",
+        "pcmanfm/desktopwindow.h": "506cf8a3d42ca73f2ea82992f8247e29a6f57b3bfad8d323e82225738bcd2ce8"
+      },
+      "patches": {
+        "pcmanfm-desktop-only.patch": "1293bca12801ce1dde5717c60e88e66d15e83973245caf3ec3b023cb85abeb4f",
+        "pcmanfm-multi-output.patch": "e944868f458959041f701737a7fe170ae34413d661ddfc45b6514a53fde1c755"
+      },
+      "integrationInputs": {
+        "environment/session/desktop/output-layout.h": "b1ccd0a94bddde382ce278145a4b92dc8ee52a099c26cd9f3467fc499aed9f3a"
       }
     },
     "source": {

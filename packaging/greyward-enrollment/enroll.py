@@ -251,6 +251,14 @@ def prepare():
     if not Path('/var/lib/greyward/installer/production-pending').is_file() or Path('/etc/greyward-production-complete').exists():
         raise RuntimeError('Only the unfinished installed first-boot gate may prepare enrollment')
     accounts = installer_accounts()
+    transaction_path = STATE / 'transaction.json'
+    # Once the initial mapping is prepared, retries are read-only. Check this
+    # phase before requiring a quiescent account: a normal user process must
+    # not strand first boot after a previous attempt reached PENDING_SESSION.
+    if transaction_path.exists():
+        receipt = json.loads(trusted(transaction_path))
+        if receipt.get('phase') == 'PENDING_SESSION':
+            return check()
     quiescent(accounts)
     if run('/usr/sbin/getenforce') != 'Enforcing':
         raise RuntimeError('SELinux enforcing required')
@@ -259,8 +267,8 @@ def prepare():
     trusted_directory = STATE.lstat()
     if STATE.is_symlink() or trusted_directory.st_uid or trusted_directory.st_mode & 0o077:
         raise RuntimeError('Unsafe transaction storage')
-    if (STATE / 'transaction.json').exists():
-        receipt = json.loads(trusted(STATE / 'transaction.json'))
+    if transaction_path.exists():
+        receipt = json.loads(trusted(transaction_path))
         if receipt.get('phase') == 'PREPARED_INPUTS':
             return finish_preparation(accounts, receipt)
         if receipt.get('phase') == 'PREPARING':

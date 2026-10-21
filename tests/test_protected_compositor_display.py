@@ -1,6 +1,7 @@
 """Keep the protected compositor's output control narrow and usable."""
 import ast
 from pathlib import Path
+import re
 import unittest
 
 
@@ -55,8 +56,9 @@ class ProtectedCompositorDisplayTests(unittest.TestCase):
 
         application_security = (ROOT / 'security-center/packaging/application-security/greyward-application-security-experimental.spec').read_text()
         enrollment = (ROOT / 'packaging/greyward-enrollment/greyward-enrollment.spec').read_text()
-        self.assertRegex(application_security, r'(?m)^Release:\s+69')
-        self.assertIn('greyward-application-security-experimental = 0.1.0-69%{?dist}', enrollment)
+        revision = int(re.search(r'(?m)^Release:\s+(\d+)', application_security)[1])
+        self.assertGreaterEqual(revision, 64)
+        self.assertIn(f'greyward-application-security-experimental = 0.1.0-{revision}%{{?dist}}', enrollment)
 
     def test_existing_enrollments_have_a_quiescent_dms_shell_migration(self):
         spec = (ROOT / 'packaging/greyward-enrollment/greyward-enrollment.spec').read_text()

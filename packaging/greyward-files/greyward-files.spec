@@ -1,6 +1,6 @@
 Name: greyward-files
 Version: 1.0.0
-Release: 17%{?dist}
+Release: 18%{?dist}
 Summary: GREYWARD Strata file manager and transparent desktop integration
 License: MIT AND GPL-3.0-only AND GPL-2.0-or-later AND Apache-2.0 AND OFL-1.1 AND ISC AND LGPL-2.0-or-later AND LicenseRef-UnRAR AND LicenseRef-GREYWARD-Branding
 URL: https://github.com/lgse/strata
@@ -81,12 +81,20 @@ if hashlib.sha256((source/'Cargo.lock').read_bytes()).hexdigest()!=m['cargoLockS
 for name,digest in m['sourcePatches'].items():
     if hashlib.sha256((pathlib.Path('packaging/greyward-files')/name).read_bytes().replace(b'\r\n',b'\n')).hexdigest()!=digest:
         raise SystemExit('Strata source patch changed')
+for name,digest in m['inputs']['desktop']['patches'].items():
+    if hashlib.sha256((pathlib.Path('packaging/greyward-files')/name).read_bytes().replace(b'\r\n',b'\n')).hexdigest()!=digest:
+        raise SystemExit('Desktop source patch changed')
+for name,digest in m['inputs']['desktop']['integrationInputs'].items():
+    if hashlib.sha256(pathlib.Path(name).read_bytes().replace(b'\r\n',b'\n')).hexdigest()!=digest:
+        raise SystemExit('Desktop integration input changed')
 with tarfile.open(sys.argv[4]) as archive:
     archive.extractall(source,filter='data')
 (source/'.cargo').mkdir(exist_ok=True)
 (source/'.cargo/config.toml').write_text('[source.crates-io]\nreplace-with = "vendored-sources"\n[source.vendored-sources]\ndirectory = "vendor"\n')
 PY
 patch --directory=desktop/pcmanfm-qt-2.4.1 -p1 --fuzz=0 < packaging/greyward-files/pcmanfm-desktop-only.patch
+patch --directory=desktop/pcmanfm-qt-2.4.1 -p1 --fuzz=0 < packaging/greyward-files/pcmanfm-multi-output.patch
+cp environment/session/desktop/output-layout.h desktop/pcmanfm-qt-2.4.1/pcmanfm/greyward-output-layout.h
 patch --directory=source/lgse-strata-6662d8d -p1 --fuzz=0 < packaging/greyward-files/strata-preview-mode.patch
 patch --directory=source/lgse-strata-6662d8d -p1 --fuzz=0 < packaging/greyward-files/strata-native-icons.patch
 
@@ -107,7 +115,12 @@ export STRATA_BUILD_COMMIT=6662d8d4bd4cb3cdec3f10f918f3b4c92b18cdcc+greyward-fil
 python3 tools/generate-file-icons.py --catalog branding/source/greyward-icon-family.json --upstream source/lgse-strata-6662d8d --destination icons-build
 cmake -S environment/session/desktop/style -B style-build -DCMAKE_BUILD_TYPE=Release
 cmake --build style-build --parallel 2
-cmake -S desktop/pcmanfm-qt-2.4.1 -B desktop-build -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_INSTALL_LIBDIR=lib64
+# Match Fedora's PIE executable contract even in a minimal builder. Preserve
+# supplied distribution linker hardening; non-PIE Qt signal pointers can differ.
+cmake -S desktop/pcmanfm-qt-2.4.1 -B desktop-build \
+  -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
+  -DCMAKE_EXE_LINKER_FLAGS="${LDFLAGS:-} -pie" \
+  -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_INSTALL_LIBDIR=lib64
 cmake --build desktop-build --parallel 2
 
 %install
@@ -144,6 +157,8 @@ install -m0644 desktop/pcmanfm-qt-2.4.1/LICENSE %{buildroot}%{_licensedir}/%{nam
 cp -a icons-build/LICENSES %{buildroot}%{_licensedir}/%{name}/icon-family
 
 %check
+g++ -std=c++17 -Wall -Wextra -Werror tests/test_desktop_output_layout.cpp $(pkg-config --cflags --libs Qt6Core) -o desktop-output-layout-test
+./desktop-output-layout-test
 export CARGO_HOME="$PWD/cargo-home"
 export CARGO_TARGET_DIR="$(realpath strata-target)"
 export PKG_CONFIG=/usr/bin/pkgconf
@@ -182,6 +197,11 @@ PY
 %license %{_licensedir}/%{name}
 
 %changelog
+* Wed Oct 21 2026 MANTIS SYSTEMS - 1.0.0-18
+- Keep transparent icons above wallpaper and reconcile surfaces after output changes.
+- Persist unique per-screen icon placement, with drag/menu relocation and unplug fallback.
+- Require PIE and preserve distribution linker hardening; check native layout during RPM construction.
+
 * Wed Oct 14 2026 MANTIS SYSTEMS - 1.0.0-17
 - Balance semantic accents with darker badges and neutral plain-text icons after visual review.
 

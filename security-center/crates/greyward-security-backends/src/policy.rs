@@ -203,7 +203,7 @@ pub fn evaluate_facts_with_deviations(
         },
         EvidenceValue::Text(format!("{se:?}")),
     ));
-    let mut firmware_hsi = make(
+    let firmware_hsi = make(
         "system.firmware.hsi",
         Domain::System,
         Requiredness::Recommended,

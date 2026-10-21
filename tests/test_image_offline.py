@@ -228,6 +228,28 @@ class OfflineTests(unittest.TestCase):
             provision,
         )
 
+    def test_installer_gates_alternate_login_routes_until_enrollment_is_complete(self):
+        installer = (ROOT / "environment/image/installer.ks.tmpl").read_text()
+        acceptance = (ROOT / "environment/production/production-acceptance.sh").read_text()
+        gate_units = (
+            "greetd.service", "display-manager.service", "gdm.service",
+            "sddm.service", "lightdm.service", "initial-setup.service",
+            "initial-setup-reconfiguration.service", "gnome-initial-setup.service",
+            "gnome-initial-setup-first-login.service",
+            "gnome-initial-setup-copy-worker.service", "user@.service",
+        )
+        self.assertIn("rm -f /mnt/sysroot/etc/greyward-production-complete", installer)
+        self.assertIn("/usr/lib/systemd/system/multi-user.target /mnt/sysroot/etc/systemd/system/default.target", installer)
+        self.assertNotIn("/usr/lib/systemd/system/graphical.target /mnt/sysroot/etc/systemd/system/default.target", installer)
+        self.assertIn("greyward-production-install-gate.conf", installer)
+        self.assertIn("ConditionPathExists=/etc/greyward-production-complete", installer)
+        self.assertIn('if [[ "$require_marker" == false ]]; then', acceptance)
+        self.assertIn("greyward-production-install-gate.conf", acceptance)
+        self.assertIn('systemctl get-default)" = multi-user.target', acceptance)
+        for unit in gate_units:
+            self.assertIn(unit, installer)
+            self.assertIn(unit, acceptance)
+
     def test_firstboot_persists_the_failed_phase_and_greeter_readiness(self):
         provision = (ROOT / "environment/production/provision.sh").read_text()
         firstboot = (ROOT / "environment/production/provision-firstboot.sh").read_text()
@@ -236,10 +258,31 @@ class OfflineTests(unittest.TestCase):
         self.assertIn("provision-current-phase.txt", provision)
         self.assertIn("provision-failure.txt", provision)
         self.assertIn("BASH_COMMAND", provision)
-        self.assertIn("pgrep -u greeter -x dms-greeter", firstboot)
+        self.assertIn("pgrep -u greeter -x 'qs|quickshell'", firstboot)
         self.assertIn("pgrep -u greeter -x labwc", firstboot)
         self.assertIn("greetd-failure.txt", firstboot)
         self.assertIn("finalizer entered; validating staged inputs", firstboot)
+        self.assertIn("GREYWARD_FIRSTBOOT_FINALIZE=1", firstboot)
+        self.assertIn("systemctl set-default multi-user.target", firstboot)
+        self.assertIn("report_enrollment_workloads", firstboot)
+        self.assertIn("stop_idle_installer_user_managers", firstboot)
+        self.assertIn("refusing enrollment cleanup", firstboot)
+        self.assertIn("/proc/[0-9]*", firstboot)
+        self.assertIn("process=%s", firstboot)
+        self.assertIn("deferring interactive shell setup", provision)
+        self.assertIn("configuring the interactive shell", firstboot)
+        self.assertLess(
+            firstboot.index("/usr/libexec/greyward-enrollment prepare"),
+            firstboot.index("/usr/local/libexec/greyward-configure-zsh"),
+        )
+        self.assertLess(
+            firstboot.index("/usr/local/libexec/greyward-configure-zsh"),
+            firstboot.index("timeout --foreground 10m"),
+        )
+        self.assertLess(
+            firstboot.index("--pre-marker"),
+            firstboot.index("systemctl set-default graphical.target"),
+        )
         self.assertIn("timeout --foreground 10m", firstboot)
         self.assertIn("timeout --foreground 120s systemctl start greetd.service", firstboot)
         self.assertIn("timeout --foreground 120s systemctl enable --now", provision)
@@ -304,6 +347,10 @@ class OfflineTests(unittest.TestCase):
 
     def test_production_zsh_config_replaces_anaconda_shell_files(self):
         source = (ROOT / "environment/production/configure-zsh.sh").read_text()
+        self.assertIn('IFS=: read -r _ _ target_uid target_gid _ target_home _', source)
+        self.assertIn('/usr/bin/setpriv --reuid="$target_uid" --regid="$target_gid" --init-groups', source)
+        self.assertNotIn('runuser -u "$target_user"', source)
+        self.assertIn('test -x /usr/bin/setpriv', source)
         self.assertIn('install -o "$target_user" -g "$target_group" -m 0644 \\\n  /usr/share/greyward/zsh/zshrc "$target_home/.zshrc"', source)
         self.assertIn('install -o "$target_user" -g "$target_group" -m 0644 \\\n  /usr/share/greyward/zsh/p10k.zsh "$target_home/.p10k.zsh"', source)
 
@@ -465,8 +512,8 @@ class OfflineTests(unittest.TestCase):
             stager,
         )
         self.assertIn("rebuild it from this checkout before ISO staging", stager)
-        self.assertIn("Release: 60%{?dist}", spec)
-        self.assertIn("Requires: greyward-application-security-experimental = 0.1.0-69%{?dist}", spec)
+        self.assertIn("Release: 61%{?dist}", spec)
+        self.assertIn("Requires: greyward-application-security-experimental = 0.1.0-70%{?dist}", spec)
 
     def test_files_is_a_first_party_offline_package_and_desktop_default(self):
         builder = (ROOT / "environment/image/build.sh").read_text()
@@ -478,6 +525,8 @@ class OfflineTests(unittest.TestCase):
         session_defaults = (ROOT / "environment/session/greyward-dms-session-migrate").read_text()
 
         self.assertIn("--files-rpm", builder)
+        self.assertIn("./usr/share/greyward/files/source.json|/usr/share/greyward/files/source.json", builder)
+        self.assertIn('source_file="$repo_root/packaging/greyward-files/source.json"', builder)
         self.assertIn("--files-rpm", iso_builder)
         self.assertIn("greyward-files", validator)
         self.assertIn('"${files_rpms[0]}"', provision)

@@ -450,10 +450,9 @@ impl SystemPostureReader {
             && last.is_none_or(|requested| {
                 now.saturating_duration_since(requested) >= Duration::from_secs(5)
             })
+            && self.refresh.try_send(()).is_ok()
         {
-            if self.refresh.try_send(()).is_ok() {
-                *last = Some(now);
-            }
+            *last = Some(now);
         }
         let (mut value, age) = if let Some(cached) = cached {
             (cached.value, now.saturating_duration_since(cached.observed))

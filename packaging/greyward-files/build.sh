@@ -23,6 +23,7 @@ tar -C "$repo" -czf "$output/SOURCES/greyward-files-inputs.tar.gz" \
   environment/session/greyward-desktop-icons environment/session/greyward-desktop-icons.service \
   environment/session/greyward-desktop-shortcut packaging/greyward-files/source.json \
   packaging/greyward-files/pcmanfm-desktop-only.patch \
+  packaging/greyward-files/pcmanfm-multi-output.patch tests/test_desktop_output_layout.cpp \
   packaging/greyward-files/strata-preview-mode.patch packaging/greyward-files/strata-native-icons.patch \
   branding/source/greyward-files.svg branding/source/greyward-icon-family.json \
   tools/generate-file-icons.py branding/LICENSE

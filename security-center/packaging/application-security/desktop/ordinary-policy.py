@@ -24,7 +24,13 @@ def role_domains(policy):
 
 def assemble(policy, output):
     domains = role_domains(policy)
-    ordinary = [t for t in domains if t != "greyward_as_display_t"]
+    # The taskbar approval client is a reviewed role member, not an ordinary
+    # application. It reaches only the typed protected approval socket, and the
+    # live verifier admits its exact identity/scope separately. Fresh enrollment
+    # must preserve that boundary just as an existing migrated seat does.
+    ordinary = [t for t in domains if t not in {
+        "greyward_as_display_t", "greyward_usbguard_approval_t",
+    }]
     lines = ["(typeattribute greyward_as_ordinary)",
              "(typeattributeset greyward_as_ordinary (" + " ".join(ordinary) + "))"]
     for target in ["greyward_as_auth_t", "greyward_as_display_t"]:

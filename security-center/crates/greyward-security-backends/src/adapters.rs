@@ -314,12 +314,12 @@ fn firmware_security_report_from_json(
     for attribute in &attributes {
         if attribute.result.is_empty() || attribute.expected.is_empty() {
             unknown = true;
-        } else if attribute.result == attribute.expected {
-            continue;
-        } else if matches!(attribute.result.as_str(), "not-supported" | "unsupported") {
-            unsupported = true;
-        } else {
-            insecure = true;
+        } else if attribute.result != attribute.expected {
+            if matches!(attribute.result.as_str(), "not-supported" | "unsupported") {
+                unsupported = true;
+            } else {
+                insecure = true;
+            }
         }
     }
     let state = if insecure {
@@ -334,6 +334,7 @@ fn firmware_security_report_from_json(
     (state, attributes)
 }
 
+#[cfg(test)]
 fn firmware_security_from_json(value: &serde_json::Value) -> FirmwareSecurityState {
     firmware_security_report_from_json(value).0
 }
@@ -385,7 +386,7 @@ fn security_update_count(exit_code: Option<i32>, stdout: &[u8]) -> Option<u32> {
     // finds no matching upgrades. Accept only that exact empty response and
     // only for exit status 0; a missing schema on other statuses remains an
     // error instead of being mistaken for a clean system.
-    if exit_code == Some(0) && value.as_object().is_some_and(|object| object.is_empty()) {
+    if exit_code == Some(0) && value.as_object().is_some_and(serde_json::Map::is_empty) {
         return Some(0);
     }
 
