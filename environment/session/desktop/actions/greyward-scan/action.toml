@@ -1,0 +1,21 @@
+schema_version = 1
+id = "greyward-scan"
+name = "Scan with GREYWARD"
+description = "Scan this file through Security Context; results remain in Security Center."
+icon = "search"
+enabled = true
+menu = "top"
+
+[when]
+kinds = ["file"]
+min_items = 1
+max_items = 1
+
+[run]
+runtime = "command"
+program = "/usr/bin/greyward-file-context"
+args = ["--scan", "{path}"]
+mode = "per-item"
+on_error = "stop"
+working_directory = "home"
+confirm = false

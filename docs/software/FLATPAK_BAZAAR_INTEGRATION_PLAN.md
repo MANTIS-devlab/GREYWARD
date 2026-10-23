@@ -21,30 +21,26 @@ Flatpak and portals
 
 ## Default production applications
 
-The production package baseline provides GNOME Screenshot, OBS Studio, Papers, Loupe,
+The production package baseline provides GNOME Screenshot, Papers, Loupe,
 File Roller, Firefox as an alternate browser, and CUPS-based printer support.
-The following five applications are installed system-wide from the production
+The following four applications are installed system-wide from the production
 Flathub remote and are first-class parts of the normal desktop:
 
 | Role | Application | Flatpak ID | Desktop ID |
 |---|---|---|---|
 | Mail | Aerion | `io.github.hkdb.Aerion` | `io.github.hkdb.Aerion.desktop` |
 | Office documents | Collabora Office | `com.collaboraoffice.Office` | `com.collaboraoffice.Office.desktop` |
-| Local video | Haruna | `org.kde.haruna` | `org.kde.haruna.desktop` |
 | Web browser | Brave | `com.brave.Browser` | `com.brave.Browser.desktop` |
 | VPN | Proton VPN | `com.protonvpn.www` | `com.protonvpn.www.desktop` |
 
 `environment/flatpak/default-applications.list` is the canonical install list.
 `environment/flatpak/mimeapps.list` assigns Aerion to `mailto:`, Brave to HTTP,
-HTTPS and HTML, Collabora Office to common office formats, and Haruna to common
-local video formats. PDF is explicitly assigned to Papers and common image
+HTTPS and HTML, Collabora Office to common office formats, with no preselected video player. PDF is explicitly assigned to Papers and common image
 formats to Loupe, independently of browser registration order.
 
 The session sets the dark Adwaita preference for GTK/libadwaita applications;
-the five Flatpak applications use their normal desktop theme integration and
-standard portals. Haruna receives only a GREYWARD system override that
-disables network access by default for local playback. A user can explicitly
-grant that permission later for online features. Brave and Proton VPN receive
+the four Flatpak applications use their normal desktop theme integration and
+standard portals. Brave and Proton VPN receive
 no GREYWARD-specific permission broadening, and Aerion/Collabora use their
 standard Flatpak sandbox permissions.
 
@@ -57,7 +53,7 @@ The wrapper at environment/flatpak/greyward-software is the only GREYWARD launch
 5. falls back to an uncurated Bazaar launch if the template is unavailable.
 
 Fresh installations seed only the read-only `xdg-config/bazaar` access for
-Software and network-off default for Haruna, through the shared
+Software through the shared
 `environment/flatpak/seed-system-permissions.py` entrypoint. Production and
 development deployment both use it. Any existing system global/app override
 is preserved; user overrides are never reset. Failed reads stop seeding rather

@@ -23,10 +23,13 @@ tar -C "$repo" -czf "$output/SOURCES/greyward-files-inputs.tar.gz" \
   environment/session/greyward-desktop-icons environment/session/greyward-desktop-icons.service \
   environment/session/greyward-desktop-shortcut packaging/greyward-files/source.json \
   packaging/greyward-files/pcmanfm-desktop-only.patch \
-  packaging/greyward-files/pcmanfm-multi-output.patch tests/test_desktop_output_layout.cpp \
+  packaging/greyward-files/pcmanfm-multi-output.patch packaging/greyward-files/pcmanfm-strata-routing.patch \
+  tests/test_desktop_output_layout.cpp \
+  tests/test_files_launchers.py \
   packaging/greyward-files/strata-preview-mode.patch packaging/greyward-files/strata-native-icons.patch \
   branding/source/greyward-files.svg branding/source/greyward-icon-family.json \
   tools/generate-file-icons.py branding/LICENSE
 cp "$repo/packaging/greyward-files/greyward-files.spec" "$output/SPECS/"
 rpmbuild --define "_topdir $(realpath "$output")" \
+  --define "greyward_cargo_target $CARGO_TARGET_DIR" \
   --define "_tmppath $(realpath "$output")/TMP" -ba "$output/SPECS/greyward-files.spec"

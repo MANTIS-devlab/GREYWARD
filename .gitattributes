@@ -15,12 +15,19 @@
 *.service text eol=lf
 *.timer text eol=lf
 *.conf text eol=lf
+*.desktop text eol=lf
+*.rules text eol=lf
+*.env text eol=lf
+*.toml text eol=lf
+environment/production/zsh/* text eol=lf
 environment/patches/dms/*.patch text eol=lf whitespace=-blank-at-eol,-blank-at-eof
+environment/patches/dms-2.0/*.patch text eol=lf whitespace=-blank-at-eol,-blank-at-eof,-space-before-tab
 spikes/application-security/portal/*.patch text eol=lf whitespace=-blank-at-eol,-blank-at-eof
 # Unified diff context columns preserve upstream tabs and empty lines verbatim.
 security-center/packaging/application-security/desktop/*.patch text eol=lf whitespace=-blank-at-eol,-blank-at-eof,-space-before-tab
 packaging/greyward-files/*.patch text eol=lf whitespace=-blank-at-eol,-blank-at-eof
 environment/session/greyward-* text eol=lf
+environment/session/desktop/strata-launcher text eol=lf
 environment/production/greyward-* text eol=lf
 security-center/security-context/bin/* text eol=lf
 environment/session/labwc/autostart text eol=lf
@@ -37,3 +44,11 @@ packaging/greyward-enrollment/*.spec text eol=lf
 # Python's isolated-mode option, so the CR from Windows line endings is fatal.
 security-center/packaging/application-security/administration/sudo-handoff text eol=lf
 security-center/packaging/application-security/greyward-application-security-experimental.spec text eol=lf
+
+# Native private style and package inputs retain deterministic source bytes.
+*.cpp text eol=lf
+*.h text eol=lf
+*.html text eol=lf
+packaging/greyward-files/*.spec text eol=lf
+
+security-center/packaging/*.spec text eol=lf

@@ -1,6 +1,6 @@
 Name: greyward-files
 Version: 1.0.0
-Release: 18%{?dist}
+Release: 20%{?dist}
 Summary: GREYWARD Strata file manager and transparent desktop integration
 License: MIT AND GPL-3.0-only AND GPL-2.0-or-later AND Apache-2.0 AND OFL-1.1 AND ISC AND LGPL-2.0-or-later AND LicenseRef-UnRAR AND LicenseRef-GREYWARD-Branding
 URL: https://github.com/lgse/strata
@@ -29,7 +29,10 @@ BuildRequires: pkgconfig(gtksourceview-5)
 BuildRequires: pkgconfig(poppler-glib)
 BuildRequires: pkgconfig(gstreamer-app-1.0) >= 1.20
 BuildRequires: pkgconfig(fontconfig)
-Requires: pcmanfm-qt >= 2.4.1
+# Native ELF dependencies are generated from the private desktop component.
+# Do not pull in the public PCManFM browser, terminal or sudo front ends.
+Requires: qt6-qtwayland
+Requires: kf6-kimageformats
 Requires: python3
 Requires: bubblewrap
 # External helper programs are not found by ELF dependency generation.
@@ -46,6 +49,8 @@ Requires: gvfs-fuse
 Requires: udisks2
 Requires: breeze-icon-theme
 Requires: greyward-session >= 0.1.0-17
+Requires: greyward-security-center >= 0.1.0-116
+%{!?greyward_cargo_target:%global greyward_cargo_target strata-target}
 %global debug_package %{nil}
 # Keep the checked built ELF intact during packaging.
 %global __brp_strip %{nil}
@@ -94,16 +99,15 @@ with tarfile.open(sys.argv[4]) as archive:
 PY
 patch --directory=desktop/pcmanfm-qt-2.4.1 -p1 --fuzz=0 < packaging/greyward-files/pcmanfm-desktop-only.patch
 patch --directory=desktop/pcmanfm-qt-2.4.1 -p1 --fuzz=0 < packaging/greyward-files/pcmanfm-multi-output.patch
+patch --directory=desktop/pcmanfm-qt-2.4.1 -p1 --fuzz=0 < packaging/greyward-files/pcmanfm-strata-routing.patch
 cp environment/session/desktop/output-layout.h desktop/pcmanfm-qt-2.4.1/pcmanfm/greyward-output-layout.h
 patch --directory=source/lgse-strata-6662d8d -p1 --fuzz=0 < packaging/greyward-files/strata-preview-mode.patch
 patch --directory=source/lgse-strata-6662d8d -p1 --fuzz=0 < packaging/greyward-files/strata-native-icons.patch
 
 %build
 export CARGO_HOME="$PWD/cargo-home"
-if [ -n "${CARGO_TARGET_DIR:-}" ]; then
-    ln -s "$(realpath "$CARGO_TARGET_DIR")" strata-target
-fi
-export CARGO_TARGET_DIR="$(realpath strata-target)"
+mkdir -p "%{greyward_cargo_target}"
+export CARGO_TARGET_DIR="$(realpath "%{greyward_cargo_target}")"
 export PKG_CONFIG=/usr/bin/pkgconf
 # No debug package is produced. Full Fedora debuginfo for generated GTK
 # bindings exhausts small builders; retain the other Fedora compiler flags.
@@ -125,17 +129,22 @@ cmake --build desktop-build --parallel 2
 
 %install
 binary=binary/strata-1.0.0-x86_64-unknown-linux-gnu
-install -Dm0755 strata-target/release/strata %{buildroot}/usr/libexec/greyward/files/strata
+install -Dm0755 "%{greyward_cargo_target}/release/strata" %{buildroot}/usr/libexec/greyward/files/strata
 install -Dm0755 desktop-build/pcmanfm/pcmanfm-qt %{buildroot}/usr/libexec/greyward/files/pcmanfm-qt
+install -d %{buildroot}/usr/share/greyward/files/desktop/translations
+find desktop-build/pcmanfm -maxdepth 1 -type f -name 'pcmanfm-qt_*.qm' -exec install -m0644 {} %{buildroot}/usr/share/greyward/files/desktop/translations/ \;
 install -Dm0755 environment/session/desktop/strata-launcher %{buildroot}/usr/bin/strata
+# A Windows source bundle must never put CR into the kernel interpreter path.
+sed -i 's/\r$//' %{buildroot}/usr/bin/strata
 install -Dm0755 style-build/libgreywarddesktop.so %{buildroot}%{_libdir}/greyward/desktop/qt/styles/libgreywarddesktop.so
 for helper in greyward-files-seed greyward-desktop-icons greyward-desktop-shortcut; do
     install -Dm0755 environment/session/$helper %{buildroot}/usr/local/libexec/$helper
 done
 install -Dm0644 environment/session/greyward-desktop-icons.service %{buildroot}/usr/lib/systemd/user/greyward-desktop-icons.service
-for asset in obsidian.toml transparent.svg settings.conf; do
+for asset in obsidian.toml silver.toml transparent.svg settings.conf; do
     install -Dm0644 environment/session/desktop/$asset %{buildroot}/usr/share/greyward/files/$asset
 done
+cp -a environment/session/desktop/actions %{buildroot}/usr/share/greyward/files/
 install -d %{buildroot}/usr/share/icons %{buildroot}/usr/share/greyward/files
 cp -a icons-build/theme/Greyward %{buildroot}/usr/share/icons/
 cp -a icons-build/strata %{buildroot}/usr/share/greyward/files/strata-resources
@@ -157,10 +166,12 @@ install -m0644 desktop/pcmanfm-qt-2.4.1/LICENSE %{buildroot}%{_licensedir}/%{nam
 cp -a icons-build/LICENSES %{buildroot}%{_licensedir}/%{name}/icon-family
 
 %check
+GREYWARD_FILES_PACKAGE_ROOT="%{buildroot}" python3 tests/test_files_launchers.py
 g++ -std=c++17 -Wall -Wextra -Werror tests/test_desktop_output_layout.cpp $(pkg-config --cflags --libs Qt6Core) -o desktop-output-layout-test
 ./desktop-output-layout-test
 export CARGO_HOME="$PWD/cargo-home"
-export CARGO_TARGET_DIR="$(realpath strata-target)"
+mkdir -p "%{greyward_cargo_target}"
+export CARGO_TARGET_DIR="$(realpath "%{greyward_cargo_target}")"
 export PKG_CONFIG=/usr/bin/pkgconf
 # A dedicated target imports the actual metadata module, avoiding compilation
 # of Strata's entire unrelated internal test suite.
@@ -170,9 +181,12 @@ export STRATA_RELEASE_TAG=v1.0.0
 export STRATA_BUILD_COMMIT=6662d8d4bd4cb3cdec3f10f918f3b4c92b18cdcc+greyward-files15
 (cd source/lgse-strata-6662d8d && cargo test --release --frozen --offline --jobs 1 --test greyward_native_icons -- --test-threads=1)
 python3 - <<'PY'
-import pathlib,hashlib
-source=pathlib.Path('strata-target/release/strata')
+import pathlib,hashlib,os
+source=pathlib.Path(os.environ['CARGO_TARGET_DIR'])/'release/strata'
 installed=pathlib.Path('%{buildroot}/usr/libexec/greyward/files/strata')
+launcher=pathlib.Path('%{buildroot}/usr/bin/strata')
+assert launcher.read_bytes().startswith(b'#!/usr/bin/sh\n')
+assert b'\r' not in launcher.read_bytes()
 if hashlib.sha256(source.read_bytes()).digest()!=hashlib.sha256(installed.read_bytes()).digest():
     raise SystemExit('Built executable changed during packaging')
 assert 'Exec=strata %%U' in pathlib.Path('%{buildroot}/usr/share/applications/io.github.lgse.Strata.desktop').read_text()
@@ -197,6 +211,9 @@ PY
 %license %{_licensedir}/%{name}
 
 %changelog
+* Thu Oct 22 2026 MANTIS SYSTEMS - 1.0.0-19
+- Seed native Strata Safe Open, scanning and file-context actions without replacing user edits.
+
 * Wed Oct 21 2026 MANTIS SYSTEMS - 1.0.0-18
 - Keep transparent icons above wallpaper and reconcile surfaces after output changes.
 - Persist unique per-screen icon placement, with drag/menu relocation and unplug fallback.

@@ -67,6 +67,7 @@ MountOnStartup=false
 MountRemovable=false
 AutoRun=false
 ''')
+    (desktop / 'folder ; $(literal)').mkdir()
     (labwc / 'rc.xml').write_text('<labwc_config/>\n')
     (labwc / 'autostart').write_text('#!/bin/sh\nexit 0\n')
     (labwc / 'autostart').chmod(0o700)

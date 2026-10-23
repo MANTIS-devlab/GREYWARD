@@ -1,0 +1,28 @@
+{
+  "id": "greywardNetwork",
+  "name": "GREYWARD Network security",
+  "description": "Observed GREYWARD network security and its existing Security Center workflow",
+  "version": "1.1.0",
+  "author": "MANTIS SYSTEMS",
+  "type": "dashCard",
+  "capabilities": [
+    "dash-card"
+  ],
+  "component": "./Card.qml",
+  "icon": "policy",
+  "requires_dms": "=2.0.0",
+  "dash": {
+    "card": {
+      "title": "Network security",
+      "w": 2,
+      "h": 2,
+      "minW": 2,
+      "minH": 2,
+      "maxW": 4,
+      "maxH": 3
+    }
+  },
+  "permissions": [
+    "process"
+  ]
+}

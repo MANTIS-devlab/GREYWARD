@@ -123,6 +123,7 @@ pub fn evaluate_facts_with_deviations(
         active_connection: None,
         interface: None,
         connection_type: None,
+        disconnected: false,
         firewall: FirewallState::Unknown,
         trust_zone: TrustZone::Unknown,
     };
@@ -315,17 +316,27 @@ pub fn evaluate_facts_with_deviations(
             FirewallState::Unavailable => RuntimeAvailability::Absent,
             _ => RuntimeAvailability::Failed,
         },
-        if matches!(network.trust_zone, TrustZone::Unknown) {
+        if network.disconnected
+            && network.interface.is_none()
+            && network.active_connection.is_none()
+            && matches!(network.firewall, FirewallState::Available)
+        {
+            // No active link has no zone to assess. The local firewall still
+            // has to answer successfully; a failed probe is never secure.
+            PredicateResult::Satisfied
+        } else if matches!(network.trust_zone, TrustZone::Unknown) {
             PredicateResult::Indeterminate
         } else {
             PredicateResult::Satisfied
         },
         EvidenceValue::Text(format!(
-            "connection={:?};interface={:?};type={:?};zone={:?}",
+            "connection={:?};interface={:?};type={:?};zone={:?};disconnected={};firewall={:?}",
             network.active_connection,
             network.interface,
             network.connection_type,
-            network.trust_zone
+            network.trust_zone,
+            network.disconnected,
+            network.firewall
         )),
     ));
     checks.push(make(

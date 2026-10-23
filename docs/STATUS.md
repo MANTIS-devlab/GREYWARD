@@ -1,5 +1,684 @@
 # GREYWARD current status
 
+## 24 October publication preparation
+
+The owner authorizes updating the sanitized public source and uploading the
+latest existing ISO. [RC3 notes](patch-notes/0.5.0-dms2-rc3.md) record the exact
+artifact, its package tuple and outstanding acceptance. RC3 predates Center 120 /
+Context 112 notification work; source publication does not add those packages
+to the existing ISO. No successor image is being composed for this request.
+Public export now masks forward-slash Windows paths as well as backslash paths.
+An exact upstream QML preimage false positive is scoped to its one pinned hash
+in the secret-scanner configuration; all other scanner checks remain active.
+
+## Security/privacy notifications installed — 24 October
+
+The physical reference now runs Center 120 / Context 112 with Application
+Security 82 / Enrollment 79 unchanged. Verified security updates and a prepared
+restart can produce daily reminders; microphone/camera start notices are opt-in
+in Privacy, off by default, and retain the continuous activity indicators. VPN
+interruption notifications are excluded; existing VPN status is unchanged.
+See [the canonical notification contract](security-context/LIVE_PRIVACY_CAPSULE.md#security-and-privacy-notifications).
+
+The optimized RPM build and normal Rust workspace checks pass, along with Rust
+formatting, Clippy with warnings denied, 418 Fedora Python tests and 99 frontend
+contracts. The final extracted package also passes four offline readbacks at
+12-second intervals on a private bus/network namespace, plus provider-loss
+readback, without using the desktop firewall command. The 44 Windows image
+contract tests pass with two native-only tests skipped; no ISO was composed.
+The normalized component source fingerprint matches the package manifest:
+`5d5a857dde972d08db0708a115b16aa5d0dcf36452458812e7b4aba503948a85`.
+
+Installed package payloads match; the existing mutable OpenSnitch policy remains
+customized. All 52 installed production-contract files have the expected RPM
+owner. The new module is required by that contract for future compositions.
+The restarted session service runs in `greyward_guard_t`, reads the installed
+modules and exposes the new preference methods. Native API write/read/restore
+passed and the preference remains off, with per-user files mode 0600. No old
+Center process was left running. Update Center verified 27 security updates at
+the readback; DMS accepted notification ID 1 while protection remained Protected.
+Reminder persistence and unchanged delivery are checked across refreshes.
+No microphone/camera was activated for testing; physical sensor-start and visual
+popup acceptance remain separate from the API and transition tests.
+
+The protected-seat verifier passes with SELinux Enforcing. The graphical session,
+greeter, Polkit, OpenSnitch engine/control plane, Secure DNS and scanner stayed
+running with their original invocations. Only the root policy reader and user
+Context were restarted. Rollback RPMs and private verification receipts are
+retained on the reference. No GitHub publication or ISO is part of this task.
+
+## 23 October DMS2 RC3 composed and verified
+
+The requested successor combines the user-accepted Polkit presentation and
+native GREYWARD lock appearance with a correction for RC2's disconnected
+Polkit loop. The Rust offline collector now calls the fixed, read-only
+`OpenSnitchPolicy1.GetFirewallState` system method rather than executing
+`firewall-cmd --state` as the desktop user. The existing root network boundary
+reads the live daemon property with a two-second timeout; no caller-selected
+properties or mutations are accepted. Failed/missing providers remain uncertain.
+Mutation reviews and their fresh Polkit authentication are unchanged.
+
+The source candidate selects Center 119, Context 111, Application Security 83
+and Enrollment 80, retaining DMS 7.9, Session 34, Files 20 and Branding 16.
+The final extracted Center/Context RPMs pass the private-bus/network-namespace
+regression: the old packaged helper triggers the rejected desktop command,
+while four new ordinary-user samples at 12-second intervals read the real host
+firewall through the fixed method. Provider loss remains uncertain without a
+desktop fallback. The packaged bus policy is used with the non-wheel `nobody`
+account and a no-active-link NetworkManager fixture. This proves the isolated
+collector path, not an installed desktop with its physical network disconnected.
+The authentication assembler, emblem and materializer in AppSec 83 are identical
+to the user-accepted AppSec 82 bytes.
+
+The resulting ISO is
+`<local workspace>`,
+with checksum, provenance and `verification.json` sidecars. Size: 5,284,036,608
+bytes. SHA-256:
+`198a4cb0e4f9b3bfe4f447909a06a8f2ae5d3d93b384a8b0e8632a34d79a024a`.
+The source is frozen at `046edd6a85eb4f4145b414fb6262822e77e78514`, with a fresh
+portable reference capture at `2026-10-23T19:30:45.468610+00:00`.
+
+Normal RPM build/check phases pass, as do workspace formatting and Clippy,
+410 Context tests, 98 frontend contracts, the Linux image suite (72 passed,
+one explicit gate skipped), 17 assembly, six clipboard and 13 migration checks.
+Both repository gates pass. Canonical factory checks validate source/package
+closure, networkless dependency resolution and Flatpak installation, the
+composed installer contract, extracted stage (30 declared paths), payload hashes
+and recursive-copy hashes. The Windows copy has the same checksum and passes
+the 40-path media contract. All eight RPMs match their selected bytes in both
+embedded locations (16 checks); six staged source files and the portable
+baseline match. OBS, QTerminal, public PCManFM and the Haruna app remain excluded.
+
+RC2 is retained. Fresh installation, physical offline, three-screen, recovery
+and performance acceptance of RC3 are not established; `installed_system_tested`
+and release acceptance remain false. The existing `<validation-host>` graphical session and
+R6 were not modified. Nothing was published to GitHub; remote main's prior CI
+results do not validate these unpublished commits.
+
+## 23 October native lock wallpaper correction user-validated
+
+The user's RC2 screenshot still showed the stock DMS lock background. The
+private JSON contained the correct wallpaper, but the reference's running
+authentication shell returned default `lockPamPath`/managed flags. Native 2.0
+settings discovery waits for a threaded `config.d` scan; the confined runtime
+logs worker-creation failures. The derivative now loads its one immutable
+profile and canonical theme synchronously without folder discovery. Ordinary
+DMS settings loading is unchanged. Settings/theme/background upstream preimages
+are pinned alongside the selected receipt, with no SELinux permission changes.
+
+The native wallpaper initially decoded but rendered black in the private
+software-rendering preview because of the GPU blur layer. The protected
+derivative now draws the image and native scrim directly on software. Native
+options select a single-color digital clock/date, Inter and a quiet pill field
+without the generic avatar. The corrected private render shows the actual
+GREYWARD texture and emblem; an unavailable-worker negative control fails on
+the predecessor and passes on the candidate.
+
+Application Security 82 / Enrollment 79 are built with normal RPM checks,
+selected by the candidate manifest and installed on the physical reference in
+an approved logout window. Migration verifies all 1,643 protected file digests
+and the linked Administration receipt. RPM verification passes, the selected
+DMS release and USB rules are unchanged, and SELinux remains Enforcing. Fresh
+runtime readback confirms settings loaded, the canonical wallpaper in Fill mode,
+the custom theme with surface `#050607` and Inter. The protected seat verifies
+in the broker's service context. The user confirms the real GREYWARD background
+and successful lock/unlock, and explicitly accepts this version. The
+Polkit visual files match their user-validated predecessor; native focus,
+external-screen actions and complete lock-component tests pass privately.
+At that visual validation point no new ISO was constructed or published, and
+the separate RC2 offline Polkit loop was unresolved. The RC3 entry above records
+the subsequent collector correction and media checks.
+
+Validation: 17 assembly, six clipboard, 13 migration, ten packaged-input and
+nine candidate tests pass on Fedora, as does the actual Application Security 82
+RPM/source closure check. Three native authorization checks, three native DMS
+checks and the wallpaper rendering/negative-control check pass on the reference's
+private display. Repository static and documentation gates pass. These results
+do not constitute a successor ISO build or clean-install acceptance.
+
+## 23 October protected Polkit visual successor user-validated
+
+The requested visual successor uses the canonical GREYWARD emblem, an
+Obsidian/Platinum palette and one shared card for input and mirrored outputs.
+Long requests scroll instead of being truncated; keyboard actions, visible
+focus and disabled busy actions are included. The existing authorization,
+PAM and protected-input ownership remain in place. Native isolated rendering
+and synthetic keyboard tests pass on the physical reference, including narrow
+layout and mirror checks. The first candidate, Application Security 80 /
+Enrollment 77, was built with its normal RPM checks and installed on the
+physical reference during the approved logout window. The
+protected migration passes, all 1,643 receipt-bound files and the linked
+Administration receipt verify, RPM verification passes, USB rules and DMS
+selection are unchanged, and SELinux remains Enforcing. The exact previous
+RPMs and protected tree backup are retained. A fresh session starts and the
+seat verifies in the broker's SELinux service context; a direct SSH-domain
+readback cannot read the protected actor's `/proc` entry and is not equivalent.
+The user then reported a blank emblem and ineffective Cancel on an external
+output. Therefore 80 / 77 is not accepted. The 81 / 78 correction
+compiles the exact SVG into synchronous geometry and routes mirror cancellation
+directly to the shared Polkit flow. A synthetic missing-controller case fails
+against the old mirror and passes against the corrected one. Those matched
+packages are now installed after a second approved logout. Migration, all 1,643
+protected file digests, the linked Administration receipt and RPM verification
+pass; USB rules and the selected DMS release remain unchanged with SELinux
+Enforcing. The fresh session verifies in the broker's SELinux service context.
+The user confirms that the emblem is visible and external-screen Cancel closes
+the real request, and explicitly accepts this visual version. This does not
+claim a new password/USB workflow or complete three-screen security acceptance.
+No successor ISO was constructed during that Polkit visual validation.
+
+Validation: 16 assembly, six clipboard and 13 migration tests pass on Fedora;
+three native focus/presentation checks pass on the reference's private display,
+including real mouse events through the generated mirror and an unavailable
+input-controller case. The normal RPM checks pass for both final packages.
+The Windows clipboard fixture cannot model Unix ownership and fails there;
+the same six fixtures pass on Fedora without altering their checks. Ten ISO
+input and nine candidate tests, the source-aware actual-RPM check and both
+repository gates pass. These results do not establish real authentication or
+physical three-screen acceptance. The future media guard now requires the
+canonical emblem as well as the assembler, refusing stale or missing artwork.
+
+Historical RC2 diagnosis (the successor correction is tracked above): its periodic no-active-link
+collector invokes `firewall-cmd --state`; firewalld 2.4.4 requests configuration
+authorization for that property read, repeatedly prompting the ordinary user.
+R6 logs identify this caller/action and the user reports that restoring the
+network stops the loop. Internet loss with an active link has not been shown
+to cause it. The existing composition/integrity evidence below does not cover
+this failure. RC2 is not release accepted; fix and offline desktop validation
+are required before a replacement ISO. The visual change does not fix this bug.
+
+## 23 October DMS2 RC2 composed and verified
+
+The requested successor is available at
+`<local workspace>`,
+with checksum, provenance and verification sidecars. Size: 5,284,036,608 bytes.
+SHA-256: `4a873b12471d723517cc7d3affba3e97c5a01d060b34d4b180f4a8131ac46c0a`.
+Its frozen source is `f208e1587579cef0dc042a529a05e2ff29c78770`; a new portable
+physical-reference baseline was captured at `2026-10-23T17:01:54.830240+00:00`.
+The eight component RPMs are DMS 2.0.0-7.9, Session 34, Files 20, Center 118,
+Context 110, AppSec 79, Enrollment 76 and Branding 16. These include the full
+appearance/Overview defaults, darker palette, native Settings gear and pin,
+larger security emblem, native single-pill background, refresh-stable network
+identity, protected lock wallpaper and retired-application exclusions.
+
+All 73 Linux image tests and both repository gates pass. Canonical factory
+checks pass for source/package and USB approval inputs, networkless RPM
+resolution and Flatpak installation, the composed installer contract, extracted
+production stage (30 declared paths), payload hashes and recursive-copy hashes.
+The copied Windows ISO matches the builder checksum and passes the 40-path media
+contract. All eight first-party RPM hashes match in both embedded locations
+(16 checks); six staged source files and the embedded baseline also match.
+The final RPM closure excludes OBS, QTerminal and public PCManFM, and the
+selected Flatpak inventory excludes Haruna. The explicit seed copy drops its
+retired Haruna app ref while retaining required shared runtimes.
+
+RC1 is retained. No test VM was booted or changed for this composition; no fresh
+installation, physical offline/three-screen, recovery or performance acceptance
+is claimed. Candidate release acceptance remains false. Nothing was published
+to GitHub. The entries below record the preceding installed and media states.
+
+## 23 October native Settings taskbar default and installed readback
+
+The reference account's persisted taskbar pins already include native Settings
+after Brave, Black Box and Strata. Session 34 now seeds that same list for fresh
+DMS 2.0 accounts. Existing lists, including deliberately empty lists, and the
+legacy generation's defaults remain unchanged. The candidate package manifest
+selects Session 34; image staging already rejects a packaged pin helper that
+differs from source.
+
+Session 34 is built and installed on the physical reference. Payload comparison
+with 33 changes only the session pin helper; the exact previous RPM is retained
+for rollback. Native Bash/jq state tests pass (seven run, one explicit binary
+fixture unavailable), as do all 44 Linux image tests against the actual RPM,
+nine candidate tests and both repository gates. Installed readback verifies
+DMS 2.0.0-7.9 / Session 34 / Files 20 / Center 118 / Context 110 / AppSec 79 /
+Enrollment 76. RPM verification passes, allowing only the existing mutable
+OpenSnitch policy configuration. The Settings gear, larger security emblem,
+protected lock wallpaper, durable pins and retired-application absence are
+confirmed from installed files and configuration. Strata remains installed.
+
+Both ordinary shell processes use the installed shell and current receipt-keyed
+QML cache; no old or deleted QML mappings are observed. These changes are
+package-owned rather than cache-only overrides. Legitimate matching caches
+remain enabled. Protected profile hashes, active-seat verification, taskbar
+preferences, USB rules, session and service generations are unchanged; SELinux
+remains Enforcing. No reload, logout, successor ISO or publication was performed
+for this follow-up. The appearance and emblem entries below describe the
+preceding installed revisions.
+
+## 23 October Security Center taskbar emblem refinement
+
+The taskbar emblem now adds four pixels to its native bar-scaled size in both
+orientations. Content-measured width and the single native pill are retained;
+activity glyphs, other widgets and the flyout emblem are unchanged. The reference
+now runs DMS 2.0.0-7.9 / Enrollment 76, retaining Session 33 / AppSec 79. Both
+package builds, normal package checks and five private native plugin fixtures
+pass. DMS payload comparison changes only the ordinary widget and its receipt;
+the generated shell and three pinned executables remain byte-identical.
+
+The rebuilt Enrollment source compositor and its input digest differ from 75;
+they are not described as identical protected payloads. The running protected
+desktop uses its independently copied, verified profile. Every file in that
+profile and Administration remains unchanged across the package update, and the
+fresh seat verifier passes. No protected migration, logout, compositor restart
+or root-service restart was performed. A separate ordinary-panel reload loads
+the new receipt-keyed cache, with no old/deleted QML mappings. Installed RPM
+verification, unchanged taskbar preferences, session, USB rules and root-service
+generations pass; SELinux remains Enforcing. The appearance tuple below precedes
+this refinement. No successor ISO or publication is claimed.
+
+## 23 October physical appearance capture and desktop cleanup
+
+The reference account's current appearance is captured in the candidate
+`experience.json`: transparent bottom bar, 1.13 text / 1.1 icon scaling,
+155-percent app icons with 140-percent hover enlargement, the exact widget
+order/options, per-widget backgrounds, spacing, borders, shadows and opacity.
+Security Center, clock and power retain backgrounds; other widgets are bare.
+The optional dock stays disabled. Geometric centering, compact clipboard and
+the four-pixel launcher border are included. Screen names/models and the
+disabled experimental bar are not portable defaults. New accounts receive the
+portable layout; established accounts retain their preferences.
+
+The candidate forwards DMS's native per-widget Background option into both
+plugin pill orientations. Security Center uses that single background and
+native scaled icons, with content-measured width. The Settings launcher uses a
+standalone silver gear SVG. Network identity retains the last confirmed address
+and country flag while refreshing; cold startup still shows Checking. Failed
+lookups remain unavailable and opt-out clears identity. Address data remains
+memory-only. The public-IP globe is removed from both orientations and flyout.
+The protected lock profile pins the canonical GREYWARD wallpaper and Fill mode.
+Its activation requires a quiet protected-profile migration and fresh login.
+
+OBS, QTerminal and Haruna have been removed from the physical reference after
+configuration backup. Removing QTerminal also removes Fedora's public PCManFM
+package, which requires it; Strata and the independently packaged private
+desktop binary remain installed. Security/recovery service PIDs and USB rules
+are unchanged. Fresh-image package floors, exclusions, default Flatpaks,
+curation and MIME assignments no longer bring these applications back.
+
+After approval for one logout, the reference now runs DMS 2.0.0-7.8 / Session 33 /
+AppSec 79 / Enrollment 75. The first attempt correctly refused the still-closing
+logind session before making protected changes; retry after it disappeared used
+the same approved quiet window. The 6,561-member recovery archive passes private
+extraction/comparison; exact candidate and rollback RPM transactions pass. All
+four package builds and their normal checks pass. Payload readback verifies 22
+plugin files, the shell receipt, three unchanged pinned executables, the gear,
+factory appearance/migration bytes and protected materializer. Five private
+native plugin tests pass, including both pill-background toggles and refresh
+identity retention. All 44 Linux image cases pass against the actual Session 33
+RPM, including visual-byte and retired-application negative controls.
+
+The protected migration and fresh-login runtime readback pass: the active seat
+verifies, protected processes and the workflow broker use their current
+executables, and the two ordinary shell processes use only the current receipt
+cache namespace without old/deleted QML mappings. The protected runtime's lock
+wallpaper and Fill mode match the canonical wallpaper. The user's taskbar options
+are retained with the native security background enabled. Fresh state is
+Protected with zero reviews, Operating filtering and VPN Active; SELinux is
+Enforcing, USB rules and unrelated service generations are unchanged. These
+are configured/runtime checks; visual lock/gear/flag acceptance is still separate.
+No new ISO or public publication is claimed. The previous RC1 remains unchanged.
+
+## 23 October R6 follow-up — current readback, candidate activation pending
+
+The user now reports no visible flapping. The supplied normal-session diagnostic
+capture confirms the RC1 tuple on R6: DMS 2.0.0-7.6 / Session 31 / Center 118 /
+Context 110 / AppSec 78 / Enrollment 73 / Files 20, with SELinux Enforcing.
+The four captured Context source hashes match the canonical sources. The active
+bus owner is the expected session10 entrypoint; Context and DMS both report zero
+restarts. Live introspection exports `GetShellPresentation`, and the call succeeds
+with Protected, Operating network protection, Secure firewall, Encrypted DNS,
+VPN Off and no items or notification items. The earlier UnknownMethod response
+is not reproduced; its original cause remains unestablished.
+
+The separate system-posture capture spans 16:35:28–16:37:27 CEST: one loading /
+Unavailable reply followed by 54 Review Needed replies with two reviews and
+three or four unavailable checks. This differs from the earlier 16:34 session
+presentation; it is not a simultaneous trace of both paths and does not prove
+visible flapping or identify the underlying checks. Do not label the captured
+system fallback healthy or attribute the user's improvement to the undeployed
+candidate fix. The archive contains no theme/Overview settings and its journal
+read was permission-denied. RPM verification also encountered protected files
+unreadable by the ordinary account; those reports do not establish missing
+files or complete integrity acceptance. No guest change was made for this review.
+
+The preparation and unavailable-channel evidence below precede this supplied
+capture. Candidate activation, visual settings readback and successor media
+remain separate pending work.
+
+The user reports brief Protection and Network warnings on R6 after installing
+the new ISO, without the same symptom on the physical reference. Read-only
+comparison found that the reference's live DMS theme was an unowned, darker
+file, whereas the image used the generated graphite theme. Canonical palette
+input now records the reference's native dark shell roles; existing Strata and
+Security Center application roles are retained. Session 32 owns the system theme
+as well as its factory copy. Its Overview preset uses the observed reference
+grid: three security cards, full-width media, calendar, disk, memory and CPU.
+Existing user layouts and privacy opt-outs remain preserved.
+
+The shared shell client now retains detailed evidence within its original lease
+when a fresh positive aggregate fallback arrives. It does not renew that lease,
+resolve pending actions, or suppress a new negative aggregate. Missing filtering
+details render unavailable instead of inventing a Network review finding. All
+five private native plugin tests pass, including expiry/negative/pending-action
+regressions and the actual DMS theme loader's resolved dark surfaces.
+At that preparation stage, the transient R6 warning had not been captured; this
+source correction does not establish that its entire live cause is resolved.
+The fresh R6 install has no development SSH path, and console text pasting fails;
+a normal-session presentation readback has been requested. R6 later auto-locked;
+unlocking has been requested without automating authentication. No R6 policy or
+session change and no physical-reference deployment has been made for this follow-up.
+The subsequent user capture shows `UnknownMethod` for `GetShellPresentation`.
+The exact Context 110 RPM contains that method and passes a private native
+D-Bus export check through `Session10SecurityContext` with a synthetic read
+provider. This proves packaged method registration only. R6's installed RPM,
+source-method presence and actual bus owner have been requested to distinguish
+an installed-version, running-process or call-target mismatch; none is yet
+established as the cause.
+The user is remote and cannot perform these reads. The observed guest address
+does not accept TCP connections on port 22; no SSH verification was bypassed.
+Guest file transfer is disabled, KVP reports no contact, and no serial pipe is
+configured. VMConnect capture works, but fresh accessibility controls are rejected
+by the input tool and console text delivery cannot be verified. No guest access
+configuration was changed. Live diagnosis and activation remain pending an
+available guest channel rather than treating the prepared fallback fix as proof.
+
+Candidate inputs target DMS 2.0.0-7.7 / Session 32 / Enrollment 74, retaining
+Center 118 / Context 110 / AppSec 78 / Files 20. All three package builds and
+normal package checks pass. Readback verifies all 22 packaged plugin files and
+the three pinned executable hashes. The built-Session visual test passes all
+43 image cases on Linux, including actual RPM payload and changed-input refusal.
+Its first run exposed RPM's hard-link encoding of duplicate themes; the contract
+now extracts the closed three-file set together rather than reading an empty
+individual link member. Session build inputs remain byte-identical to the
+source snapshot used for its retained artifact. All three Windows artifact
+copies have matching SHA-256 hashes. Enrollment's newly built protected Labwc
+and its input digest differ from revision 73; it has not been hot-deployed or
+declared a metadata-only update. Recoverable candidate activation
+and a corrected successor ISO remain pending. RC1 is historical media
+for these corrections, not a claim that they are already embedded. Candidate ISO
+staging now rejects a Session RPM whose actual system theme, factory theme or
+Overview preset differs from source. Public publication remains unapproved.
+
+## 23 October matched activation and DMS 2.0 ISO candidate
+
+After explicit approval for one graphical logout, the physical reference now has
+DMS 2.0.0-7.6 / Session 31 / Files 20 / Center 118 / Context 110 / AppSec 78 /
+Enrollment 73. The quiet 6,561-member recovery archive passes private extraction
+and comparison. Exact package digests and the RPM transaction pass; the canonical
+protected migration verifies that generation 7 already has the matching inputs.
+Only the workflow broker was restarted within that quiet window. RPM verification,
+the full selected DMS verifier, unchanged USB rules and unrelated root service
+generations pass; SELinux remains Enforcing. The user confirms a successful fresh
+login. Independent readback verifies the protected seat, the newly installed broker
+executable and the two ordinary shell processes. Their active QML mappings use only
+the current verified receipt namespace; no deleted or prior cache mapping is
+observed. Fresh Context reports PROTECTED with zero reviews, OPERATING filtering
+and ACTIVE VPN. Valid receipt-keyed caching remains enabled.
+
+The explicitly requested internal ISO is now composed. The image entrypoints
+now accept `--dms-candidate`, selecting the separate candidate receipt and plugin
+inventory while retaining exact payload/source checks. The validated default stays
+unchanged and candidate acceptance remains false.
+
+Artifact: `GREYWARD-0.5.0-DMS2-RC1-x86_64.iso`, 5,446,631,424 bytes, SHA-256
+`c17280fa3de30c4faadfc7aaf48bb829d2767c532eb4f3c882b4745c39a935b8`.
+Image source is `882080ac9ee34d85fa55734524a795383326f60a`; all eight embedded
+first-party RPMs match the selected artifact hashes and the physical package set.
+The fresh portable baseline, package dependencies, Flatpak commits, empty-root
+networkless dependency transaction and complete Flatpak installation pass, as do
+the extracted payload and production-stage checks. RPM scriptlets were not run
+by that dependency solve; it does not prove an installed OS.
+The Windows copy has the same SHA-256 and passes the 40-path media contract.
+The later user-authorized R6 boot attaches this exact ISO and reaches Anaconda's
+installation summary with the disk-encryption passphrase dialog, observed through
+the real VMConnect console. The original disk-first boot order is restored; the
+ISO stays attached. No installation was started and no new VM was created.
+Clean installation, encrypted recovery, physical
+offline/three-screen acceptance and daily-use/performance gates remain separate.
+No GitHub publication, tag or release was performed.
+
+## Historical: 23 October ordinary follow-up — before matched protected activation
+
+At this stage the physical reference ran DMS 2.0.0-7.5 / Session 31 / Files 20 /
+Center 118 / Context 110, retaining protected AppSec 76 / Enrollment 67 and
+runtime generation 7. Fresh installed Context readback shows PROTECTED with
+zero reviews, OPERATING application filtering, a SECURE network check and
+explicit ACTIVE VPN state. The card model applied to those observed bounded
+fields returns green `Protection active`, with `VPN active` underneath. An
+observed VPN off does not downgrade healthy filtering; missing/stale evidence
+cannot establish Off. Explicit stopped/disabled controls remain inactive.
+The cards use graphite surfaces, functional semantic icons/text and restrained
+accents, with decorative rings and oversized watermarks removed. Private native
+normal/compact layout checks and a synthetic desktop preview pass; final user
+visual confirmation of this refinement is still separate.
+
+The offline defect was in the canonical network collector: without an active
+interface it returned unknown without checking the firewall. That made the
+Network domain unknown and therefore the aggregate posture unavailable. The
+replacement distinguishes successful NetworkManager absence from probe failure,
+then requires a live firewalld reply before satisfying the offline firewall
+check. Missing/malformed observations and failed probes stay uncertain. Overall
+aggregation and other required checks are unchanged. A private packaged-helper
+canary returns SECURE for confirmed offline plus running firewall, and UNKNOWN
+for failed NetworkManager/firewall probes. No physical network disconnect was
+performed, so installed physical offline acceptance remains unclaimed.
+
+The first Center 117 build reused an old standalone posture helper; its packaged
+canary reproduced UNKNOWN for the confirmed offline case. It was not deployed.
+Canonical Center/AppSec RPM builds now explicitly rebuild first-party release
+executables while retaining dependency caches. Center 118 passes that same
+packaged canary. A Linux spec-execution regression also passes against stale
+cached executable outputs. All normal Center/AppSec package checks pass;
+explicitly ignored hardware/privileged fixtures remain unclaimed.
+
+Context 109 initially compared the refreshed VPN observation with the earlier
+summary sample time and conservatively rendered it unavailable. Context 110
+compares VPN freshness at provider completion without renewing the original
+posture lease. The real GetShellSummary caller and pure projection regressions
+pass, alongside all 409 Context tests, 98 frontend checks, 10 card cases and
+three private native plugin fixtures. The 4,809-file canonical build snapshot
+and exact overlays verify; final evidence prose is maintained separately.
+
+Payload admission verified the four DMS file changes and rebuilt Center helper.
+Context's only functional changes are shell projection/collection; its root
+network module exactly matches the existing installed hot fix. Two Polkit
+source differences normalize line endings only, preserving authorization logic.
+Installed RPM verification passes apart from the preserved customized OpenSnitch
+configuration. Predecessor downgrade dry runs and private backups are retained.
+Root-network scriptlet restarts were suppressed and only ordinary shell/Context
+units explicitly reloaded. Root service generations, network configuration,
+protected inputs, USB rules and original protected compositor/authentication
+PIDs are unchanged. SELinux stays Enforcing, and fresh protected-seat verification
+returns true. No logout, compositor restart, reboot or publication occurred.
+
+The future matched image source tuple is DMS 7.6 / Center 118 / Context 110 /
+AppSec 78 / Enrollment 73. All five package builds and their source/hash closure
+pass; the future protected packages remain uninstalled. The protected broker's compiled fallback requires a
+separate matched activation window; it was not hot-updated. The active shell
+uses the newly built canonical unprivileged posture helper. Production defaults
+retain the validated release and migration acceptance remains incomplete.
+
+## Historical: 23 October initial cache correction — superseded by protection-first refinement
+
+The physical reference now has DMS 2.0.0-7.3 / Session 31, retaining Files 20 /
+Center 116 / Application Security 76 / Enrollment 67 / Context 108 and protected
+runtime generation 7. Healthy `OPERATING` filtering and VPN-owned DNS map to
+green `VPN active`; actual findings retain precedence. The earlier UI-only
+correction was insufficient: the user reported the old card design after reload.
+The compiled cache for the exact canonical `StatusCard.qml` path still contained
+the pre-redesign implementation despite current installed source bytes. Package
+timestamps were unchanged. The old running process retained that deleted cache
+mapping and predated the cache fix.
+
+The canonical ordinary-shell wrapper now keys `QML_DISK_CACHE_PATH` by the fully
+verified release receipt's SHA-256. It preserves caching and prior namespaces;
+protected authentication and its private runtime are unchanged. The obsolete
+compiled card was privately backed up and removed. Through the existing user
+service manager, only the ordinary taskbar/dashboard was reloaded. Readback
+confirms new DMS/Quickshell processes, the expected cache key, and actual mapped
+compiled card/model units in that namespace. The current compiled card contains
+the new footer and no old Update Center headline; the compiled model contains
+`VPN active` and `OPERATING`. The user confirms that Network is green. Follow-up work will restore network protection as the primary state and keep VPN as secondary information; offline aggregation remains a distinct diagnosed issue.
+
+The exact package payload delta is three DMS files (model, plugin version,
+receipt) and one Session file (ordinary wrapper). Runtime binaries, helpers and
+shell files are byte-identical to generation 7. Protected desktop/Administration
+receipts, Enrollment inputs and USB rules remain unchanged. Full installed RPM
+verification, selector validation and predecessor downgrade dry runs pass. The
+fixed seat verifier still returns `verified: true`; the original graphical
+session remains open, SELinux stays Enforcing and recovery/security services
+remain active. No compositor restart, logout, reboot or protected migration was
+performed. New matched Enrollment 70 builds for future image staging and is not
+installed on the active desktop. No publication or ISO composition occurred.
+
+Eight card-state cases, three private native plugin fixtures, 14 build contracts,
+nine candidate contracts and eight Linux verifier fixtures pass. The source and
+payload closure covers 4,808 files. The direct-kernel wrapper regression confirms
+cache-key changes even with identical receipt mtimes, stable warm-key reuse,
+default XDG handling and preservation of prior caches. The optional private
+Quickshell warm-cache fixture does not emit disk-cache units on this builder and
+is explicitly skipped; it is not evidence of a native warm-cache replay. Actual
+installed cache mappings/code tokens provide separate scoped evidence above.
+
+## Historical: 22 October first Network card correction — superseded by cache fix
+
+Readback on the physical reference confirms healthy application filtering
+(`OPERATING`), a secure evaluated network check, zero network reviews and
+VPN-owned DNS. The dashboard's positive-state vocabulary omitted `OPERATING`,
+causing an incorrect amber review headline. The source now recognizes it and
+shows green `VPN active` when both filtering controls are confirmed and no real
+finding needs attention. DNS ownership is disclosed without claiming encrypted
+DNS, full-tunnel routing or a kill switch. Informational events do not create a
+review requirement; real warnings/actions/failures and stale evidence retain
+precedence. Eight state cases and three private native plugin fixtures pass.
+The installed package-only correction is DMS 2.0.0-7.2, retaining Enrollment 67,
+the exact runtime/protected generation 7 and all other packages. The build pins
+the three existing executable digests before providing the predecessor's exact
+runtime dependency. The first rebuilt Enrollment candidate changes its embedded
+compositor package note and digest; it is not eligible for this live UI-only
+update. New matched Enrollment 69 is built separately for future image staging;
+it is not installed on the physical reference. Normal DMS package checks pass,
+alongside 14 build contracts, nine candidate contracts, eight Linux installed
+verifier fixtures and eight card-state cases. The 4,807-file source comparison
+passes. Extracted DMS payload differs only at the model, plugin version and
+release receipt; every runtime executable, shell file and helper is identical.
+The installed dependency/conflict dry run, full RPM verification, selected-DMS
+validation and predecessor downgrade dry run pass. Protected desktop and
+Administration receipts, Enrollment inputs and USB rules are unchanged. The same
+graphical session remains open, its fixed protected-seat verifier still returns
+`verified: true`, and SELinux remains Enforcing. No protected migration, session
+closure or compositor restart occurred. The user has been asked to reload only
+the ordinary shell from its normal terminal; physical color/text confirmation is
+pending. No publication or ISO composition occurred.
+
+## 22 October Security dashboard cards — successor active; physical review pending
+
+The user-requested refresh adds green/amber/red state accents, native vector
+emblems, per-control rows and a small taskbar status dot. The existing shared
+observer and typed routes remain unchanged. Unknown or stale evidence stays
+amber; explicit failure is red. Network shows firewall/application/DNS evidence
+separately. Updates never inherits an Up to date claim from overall protection;
+idle update counts and last-check results are not present in this summary.
+
+Seven focused Node cases, palette/contrast checks and three native plugin
+fixtures pass. Synthetic dark/light renders were inspected and compact layout
+fits; physical appearance remains pending. The installed matched set is DMS 2.0.0-7 /
+Session 30 / Application Security 76 / Enrollment 67, retaining Files 20 / Center
+116 / Context 108. It includes the schema-42 correction. All four packages build
+with normal checks; 108 native/profile/source/palette
+checks, six real-CLI fixtures and seven Node cases pass. Package hashes, source
+closure and the physical dependency/conflict dry run pass. After the user approved
+activation, the physical reference was already at the greeter with no enrolled
+graphical session. The four revision-7 packages and canonical protected-profile
+migration are now applied; Files 20 / Center 116 / Context 108 are retained.
+All 1,642 protected file digests and the Administration cross-reference verify;
+installed RPM verification and selected-DMS validation pass. The workflow broker
+was reloaded in the approved quiet window. SELinux remains Enforcing and SSH,
+greetd, USBGuard, Polkit and firewalld remain active. The USB rule file is unchanged:
+11 persistent rules, 15 allowed devices and no blocked/rejected devices at readback.
+The new quiet recovery archive has 6,559 members and passes isolated extraction
+and metadata/content comparison; installed rollback/reapply remains untested.
+After a fresh login, the PID-1-started fixed seat verifier returns `verified: true`.
+The actual protected runtime settings report schema 42 and remain root-owned,
+read-only. Real keyboard authorization, Strata reopening and physical appearance
+remain pending user confirmation.
+No session was forcibly closed, reboot, hot compositor restart, ISO composition
+or publication occurred. Revision 6 is a retained predecessor.
+
+
+## Historical: 22 October first DMS 2.0 physical trial — superseded by revision 7
+
+The following records the earlier revision-3 trial, superseded by the activation
+above. After the user approved the activation window and logged out normally, the six
+matched packages were installed on the physical reference: DMS 2.0.0-3 / Session
+26 / Files 19 / Center 116 / Application Security 72 / Enrollment 63. Files has
+since been upgraded to corrected revision 20 without closing the session. Context 108
+and the independent pinned 1.6 greeter remain unchanged. The production source
+manifest and ISO inputs still select the validated 1.6 release. No publication
+or ISO composition occurred.
+
+The final quiet-session backup includes both SELinux stores, protected desktop
+and Administration inputs, application state, ordinary preferences and USB/firewall
+policy. Graphical sessions/protected processes were absent; policy database
+main/WAL/journal and key receipts stayed stable across capture. The 5,131-member
+archive restores and compares with its saved content/metadata in an isolated
+directory. Exact old RPMs and downgrade/reinstallation dry runs are available;
+installed rollback/reapply has not been rehearsed.
+
+Protected authentication was migrated to 2.0 with all 1,642 prepared-file hashes
+and the Administration cross-reference verified. Its ordinary-plugin loader is
+disabled. Installed RPM verification and the selected DMS validator pass. The
+security broker was reloaded in the approved quiet window. SELinux stays
+Enforcing; SSH, greetd, USBGuard, Polkit and firewalld stay active. The persistent
+USB rule file is byte-identical to the pre-migration backup; no manual allow rule
+was added. No reboot or hot compositor restart occurred.
+
+Source, package, native headless shell/plugin/focus, profile, real-CLI migration,
+image-source and frontend gates pass as recorded in the
+[migration authority](architecture/DMS_2_0_MIGRATION.md). Shared palette, native
+Security dashboard/tab/search and private Strata desktop routing are candidates
+for physical review. The original dirty worktree is preserved separately.
+
+The old installed seat passed a fresh metadata readback before logout. After
+the new login, the PID-1-started fixed verifier also returns `verified: true`.
+Ordinary application requests for coverage, device protection and Administration
+return normally; rejected SSH-root activity reads do not establish a desktop
+regression and must not be addressed by weakening the caller boundary.
+
+A new actual-source regression test exposed a protected settings mismatch:
+the native pinned shell requires schema 42, while the first trial seeded 29.
+The corrected source selects 42, preserves legacy schema 18 and checks the
+manifest pin against the actual native declaration during assembly. The schema-only
+predecessor candidate is DMS 2.0.0-6 / Session 29 / Files 20 / Application Security 75 /
+Enrollment 66, retaining exact Center 116 / Context 108. Intermediate
+revision-4 build artifacts were rejected before deployment after a text-encoding
+diff; no admitted package identity is reused for different bytes. The four successor RPMs now build with their normal checks, have closed
+source/payload receipts and pass the installed dependency/conflict dry run.
+All 104 native/profile/source contracts and six actual-CLI migration fixtures
+pass on Fedora. A new approved quiet activation window is still required. The active desktop remains on revision 3.
+
+The user confirms first-login success but reports that Strata does not open.
+Direct package-byte inspection finds CRLF in `/usr/bin/strata`, making the kernel
+look for `/usr/bin/sh` with a trailing carriage return. A private backup precedes
+an atomic LF-only launcher correction on the physical reference; its interpreter
+syntax passes and no other script in the six installed trial packages has a
+broken shebang. The user confirms that Strata now opens normally. Files 20 adds the canonical
+LF checkout attribute, installation normalization and a direct-kernel wrapper
+test with a failing CRLF negative control. The source-built Files 20 RPM now passes normal checks, three source/packaged
+wrapper kernel tests and the exact packaged desktop three-two-three output
+fixture. It is installed with clean RPM verification; the wrapper matches the
+confirmed LF correction and the protected seat still verifies with SELinux
+Enforcing. The user confirmed reopening after the launcher correction; a fresh
+open of the rebuilt native payload remains to confirm. No explicit session or
+service restart was used. The protected follow-up is staged, awaiting the new
+approval; it has not been activated.
+
+Three-screen workflows, real password input/authorization, Strata security-action
+parity, rollback/reapply, rendered-performance comparison and 24-hour daily use
+remain pending. Nautilus removal is still gated on installed Strata parity. No
+measured speed-up or complete installed security acceptance is claimed.
+
 ## 21 October desktop icons on multiple outputs — 0.4.5 media verified
 
 Files 18 separates icons from DMS wallpaper and reconciles connected outputs.

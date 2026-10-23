@@ -53,6 +53,14 @@ class OperationTests(unittest.TestCase):
         self.runtime.service = Mock()
         self.runtime.router = Mock()
         self.runtime.router.eligible_items.side_effect = lambda items: items
+        self.runtime.bus = Mock()
+        self.runtime.update_snapshot = {}
+        self.runtime.boot_id = 'test-boot'
+        self.runtime._read_updates = Mock()
+        self.runtime.notice_preferences = Mock()
+        self.runtime.notice_preferences.read.return_value = {'sensor_start': False}
+        self.runtime.sensor_starts = Mock()
+        self.runtime.sensor_starts.collect.return_value = []
         self.runtime.running = False
 
     def test_display_lease_renewal_does_not_change_revision_or_notifications(self):
@@ -65,12 +73,37 @@ class OperationTests(unittest.TestCase):
         self.runtime.service.ShellSummaryChanged.assert_not_called()
         self.runtime.router.reconcile.assert_not_called()
 
+    def test_metadata_checks_are_spaced_but_ready_transaction_is_read_promptly(self):
+        import json
+        proxy = Mock()
+        proxy.GetSnapshot.return_value = json.dumps({'snapshot_refreshing': True})
+        proxy.GetTransactionStatus.return_value = json.dumps({'phase': 'READY_TO_RESTART'})
+        runtime = self.runtime
+        runtime.next_update_check = 0
+        runtime.update_check_deadline = 0
+        # Call the real method; the collection test separately mocks it.
+        with patch('greyward_security_context.shell_runtime.dbus.Interface', return_value=proxy), \
+                patch('greyward_security_context.shell_runtime.time.monotonic', return_value=100):
+            ShellRuntime._read_updates(runtime)
+        self.assertEqual(runtime.next_update_check, 1000)
+        self.assertEqual(proxy.GetSnapshot.call_count, 1)
+        proxy.GetSnapshot.return_value = json.dumps({'snapshot_refreshing': False})
+        with patch('greyward_security_context.shell_runtime.dbus.Interface', return_value=proxy), \
+                patch('greyward_security_context.shell_runtime.time.monotonic', return_value=110):
+            ShellRuntime._read_updates(runtime)
+        with patch('greyward_security_context.shell_runtime.dbus.Interface', return_value=proxy), \
+                patch('greyward_security_context.shell_runtime.time.monotonic', return_value=120):
+            ShellRuntime._read_updates(runtime)
+        self.assertEqual(proxy.GetSnapshot.call_count, 2)
+        proxy.GetTransactionStatus.assert_called_once()
+        self.assertEqual(runtime.update_snapshot['transaction']['phase'], 'READY_TO_RESTART')
+
     def test_widget_and_native_notifications_receive_the_same_eligible_items(self):
         live = [
-            {'id': 'firewall-unavailable', 'severity': 'WARNING'},
             {'id': 'usb:ref', 'severity': 'ACTION'},
+            {'id': 'firewall-unavailable', 'severity': 'WARNING'},
         ]
-        eligible = [live[1]]
+        eligible = [live[0]]
         self.runtime.router.eligible_items.side_effect = None
         self.runtime.router.eligible_items.return_value = eligible
         value = {'revision': 1, 'items': live, 'label': 'Review needed'}

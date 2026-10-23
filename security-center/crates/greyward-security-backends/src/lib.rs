@@ -191,6 +191,7 @@ mod tests {
             active_connection: Some("wired".into()),
             interface: Some("eth0".into()),
             connection_type: Some("ethernet".into()),
+            disconnected: false,
             firewall: FirewallState::Available,
             trust_zone: TrustZone::Public,
         })]);
@@ -207,6 +208,7 @@ mod tests {
             active_connection: Some("wired".into()),
             interface: Some("eth0".into()),
             connection_type: Some("ethernet".into()),
+            disconnected: false,
             firewall: FirewallState::Unavailable,
             trust_zone: TrustZone::Unknown,
         })]);
@@ -219,6 +221,58 @@ mod tests {
                 .state,
             greyward_security_domain::PostureState::Unavailable
         );
+    }
+    #[test]
+    fn offline_requires_confirmed_absence_and_a_live_firewall() {
+        for (disconnected, firewall, expected) in [
+            (
+                true,
+                FirewallState::Available,
+                greyward_security_domain::PostureState::Secure,
+            ),
+            (
+                false,
+                FirewallState::Available,
+                greyward_security_domain::PostureState::Unknown,
+            ),
+            (
+                true,
+                FirewallState::Unavailable,
+                greyward_security_domain::PostureState::Unavailable,
+            ),
+            (
+                true,
+                FirewallState::Error,
+                greyward_security_domain::PostureState::Unknown,
+            ),
+        ] {
+            let facts = NetworkFacts {
+                active_connection: None,
+                interface: None,
+                connection_type: None,
+                disconnected,
+                firewall,
+                trust_zone: TrustZone::Unknown,
+            };
+            let snapshot = evaluate_facts(&[AdapterFacts::Network(facts.clone())]);
+            let check = snapshot
+                .checks
+                .iter()
+                .find(|check| check.check_id.as_str() == "network.active-connection")
+                .unwrap();
+            assert_eq!(check.state, expected);
+            if expected == greyward_security_domain::PostureState::Secure {
+                // Legacy serialized observations cannot accidentally acquire
+                // the new known-offline interpretation.
+                let mut wire = serde_json::to_value(facts).unwrap();
+                wire.as_object_mut().unwrap().remove("disconnected");
+                assert!(
+                    !serde_json::from_value::<NetworkFacts>(wire)
+                        .unwrap()
+                        .disconnected
+                );
+            }
+        }
     }
     #[test]
     fn flatpak_and_portal_states_are_distinct() {

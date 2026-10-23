@@ -168,6 +168,11 @@ def build_experience(shell, capsule, devices, usb_error, files, network, operati
             value = "Reviewed exception" if check.get("accepted_deviation") else str(check.get("state", "UNAVAILABLE")).replace("_", " ").capitalize()
             if entry: entry["value"] = value
             else: details.append({"label": label, "value": value})
+    vpn_state = shell.get("vpn", {}).get("state", "UNAVAILABLE")
+    if vpn_state not in {"ACTIVE", "OFF"}:
+        vpn_state = "UNAVAILABLE"
+    details.append({"label": "VPN", "state": vpn_state,
+                    "value": {"ACTIVE": "Active", "OFF": "Off"}.get(vpn_state, "Unavailable")})
 
     # Delivery's last confirmed presentation is evidence of an earlier warning,
     # never evidence of current permission or resolution. Provider loss cannot

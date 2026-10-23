@@ -20,6 +20,30 @@ def tree_receipt(root):
     return files, digest
 
 
+def verify_package_only_runtime(receipt):
+    """Only identical runtime bytes may satisfy the predecessor's exact pin."""
+    if 'rpmRelease' not in receipt.get('build', {}):
+        return
+    names = {'binarySha256', 'usbguardApprovalSha256', 'usbguardAuthApprovalSha256'}
+    expected = receipt['build'].get('packageOnlyRuntime')
+    if (not isinstance(expected, dict) or set(expected) != names
+            or any(not isinstance(value, str) or not re.fullmatch(r'[0-9a-f]{64}', value)
+                   for value in expected.values())
+            or any(receipt.get(name) != expected[name] for name in names)):
+        raise ValueError('Package-only DMS runtime differs from the pinned generation')
+
+
+def verify_settings_schema(release, shell):
+    """Bind the native schema to the pinned source before making a receipt."""
+    if release['dms']['tag'] != 'v2.0.0':
+        return
+    expected = release['dms'].get('settingsConfigVersion')
+    source = (shell / 'Common/SettingsData.qml').read_text()
+    versions = re.findall(r'\breadonly\s+property\s+int\s+settingsConfigVersion\s*:\s*(\d+)\b', source)
+    if type(expected) is not int or versions != [str(expected)]:
+        raise ValueError('Native settings schema differs from reviewed source pin')
+
+
 def extract(archive, destination):
     with tarfile.open(archive) as stream:
         # Python's data filter rejects traversal, escaping links and special files.
@@ -94,8 +118,13 @@ def assemble(manifest, source, vendor, patches, output):
     shell = output / 'shell'
     shutil.copytree(upstream / 'quickshell', shell, ignore=shutil.ignore_patterns('.qmlls.ini', '.git'))
     changelog = (shell / 'Services/ChangelogService.qml').read_text()
-    if 'currentVersion: "1.6"' not in changelog or '"/.changelog-"' not in changelog:
+    line = release['dms']['tag'].lstrip('v').rsplit('.', 1)[0]
+    changelog_ok = ('currentVersion: "1.6"' in changelog and '"/.changelog-"' in changelog
+                    if line == '1.6' else line == '2.0' and 'ShellVersionService.semverVersion' in changelog
+                    and '"/dms/.changelog-"' in changelog)
+    if not changelog_ok:
         raise ValueError('Changelog migration marker contract changed')
+    verify_settings_schema(release, shell)
     expected = {item['file'] for item in release['patches']}
     if {p.name for p in patches.glob('*.patch')} != expected:
         raise ValueError('Unlisted or missing patch')
@@ -111,10 +140,29 @@ def assemble(manifest, source, vendor, patches, output):
         if set(changed) != set(item['preimages']):
             raise ValueError('Patch file inventory mismatch')
         touched.update(changed)
+    additions = release.get('shellAdditions', {})
+    if additions:
+        assets = Path(__file__).resolve().parents[2] / 'environment/session/dms-2.0'
+        expected = additions['files']
+        if {p.relative_to(assets).as_posix() for p in assets.rglob('*') if p.is_file()} != set(expected):
+            raise ValueError('Unlisted or missing shell addition')
+        for name, digest in expected.items():
+            relative = PurePosixPath(name)
+            if relative.is_absolute() or '..' in relative.parts or '\\' in name:
+                raise ValueError('Unsafe shell addition path')
+            source_asset, destination = assets / name, shell / name
+            if source_asset.is_symlink() or destination.exists() or destination.is_symlink() or sha(source_asset) != digest:
+                raise ValueError('Changed or conflicting shell addition: ' + name)
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(source_asset, destination)
     files, digest = tree_receipt(shell)
-    counts = {'qmlFiles': sum(name.endswith('.qml') and not name.startswith('DankCommon/') for name in files),
-              'commonQmlFiles': sum(name.startswith('DankCommon/') and name.endswith('.qml') for name in files),
-              'commonFiles': sum(name.startswith('DankCommon/') for name in files)}
+    common = release.get('commonDirectory', 'DankCommon')
+    if common not in {'DankCommon', 'DCommon'} or not (shell / common).is_dir():
+        raise ValueError('Missing or unreviewed shared QML directory')
+    prefix = common + '/'
+    counts = {'qmlFiles': sum(name.endswith('.qml') and not name.startswith(prefix) for name in files),
+              'commonQmlFiles': sum(name.startswith(prefix) and name.endswith('.qml') for name in files),
+              'commonFiles': sum(name.startswith(prefix) for name in files)}
     if any(release['shell'].get(key) != value for key, value in counts.items()):
         raise ValueError('Inherited shell file counts mismatch')
     if digest != release['shell']['sha256'] or len(touched) != release['shell']['patchedFiles']:

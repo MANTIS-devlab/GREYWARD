@@ -1,6 +1,6 @@
 Name:           greyward-security-center
 Version:        0.1.0
-Release:        115%{?dist}
+Release:        120%{?dist}
 Summary:        GREYWARD local security posture and control application
 License:        GPL-3.0-only AND Apache-2.0 AND OFL-1.1 AND CC0-1.0
 Source0:        %{name}-%{version}.tar.gz
@@ -45,7 +45,10 @@ PY
 %build
 build_started=$SECONDS
 export CARGO_TARGET_DIR="%{greyward_cargo_target}"
-cargo build -p greyward-security-center -p greyward-security-backends --release --locked --features greyward-security-center/custom-protocol
+# Reused target directories retain dependencies, but must never supply stale
+# first-party helpers when reproducible sources carry older mtimes.
+cargo clean --release -p greyward-security-center -p greyward-security-backends -p greyward-security-domain
+cargo build -p greyward-security-center -p greyward-security-backends --bins --release --locked --features greyward-security-center/custom-protocol
 printf 'GREYWARD_TIMING stage=rust-tauri-build seconds=%s\n' "$((SECONDS - build_started))"
 
 %check
@@ -116,6 +119,21 @@ install -Dm0755 greyward-safe-open.so \
 %postun
 /usr/bin/fc-cache -f >/dev/null 2>&1 || :
 %changelog
+* Fri Oct 23 2026 MANTIS SYSTEMS - 0.1.0-120
+- Add the typed opt-in microphone/camera start notification preference in Privacy.
+
+* Fri Oct 23 2026 MANTIS SYSTEMS - 0.1.0-119
+- Read offline firewall health through the bounded system service without desktop Polkit challenges.
+
+* Fri Oct 23 2026 MANTIS SYSTEMS - 0.1.0-118
+- Rebuild first-party executables explicitly while retaining dependency caches.
+
+* Fri Oct 23 2026 MANTIS SYSTEMS - 0.1.0-117
+- Confirm local firewall health independently when NetworkManager reports no active link.
+
+* Thu Oct 22 2026 MANTIS SYSTEMS - 0.1.0-116
+- Expose fixed Safe Open and scan actions for Strata without unrestricted fallback.
+
 * Tue Oct 20 2026 MANTIS SYSTEMS - 0.1.0-115
 - Treat DNF5's successful empty security result as zero available updates.
 

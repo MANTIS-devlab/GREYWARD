@@ -42,23 +42,23 @@ class FlatpakDefaultPolicyTests(unittest.TestCase):
     def test_fresh_defaults_are_written_and_second_run_preserves_them(self):
         provider = Provider()
         first = defaults.seed_defaults(provider)
-        self.assertEqual([item["decision"] for item in first], ["SEEDED", "SEEDED"])
-        self.assertEqual(len(provider.writes), 2)
+        self.assertEqual([item["decision"] for item in first], ["SEEDED"])
+        self.assertEqual(len(provider.writes), 1)
         second = defaults.seed_defaults(provider)
-        self.assertEqual([item["decision"] for item in second], ["PRESERVED", "PRESERVED"])
-        self.assertEqual(len(provider.writes), 2)
+        self.assertEqual([item["decision"] for item in second], ["PRESERVED"])
+        self.assertEqual(len(provider.writes), 1)
 
     def test_existing_app_permissions_are_preserved_byte_for_byte(self):
         values = {"io.github.kolunmi.Bazaar": "[Context]\nfilesystems=!home;~/selected:ro;\n",
                   "org.kde.haruna": "[Context]\nshared=network;\n[Environment]\nTOKEN=synthetic-private\n"}
         provider = Provider(app_policy=values)
-        self.assertEqual([item["decision"] for item in defaults.seed_defaults(provider)], ["PRESERVED", "PRESERVED"])
+        self.assertEqual([item["decision"] for item in defaults.seed_defaults(provider)], ["PRESERVED"])
         self.assertEqual(provider.app_policy, values)
         self.assertEqual(provider.writes, [])
 
     def test_global_policy_is_not_implicitly_overridden_by_app_defaults(self):
         provider = Provider("[Context]\nfilesystems=!home;\nshared=network;\n")
-        self.assertEqual([item["decision"] for item in defaults.seed_defaults(provider)], ["PRESERVED", "PRESERVED"])
+        self.assertEqual([item["decision"] for item in defaults.seed_defaults(provider)], ["PRESERVED"])
         self.assertEqual(provider.writes, [])
 
     def test_failure_is_not_interpreted_as_absent_policy(self):
@@ -77,7 +77,7 @@ class FlatpakDefaultPolicyTests(unittest.TestCase):
 
     def test_nonempty_markers_are_existing_policy(self):
         provider = Provider(app_policy={app: "[Context]\n" for app, *_ in defaults.DEFAULTS})
-        self.assertEqual([item["decision"] for item in defaults.seed_defaults(provider)], ["PRESERVED", "PRESERVED"])
+        self.assertEqual([item["decision"] for item in defaults.seed_defaults(provider)], ["PRESERVED"])
         self.assertEqual(provider.writes, [])
 
 

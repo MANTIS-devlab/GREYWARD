@@ -22,6 +22,12 @@ if [[ "${1:-}" == restart ]]; then
 fi
 if [[ "${1:-}" == run ]]; then
   shift
+  # Reproducible RPM timestamps can leave older compiled QML valid at the same
+  # system-plugin URLs. Bind ordinary-shell cache reuse to the verified payload
+  # receipt, not its mtimes. Preserve old namespaces for reversible upgrades.
+  receipt_digest=$(sha256sum "$root/release.json")
+  receipt_digest=${receipt_digest%% *}
+  export QML_DISK_CACHE_PATH="${XDG_CACHE_HOME:-$HOME/.cache}/greyward/dms-qml/$receipt_digest"
   exec "$root/bin/dms" run --session -c "$DMS_SHELL_DIR" "$@"
 fi
 exec "$root/bin/dms" "$@"

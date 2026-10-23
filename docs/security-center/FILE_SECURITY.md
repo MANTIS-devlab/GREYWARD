@@ -118,6 +118,15 @@ system scans.
 
 ## Safe Open descriptor contract
 
+Strata migration source supplies native literal-argv actions for Safe Open,
+scanning and Security Context, without an unrestricted opening fallback. The
+existing companion's `--safe-open ABSOLUTE_PATH` dispatches only the typed
+`SafeOpen` request and accepts only `ok: true` with `state: LAUNCHED` as launch
+evidence. It does not establish successful workload completion. Unknown scan
+results return failure and are not described as completed. Actual installed
+Strata parity and Nautilus removal remain pending in the
+[DMS 2.0 migration](../architecture/DMS_2_0_MIGRATION.md).
+
 Current functional source holds the ordinary selected file descriptor through
 classification and handler selection, then sends it to the shared application
 broker's `PrepareSelectedDocumentLaunch(hsasb)` workflow. Root preparation

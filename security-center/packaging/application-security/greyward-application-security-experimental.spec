@@ -1,6 +1,6 @@
 Name:           greyward-application-security-experimental
 Version:        0.1.0
-Release:        70%{?dist}
+Release:        83%{?dist}
 Summary:        Experimental GREYWARD application-security runtime and Guard CLI
 License:        GPL-3.0-only AND MIT
 Source0:        %{name}-%{version}.tar.gz
@@ -30,6 +30,7 @@ Requires:       labwc
 Requires:       squashfs-tools
 Requires:       python3-setools
 Requires:       greyward-session
+Requires:       qt6-qtdeclarative
 
 %description
 Internal development broker with authenticated owner-scoped inventory reads.
@@ -49,6 +50,7 @@ does not establish release acceptance for broader workload isolation.
 export CARGO_TARGET_DIR="%{greyward_cargo_target}"
 export PATH=/usr/bin:/bin
 export RUSTC=/usr/bin/rustc RUSTDOC=/usr/bin/rustdoc
+/usr/bin/cargo clean --release -p greyward-application-security -p greyward-security-backends -p greyward-security-domain
 /usr/bin/cargo build --release --locked --offline -p greyward-application-security --bins
 python3 - <<'PY'
 import hashlib
@@ -104,6 +106,8 @@ install -m0444 packaging/application-security/desktop/*.py packaging/application
     %{buildroot}%{_datadir}/greyward-application-security/desktop/
 install -Dm0444 packaging/application-security/authentication/assemble.py \
     %{buildroot}%{_datadir}/greyward-application-security/authentication/assemble.py
+install -m0444 data/greyward-security-status.svg \
+    %{buildroot}%{_datadir}/greyward-application-security/authentication/greyward-security-status.svg
 install -d %{buildroot}%{_libexecdir}
 install -m0755 greyward-wayland-context %{buildroot}%{_libexecdir}/greyward-wayland-context
 # Empty fail-closed mount target. Prepared code exists only in the unit's
@@ -157,6 +161,25 @@ install -Dm0644 packaging/application-security/systems.mantis.greyward.Applicati
 %{_datadir}/dbus-1/system.d/systems.mantis.greyward.ApplicationSecurityDevelopment1.conf
 
 %changelog
+* Fri Oct 23 2026 MANTIS SYSTEMS - 0.1.0-83
+- Rebuild the shared collector with the noninteractive system firewall-state read.
+
+* Fri Oct 23 2026 MANTIS SYSTEMS - 0.1.0-82
+- Load the immutable native authentication profile and theme synchronously; retain the lock wallpaper without GPU effects on software rendering.
+- Select the native quiet clock/date and pill password field for the protected 2.0 lock screen.
+
+* Fri Oct 23 2026 MANTIS SYSTEMS - 0.1.0-81
+- Render the canonical emblem as synchronous geometry and cancel mirrored requests directly through their shared Polkit flow.
+
+* Fri Oct 23 2026 MANTIS SYSTEMS - 0.1.0-80
+- Use one Obsidian/Platinum protected Polkit card on all outputs, with scrollable requests and keyboard-accessible actions.
+
+* Fri Oct 23 2026 MANTIS SYSTEMS - 0.1.0-78
+- Rebuild first-party executables explicitly with a reused dependency cache.
+
+* Fri Oct 23 2026 MANTIS SYSTEMS - 0.1.0-77
+- Rebuild the shared offline firewall collector for the next matched protected activation.
+
 * Wed Oct 21 2026 MANTIS SYSTEMS - 0.1.0-70
 - Keep the reviewed USB approval helper outside generated ordinary coverage.
 - Carry the protected-seat regression fix into fresh installations.

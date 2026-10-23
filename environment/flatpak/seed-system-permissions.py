@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 """Seed fresh-install defaults without resetting reviewed Flatpak policy.
 
-Only two fixed distributor defaults; no generic policy/UI execution interface.
+Only fixed distributor defaults; no generic policy/UI execution interface.
 Any existing system global/app override is retained. User overrides are never
 written. Readback confirms the default record, not effective resource coverage.
 """
@@ -13,7 +13,6 @@ import sys
 
 DEFAULTS = (
     ("io.github.kolunmi.Bazaar", "--filesystem=xdg-config/bazaar:ro", "filesystems", "xdg-config/bazaar:ro"),
-    ("org.kde.haruna", "--unshare=network", "shared", "!network"),
 )
 
 

@@ -13,6 +13,20 @@ SPEC.loader.exec_module(CHECK)
 
 
 class UsbApprovalReleaseInputs(unittest.TestCase):
+    def test_candidate_receipt_is_checked_only_when_explicitly_selected(self):
+        payloads = self.payloads('dms')
+        legacy = next(path for path in payloads if path.endswith('/release.json'))
+        manifest = ROOT / 'environment/production/dms-2.0-candidate.json'
+        candidate = '/usr/lib/greyward/dms/' + json.loads(manifest.read_text())['releaseId'] + '/release.json'
+        payloads[candidate] = payloads.pop(legacy)
+        read = lambda rpm, path: payloads.get(path, b'{}')
+        CHECK.verify(ROOT, Path('candidate.rpm'), 'dms', read, manifest=manifest)
+        with self.assertRaisesRegex(ValueError, 'helper source receipt'):
+            CHECK.verify(ROOT, Path('candidate.rpm'), 'dms', read)
+        payloads[candidate] = b'{}'
+        with self.assertRaisesRegex(ValueError, 'helper source receipt'):
+            CHECK.verify(ROOT, Path('candidate.rpm'), 'dms', read, manifest=manifest)
+
     def payloads(self, kind):
         result = {installed: (ROOT / source).read_bytes() for source, installed in CHECK.SOURCES[kind].items()}
         if kind == 'dms':

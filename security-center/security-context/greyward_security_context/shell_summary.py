@@ -204,7 +204,26 @@ def _secure_dns(value, provider_fresh):
     }
 
 
-def build_shell_summary(summary, network=None, clamav=None, profile=None, transaction=None, now_value=None, security_digest=None, secure_dns=None):
+def _vpn(value, provider_fresh, current):
+    """Project existing root link observations; never infer Off from DNS mode."""
+    value = value if isinstance(value, dict) else {}
+    observed = _parse_time(value.get("generated_at"))
+    age = (current - observed).total_seconds() if observed.tzinfo else -1
+    links = value.get("vpn_links")
+    valid = (provider_fresh and value.get("schema") == "greyward.secure-dns/v1"
+             and 0 <= age <= 60 and isinstance(links, list) and len(links) <= 64
+             and all(isinstance(link, str) and 0 < len(link) <= 64 for link in links)
+             and str(value.get("effective_policy") or "").upper()
+             in {"DISCONNECTED", "VPNOWNED", "NETWORKDEFAULT", "SECUREPROVIDER"})
+    # Contradictory/missing evidence remains unknown. No interface names leave
+    # this bounded projection and no encryption/routing guarantee is inferred.
+    active = bool(links) or value.get("tunnel_detected") is True
+    contradictory = not active and str(value.get("effective_policy")).upper() == "VPNOWNED"
+    state = ("ACTIVE" if active else "OFF") if valid and not contradictory else "UNAVAILABLE"
+    return {"state": state}
+
+
+def build_shell_summary(summary, network=None, clamav=None, profile=None, transaction=None, now_value=None, security_digest=None, secure_dns=None, vpn_now_value=None):
     """Build the bounded shell contract without reading providers."""
     current = now_value or _now()
     value = summary if isinstance(summary, dict) else {}
@@ -262,6 +281,7 @@ def build_shell_summary(summary, network=None, clamav=None, profile=None, transa
         "network_profile": {"state": profile_data["state"], "available": profile_data["available"]},
         "firewall": profile_data["firewall"],
         "secure_dns": _secure_dns(secure_dns, provider_fresh),
+        "vpn": _vpn(secure_dns, provider_fresh, vpn_now_value or current),
         "malware": _malware(value, clamav or {}) if provider_fresh else {"state": "UNAVAILABLE", "database_age_seconds": 0},
         "usb": _usb(value) if provider_fresh else {"state": "UNAVAILABLE", "blocked_count": 0},
         "update": _update(transaction or {}) if provider_fresh else _update({}),

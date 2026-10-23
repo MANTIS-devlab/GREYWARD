@@ -1,5 +1,6 @@
 """Exact-input authentication assembly; no VM, policy or PAM mutation."""
 import importlib.util
+import xml.etree.ElementTree as ET
 import hashlib
 import json
 import os
@@ -19,6 +20,32 @@ MATERIALIZE_SPEC.loader.exec_module(materialize)
 
 
 class AuthenticationAssembly(unittest.TestCase):
+    def test_native_lock_profile_replaces_legacy_widgets_without_touching_template(self):
+        template = {'configVersion': 18, 'lockScreenWallpaperPath': '/unused',
+                    'lockScreenWidgetInstances': [{'widgetType': 'ordinaryPlugin'}]}
+        settings = materialize.authentication_settings(template, 42)
+        self.assertEqual(settings['configVersion'], 42)
+        self.assertEqual(settings['clockFormat'], '24h')
+        self.assertEqual(settings['lockScreenFontFamily'], 'Inter')
+        self.assertEqual(settings['lockScreenWallpaperPath'],
+                         '/usr/share/backgrounds/greyward/greyward-wallpaper-black-art-4k.jpg')
+        widgets = {item['widgetType']: item['config'] for item in settings['lockScreenWidgetInstances']}
+        self.assertEqual(set(widgets), {'desktopClock', 'lockAuth'})
+        self.assertFalse(widgets['desktopClock']['twoTone'])
+        self.assertTrue(widgets['desktopClock']['showDate'])
+        self.assertEqual(widgets['lockAuth']['style'], 'pill')
+        self.assertEqual(template['lockScreenWidgetInstances'], [{'widgetType': 'ordinaryPlugin'}])
+
+    def test_protected_emblem_refuses_external_or_unreviewed_svg_features(self):
+        with tempfile.TemporaryDirectory() as folder:
+            base = Path(folder)
+            (base / 'greyward-security-status.svg').write_text(
+                '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">'
+                '<image href="https://example.invalid/image.svg"/></svg>')
+            with mock.patch.object(assembly, '__file__', str(base / 'assemble.py')):
+                with self.assertRaisesRegex(ValueError, 'Unsupported authorization emblem paint'):
+                    assembly.authorization_emblem()
+
     def test_wayland_protocol_integrity_pin_uses_canonical_git_bytes(self):
         root = Path(__file__).resolve().parents[1]
         protocol = root / 'security-center/packaging/application-security/wayland/security-context-v1.xml'
@@ -37,6 +64,8 @@ class AuthenticationAssembly(unittest.TestCase):
         self.assertEqual(settings['loginctlLockIntegration'], True)
         self.assertEqual(settings['lockPamPath'], '/etc/pam.d/greyward-dms-lock')
         self.assertEqual(settings['customDefault'], 'preserved')
+        self.assertEqual(settings['lockScreenWallpaperPath'], '/usr/share/backgrounds/greyward/greyward-wallpaper-black-art-4k.jpg')
+        self.assertEqual(settings['lockScreenWallpaperFillMode'], 'Fill')
         self.assertEqual(template['configVersion'], 0)
         self.assertEqual(template['lockPamPath'], '/unsafe/user/value')
 
@@ -303,15 +332,20 @@ readonly property bool u2fSuppressedByPrimaryPam: SettingsData.lockPamExternally
             self.assertNotIn('informational only', lock)
             self.assertNotIn('keyboardLayoutLabel', lock)
             self.assertIn('active: root.authorizationActive && lockSurface.screen?.name === root.authorizationScreenName', lock)
-            self.assertIn('SECURE AUTHORIZATION', lock)
+            self.assertIn('Secure authorization', lock)
             auth_content = (base / 'first/shell/Modals/PolkitAuthContent.qml').read_text()
-            self.assertIn('name: "shield_lock"', auth_content)
+            emblem = ET.parse(SOURCE.parents[4] / 'branding/source/greyward-security-status.svg').getroot()
+            for path in emblem.findall('{http://www.w3.org/2000/svg}path'):
+                self.assertIn('path: ' + json.dumps(path.attrib['d']), auth_content)
+                self.assertIn('fillColor: ' + json.dumps(path.attrib['fill']), auth_content)
+            self.assertIn('asynchronous: false', auth_content)
+            self.assertNotIn('name: "shield_lock"', auth_content)
             self.assertIn('text: I18n.tr("Authentication Required")', auth_content)
             self.assertIn('readonly property int passwordCharacterCount: passwordInput.length', auth_content)
-            self.assertIn('AUTHORIZATION REQUEST', auth_content)
+            self.assertIn('textFormat: Text.PlainText', auth_content)
             self.assertIn('id: authorizationCard', auth_content)
-            self.assertIn('width: Math.max(1, Math.min(720, parent.width))', auth_content)
-            self.assertIn('height: Math.max(1, Math.min(440, parent.height))', auth_content)
+            self.assertIn('width: Math.max(1, Math.min(640, parent.width))', auth_content)
+            self.assertIn('height: Math.max(1, Math.min(authorizationLayout.implicitHeight + 64, parent.height))', auth_content)
             self.assertIn('id: passwordField', auth_content)
             self.assertIn('showPasswordToggle: false', auth_content)
             self.assertNotIn('id: headerSection', auth_content)
@@ -319,9 +353,9 @@ readonly property bool u2fSuppressedByPrimaryPam: SettingsData.lockPamExternally
             remote = lock[lock.index('id: remoteAuthorizationCard'):lock.index('Connections {\n                target: sessionLock')]
             self.assertIn('root.authorizationPasswordLength', remote)
             self.assertIn('PolkitService.agent?.flow?.message', remote)
-            self.assertIn('height: Math.max(1, Math.min(440, parent.height - 48))', remote)
-            self.assertIn('color: "#141b22"', remote)
-            self.assertIn('color: "#10171d"', remote)
+            self.assertIn('height: Math.max(1, Math.min(authorizationLayout.implicitHeight + 64, parent.height - 48))', remote)
+            self.assertIn('color: "#050607"', remote)
+            self.assertIn('color: "#101214"', remote)
             self.assertIn('Authentication failed - try again', remote)
             self.assertIn('enabled: parent.enabled', remote)
             self.assertNotIn('passwordInput', remote)

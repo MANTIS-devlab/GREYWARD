@@ -7,6 +7,7 @@
 #include <QStyleFactory>
 #include <QStyleOptionMenuItem>
 #include <QStylePlugin>
+#include "palette.h"
 
 // Selected only by the desktop-icons launcher; never a global Qt theme.
 class Obsidian final : public QProxyStyle {
@@ -18,18 +19,19 @@ public:
     }
 
     QPalette standardPalette() const override {
+        const auto &c = GreywardPalette::dark;
         QPalette p = QProxyStyle::standardPalette();
-        p.setColor(QPalette::Window, QColor("#171a1d"));
-        p.setColor(QPalette::Base, QColor("#101214"));
-        p.setColor(QPalette::AlternateBase, QColor("#202529"));
-        p.setColor(QPalette::Button, QColor("#242a2e"));
-        p.setColor(QPalette::WindowText, QColor("#e2e5e7"));
-        p.setColor(QPalette::Text, QColor("#e2e5e7"));
-        p.setColor(QPalette::ButtonText, QColor("#e2e5e7"));
-        p.setColor(QPalette::Highlight, QColor("#39444b"));
-        p.setColor(QPalette::HighlightedText, QColor("#f1f3f4"));
-        p.setColor(QPalette::Disabled, QPalette::Text, QColor("#899399"));
-        p.setColor(QPalette::Disabled, QPalette::WindowText, QColor("#899399"));
+        p.setColor(QPalette::Window, QColor(c.surface));
+        p.setColor(QPalette::Base, QColor(c.deep));
+        p.setColor(QPalette::AlternateBase, QColor(c.soft));
+        p.setColor(QPalette::Button, QColor(c.raised));
+        p.setColor(QPalette::WindowText, QColor(c.text));
+        p.setColor(QPalette::Text, QColor(c.text));
+        p.setColor(QPalette::ButtonText, QColor(c.text));
+        p.setColor(QPalette::Highlight, QColor(c.raised));
+        p.setColor(QPalette::HighlightedText, QColor(c.text));
+        p.setColor(QPalette::Disabled, QPalette::Text, QColor(c.subtle));
+        p.setColor(QPalette::Disabled, QPalette::WindowText, QColor(c.subtle));
         return p;
     }
 
@@ -52,8 +54,10 @@ public:
         if (e == PE_PanelMenu) {
             p->save();
             p->setRenderHint(QPainter::Antialiasing);
-            p->setPen(QColor(107, 119, 127, 130));
-            p->setBrush(QColor(21, 25, 28, 243));
+            QColor border(GreywardPalette::dark.border); border.setAlpha(180);
+            QColor surface(GreywardPalette::dark.surface); surface.setAlpha(248);
+            p->setPen(border);
+            p->setBrush(surface);
             p->drawRoundedRect(QRectF(o->rect).adjusted(.5, .5, -.5, -.5), 7, 7);
             p->restore();
             return;

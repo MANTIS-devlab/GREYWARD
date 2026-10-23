@@ -1,6 +1,6 @@
 Name:           greyward-security-context
 Version:        0.1.0
-Release:        108%{?dist}
+Release:        112%{?dist}
 Summary:        GREYWARD OpenSnitch control plane and Security Context session bus
 License:        GPL-3.0-only
 Source0:        %{name}-%{version}.tar.gz
@@ -191,6 +191,18 @@ install -Dm0644 security-context/tmpfiles.d/greyward-secure-dns.conf %{buildroot
 
 
 %changelog
+* Fri Oct 23 2026 MANTIS SYSTEMS - 0.1.0-112
+- Add verified update reminders and optional per-application sensor starts.
+
+* Fri Oct 23 2026 MANTIS SYSTEMS - 0.1.0-111
+- Expose a fixed read-only firewall-state projection through the existing system network boundary.
+
+* Fri Oct 23 2026 MANTIS SYSTEMS - 0.1.0-110
+- Compare refreshed VPN observations at collection completion without extending posture freshness.
+
+* Fri Oct 23 2026 MANTIS SYSTEMS - 0.1.0-109
+- Project explicit fresh VPN presence separately from network protection and DNS ownership.
+
 * Mon Oct 19 2026 MANTIS SYSTEMS - 0.1.0-108
 - Keep firewall rules live across early boot races and firewalld restarts.
 

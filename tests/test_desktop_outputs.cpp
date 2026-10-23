@@ -16,9 +16,24 @@
 #include <LayerShellQt/window.h>
 #include "application.h"
 #include "desktopwindow.h"
+#include "launcher.h"
 #include <functional>
 #include <iostream>
 #include <stdexcept>
+
+// Interpose only the static detached launch in this linked synthetic driver.
+// No installed Strata process or host application bus is contacted.
+static QString detachedProgram;
+static QStringList detachedArguments;
+static int detachedLaunches = 0;
+static bool detachedSucceeds = true;
+bool QProcess::startDetached(const QString& program, const QStringList& arguments,
+                             const QString&, qint64*) {
+    detachedProgram = program;
+    detachedArguments = arguments;
+    ++detachedLaunches;
+    return detachedSucceeds;
+}
 
 static void require(bool result, const char* reason) {
     if(!result) throw std::runtime_error(reason);
@@ -82,6 +97,34 @@ int main(int argc, char** argv) {
                 require(window->getDesktopScreen() != nullptr, "output binding absent");
                 require(LayerShellQt::Window::get(window->windowHandle())->layer() == LayerShellQt::Window::LayerBottom, "icons share wallpaper layer");
             }
+            const QString folder = qEnvironmentVariable("HOME") + QStringLiteral("/Desktop/folder ; $(literal)");
+            const QString expectedUri = QUrl::fromLocalFile(folder).toString(QUrl::FullyEncoded);
+            app.launchFiles(qEnvironmentVariable("HOME") + QStringLiteral("/Desktop"),
+                            {QStringLiteral("folder ; $(literal)"), QStringLiteral("--looks-like-option")}, false, false);
+            require(detachedProgram == QStringLiteral("/usr/bin/strata"), "folder IPC did not select Strata");
+            require(detachedArguments.size() == 2 && detachedArguments.first() == expectedUri
+                    && detachedArguments.last().startsWith(QStringLiteral("file:///")), "folder operands were not literal encoded URIs");
+            const int beforeEmpty = detachedLaunches;
+            app.launchFiles(QDir::homePath(), {}, false, false);
+            require(detachedLaunches == beforeEmpty, "empty IPC unexpectedly launched an application");
+            Fm::FilePathList folders;
+            folders.push_back(Fm::FilePath::fromLocalPath(folder.toUtf8().constData()));
+            PCManFM::Launcher().launchPaths(nullptr, folders);
+            until([&] { return detachedLaunches == beforeEmpty + 1; }, "native folder launcher did not reach Strata");
+            // GIO encodes the semicolon as %3B; Qt leaves the legal URI path
+            // character literal. Both must address the exact synthetic folder.
+            const QUrl routedFolder(detachedArguments.value(0), QUrl::StrictMode);
+            require(detachedProgram == QStringLiteral("/usr/bin/strata") && detachedArguments.size() == 1
+                    && routedFolder.isValid() && routedFolder.isLocalFile() && routedFolder.toLocalFile() == folder
+                    && !detachedArguments.first().contains(QLatin1Char(' ')), "desktop folder bypassed literal Strata routing");
+            detachedSucceeds = false;
+            app.launchFiles(QDir::homePath(), {folder}, false, false);
+            detachedSucceeds = true;
+            for (auto widget : QApplication::topLevelWidgets())
+                require(!widget->inherits("PCManFM::MainWindow"), "a second file browser opened");
+            require(desktops().size() == 3, "failed Strata launch closed the desktop");
+            std::cout << "PASS native folder and IPC routing selects Strata with literal URIs, empty/failure preserve the desktop\n";
+
             require(app.moveDesktopItems({QStringLiteral("alpha.txt")}, external), "screen reassignment failed");
             until([&] { return contains(external, QStringLiteral("alpha.txt")) && appearances(QStringLiteral("alpha.txt")) == 1; }, "reassignment not reflected in actual models");
             std::cout << "PASS three surfaces, independent layer, unique icon ownership\n";

@@ -85,6 +85,11 @@ class PublicationBoundaryTests(unittest.TestCase):
         result = EXPORT.sanitized_text(text, 'docs/STATUS.md', set())
         self.assertEqual(result, 'Windows copy: `<local workspace>`.')
 
+    def test_forward_slash_windows_iso_location_is_also_private(self):
+        text = 'ISO: `D:/GREYWARD-ISO-candidates/private/installer.iso`.'
+        result = EXPORT.sanitized_text(text, 'docs/STATUS.md', set())
+        self.assertEqual(result, 'ISO: `<local workspace>`.')
+
     def test_public_readme_does_not_embed_sensitive_desktop_captures(self):
         text = (ROOT / 'README.md').read_text(encoding='utf-8')
         result = EXPORT.sanitized_text(text, 'README.md', set())

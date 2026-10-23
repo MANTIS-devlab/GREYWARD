@@ -32,6 +32,14 @@ consumes this staged directory and the production Kickstart, then runs the
 separate production acceptance contract; it must not call the development
 overlay.
 
+For an explicitly requested internal DMS 2.0 trial ISO, pass `--dms-candidate`
+to `build-iso.sh` (or to `build.sh` for staging alone). This selects the separate
+`dms-2.0-candidate.json` and `dms-2.0-plugins` source inventory. The selected
+manifest is embedded as `dms-release.json`; exact RPM dependencies, plugin bytes,
+USB approval sources and runtime receipts remain mandatory. The validated default
+manifest is unchanged. This option does not mark the migration release accepted
+or replace fresh-install, physical input and recovery validation.
+
 Before staging, `build.sh` checks that the source DMS unit pins
 `WAYLAND_DISPLAY=wayland-0` and byte-compares it with the unit inside the
 provided `greyward-session` RPM. A stale RPM is rejected, so a future ISO

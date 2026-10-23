@@ -1,0 +1,54 @@
+--- a/quickshell/dms/Services/NotificationService.qml
++++ b/quickshell/dms/Services/NotificationService.qml
+@@ -746,7 +746,8 @@
+             }
+ 
+             const dndBlocked = SessionData.doNotDisturb && !_allowedInDnd(policy.urgency, policy.bypassDnd);
+-            const shouldShowPopup = !root.popupsDisabled && !dndBlocked && !policy.disablePopup;
++            const quietSecurityUpdate = notif.desktopEntry === "systems.mantis.greyward.securitycenter" && !!notif.hints?.["x-greyward-quiet"];
++            const shouldShowPopup = !quietSecurityUpdate && !root.popupsDisabled && !dndBlocked && !policy.disablePopup;
+             const isTransient = notif.transient;
+             const shouldKeepInCenter = !isTransient && !policy.hideFromCenter;
+ 
+@@ -763,7 +764,7 @@
+             // explicit request for audio — so it plays even when the
+             // global new-notification sound is off.
+             const soundHints = notif.hints || {};
+-            const suppressSound = !!soundHints["suppress-sound"];
++            const suppressSound = quietSecurityUpdate || !!soundHints["suppress-sound"];
+             const requestsSound = !!soundHints["sound-name"];
+             if (!dndBlocked && !policy.disablePopup && SettingsData.soundsEnabled && (SettingsData.soundNewNotification || requestsSound) && !suppressSound) {
+                 if (policy.urgency === NotificationUrgency.Critical) {
+@@ -787,7 +788,7 @@
+                 root.allWrappers.push(wrapper);
+                 if (shouldKeepInCenter) {
+                     root.notifications.push(wrapper);
+-                    if (_shouldSaveToHistory(wrapper.urgency, policy.disableHistory)) {
++                    if (!quietSecurityUpdate && _shouldSaveToHistory(wrapper.urgency, policy.disableHistory)) {
+                         root.addToHistory(wrapper);
+                     }
+                 }
+@@ -1393,6 +1394,11 @@
+             }
+ 
+             groups[groupKey].notifications.unshift(notif);
++            if (notif.desktopEntry === "systems.mantis.greyward.securitycenter")
++                groups[groupKey].notifications.sort((a, b) => {
++                    const rank = {CRITICAL: 0, ACTION: 1, WARNING: 2, INFO: 3};
++                    return (rank[a.notification?.hints?.["x-greyward-severity"]] ?? 3) - (rank[b.notification?.hints?.["x-greyward-severity"]] ?? 3);
++                });
+             groups[groupKey].latestNotification = groups[groupKey].notifications[0];
+             groups[groupKey].count = groups[groupKey].notifications.length;
+ 
+@@ -1431,6 +1437,11 @@
+             }
+ 
+             groups[groupKey].notifications.unshift(notif);
++            if (notif.desktopEntry === "systems.mantis.greyward.securitycenter")
++                groups[groupKey].notifications.sort((a, b) => {
++                    const rank = {CRITICAL: 0, ACTION: 1, WARNING: 2, INFO: 3};
++                    return (rank[a.notification?.hints?.["x-greyward-severity"]] ?? 3) - (rank[b.notification?.hints?.["x-greyward-severity"]] ?? 3);
++                });
+             groups[groupKey].latestNotification = groups[groupKey].notifications[0];
+             groups[groupKey].count = groups[groupKey].notifications.length;
+ 

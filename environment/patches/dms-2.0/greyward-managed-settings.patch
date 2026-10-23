@@ -1,0 +1,44 @@
+--- a/quickshell/dms/Modals/Settings/SettingsContent.qml
++++ b/quickshell/dms/Modals/Settings/SettingsContent.qml
+@@ -201,6 +201,8 @@
+                 "hubId": page
+             };
+         const properties = {};
++        if (pageFiles[page] === "GreywardManagedTab.qml")
++            return {managedPage: page, parentModal: Qt.binding(() => root.parentModal)};
+         if (pagesWithParentModal.includes(page))
+             properties.parentModal = Qt.binding(() => root.parentModal);
+         if (page === "keybinds")
+@@ -527,8 +529,8 @@
+             "theme": "ThemeColorsTab.qml",
+             "theme_apps": "ThemeAppsTab.qml",
+             "palette_inject": "PaletteInjectTab.qml",
+-            "lock_screen": "LockScreenTab.qml",
+-            "greeter": "GreeterTab.qml",
++            "lock_screen": "GreywardManagedTab.qml",
++            "greeter": "GreywardManagedTab.qml",
+             "about": "AboutTab.qml",
+             "typography": "TypographyMotionTab.qml",
+             "sounds": "SoundsTab.qml",
+@@ -537,7 +539,7 @@
+             "osd": "OSDTab.qml",
+             "default_apps": "DefaultAppsTab.qml",
+             "running_apps": "RunningAppsTab.qml",
+-            "updater": "SoftwareUpdatesTab.qml",
++            "updater": "GreywardManagedTab.qml",
+             "updater_changelog": "ChangelogTab.qml",
+             "power_sleep": "PowerSleepTab.qml",
+             "clipboard": "ClipboardTab.qml",
+@@ -546,9 +548,9 @@
+             "audio": "AudioTab.qml",
+             "locale": "LocaleTab.qml",
+             "multiplexers": "MuxTab.qml",
+-            "users": "UsersTab.qml",
+-            "user_create": "CreateUserTab.qml",
+-            "greeter_auth": "GreeterAuthTab.qml",
++            "users": "GreywardManagedTab.qml",
++            "user_create": "GreywardManagedTab.qml",
++            "greeter_auth": "GreywardManagedTab.qml",
+             "autostart": "AutoStartTab.qml",
+             "battery": "BatteryTab.qml",
+             "dank_dash": "DDashTab.qml",

@@ -53,6 +53,7 @@ jobs:
           node --test tauri/frontend/performance.test.mjs
           node --test tauri/frontend/ux-contract.test.mjs
           node --test tauri/frontend/network-rules.test.mjs
+          node --test ../tests/dms-security-cards.test.mjs
 
   python:
     name: Python source tests
@@ -72,6 +73,7 @@ jobs:
           tests.test_image_baseline tests.test_image_offline tests.test_image_stage_text
           tests.test_firstboot_login_boundary tests.test_installed_rpm_import
           tests.test_component_cache tests.test_file_icon_family
+          tests.test_files_launchers
           tests.test_application_security_verification
       - name: Protected USB approval and ISO regression contracts
         # Migration fixtures deliberately require real root-owned ancestors.

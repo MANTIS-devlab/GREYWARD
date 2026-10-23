@@ -63,6 +63,22 @@ class NotificationTests(unittest.TestCase):
         self.router._action(1, 'open')
         self.dispatch.assert_not_called()
 
+    def test_update_reminder_survives_dismissal_provider_flap_and_service_restart(self):
+        notice = {'id': 'updates-security', 'kind': 'update-notice', 'severity': 'INFO',
+                  'title': 'Security updates', 'detail': 'Verified', 'reminder_seconds': 86400}
+        with patch('greyward_security_context.notification_router.time.time', return_value=100000):
+            self.router.reconcile([notice])
+            self.router._closed(1, 2)
+            self.router.reconcile([notice])
+            self.router.reconcile([])
+            self.router = NotificationRouter(self.bus, self.dispatch, self.path)
+            self.router.reconcile([notice])
+        self.assertEqual(len(self.bus.sent), 1)
+        with patch('greyward_security_context.notification_router.time.time', return_value=186400):
+            self.router.reconcile([notice])
+        self.assertEqual(len(self.bus.sent), 2)
+        self.assertFalse(self.bus.sent[-1][6]['x-greyward-quiet'])
+
     def test_usb_notification_never_offers_sessionless_trust_actions(self):
         item = {**self.item, 'actions': [
             {'id': 'trust_once', 'label': 'Trust once'},

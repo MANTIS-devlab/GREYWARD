@@ -3,6 +3,9 @@ import importlib.util
 import json
 from pathlib import Path
 import re
+import sys
+import contextlib
+import io
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -18,6 +21,76 @@ COMPONENT_BUILDER_SPEC.loader.exec_module(COMPONENT_BUILDER)
 
 
 class BuildInputVerificationTests(unittest.TestCase):
+    def test_package_only_runtime_provide_requires_exact_pinned_executables(self):
+        names = ('binarySha256', 'usbguardApprovalSha256', 'usbguardAuthApprovalSha256')
+        pins = dict.fromkeys(names, 'a' * 64)
+        receipt = {'build': {'rpmRelease': '7.2', 'packageOnlyRuntime': pins}, **pins}
+        ASSEMBLY.verify_package_only_runtime(receipt)
+        for name in names:
+            with self.subTest(name=name), self.assertRaisesRegex(ValueError, 'pinned generation'):
+                ASSEMBLY.verify_package_only_runtime({**receipt, name: 'b' * 64})
+        for expected in (None, {}, {**pins, 'other': 'a' * 64}, dict.fromkeys(names, 'invalid')):
+            with self.assertRaisesRegex(ValueError, 'pinned generation'):
+                ASSEMBLY.verify_package_only_runtime({**receipt, 'build': {'rpmRelease': '7.2', 'packageOnlyRuntime': expected}})
+        ASSEMBLY.verify_package_only_runtime({'build': {}})
+
+    def test_package_only_revision_keeps_the_runtime_selector_and_rejects_bad_suffixes(self):
+        # Execute the actual build-script spec generator, not a copied parser.
+        source = (ROOT / 'packaging/greyward-dms/build.sh').read_text()
+        generator = source.split('"$output/SPECS/greyward-dms.spec" <<\'PY\'\n', 1)[1].split('\nPY\n', 1)[0]
+        release = json.loads((ROOT / 'environment/production/dms-2.0-candidate.json').read_text())
+        generation = release['releaseId'].rsplit('-', 1)[1]
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary); manifest = base / 'input.json'; output = base / 'output.spec'
+            arguments = ['spec-generator', str(manifest), str(ROOT / 'packaging/greyward-dms/greyward-dms.spec'), str(output)]
+            for revision in (None, generation + '.1'):
+                if revision is None: release['build'].pop('rpmRelease', None)
+                else: release['build']['rpmRelease'] = revision
+                manifest.write_text(json.dumps(release))
+                with patch.object(sys, 'argv', arguments): exec(compile(generator, 'spec-generator', 'exec'), {})
+                generated = output.read_text()
+                self.assertIn('%global greyward_package_revision ' + (revision or generation) + '\n', generated)
+                self.assertIn('%global greyward_runtime /usr/lib/greyward/dms/' + release['releaseId'] + '\n', generated)
+                self.assertIn("printf 'v%{version}-%{greyward_revision}\\n'", generated)
+                self.assertEqual('Provides: greyward-dms = 2.0.0-' + generation + '%{?dist}' in generated, revision is not None)
+                self.assertEqual(COMPONENT_BUILDER.dms_package_identity(release),
+                                 'greyward-dms-2.0.0-' + (revision or generation))
+                enrollment = (ROOT / 'packaging/greyward-enrollment/build.sh').read_text().split("<<'PYDEP'\n", 1)[1].split('\nPYDEP', 1)[0]
+                with patch.object(sys, 'argv', ['dependency', str(manifest)]), contextlib.redirect_stdout(io.StringIO()) as captured:
+                    exec(compile(enrollment, 'dependency', 'exec'), {})
+                self.assertEqual(captured.getvalue().strip(), '2.0.0-' + (revision or generation))
+            for revision in (str(int(generation) + 1) + '.1', generation + '.0', generation + '.1\nRequires: evil', generation + '.01', 7, ''):
+                release['build']['rpmRelease'] = revision; manifest.write_text(json.dumps(release))
+                with patch.object(sys, 'argv', arguments), self.assertRaisesRegex(SystemExit, 'package-only revision'):
+                    exec(compile(generator, 'spec-generator', 'exec'), {})
+                with self.assertRaisesRegex(SystemExit, 'package-only revision'):
+                    COMPONENT_BUILDER.dms_package_identity(release)
+
+    def test_native_schema_drift_refuses_assembly(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            shell = Path(temporary)
+            (shell / 'Common').mkdir()
+            source = shell / 'Common/SettingsData.qml'
+            release = {'dms': {'tag': 'v2.0.0', 'settingsConfigVersion': 42}}
+            source.write_text('readonly property int settingsConfigVersion: 42\n')
+            ASSEMBLY.verify_settings_schema(release, shell)
+            for declaration in ('readonly property int settingsConfigVersion: 43\n',
+                                'property int settingsConfigVersion: 42\n',
+                                'readonly property int settingsConfigVersion: 42\n' * 2):
+                with self.subTest(declaration=declaration):
+                    source.write_text(declaration)
+                    with self.assertRaisesRegex(ValueError, 'Native settings schema'):
+                        ASSEMBLY.verify_settings_schema(release, shell)
+            source.write_text('readonly property int settingsConfigVersion: 42\n')
+            for expected in (None, True, '42', 29):
+                with self.subTest(expected=expected):
+                    release['dms']['settingsConfigVersion'] = expected
+                    with self.assertRaisesRegex(ValueError, 'Native settings schema'):
+                        ASSEMBLY.verify_settings_schema(release, shell)
+
+    def test_legacy_schema_pin_is_not_changed(self):
+        ASSEMBLY.verify_settings_schema({'dms': {'tag': 'v1.6.2'}}, Path('/not-read'))
+
     def attempt(self, changed_package=None, changed_version=None):
         release = json.loads((ROOT / 'environment/production/dms-release.json').read_text())
 
@@ -49,7 +122,8 @@ class BuildInputVerificationTests(unittest.TestCase):
 
     def test_iso_builder_rejects_stale_first_party_plugin_payload(self):
         source = IMAGE_BUILDER.read_text()
-        self.assertIn('plugin_source="$session/dankmaterialshell/plugins"', source)
+        self.assertIn('plugin_source="$repo_root/environment/session/dankmaterialshell/plugins"', source)
+        self.assertIn('plugin_source="$repo_root/environment/session/dms-2.0-plugins"', source)
         self.assertIn('rpm_plugin_path="./etc/xdg/quickshell/dms-plugins/$plugin_relative"', source)
         self.assertIn('normalize_plugin_text', source)
         self.assertIn('cmp -s - <(normalize_plugin_text < "$plugin_file")', source)
@@ -90,7 +164,11 @@ class BuildInputVerificationTests(unittest.TestCase):
         runtime_spec = (ROOT / 'security-center/packaging/application-security/greyward-application-security-experimental.spec').read_text()
         runtime_revision = re.search(r'(?m)^Release:\s+(\d+)', runtime_spec)[1]
         self.assertIn(f'Requires: greyward-application-security-experimental = 0.1.0-{runtime_revision}%{{?dist}}', enrollment_spec)
-        self.assertIn('Requires: greyward-dms = 1.6.2-26%{?dist}', enrollment_spec)
+        self.assertIn('%{!?greyward_dms_dependency:%global greyward_dms_dependency 1.6.2-26}', enrollment_spec)
+        self.assertIn('Requires: greyward-dms = %{greyward_dms_dependency}%{?dist}', enrollment_spec)
+        enrollment_build = (ROOT / 'packaging/greyward-enrollment/build.sh').read_text()
+        self.assertIn('--define "greyward_dms_dependency $dms_dependency"', enrollment_build)
+        self.assertIn('environment/production/dms-release.json', enrollment_build)
         build = (ROOT / 'packaging/greyward-dms/build.sh').read_text()
         self.assertIn('usbguard-approval-execute.go', build)
         self.assertIn('usbguardAuthApprovalSha256', (ROOT / 'packaging/greyward-dms/greyward-dms.spec').read_text())
@@ -107,7 +185,9 @@ class BuildInputVerificationTests(unittest.TestCase):
 
     def test_root_component_builder_drops_to_unprivileged_user_before_dms_build(self):
         command = COMPONENT_BUILDER.dms_build_command(Path('/repo'), Path('/inputs'), Path('/output'), 'stendev', True)
-        self.assertEqual(command[:7], ['unshare', '--net', 'runuser', '-u', 'stendev', '--', 'bash'])
+        self.assertEqual(command[:5], ['unshare', '--net', 'sh', '-eu', '-c'])
+        self.assertEqual(command[5], 'ip link set dev lo up; exec "$@"')
+        self.assertEqual(command[7:12], ['runuser', '-u', 'stendev', '--', 'bash'])
         self.assertNotIn('sudo', command)
 
 

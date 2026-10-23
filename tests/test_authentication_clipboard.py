@@ -64,6 +64,43 @@ class AuthenticationClipboard(unittest.TestCase):
             materialize.materialize(1001, 1001)
         self.assertFalse(target.exists())
 
+    @unittest.skipUnless(os.name == 'posix', 'real Unix ownership and input modes')
+    def test_2_0_profile_is_separate_and_preserves_legacy_rollback_input(self):
+        materialize.materialize(1001, 1001)
+        before = {p.name: p.read_bytes() for p in self.config.parent.iterdir()}
+        materialize.materialize(1001, 1001, 'v2.0.0-7')
+        auth = self.state / 'auth-1001'
+        environment = materialize.authentication_environment(auth, 'v2.0.0-7')
+        profile = Path(environment['XDG_CONFIG_HOME']) / 'dms'
+        self.assertEqual(json.loads((profile / 'settings.json').read_text())['configVersion'], 42)
+        self.assertEqual(json.loads((profile / 'clsettings.json').read_text()), {'disabled': True})
+        self.assertEqual((profile / 'settings.json').stat().st_mode & 0o777, 0o444)
+        self.assertEqual(profile.stat().st_uid, 0)
+        self.assertEqual(before, {p.name: p.read_bytes() for p in self.config.parent.iterdir()})
+        for key, value in environment.items():
+            self.assertEqual(Path(value).name, 'dms20')
+            self.assertFalse((Path(value) / 'DankMaterialShell').exists())
+        self.assertIn('XDG_DATA_HOME', environment)
+
+    def test_unknown_authentication_generation_refuses_before_writes(self):
+        with mock.patch.object(materialize, 'prepare_enforcement') as prepare:
+            for release in ('v2.0.1-1', 'v2.0.0-999', '../dms', None):
+                with self.subTest(release=release), self.assertRaisesRegex(RuntimeError, 'Unreviewed authentication runtime'):
+                    materialize.materialize(1001, 1001, release)
+            prepare.assert_not_called()
+        self.assertFalse(self.state.exists())
+
+    @unittest.skipUnless(os.name == 'posix', 'POSIX aliases')
+    def test_versioned_config_alias_cannot_redirect_profile_creation(self):
+        auth = self.state / 'auth-1001'
+        (auth / 'config').mkdir(parents=True)
+        target = self.state / 'outside'; target.mkdir()
+        (auth / 'config/dms20').symlink_to(target, target_is_directory=True)
+        with self.assertRaisesRegex(RuntimeError, 'Unsafe versioned authentication directory'):
+            materialize.materialize(1001, 1001, 'v2.0.0-7')
+        self.assertEqual(list(target.iterdir()), [])
+
+
 
 if __name__ == '__main__':
     unittest.main()

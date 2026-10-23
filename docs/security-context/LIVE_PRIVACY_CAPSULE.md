@@ -2,6 +2,43 @@
 
 Status: **IMPLEMENTED FOUNDATION / PARTIAL SIGNAL COVERAGE**.
 
+## Security and privacy notifications
+
+`security_notices.py` adds observations inside the existing session runtime;
+`notification_router.py` remains the only native publisher. Native DMS notification
+settings, Do Not Disturb and history still apply. Informational notices do not
+change the protection posture or replace continuous microphone/camera indicators.
+
+VPN-interruption notifications are not implemented; existing VPN status
+presentation is unchanged.
+
+- Security-update availability requires Update Center's fresh successful
+  provider/record evidence and explicit `SECURITY_FIX`, excluding compatibility
+  holds and unknown classifications. Metadata older than fifteen minutes,
+  provider failure and checking state cannot establish availability. Restart
+  notifications require its `READY_TO_RESTART` transaction, explicit `REQUIRED`
+  and the current boot ID; merely listing an update that might need a reboot
+  does not qualify. Notifications only open Update Center; they never apply an
+  update or restart. Metadata checks reuse its asynchronous cache at fifteen
+  minute intervals with a bounded initial completion poll, while cheap
+  transaction reads observe readiness. Each category reminds at most daily,
+  across dismissals, provider flaps and subsequent logins. The local
+  `$XDG_STATE_HOME/greyward/notification-reminders.json` stores only two delivery
+  timestamps, not package or application inventories.
+- Optional microphone/camera start notifications are off by default. Enable
+  them in Security Center → Privacy → Privacy notifications. The typed session
+  methods `GetNotificationPreferences()` and `SetSensorStartNotifications(bool)`
+  read/write only `$XDG_CONFIG_HOME/greyward/security-notifications.json`.
+  A confirmed new per-application sensor use produces one short informational
+  notification; refreshes, initial rehydration, enabling the preference during
+  existing use and observer recovery do not replay it. Stop then start is a
+  new use. Unknown attribution remains explicitly unidentified. No media is
+  recorded and no device permission is changed.
+
+Tests: `test_security_notices.py`, `test_notification_router.py`,
+`test_shell_runtime.py` and the frontend preference readback/rollback contract.
+Installed and physical acceptance are recorded separately in `docs/STATUS.md`.
+
 The Live Privacy Capsule is the compact live-activity surface inside the
 existing `greywardSecure` DMS widget. It is not a second taskbar widget and it
 does not replace the Security Center history or evidence views.
@@ -128,7 +165,7 @@ The existing session service owns one collection scheduler, provider signal
 subscriptions and a bounded fallback refresh. Notification replacement IDs and
 dismissal acknowledgements live in a mode-0600 runtime delivery ledger, separate
 from security truth. Dismissal does not resolve a finding. Normal activity is
-silent; actionable/warning popups last ten seconds, requested scan results four
+silent unless sensor-start notices are explicitly enabled; actionable/warning popups last ten seconds, requested scan results four
 seconds, and unresolved critical notifications persist. Recovery updates are
 quiet and do not create another history entry. Resolution closes the matching
 notification. DMS still owns DND, dismissal and keyboard navigation. Critical
@@ -209,6 +246,31 @@ clipboard contents, network payloads, DPI data, packet captures, or raw USB
 serials. No new privileged daemon, eBPF collector, packet-inspection path, or
 clipboard manager is introduced by this feature.
 
+## DMS 2.0 candidate card presentation
+
+The migration candidate uses the existing single summary owner for taskbar,
+Security tab and three dashboard cards. Fresh confirmed protection is green,
+review/unknown/stale/loading is amber and explicit critical/failure evidence is
+red, accompanied by text and status glyphs. A per-control breakdown does not
+extend the evidence lease or certify unrelated providers. Network requires both
+firewall and application-filtering evidence for a green card, including the
+provider's exact `OPERATING` state. Informational network events do not create a
+review requirement. Observed VPN-owned DNS is shown as `VPN active`, with DNS
+ownership disclosed; it does not claim full-tunnel routing, encrypted DNS or a
+kill switch. Actual warnings/actions/failures still take precedence and stale
+evidence cannot stay green. DNS is separately shown. Idle update availability remains unknown until Update Center supplies its
+own result; no count or Up to date status is synthesized. The cards introduce
+no independent collector, poll or authority. The candidate `StatusModel.js` and generated
+state palette are owned in the repository map; native tests and synthetic
+renders are separate from physical acceptance. See the
+[DMS 2.0 migration](../architecture/DMS_2_0_MIGRATION.md).
+
+The ordinary launcher binds the [Qt QML disk cache](https://doc.qt.io/qt-6/qmldiskcache.html)
+to the verified release-receipt digest. This prevents unchanged reproducible RPM
+timestamps from reusing pre-update compiled card code at fixed plugin URLs.
+Caching remains enabled; prior namespaces are retained. This does not alter the
+protected authentication runtime or create a new posture/evidence source.
+
 ## Validation
 
 Pure contract and classifier tests live in
@@ -225,3 +287,65 @@ and `test_sensors.py`. Run the runtime-dependent tests on Fedora. Generate the
 explicitly simulated design sheet with
 `python tools/greyward-dev/security-shell-state-sheet.py`; it does not connect to
 providers and is not hardware acceptance evidence.
+
+## Network protection, VPN and offline observations
+
+The DMS 2.0 Network card makes filtering status primary. Confirmed firewall and
+application filtering produce **Protection active**; explicit disabled/stopped
+controls produce **Protection inactive**. Actual warnings and unavailable
+filtering evidence retain their severity. VPN is secondary information and its
+absence does not create a warning.
+
+The existing Secure DNS observer also observes VPN links. The bounded shell
+summary adds `vpn.state` (`ACTIVE`, `OFF`, `UNAVAILABLE`), with no link names.
+`OFF` requires a valid schema, successful observation and a generation timestamp
+no more than 60 seconds old; expired, missing, contradictory or unavailable data
+cannot establish absence. The existing shell evidence lease remains bounded.
+Split VPN with separately managed DNS still displays Active. This observation
+establishes neither encryption, full-tunnel routing nor a kill switch.
+`shell_experience.py` emits a `VPN` detail with explicit machine state; the card
+never parses arbitrary/localized text as absence. Older summaries can establish
+Active from VPN-owned DNS but cannot establish Off from other DNS modes.
+
+A confirmed network disconnect is distinct from failed collection. The shared
+Rust collector checks the local firewall even without an active interface;
+only successful NetworkManager absence plus a successful firewalld `RUNNING`
+read can satisfy that offline firewall check. The existing root network service
+exposes the no-input `OpenSnitchPolicy1.GetFirewallState` method to ordinary
+callers, with a fixed two-second provider timeout and only `running`,
+`not-running` or `unavailable` replies. It reads the live daemon state; it does
+not infer health from systemd, a cache or connectivity. The Rust client has a
+three-second call bound and no `firewall-cmd --state` fallback: that property
+read triggers firewalld CONFIG authorization for desktop callers. No policy
+grant or mutation authorization is broadened. Unknown connection evidence and
+failed firewall probes remain uncertain. The global posture algorithm is not
+relaxed, and other security failures remain visible. Offline fixtures exercise
+the command boundary without disconnecting a physical machine or changing its
+network policy. See current status for installed versus future protected builds.
+
+The explicit Fedora packaged-byte regression is run as root with an extracted
+Context RPM and posture executable, not by disconnecting a reference desktop:
+
+```bash
+PYTHONPATH=/private/context/usr/lib/greyward-security-context \
+GREYWARD_OFFLINE_POSTURE=/private/center/usr/libexec/greyward-security-posture \
+GREYWARD_OFFLINE_POLICY=/private/context/etc/dbus-1/system.d/systems.mantis.greyward.OpenSnitchPolicy1.conf \
+GREYWARD_OFFLINE_TEST_USER=nobody \
+python3 -m unittest discover -s tests -p test_offline_firewall_boundary.py -v
+```
+
+It uses the packaged bus policy and real read method on a private bus, forwards
+only the fixed upstream state read to the real firewall, and runs the ordinary
+helper in a network namespace with confirmed no-link input. Four samples are
+spaced 12 seconds apart; provider loss must remain uncertain. Any desktop
+`firewall-cmd` call fails the check. Optional `GREYWARD_OFFLINE_PREDECESSOR`
+points to the prior packaged helper for a negative control. No installed
+service, host link or policy is changed. This isolated check does not establish
+fresh-install or physical desktop acceptance.
+
+VPN freshness is evaluated at completion of the existing provider collection.
+The posture summary retains its original sampling time and evidence lease;
+a later DNS GetState refresh must neither appear to be a future observation
+nor renew older posture evidence. The real GetShellSummary caller regression
+and pure projection fixture cover this ordering. Current installed evidence is
+recorded in STATUS; physical offline acceptance remains separate from canaries.

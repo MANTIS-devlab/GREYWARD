@@ -1,0 +1,21 @@
+schema_version = 1
+id = "greyward-security-context"
+name = "Security Context"
+description = "Review GREYWARD security information for this file."
+icon = "key"
+enabled = true
+menu = "top"
+
+[when]
+kinds = ["file"]
+min_items = 1
+max_items = 1
+
+[run]
+runtime = "command"
+program = "/usr/bin/greyward-file-context"
+args = ["{path}"]
+mode = "per-item"
+on_error = "stop"
+working_directory = "home"
+confirm = false

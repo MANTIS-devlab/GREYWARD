@@ -89,7 +89,6 @@ zsh
 firefox
 nautilus
 # Strata is the normal file manager; Nautilus remains installed for Safe Open.
-pcmanfm-qt
 # Files integration: Windows/NAS shares, phones, cameras, and archive browsing.
 gvfs-smb
 gvfs-mtp
@@ -102,7 +101,6 @@ libnotify
 # User-facing document and media tools. These use the system dark preference
 # configured by the production provisioner.
 gnome-screenshot
-obs-studio
 papers
 loupe
 file-roller

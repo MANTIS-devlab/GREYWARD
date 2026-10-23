@@ -22,7 +22,6 @@ rows:
         list:
           - io.github.hkdb.Aerion
           - com.collaboraoffice.Office
-          - org.kde.haruna
           - com.brave.Browser
 
   - section:

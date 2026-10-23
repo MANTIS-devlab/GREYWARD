@@ -146,6 +146,50 @@ Unknown tables and values remain read-only. Revoking a document grant never
 deletes the underlying file. Restoration uses the exact captured permission set
 only while the resource identity remains unchanged.
 
+## Protected native lock appearance
+
+The protected DMS 2.0 derivative reads its single immutable settings profile
+and canonical custom theme synchronously. It does not discover a `config.d`
+directory or watch for writable preference changes. The ordinary shell retains
+upstream's loader. Exact preimages of `SettingsData.qml`, `Theme.qml` and
+`LockScreenBackground.qml` are bound to the selected DMS receipt. This prevents
+an unavailable folder worker from silently retaining stock wallpaper and theme
+defaults in authentication.
+
+The native lock uses the canonical GREYWARD wallpaper in Fill mode, Inter,
+a single-color digital clock with date, and the native pill password field
+without a profile avatar. Native lock widgets replace legacy visibility flags
+only for schema 42; media, weather and notification widgets are not seeded in
+the private lock profile. Software rendering draws the native decoded image
+and scrim directly, avoiding the GPU-only blur layer that can render black
+despite `Image.Ready`. No new locker or authentication permission is introduced.
+The bounded `authentication.appearance` IPC read reports applied settings and
+theme, with no password or ordinary user preferences. The private-display
+`tests/test_lock_wallpaper.py` checks loaded settings, theme, image decode and
+the software path, including an unavailable-directory-worker negative control.
+
+## Protected Polkit presentation
+
+The authentication assembler owns one Obsidian/Platinum card shared by the
+password-bearing output and its protected mirrors. The header compiles the
+canonical GREYWARD Security Center SVG paths from the Application Security
+package into synchronous Qt Quick geometry, without an image-loading worker
+or a user's icon theme. Unreviewed SVG features refuse assembly. The live request and
+supplementary message render as plain text. Long requests and constrained
+viewports scroll, and keyboard focus reveals the action row. Busy actions are
+disabled on every output. Mirrored submission reaches the authoritative field;
+mirrored cancellation reaches the shared Polkit flow directly, even if that
+field's controller is unavailable. This presentation changes no Polkit action, authorization rule,
+PAM stack or session-lock admission. Only the authoritative field stores the
+password; mirrors receive its masked character count.
+
+`tests/test_authentication_presentation.py` renders the actual assembled DMS 2.0
+component in a private headless compositor and checks keyboard/mouse submission,
+cancellation, busy state, mirrored actions and narrow layouts, including a
+missing input-controller negative control. It uses synthetic
+input with Polkit disabled. These checks do not prove physical authentication
+or three-screen behavior in an installed protected session.
+
 ## Polkit rules
 
 Security Center does not override policy files for upstream actions. Recovery

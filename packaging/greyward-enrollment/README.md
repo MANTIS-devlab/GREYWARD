@@ -133,3 +133,13 @@ Required manual candidate acceptance on the **separate installed test VM**:
 
 Compilation, source tests and private policy linking are package evidence only.
 No clean-install, graphical authentication or recovery pass may be inferred.
+
+## DMS 2.0 migration candidate
+
+The build helper accepts an optional third DMS manifest argument. It derives the
+exact RPM dependency from a validated release ID; omitting the argument retains
+the production manifest and does not select the experimental shell. The current
+migration uses Enrollment 62 with Application Security 71 and DMS 2.0.0-2.
+Candidate package construction never enrolls an account or loads a policy.
+Physical activation and recovery acceptance remain pending in the
+[DMS 2.0 migration authority](../../docs/architecture/DMS_2_0_MIGRATION.md).

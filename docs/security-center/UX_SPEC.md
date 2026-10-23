@@ -83,7 +83,7 @@ pill alone is never sufficient. Do not call a configured Secure DNS policy
 
 Current navigation is grouped by the task, with one owning destination for each
 workflow. `workspace.css` owns the shell/navigation; `styles.css` owns feature
-composition. `materials.css` centralizes tokens and material/interaction rules;
+composition. `theme-tokens.css` projects the shared palette; `materials.css` owns material/interaction rules;
 its installed Center 72 package passes actual EN/FR desktop visual review.
 Product copy is
 catalogued in EN/FR.

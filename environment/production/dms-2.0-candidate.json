@@ -1,0 +1,251 @@
+{
+  "schema": "greyward.dms-release/v1",
+  "status": "physical-migration-test-not-release-accepted",
+  "releaseId": "v2.0.0-7",
+  "dms": {
+    "tag": "v2.0.0",
+    "commit": "9b413296b16721f7679fb62e624cb1ed2433fa58",
+    "apiVersion": 38,
+    "settingsConfigVersion": 42
+  },
+  "dankCommon": "ebf5e6c002da1bdaa4aaa2f319fea7b8507abc42",
+  "dankgo": "v1.6.3-0.20261020163124-e2ca52bdf500",
+  "inputs": {
+    "source": {
+      "file": "dms-source.tar.gz",
+      "root": "DankMaterialShell-2.0.0",
+      "sha256": "5e498216d3ad0b0d487848957ca6aec53862d1ba21582dbd4ef15483c88fd041"
+    },
+    "vendor": {
+      "file": "dms-cli-2.0.0.tar.gz",
+      "root": "dms-cli-2.0.0",
+      "sha256": "ab5c433b57fbcd0d507f2060fc73706101558f4f44909bd5814fad2d1f2246c3"
+    },
+    "toolchain": {
+      "file": "go1.27.3.linux-amd64.tar.gz",
+      "root": "go",
+      "sha256": "65efbc80fdc1fa2cd2631cad5b481777a68e8725f34e89f50fc6ac714e379b40",
+      "url": "https://go.dev/dl/go1.27.3.linux-amd64.tar.gz"
+    }
+  },
+  "build": {
+    "minimumGo": "1.27.1",
+    "tags": [
+      "distro_binary",
+      "withshell"
+    ],
+    "moduleMode": "vendor",
+    "network": "disabled",
+    "sourceDateEpoch": 1792524192,
+    "fedora": 44,
+    "requiredPackages": {
+      "python3": "3.14.8-1.fc44.x86_64",
+      "make": "4.4.1-12.fc44.x86_64",
+      "rpm-build": "6.0.2-1.fc44.x86_64"
+    },
+    "buildTime": "2026-10-20_19:23:12",
+    "toolchain": {
+      "input": "toolchain",
+      "version": "go1.27.3",
+      "goVersion": "go version go1.27.3 linux/amd64"
+    },
+    "rpmRelease": "7.9",
+    "packageOnlyRuntime": {
+      "binarySha256": "0eb5a9b5bdcd16882b41f8bdf03a37bcbb9f6a8d7723e2b0f0640aada0d0f532",
+      "usbguardApprovalSha256": "0eece46c693dd271b655b3e9596124abdbb7ede28f69b5f66fec97d18751e95a",
+      "usbguardAuthApprovalSha256": "27d8063b1f43ef8003b235cb62b958dbd0a6449d6dd1ab1f17737b439a7dbe8e"
+    }
+  },
+  "compatibility": {
+    "quickshell": "0.3.1-5.fc44",
+    "labwc": "0.9.6-1.fc44",
+    "uwsm": "0.24.3-1.fc44",
+    "greeter": "1:1.6.2-1.fc44",
+    "validation": "Matched predecessor packages and private headless checks pass. This successor is for the explicitly authorized physical trial; physical/recovery/performance acceptance is pending."
+  },
+  "patches": [
+    {
+      "file": "greyward-labwc-runtime.patch",
+      "sha256": "0abe3482241f3996a2180dae4e96d77d29045a6145456570f2c2d5a7eb508cb8",
+      "reason": "Retain bounded closed-popout reclamation on Labwc; measure before claiming savings.",
+      "preimages": {
+        "Services/PopoutService.qml": "3db46de3f0f58f0943e4a329e46850627b89740035746416e0cb8f55067cc1f9"
+      }
+    },
+    {
+      "file": "greyward-wlr-output-readiness.patch",
+      "sha256": "7d7d27967a504d2f66dd26a887a2eda1fd9186001a288d5a5e7b52af85b5bba9",
+      "reason": "Preserve response-based output readiness and bounded retry independently of capability ordering.",
+      "preimages": {
+        "Services/WlrOutputService.qml": "738143cd654213ef887be40813003e8fd20acfd2762cd8dc4b14b2e988735863"
+      }
+    },
+    {
+      "file": "greyward-grouped-minimize.patch",
+      "sha256": "de27c33e92a938c6748d88876ee03aad87b310cc039cc6b0a1bbc2ca9a1ce610",
+      "reason": "Preserve focused grouped-window minimize behavior in the actual 2.0 dock implementation.",
+      "preimages": {
+        "Modules/Dock/DockAppButton.qml": "14b28ef8fe8755208549afa83f570b1274810b6dff6273e8a89fb2dd7d7e347d"
+      }
+    },
+    {
+      "file": "greyward-tray-icon-fallback.patch",
+      "sha256": "3d60a54be8b75c16c7cd628dfd78023a1378f3147c2d1ddc348483f2529e4981",
+      "reason": "Preserve icon resolver coverage in the shared 2.0 tray manager.",
+      "preimages": {
+        "Common/TrayMenuManager.qml": "b418e8417f46b35cb0d79cdadd48657838c1454f4208635b3d3058de01195f08"
+      }
+    },
+    {
+      "file": "greyward-flatpak-icons.patch",
+      "sha256": "5e15d33c3fd10345fc52c2c1d3a1b8eaca65ce5a899c71d186f0a855d2b2823b",
+      "reason": "Discover active Flatpak export roots using the new asynchronous icon index lifecycle.",
+      "preimages": {
+        "Services/IconThemeService.qml": "09bf410b5afa5efacc5d852e7881ccdcbbf404109669a89e55974bf1e0885af8"
+      }
+    },
+    {
+      "file": "greyward-security-notifications.patch",
+      "sha256": "b69b02d8d3052e1bc4e434290287cd121a6e5840b23be95975d4bfb041104a8f",
+      "reason": "Keep quiet replacements out of popup/audio/history and preserve severity ordering; use native theme-driven notification visuals.",
+      "preimages": {
+        "Services/NotificationService.qml": "d6226f405f9e40a60e7eecbd23ce60e17232773784eb80083aacc13943a53c36"
+      }
+    },
+    {
+      "file": "greyward-update-routing.patch",
+      "sha256": "16aa2b7d802b849291f3d2eb7e9d0e03f6d6eb70fe1ce320eed31d30cc296c43",
+      "reason": "Use GREYWARD Update Center for refresh/apply/cancel and keep the native parallel scheduler inactive.",
+      "preimages": {
+        "Services/SystemUpdateService.qml": "5248c70133d1e46ba14349f3482b797c91cb1513ec77887f08c88cde7abc4dac"
+      }
+    },
+    {
+      "file": "greyward-desktop-shortcuts.patch",
+      "sha256": "29ba406d19008a50c4fb5098821c4f5b188ba10e40404a37702c3f73645e63a0",
+      "reason": "Retain verified installed-launcher shortcut creation in the actual 2.0 dock menu.",
+      "preimages": {
+        "Modules/Dock/DockContextMenu.qml": "a46a0d9f2c0e3ba1c6fe8342ce0cc69b35652398666cf3b13297cf280fdaa191"
+      }
+    },
+    {
+      "file": "greyward-managed-settings.patch",
+      "sha256": "1eca116f4aa181463efce0ba196df5eeda56bdff9eb561a7aec15dd3e379be2c",
+      "reason": "Keep enrollment, protected authentication and reviewed update transactions under GREYWARD ownership; report unimplemented protected appearance controls explicitly.",
+      "preimages": {
+        "Modals/Settings/SettingsContent.qml": "0d4f44586d3c226817bc1287fc6c3048d9c321487ab51a09732b4bc886fb16d0"
+      }
+    },
+    {
+      "file": "greyward-native-plugin-appearance.patch",
+      "sha256": "56e5a3c5b7578739206dc9deb267c669848c88a450d37ea72c85e2632725f68d",
+      "reason": "Forward the native per-widget Background setting to plugin pills and use a standalone GREYWARD settings gear.",
+      "preimages": {
+        "Services/AppSearchService.qml": "48a298e7340fa9085e70fbc9c43c7cad55884041054206cb15919d97d02cd7d5",
+        "Modules/Plugins/PluginComponent.qml": "537780a0bec198e499490894376ea0c6e485971ca26ff686b2351d1cde9d6f8d"
+      }
+    }
+  ],
+  "shell": {
+    "sha256": "c094da5ec9b2d6df275bb17e4111290d9b278d461b2925e83a236e73e59edfef",
+    "patchedFiles": 11,
+    "qmlFiles": 987,
+    "commonQmlFiles": 160,
+    "commonFiles": 249
+  },
+  "rollback": {
+    "baselineRelease": "v1.6.2-26",
+    "exactRpmsAvailable": false,
+    "restoreRehearsed": false
+  },
+  "firstPartyCompatibility": {
+    "dms": "v2.0.0",
+    "imports": [
+      "qs.Common",
+      "qs.Services",
+      "qs.DCommon.Widgets",
+      "qs.Modules.Plugins"
+    ],
+    "plugins": [
+      "greywardNetwork",
+      "greywardNetworkTraffic",
+      "greywardProtection",
+      "greywardPublicIp",
+      "greywardSecure",
+      "greywardSoftware",
+      "greywardUpdates"
+    ],
+    "delivery": "/etc/xdg/quickshell/dms-plugins",
+    "automaticDownloads": false,
+    "validation": "2.0 native plugin adapters under source/headless review. Installed and visual acceptance pending."
+  },
+  "commonDirectory": "DCommon",
+  "patchDirectory": "environment/patches/dms-2.0",
+  "activation": {
+    "eligible": true,
+    "pending": [],
+    "scope": "physical-migration-test"
+  },
+  "shellAdditions": {
+    "files": {
+      "Modules/Settings/GreywardManagedTab.qml": "929bb847eb6a6ac961c2333d8738a11112dac32d45cebbf02091a620dda35ae4",
+      "assets/greyward-settings.svg": "16780388124c05dbc6b84b113667304a20be0ec1acf872bf428e2edc156b4261"
+    }
+  },
+  "firstPartyDirectory": "environment/session/dms-2.0-plugins",
+  "firstPartySources": {
+    "greywardNetwork/Card.qml": "7329eb34cb9b33725bf282a541ad85e4ade4c4c5c6d5c85663b5f44218299206",
+    "greywardNetwork/plugin.json": "6166baec93daf6b0e8aea2838b69ce9de78109499e0bde7df6fa568ec57ecd23",
+    "greywardNetworkTraffic/NetworkTrafficMath.js": "f0bc9173377978471b20149f45706ab8bfb468995cf0457465feb057640bc851",
+    "greywardNetworkTraffic/NetworkTrafficModel.qml": "5a8f3a167732b6f6c3606c02a02f59bd694c34bb51a6156f105ee84020e8ada8",
+    "greywardNetworkTraffic/NetworkTrafficWidget.qml": "60fe6b57c161ae0fa1d5a26cddcc7d943c65551de04bd3b3e1d4a7c282f158c2",
+    "greywardNetworkTraffic/plugin.json": "c3ef9f4ef2f174d152f60d9a7006c6d26b73618c35332d03f76f064f8dedee4d",
+    "greywardProtection/Card.qml": "7e85ec772ee6e9a8c41fbc9e89dcf97bdbab2ca8ad6569cecfe7ce96432f679a",
+    "greywardProtection/plugin.json": "b952bf2b993a20dde27750f5cd6e36ac11b8ddff0c6698c8106dbaedf9bfcc19",
+    "greywardPublicIp/plugin.json": "96791222834499c8c54e57caf24196283c94692f22eb0c5a7bb38de551d2fb61",
+    "greywardPublicIp/PublicIpWidget.qml": "d8a5e7d1fc73195e024324f2cf980ed4ef4125adff9539ea8244605c26ee2df0",
+    "greywardSecure/plugin.json": "485c473ac54965db7acf47813098ea3314b5f762f9e884fce200bda0742c5a1a",
+    "greywardSecure/SecureWidget.qml": "9d0fbe79539610a5ff8825e0cb29fb7e559c4d1f826efae314df5fc0e3af363b",
+    "greywardSecure/SecurityClient.qml": "357c8179bf85e9f624720d8cd5dfa0fd1c4a34ff22f2dbde04a00028a8b8d6ba",
+    "greywardSecure/SecurityLauncher.qml": "a58f1d655b21191cf0f309326f4005ca700907a9117a8c0342f34d901b3266f7",
+    "greywardSecure/SecurityTab.qml": "df5320df4763d5ed5dd01fd8868e6bd7afc38828ec18d8e7a82e66594ef5e5fe",
+    "greywardSecure/StatePalette.js": "a575b3ddcccb9e2a756891bf524d81319a89afc590dfc455905d8ec1989dbbff",
+    "greywardSecure/StatusCard.qml": "a831b33e634f6b3e89945fadf1999e692e76a0669f75765ea3e62470bc127126",
+    "greywardSecure/StatusModel.js": "5a2b1b8c8669e678e44613a00f5affb368a1a0519c4b927831abe500e8330100",
+    "greywardSoftware/plugin.json": "a6c01e07d657fca590f2f077ba66204909eba35e03ad3f9593e0d40fe8f5e1b3",
+    "greywardSoftware/SoftwareWidget.qml": "2e21ca7de59d5388befdab529419b6aedf098716612f8de28fd6636898f48a5c",
+    "greywardUpdates/Card.qml": "89192863725702eba9bfa8f015e90560006eb3cae2636603fe0d803a9d39c260",
+    "greywardUpdates/plugin.json": "9c00f494f0064596adadf2081bdfd470ab5f3a69dc024db1b2a35de8e8b065f4"
+  },
+  "previousFirstPartyFiles": {
+    "greywardNetworkTraffic/NetworkTrafficMath.js": "f0bc9173377978471b20149f45706ab8bfb468995cf0457465feb057640bc851",
+    "greywardNetworkTraffic/NetworkTrafficModel.qml": "5a8f3a167732b6f6c3606c02a02f59bd694c34bb51a6156f105ee84020e8ada8",
+    "greywardNetworkTraffic/NetworkTrafficWidget.qml": "e82e63bfea06cecf093fdc4ce27a25f60c76c34f240d2b5d311be766ceeef812",
+    "greywardNetworkTraffic/plugin.json": "27e9c6ccbf755c54b39110ec1474b36a0f49d5fe0ef42be1e0aea234107a5108",
+    "greywardPublicIp/PublicIpWidget.qml": "4324a97e935e692f28cf02c7150f2d0d76b2cf9f264a13f145f571ae5d8fea74",
+    "greywardPublicIp/plugin.json": "37cc7c5a059440e9546677a5e8a1cc8076c03d5f50e227a0f6d3fa54677633c6",
+    "greywardSecure/SecureWidget.qml": "7576d76324be9e43091854e4568f2875b342267cea069af1baf502fafb5dd9f6",
+    "greywardSecure/plugin.json": "9044f7fcb47fa423d878e561cd46ad7a16f10a592b36fc2c8f082dfb86825b5a",
+    "greywardSoftware/SoftwareWidget.qml": "bd4a12d14ac8c2a4c59c919fd0caf4861da5c52dfebf61466525144a1090a735",
+    "greywardSoftware/plugin.json": "b8857ea5ba800b9b21964b0bd0380cd0f1ebc8318cc6d41ce8cfe540fe04fd70"
+  },
+  "candidatePackages": {
+    "dms": "2.0.0-7.9",
+    "session": "0.1.0-34",
+    "files": "1.0.0-20",
+    "securityCenter": "0.1.0-119",
+    "applicationSecurity": "0.1.0-83",
+    "enrollment": "0.1.0-80",
+    "securityContext": "0.1.0-111"
+  },
+  "acceptance": {
+    "releaseAccepted": false,
+    "pending": [
+      "quiescent-recovery-and-rollback-reapply",
+      "physical-input-security-and-three-output-workflows",
+      "comparable-rendered-performance",
+      "24-hour-daily-use"
+    ],
+    "authorization": "Operator must obtain the user-approved activation window; this manifest does not authorize session interruption."
+  }
+}

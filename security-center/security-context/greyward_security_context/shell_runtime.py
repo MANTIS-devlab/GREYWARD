@@ -4,13 +4,15 @@ import json
 import threading
 import time
 import logging
+from pathlib import Path
 
 import dbus
 from gi.repository import GLib
 
 from .notification_router import NotificationRouter, open_route
-from .shell_experience import build_experience
+from .shell_experience import build_experience, RANK
 from .usbguard import USB_SERVICE, DEVICES_INTERFACE
+from .security_notices import NoticePreferences, SensorStarts, update_notices
 
 
 class ShellRuntime:
@@ -27,6 +29,12 @@ class ShellRuntime:
         self.shell, self.files, self.network = {}, {}, {}
         self.router = NotificationRouter(bus, self.dispatch)
         system = dbus.SystemBus()
+        self.notice_preferences = NoticePreferences()
+        self.sensor_starts = SensorStarts()
+        self.update_snapshot = {}
+        self.next_update_check = 0
+        self.update_check_deadline = 0
+        self.boot_id = Path('/proc/sys/kernel/random/boot_id').read_text().strip()
         for member in ('DevicePresenceChanged', 'DevicePolicyChanged', 'DevicePolicyApplied'):
             system.add_signal_receiver(self.invalidate, signal_name=member, dbus_interface=DEVICES_INTERFACE, bus_name=USB_SERVICE)
         system.add_signal_receiver(self.invalidate, signal_name='NameOwnerChanged', dbus_interface='org.freedesktop.DBus', arg0=USB_SERVICE)
@@ -72,6 +80,7 @@ class ShellRuntime:
                 self.files = json.loads(self.service.GetFileSecuritySummary())
                 from .user_bus import network_summary
                 self.network = network_summary()
+                self._read_updates()
                 self.last_full = time.monotonic()
             capsule = json.loads(self.service.GetPrivacyCapsule())
             devices, error = self.service.usb.devices()
@@ -89,6 +98,10 @@ class ShellRuntime:
             workflows = getattr(self.service, 'application_workflows', None)
             blocks = workflows.recent_access_blocks() if workflows is not None else []
             value = build_experience(self.shell, capsule, devices, error, self.files, self.network, self.operations, previous, blocks)
+            notices = update_notices(self.update_snapshot, time.time(), self.boot_id)
+            notices.extend(self.sensor_starts.collect(capsule, self.notice_preferences.read()['sensor_start'], time.monotonic()))
+            # Informational starts/updates do not change protection posture.
+            value['notices'] = notices
             value['operations'] = [{k: v for k, v in op.items() if k != 'expires_at'} for op in self.operations.values()]
             GLib.idle_add(self._publish, value, full)
         except Exception:
@@ -96,6 +109,26 @@ class ShellRuntime:
             # Preserve the last confirmed snapshot only until its own deadline.
             # A failed provider does not fabricate a resolved condition.
             GLib.idle_add(self._failed)
+
+    def _read_updates(self):
+        # Reuse Update Center, never run package tools in the notification
+        # collector. Metadata checks are at most every 15 minutes, with bounded
+        # polling while its initial asynchronous refresh is completing.
+        current = time.monotonic()
+        try:
+            proxy = dbus.Interface(self.bus.get_object('org.greyward.Update1', '/org/greyward/Update1'), 'org.greyward.Update1')
+            if current >= self.next_update_check:
+                self.next_update_check = current + 900
+                self.update_check_deadline = current + 60
+            if current < self.update_check_deadline:
+                snapshot = json.loads(str(proxy.GetSnapshot(timeout=3)))
+                self.update_snapshot = snapshot if isinstance(snapshot, dict) else {}
+                if not self.update_snapshot.get('snapshot_refreshing'):
+                    self.update_check_deadline = 0
+            else:
+                self.update_snapshot['transaction'] = json.loads(str(proxy.GetTransactionStatus(timeout=3)))
+        except (dbus.DBusException, ValueError):
+            self.update_snapshot = {}
 
     def _failed(self):
         self.running = False
@@ -106,7 +139,8 @@ class ShellRuntime:
         # One server-side gate drives both the DMS alert surface and native
         # notifications. Keep the full live items in the presentation so
         # posture stays current while short warning flaps remain quiet.
-        notification_items = self.router.eligible_items(value.get('items', []))
+        combined = value.get('items', []) + value.get('notices', [])
+        notification_items = self.router.eligible_items(sorted(combined, key=lambda entry: RANK.get(entry.get('severity'), 4)))
         value['notification_items'] = notification_items
         with self.lock:
             old = {k: v for k, v in self.snapshot.items() if k not in {'revision', 'fresh_until', 'display_fresh_until'}}

@@ -137,6 +137,10 @@ pub struct NetworkFacts {
     pub active_connection: Option<String>,
     pub interface: Option<String>,
     pub connection_type: Option<String>,
+    /// True only after a successful, valid `NetworkManager` observation with
+    /// no active non-loopback link. Missing/old facts never imply offline.
+    #[serde(default)]
+    pub disconnected: bool,
     pub firewall: FirewallState,
     pub trust_zone: TrustZone,
 }

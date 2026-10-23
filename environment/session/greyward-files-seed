@@ -1,6 +1,9 @@
 #!/usr/bin/python3 -I
 """Seed app-specific defaults; leave established user choices and layouts intact."""
+import hashlib
 import os
+import stat
+import tempfile
 from pathlib import Path
 import sys
 
@@ -17,6 +20,35 @@ def seed(destination, content):
         stream.write(content)
 
 
+# Only the exact previously packaged factory file can be refreshed. User themes
+# and selections remain authoritative, including symlinked configurations.
+PREVIOUS_OBSIDIAN = '8deb3c6ffe87fad462e846d956f92637ac1657c69407fce70ea7045096d66e23'
+
+
+def seed_theme(destination, content, previous=None):
+    if not destination.exists():
+        seed(destination, content)
+        return
+    if previous is None or destination.is_symlink() or not stat.S_ISREG(destination.stat().st_mode):
+        return
+    original = destination.read_bytes()
+    if hashlib.sha256(original).hexdigest() != previous:
+        return
+    before = destination.stat()
+    seed(destination.with_name(destination.name + '.pre-dms20'), original)
+    descriptor, temporary = tempfile.mkstemp(prefix='.greyward-theme-', dir=destination.parent)
+    try:
+        with os.fdopen(descriptor, 'wb') as stream:
+            stream.write(content)
+        current = destination.lstat()
+        if (current.st_dev, current.st_ino, current.st_mtime_ns, current.st_size) != (
+                before.st_dev, before.st_ino, before.st_mtime_ns, before.st_size):
+            return
+        os.replace(temporary, destination)
+    finally:
+        Path(temporary).unlink(missing_ok=True)
+
+
 def main():
     import pwd
     if os.getuid() == 0 or sys.argv[1:] not in (['strata'], ['desktop']):
@@ -28,9 +60,16 @@ def main():
     if sys.argv[1] == 'desktop':
         seed(config / 'pcmanfm-qt/greyward/settings.conf', (ASSETS / 'settings.conf').read_bytes())
     else:
-        seed(config / 'strata/themes/greyward-obsidian.toml', (ASSETS / 'obsidian.toml').read_bytes())
+        seed_theme(config / 'strata/themes/greyward-obsidian.toml',
+                   (ASSETS / 'obsidian.toml').read_bytes(), PREVIOUS_OBSIDIAN)
+        seed_theme(config / 'strata/themes/greyward-silver.toml', (ASSETS / 'silver.toml').read_bytes())
         seed(config / 'strata/settings.toml',
              b'mode = "theme"\ntheme = "greyward-obsidian"\nelement_glow = false\n')
+        # Native literal-argv actions need no Rust fork or polling provider.
+        # Existing user edits/disabled choices remain authoritative.
+        for identifier in ('greyward-safe-open', 'greyward-scan', 'greyward-security-context'):
+            seed(config / 'strata/actions' / identifier / 'action.toml',
+                 (ASSETS / 'actions' / identifier / 'action.toml').read_bytes())
 
 
 if __name__ == '__main__':

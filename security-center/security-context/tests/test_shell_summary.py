@@ -5,6 +5,38 @@ from greyward_security_context.shell_summary import build_shell_summary
 
 
 class ShellSummaryTests(unittest.TestCase):
+    def test_later_vpn_observation_does_not_renew_the_original_posture_sample(self):
+        from datetime import timedelta
+        base = {"state": "PROTECTED", "fresh_until": "2026-08-24T12:02:00Z"}
+        dns = {"schema": "greyward.secure-dns/v1", "generated_at": "2026-08-24T12:00:02Z",
+               "effective_policy": "VPNOwned", "vpn_links": ["synthetic0"]}
+        value = build_shell_summary(base, secure_dns=dns, now_value=self.now,
+                                    vpn_now_value=self.now + timedelta(seconds=3))
+        self.assertEqual(value["vpn"]["state"], "ACTIVE")
+        self.assertEqual(value["fresh_until"], "2026-08-24T12:00:30Z")
+
+    def test_vpn_is_a_fresh_explicit_link_observation_not_a_dns_guess(self):
+        base = {"state": "PROTECTED", "fresh_until": "2026-08-24T12:02:00Z"}
+        observed = {"schema": "greyward.secure-dns/v1", "generated_at": "2026-08-24T12:00:00Z",
+                    "effective_policy": "SecureProvider", "vpn_links": []}
+        def project(dns, summary=base):
+            return build_shell_summary(summary, secure_dns=dns, now_value=self.now)["vpn"]["state"]
+        self.assertEqual(project(observed), "OFF")
+        self.assertEqual(project({**observed, "effective_policy": "Disconnected"}), "OFF")
+        # Split VPN with separately managed DNS must still say Active.
+        self.assertEqual(project({**observed, "vpn_links": ["synthetic0"]}), "ACTIVE")
+        self.assertEqual(project({**observed, "effective_policy": "VPNOwned", "vpn_links": ["synthetic0"]}), "ACTIVE")
+        for change in ({"generated_at": "2026-08-24T11:58:00Z"}, {"generated_at": "2026-08-24T12:00:01Z"},
+                       {"generated_at": "2026-08-24T12:00:00"}, {"generated_at": None},
+                       {"vpn_links": None}, {"vpn_links": [""]}, {"vpn_links": [False]},
+                       {"effective_policy": "Unavailable"}, {"effective_policy": "invented"},
+                       {"effective_policy": "VPNOwned"}, {"schema": "other"}):
+            with self.subTest(change=change):
+                self.assertEqual(project({**observed, **change}), "UNAVAILABLE")
+        self.assertEqual(project(observed, {**base, "state": "UNAVAILABLE"}), "UNAVAILABLE")
+        self.assertEqual(project(observed, {**base, "fresh_until": "2026-08-24T11:59:00Z"}), "UNAVAILABLE")
+        self.assertEqual(project({"effective_policy": "SecureProvider"}), "UNAVAILABLE")
+
     def test_definition_initialization_and_refresh_are_not_lost_as_provider_failure(self):
         from greyward_security_context.shell_summary import _malware
         for state in ('INITIALIZING', 'UPDATING', 'OUTDATED', 'UNAVAILABLE'):

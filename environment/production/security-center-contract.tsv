@@ -17,6 +17,7 @@ greyward-security-context|/usr/libexec/greyward-opensnitch-control-plane
 greyward-security-context|/usr/libexec/greyward-opensnitch-policy
 greyward-security-context|/usr/libexec/greyward-opensnitch-daemon-configure
 greyward-security-context|/usr/libexec/greyward-security-context-session10
+greyward-security-context|/usr/lib/greyward-security-context/greyward_security_context/security_notices.py
 greyward-security-context|/usr/libexec/greyward-clamav-scan
 greyward-security-context|/usr/libexec/greyward-update-center
 greyward-security-context|/usr/libexec/greyward-update-action

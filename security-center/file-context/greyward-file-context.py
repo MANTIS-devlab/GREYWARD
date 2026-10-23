@@ -6,7 +6,7 @@ import logging
 import subprocess
 import sys
 from threading import Thread
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 import gi
 gi.require_version("Gtk", "4.0")
@@ -140,7 +140,7 @@ def scan_message(result):
         return "Scan failed"
     if current == "UNAVAILABLE":
         return "Scan unavailable"
-    return "Scan completed"
+    return "Scan result unavailable"
 
 
 def notify_scan(path, result):
@@ -335,15 +335,29 @@ class FileContext(Gtk.Application):
             self.status.set_label("Security context unavailable\nGREYWARD could not complete that action.")
 
 def main():
-    if len(sys.argv) == 3 and sys.argv[1] == "--scan":
+    if len(sys.argv) == 3 and sys.argv[1] in {"--scan", "--safe-open"}:
         path = sys.argv[2]
+        if not PurePosixPath(path).is_absolute() or len(path) > 4096 or "\0" in path:
+            print("An absolute local file must be selected.", file=sys.stderr)
+            return 2
         try:
+            if sys.argv[1] == "--safe-open":
+                result = dbus_call("SafeOpen", path)
+                # Launch evidence is not a successful workload outcome. Refused,
+                # missing or contradictory results must never fall back to open.
+                started = isinstance(result, dict) and result.get("ok") is True and state(result) == "LAUNCHED"
+                subprocess.run(["notify-send", "Safe Open started" if started else "Safe Open refused",
+                                "Restricted application started. Its outcome is recorded in Security Center."
+                                if started else "The selected file could not be opened safely."],
+                               check=False, capture_output=True, text=True)
+                return 0 if started else 1
             result = dbus_call("ScanHighRiskPath", path)
             notify_scan(path, result)
-            return 0
+            return 0 if state(result) in {"CLEAN", "NO_THREATS", "NO THREATS DETECTED", "THREAT", "THREAT DETECTED"} else 1
         except Exception:
-            logger.exception("Nautilus scan action failed")
-            subprocess.run(["notify-send", "GREYWARD Security", f"Scan failed:\n{Path(path).name}"], check=False, capture_output=True, text=True)
+            logger.warning("Selected file action unavailable", exc_info=False)
+            subprocess.run(["notify-send", "GREYWARD Security", "The selected file action could not be completed."],
+                           check=False, capture_output=True, text=True)
             return 1
     if len(sys.argv) != 2:
         print("A file must be selected.", file=sys.stderr)

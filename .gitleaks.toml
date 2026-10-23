@@ -15,6 +15,15 @@ regexes = [
 ]
 
 [[allowlists]]
+description = "Exact upstream Polkit QML preimage, verified in the pinned DMS source"
+condition = "AND"
+paths = ['(^|/)security-center/packaging/application-security/authentication/assemble\.py$']
+regexTarget = "secret"
+regexes = [
+  '^1afdb4a82d45f3c0fd02e865fe39ddd7c4d45a40f1fc22a9ae5f0d45aa7e3764$'
+]
+
+[[allowlists]]
 description = "Artifact fingerprints in the canonical DMS release manifest"
 paths = ['^environment/production/dms-release\.json$']
 regexTarget = "line"

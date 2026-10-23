@@ -393,10 +393,40 @@ fn security_update_count(exit_code: Option<i32>, stdout: &[u8]) -> Option<u32> {
     None
 }
 pub fn collect_network_facts() -> NetworkFacts {
-    let active = bounded_output(
+    collect_network_facts_with(bounded_output, collect_firewall_state)
+}
+
+fn collect_firewall_state() -> FirewallState {
+    let Ok(bus) = dbus::blocking::Connection::new_system() else {
+        return FirewallState::Unavailable;
+    };
+    let proxy = bus.with_proxy(
+        "systems.mantis.greyward.OpenSnitchPolicy1",
+        "/systems/mantis/greyward/OpenSnitchPolicy1",
+        Duration::from_secs(3),
+    );
+    let reply: Result<(String,), _> = proxy.method_call(
+        "systems.mantis.greyward.OpenSnitchPolicy1",
+        "GetFirewallState",
+        (),
+    );
+    match reply.as_ref().map(|(state,)| state.as_str()) {
+        Ok("running") => FirewallState::Available,
+        Ok("not-running") => FirewallState::Error,
+        _ => FirewallState::Unavailable,
+    }
+}
+
+fn collect_network_facts_with(
+    mut read: impl FnMut(&str, &[&str]) -> std::io::Result<std::process::Output>,
+    mut firewall_state: impl FnMut() -> FirewallState,
+) -> NetworkFacts {
+    let active = read(
         "nmcli",
         &[
             "-t",
+            "-e",
+            "no",
             "-f",
             "NAME,DEVICE,TYPE,STATE",
             "connection",
@@ -404,34 +434,50 @@ pub fn collect_network_facts() -> NetworkFacts {
             "--active",
         ],
     );
-    let (active_connection, interface, connection_type) = match active {
-        Ok(output) if output.status.success() => String::from_utf8_lossy(&output.stdout)
-            .lines()
-            .find_map(|line| {
-                let fields: Vec<&str> = line.split(':').collect();
-                if fields.len() >= 4 && fields[3] == "activated" && fields[1] != "lo" {
-                    Some((
-                        Some(fields[0].to_owned()),
-                        Some(fields[1].to_owned()),
-                        Some(fields[2].to_owned()),
-                    ))
-                } else {
-                    None
-                }
-            })
-            .unwrap_or((None, None, None)),
-        _ => (None, None, None),
-    };
+    let mut active_connection = None;
+    let mut interface = None;
+    let mut connection_type = None;
+    let mut disconnected = false;
+    if let Ok(output) = &active
+        && output.status.success()
+        && let Ok(text) = std::str::from_utf8(&output.stdout)
+    {
+        disconnected = true;
+        for line in text.lines().filter(|line| !line.is_empty()) {
+            // NAME may contain colons. The three trailing fields are fixed.
+            let fields: Vec<_> = line.rsplitn(4, ':').collect();
+            if fields.len() != 4 || fields.iter().any(|field| field.is_empty()) {
+                disconnected = false;
+                break;
+            }
+            if fields[2] == "lo" {
+                continue;
+            }
+            disconnected = false;
+            if fields[0] == "activated" {
+                active_connection = Some(fields[3].to_owned());
+                interface = Some(fields[2].to_owned());
+                connection_type = Some(fields[1].to_owned());
+            }
+            break;
+        }
+    }
     let Some(iface) = interface.as_deref() else {
+        // Offline is a connection state, not evidence that local protection
+        // vanished. Still require a live firewall reply; never trust no output.
+        // Do not use firewall-cmd --state here: firewalld's property read
+        // requests CONFIG authorization and can prompt on every refresh.
+        let firewall = firewall_state();
         return NetworkFacts {
             active_connection,
             interface,
             connection_type,
-            firewall: FirewallState::Unknown,
+            disconnected,
+            firewall,
             trust_zone: TrustZone::Unknown,
         };
     };
-    let zone_output = bounded_output("firewall-cmd", &["--get-zone-of-interface", iface]);
+    let zone_output = read("firewall-cmd", &["--get-zone-of-interface", iface]);
     let (firewall, trust_zone) = match zone_output {
         Ok(output) if output.status.success() => (
             FirewallState::Available,
@@ -444,6 +490,7 @@ pub fn collect_network_facts() -> NetworkFacts {
         active_connection,
         interface,
         connection_type,
+        disconnected,
         firewall,
         trust_zone,
     }
@@ -459,6 +506,70 @@ fn parse_zone(zone: &str) -> TrustZone {
         "external" => TrustZone::External,
         "dmz" => TrustZone::Dmz,
         _ => TrustZone::Unknown,
+    }
+}
+
+#[cfg(all(test, unix))]
+mod network_tests {
+    use super::*;
+    use std::os::unix::process::ExitStatusExt;
+    use std::process::{ExitStatus, Output};
+
+    #[test]
+    fn collector_distinguishes_offline_from_failed_or_malformed_reads() {
+        for (text, status, offline) in [
+            ("", 0, true),
+            ("lo:lo:loopback:activated\n", 0, true),
+            ("", 1, false),
+            ("invalid\n", 0, false),
+            ("wifi:wlan0:802-11-wireless:activating\n", 0, false),
+            ("Office: LAN:eth0:802-3-ethernet:activated\n", 0, false),
+        ] {
+            let mut commands = Vec::new();
+            let facts = collect_network_facts_with(
+                |program, args| {
+                    commands.push((program.to_owned(), args.join(" ")));
+                    let (code, stdout) = if program == "nmcli" {
+                        (status, text)
+                    } else {
+                        assert_eq!(args, ["--get-zone-of-interface", "eth0"]);
+                        (0, "public\n")
+                    };
+                    Ok(Output {
+                        status: ExitStatus::from_raw(code << 8),
+                        stdout: stdout.as_bytes().to_vec(),
+                        stderr: Vec::new(),
+                    })
+                },
+                || FirewallState::Available,
+            );
+            assert_eq!(facts.disconnected, offline);
+            assert_eq!(facts.firewall, FirewallState::Available);
+            assert_eq!(
+                commands.len(),
+                if facts.interface.is_some() { 2 } else { 1 }
+            );
+            assert!(!commands.iter().any(|(_, args)| args == "--state"));
+            if text.starts_with("Office:") {
+                assert_eq!(facts.active_connection.as_deref(), Some("Office: LAN"));
+                assert_eq!(facts.interface.as_deref(), Some("eth0"));
+            }
+        }
+        for state in [FirewallState::Error, FirewallState::Unavailable] {
+            let facts = collect_network_facts_with(
+                |program, _| {
+                    assert_eq!(program, "nmcli");
+                    Ok(Output {
+                        status: ExitStatus::from_raw(0),
+                        stdout: Vec::new(),
+                        stderr: Vec::new(),
+                    })
+                },
+                || state.clone(),
+            );
+            assert!(facts.disconnected);
+            assert_ne!(facts.firewall, FirewallState::Available);
+        }
     }
 }
 

@@ -7,6 +7,7 @@ network access. This is a dependency test, not a substitute for a clean VM boot.
 """
 import argparse
 import configparser
+import fnmatch
 import hashlib
 import json
 import os
@@ -25,7 +26,7 @@ nvme-cli
 NetworkManager chrony dnf5 dnf-plugins-core plymouth plymouth-scripts
 plymouth-plugin-script plymouth-plugin-label dracut curl ca-certificates patch
 tar gzip util-linux""".split()
-EXCLUDED = "openssh-server,gnome-initial-setup,gnome-session-wayland-session,initial-setup,initial-setup-gui"
+EXCLUDED = "openssh-server,gnome-initial-setup,gnome-session-wayland-session,initial-setup,initial-setup-gui,obs-studio,obs-studio-plugin-*,qterminal,pcmanfm-qt"
 FLATHUB_REPO_URL = "https://dl.flathub.org/repo/"
 FLATHUB_REPO_GPG_KEY_SHA256 = "8b124b52da2b0c8a54b338969ebc108488ca1caf718fb45ba6ffee6c7adfcbe0"
 
@@ -266,7 +267,7 @@ def prune_excluded_group_packages(path):
     excluded = set(EXCLUDED.split(","))
     for packages in tree.findall(".//packagelist"):
         for package in list(packages):
-            if (package.text or "").strip() in excluded:
+            if any(fnmatch.fnmatchcase((package.text or "").strip(), pattern) for pattern in excluded):
                 packages.remove(package)
     tree.write(path, encoding="utf-8", xml_declaration=True)
 
@@ -301,11 +302,19 @@ def verify_signatures(packages, staged, offline):
                     raise ValueError("Unsigned upstream RPM: " + package.name)
 
 
+def reject_excluded_packages(inventory):
+    for name in inventory:
+        package = name.rsplit('.', 1)[0]
+        if any(fnmatch.fnmatchcase(package, pattern) for pattern in EXCLUDED.split(',')):
+            raise ValueError('Excluded application in installed RPM closure: ' + package)
+
+
 def verify_rpms(stage, work, offline, baseline):
     repo = offline / "rpm"
     packages = repo / "Packages"
     staged = sorted((stage / "rpms").glob("*.rpm"))
     inventory = rpm_inventory(sorted(packages.glob("*.rpm")))
+    reject_excluded_packages(inventory)
     if len(inventory) < 100:
         raise ValueError("Incomplete base package closure")
     check_floors(inventory, baseline)

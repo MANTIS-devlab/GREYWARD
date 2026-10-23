@@ -34,8 +34,20 @@ def nevra(path):
     return run('rpm', '-qp', '--qf', '%{NEVRA}', path, capture_output=True, text=True).stdout
 
 
+def dms_package_identity(manifest):
+    version, generation = manifest['releaseId'].removeprefix('v').rsplit('-', 1)
+    revision = manifest.get('build', {}).get('rpmRelease', generation)
+    if not isinstance(revision, str) or not re.fullmatch(re.escape(generation) + r'(?:\.[1-9][0-9]*)?', revision):
+        raise SystemExit('Invalid DMS package-only revision')
+    return 'greyward-dms-' + version + '-' + revision
+
+
 def dms_build_command(repo, dms_inputs, output, builder, privileged_caller=False):
-    command = ['unshare', '--net', 'runuser', '-u', builder, '--']
+    # HTTP fixtures need loopback, never host networking. The only root action
+    # inside the new network namespace precedes the unprivileged build.
+    command = ['unshare', '--net', 'sh', '-eu', '-c',
+               'ip link set dev lo up; exec "$@"', 'greyward-isolated-build',
+               'runuser', '-u', builder, '--']
     if not privileged_caller:
         command = ['sudo', '-n', *command]
     return [*command, 'bash', repo/'packaging/greyward-dms/build.sh', dms_inputs, output]
@@ -110,7 +122,7 @@ def main():
         for spec in specs:
             if name == 'dms':
                 m=json.loads((REPO / 'environment/production/dms-release.json').read_text())
-                identity='greyward-dms-' + m['releaseId'].removeprefix('v')
+                identity=dms_package_identity(m)
             else:
                 text=spec.read_text(); fields={k:re.search(r'^'+k+r':\s*(\S+)',text,re.M)[1] for k in ('Name','Version','Release')}
                 identity='-'.join(fields.values()).replace('%{?dist}','')

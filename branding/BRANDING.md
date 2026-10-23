@@ -52,6 +52,10 @@ it avoids raster artifacts and fine details at taskbar sizes.
 - The application launcher and running-app taskbar resolve
   `greyward-security-center`, packaged by Security Center as the same scalable
   SVG and a derived 64-pixel PNG fallback.
+- Protected Polkit compiles the same SVG paths into synchronous Qt Quick shapes. Application
+  Security packages `data/greyward-security-status.svg` next to its authentication
+  assembler; the ISO input guard checks both against source. No image-loading worker, writable user
+  icon theme or separate authorization logo is selected.
 
 The application sidebar uses the same emblem, centered above its branding.
 `tools/generate-branding.ps1 -SkipRaster` refreshes both SVG copies in

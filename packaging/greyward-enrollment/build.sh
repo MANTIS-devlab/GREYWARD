@@ -5,6 +5,23 @@ test "$(id -u)" != 0
 repo=$(cd "$(dirname "$0")/../.." && pwd)
 input=$(realpath -e "$1")
 output=$(realpath -m "$2")
+manifest=${3:-$repo/environment/production/dms-release.json}
+# Candidate dependency selection is explicit; default image builds retain the
+# production selector. Never derive a package constraint from untrusted argv.
+dms_dependency=$(python3 - "$manifest" <<'PYDEP'
+import json,re,sys
+from pathlib import Path
+manifest=json.loads(Path(sys.argv[1]).read_text())
+release=manifest.get('releaseId','')
+if manifest.get('schema')!='greyward.dms-release/v1' or not re.fullmatch(r'v[0-9]+\.[0-9]+\.[0-9]+-[1-9][0-9]*',release):
+    raise SystemExit('Invalid DMS package dependency receipt')
+version,generation=release[1:].rsplit('-',1)
+package_revision=manifest.get('build',{}).get('rpmRelease',generation)
+if not isinstance(package_revision,str) or not re.fullmatch(re.escape(generation)+r'(?:\.[1-9][0-9]*)?',package_revision):
+    raise SystemExit('Invalid DMS package-only revision')
+print(version+'-'+package_revision)
+PYDEP
+)
 test ! -e "$output"
 mkdir -p "$output"/{BUILD,BUILDROOT,RPMS,SOURCES,SPECS,SRPMS}
 printf '67fe996c4e5afd855fdbfbc3af0b05245667ec97666f463472a1961b46047f48  %s\n' "$input" | sha256sum --check --strict
@@ -35,4 +52,4 @@ tar --sort=name --mtime=@1791590400 --owner=0 --group=0 --numeric-owner \
  security-center/packaging/application-security/greyward-maintenance.target \
  security-center/packaging/application-security/greyward-maintenance-console.service
 cp "$repo/packaging/greyward-enrollment/greyward-enrollment.spec" "$output/SPECS/"
-rpmbuild -bb --define "_topdir $output" "$output/SPECS/greyward-enrollment.spec"
+rpmbuild -bb --define "_topdir $output" --define "greyward_dms_dependency $dms_dependency" "$output/SPECS/greyward-enrollment.spec"

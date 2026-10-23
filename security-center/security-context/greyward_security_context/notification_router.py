@@ -27,6 +27,11 @@ class NotificationRouter:
         self.records, self.owner, self.proxy = {}, '', None
         self._closing = set()
         self._warning_since = {}
+        self.reminder_path = Path(os.environ.get('XDG_STATE_HOME', Path.home() / '.local/state')) / 'greyward/notification-reminders.json' if state_path is None else self.path.with_name('reminders.json')
+        try:
+            self.reminders = json.loads(self.reminder_path.read_text())
+            if not isinstance(self.reminders, dict): self.reminders = {}
+        except (OSError, ValueError): self.reminders = {}
         try:
             value = json.loads(self.path.read_text())
             self.records = value.get('records', {})
@@ -41,6 +46,15 @@ class NotificationRouter:
             temporary.write_text(json.dumps({'owner': self.owner, 'records': self.records}, separators=(',', ':')))
             temporary.chmod(0o600)
             os.replace(temporary, self.path)
+        except OSError: pass
+
+    def _save_reminders(self):
+        try:
+            self.reminder_path.parent.mkdir(parents=True, exist_ok=True)
+            temporary = self.reminder_path.with_suffix('.tmp')
+            temporary.write_text(json.dumps(self.reminders, separators=(',', ':')))
+            temporary.chmod(0o600)
+            os.replace(temporary, self.reminder_path)
         except OSError: pass
 
     def _connect(self):
@@ -130,11 +144,17 @@ class NotificationRouter:
             old = record.get('item', {})
             record['item'] = current
             self.records[key] = record
-            if record.get('acknowledged') and not (current.get('severity') == 'CRITICAL' and old.get('severity') != 'CRITICAL'): continue
+            reminder = key in {'updates-security', 'updates-restart'} and current.get('reminder_seconds') == 86400
+            delivered = self.reminders.get(key)
+            # Persist only two category timestamps, never application activity.
+            # A new login/provider flap cannot bypass the daily reminder limit.
+            if reminder and isinstance(delivered, (int, float)) and time.time() - delivered < 86400:
+                continue
+            if not reminder and record.get('acknowledged') and not (current.get('severity') == 'CRITICAL' and old.get('severity') != 'CRITICAL'): continue
             signature = json.dumps(current, sort_keys=True)
-            if record.get('signature') == signature and record.get('notification_id'): continue
+            if not reminder and record.get('signature') == signature and record.get('notification_id'): continue
             escalated = current.get('severity') == 'CRITICAL' and old.get('severity') != 'CRITICAL'
-            quiet = bool(record.get('signature')) and not escalated
+            quiet = bool(record.get('signature')) and not escalated and not reminder
             actions = []
             if current.get('kind') == 'usb':
                 # The taskbar widget owns the active-session trust action.
@@ -152,6 +172,9 @@ class NotificationRouter:
                     current.get('notification_title', current['title']), html.escape(current.get('notification_detail', current['detail'])), dbus.Array(actions, signature='s'),
                     dbus.Dictionary(hints, signature='sv'), dbus.Int32(current.get('timeout_ms', 10000)), timeout=4)
                 record.update(notification_id=int(returned), signature=signature, acknowledged=False)
+                if reminder:
+                    self.reminders[key] = time.time()
+                    self._save_reminders()
             except dbus.DBusException:
                 self.proxy = None
                 break

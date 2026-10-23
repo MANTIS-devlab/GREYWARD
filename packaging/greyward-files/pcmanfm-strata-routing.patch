@@ -1,0 +1,417 @@
+--- a/pcmanfm/application.cpp
++++ b/pcmanfm/application.cpp
+@@ -37,6 +37,8 @@
+ #include <QSet>
+ #include <QDebug>
+ #include <QWindow>
++#include <QProcess>
++#include <QUrl>
+ #include <QFileSystemWatcher>
+ 
+ #include <algorithm>
+@@ -66,7 +68,7 @@
+ 
+ namespace PCManFM {
+ 
+-static const char* serviceName = "org.pcmanfm.PCManFM";
++static const char* serviceName = "systems.mantis.greyward.DesktopIcons";
+ static const char* ifaceName = "org.pcmanfm.Application";
+ 
+ int ProxyStyle::styleHint(StyleHint hint, const QStyleOption* option, const QWidget* widget, QStyleHintReturn* returnData) const {
+@@ -136,23 +138,8 @@
+         }
+ 
+ 
+-        // Desktop mode leaves folder/item requests with the default file manager.
+-        if (!arguments().contains(QStringLiteral("--desktop"))) {
+-        // We also try to register the service "org.freedesktop.FileManager1".
+-        // We allow queuing of our request in case another file manager has already registered it.
+-        static const QString fileManagerService = QStringLiteral("org.freedesktop.FileManager1");
+-        connect(dbus.interface(), &QDBusConnectionInterface::serviceRegistered, this, [this](const QString& service) {
+-                if(fileManagerService == service) {
+-                    QDBusConnection dbus = QDBusConnection::sessionBus();
+-                    disconnect(dbus.interface(), &QDBusConnectionInterface::serviceRegistered, this, nullptr);
+-                    new ApplicationAdaptorFreeDesktopFileManager(this);
+-                    if(!dbus.registerObject(QStringLiteral("/org/freedesktop/FileManager1"), this)) {
+-                        qDebug() << "Can't register /org/freedesktop/FileManager1:" << dbus.lastError().message();
+-                    }
+-                }
+-        });
+-        dbus.interface()->registerService(fileManagerService, QDBusConnectionInterface::QueueService);
+-        }
++        // Strata alone owns org.freedesktop.FileManager1 in GREYWARD.
++
+     }
+     else {
+         // an service of the same name is already registered.
+@@ -230,6 +217,18 @@
+     parser.addPositionalArgument(QStringLiteral("files"), tr("Files or directories to open"), tr("[FILE1, FILE2,...]"));
+ 
+     parser.process(arguments());
++    if (!parser.positionalArguments().isEmpty()
++        || !(parser.isSet(desktopOption) || parser.isSet(desktopOffOption)
++             || parser.isSet(desktopPrefOption) || parser.isSet(quitOption))) {
++        qWarning("This private component manages desktop icons. Use Strata for browsing.");
++        return false;
++    }
++    if (parser.isSet(findFilesOption) || parser.isSet(showPrefOption)
++        || parser.isSet(newWindowOption) || parser.isSet(setWallpaperOption)
++        || parser.isSet(wallpaperModeOption)) {
++        qWarning("Unsupported private desktop option.");
++        return false;
++    }
+ 
+     if(isPrimaryInstance) {
+         qDebug("isPrimaryInstance");
+@@ -564,21 +563,8 @@
+ }
+ 
+ void Application::findFiles(QStringList paths) {
+-    // launch file searching utility.
+-    Fm::FileSearchDialog* dlg = new Fm::FileSearchDialog(paths);
+-    connect(dlg, &QDialog::accepted, this, &Application::onFindFileAccepted);
+-    dlg->setAttribute(Qt::WA_DeleteOnClose);
+-    // set search settings
+-    dlg->setNameCaseInsensitive(settings_.searchNameCaseInsensitive());
+-    dlg->setContentCaseInsensitive(settings_.searchContentCaseInsensitive());
+-    dlg->setNameRegexp(settings_.searchNameRegexp());
+-    dlg->setContentRegexp(settings_.searchContentRegexp());
+-    dlg->setRecursive(settings_.searchRecursive());
+-    dlg->setSearchhHidden(settings_.searchhHidden());
+-    dlg->addNamePatterns(settings_.namePatterns());
+-    dlg->addContentPatterns(settings_.contentPatterns());
+-
+-    dlg->show();
++    if (paths.isEmpty()) paths.append(QDir::homePath());
++    launchFiles(QDir::currentPath(), paths, false, false);
+ }
+ 
+ void Application::connectToServer() {
+@@ -588,84 +574,15 @@
+     dlg->show();
+ }
+ 
+-void Application::launchFiles(const QString& cwd, const QStringList& paths, bool inNewWindow, bool reopenLastTabs) {
+-    Fm::FilePathList pathList;
+-    Fm::FilePath cwd_path;
+-    auto _paths = paths;
+-
+-    openingLastTabs_ = reopenLastTabs && settings_.reopenLastTabs() && !settings_.tabPaths().isEmpty();
+-    if(openingLastTabs_) {
+-        _paths = settings_.tabPaths();
+-        // forget tab paths with next windows until the last one is closed
+-        settings_.setTabPaths(QStringList());
+-    }
+-
+-    for(const QString& it : std::as_const(_paths)) {
+-        QByteArray pathName = it.toLocal8Bit();
+-        Fm::FilePath path;
+-        if(pathName == "~") { // special case for home dir
+-            path = Fm::FilePath::homeDir();
+-        }
+-        if(pathName[0] == '/') { // absolute path
+-            path = Fm::FilePath::fromLocalPath(pathName.constData());
+-        }
+-        else if(pathName.contains(":/")) { // URI
+-            path = Fm::FilePath::fromUri(pathName.constData());
+-        }
+-        else { // basename
+-            if(Q_UNLIKELY(!cwd_path)) {
+-                cwd_path = Fm::FilePath::fromLocalPath(cwd.toLocal8Bit().constData());
+-            }
+-            path = cwd_path.relativePath(pathName.constData());
+-        }
+-        pathList.push_back(std::move(path));
+-    }
+-
+-    if(!inNewWindow && settings_.singleWindowMode()) {
+-        MainWindow* window = MainWindow::lastActive();
+-        // if there is no last active window, find the last created window
+-        if(window == nullptr) {
+-            QWidgetList windows = topLevelWidgets();
+-            for(int i = 0; i < windows.size(); ++i) {
+-                auto win = windows.at(windows.size() - 1 - i);
+-                if(win->inherits("PCManFM::MainWindow")) {
+-                    window = static_cast<MainWindow*>(win);
+-                    break;
+-                }
+-            }
+-        }
+-        if(window != nullptr && openingLastTabs_) {
+-            // other folders have been opened explicitly in this window;
+-            // restoring of tab split number does not make sense
+-            settings_.setSplitViewTabsNum(0);
+-        }
+-        auto launcher = Launcher(window);
+-        launcher.openInNewTab();
+-        launcher.launchPaths(nullptr, pathList);
+-    }
+-    else {
+-        Launcher(nullptr).launchPaths(nullptr, pathList);
+-    }
+-
+-    if(openingLastTabs_) {
+-        openingLastTabs_ = false;
+-
+-        // if none of the last tabs can be opened and there is no main window yet,
+-        // open the current directory
+-        bool hasWindow = false;
+-        const QWidgetList windows = topLevelWidgets();
+-        for(const auto& win : windows) {
+-            if(win->inherits("PCManFM::MainWindow")) {
+-                hasWindow = true;
+-                break;
+-            }
+-        }
+-        if(!hasWindow) {
+-            _paths.clear();
+-            _paths.push_back(QDir::currentPath());
+-            launchFiles(QDir::currentPath(), _paths, inNewWindow, false);
+-        }
+-    }
++void Application::launchFiles(const QString& cwd, const QStringList& paths, bool, bool) {
++    QStringList uris;
++    for (const QString& path : paths) {
++        if (path.isEmpty()) continue;
++        const QUrl uri = QUrl::fromUserInput(path, cwd, QUrl::AssumeLocalFile);
++        if (uri.isValid()) uris.append(uri.toString(QUrl::FullyEncoded));
++    }
++    if (!uris.isEmpty() && !QProcess::startDetached(QStringLiteral("/usr/bin/strata"), uris))
++        qWarning("Unable to launch Strata.");
+ }
+ 
+ void Application::openFolders(Fm::FileInfoList files) {
+@@ -687,17 +604,8 @@
+     }
+ }
+ 
+-void Application::preferences(const QString& page) {
+-    // open preference dialog
+-    if(!preferencesDialog_) {
+-        preferencesDialog_ = new PreferencesDialog(page);
+-    }
+-    else {
+-        preferencesDialog_.data()->selectPage(page);
+-    }
+-    preferencesDialog_.data()->show();
+-    preferencesDialog_.data()->raise();
+-    preferencesDialog_.data()->activateWindow();
++void Application::preferences(const QString&) {
++    desktopPrefrences(QString());
+ }
+ 
+ void Application::setWallpaper(const QString& path, const QString& modeString) {
+@@ -753,53 +661,11 @@
+ /* This method receives a list of file:// URIs from DBus and opens windows
+  * or tabs for each folder, highlighting all listed items within each.
+  */
+-void Application::ShowItems(const QStringList& uriList, const QString& startupId __attribute__((unused))) {
+-    std::unordered_map<Fm::FilePath, Fm::FilePathList, Fm::FilePathHash> groups;
+-    Fm::FilePathList folders; // used only for keeping the original order
+-    for(const auto& u : uriList) {
+-        if(auto path = Fm::FilePath::fromPathStr(u.toStdString().c_str())) {
+-            if(auto parent = path.parent()) {
+-                auto paths = groups[parent];
+-                if(std::find(paths.cbegin(), paths.cend(), path) == paths.cend()) {
+-                    groups[parent].push_back(std::move(path));
+-                }
+-                // also remember the order of parent folders
+-                if(std::find(folders.cbegin(), folders.cend(), parent) == folders.cend()) {
+-                    folders.push_back(std::move(parent));
+-                }
+-            }
+-        }
+-    }
+-
+-    if(groups.empty()) {
+-        return;
+-    }
+-
+-    PCManFM::MainWindow* window = nullptr;
+-    if(settings_.singleWindowMode()) {
+-        window = MainWindow::lastActive();
+-        if(window == nullptr) {
+-            QWidgetList windows = topLevelWidgets();
+-            for(int i = 0; i < windows.size(); ++i) {
+-                auto win = windows.at(windows.size() - 1 - i);
+-                if(win->inherits("PCManFM::MainWindow")) {
+-                    window = static_cast<MainWindow*>(win);
+-                    break;
+-                }
+-            }
+-        }
+-    }
+-    if(window == nullptr) {
+-        window = new MainWindow();
+-    }
+-
+-    for(const auto& folder : folders) {
+-        window->openFolderAndSelectFiles(groups[folder]);
+-    }
+-
+-    window->show();
+-    window->raise();
+-    window->activateWindow();
++void Application::ShowItems(const QStringList& uriList, const QString& startupId) {
++    QDBusInterface strata(QStringLiteral("org.freedesktop.FileManager1"),
++                          QStringLiteral("/org/freedesktop/FileManager1"),
++                          QStringLiteral("org.freedesktop.FileManager1"), QDBusConnection::sessionBus());
++    strata.asyncCall(QStringLiteral("ShowItems"), uriList, startupId);
+ }
+ 
+ /* This method receives a list of file:// URIs from DBus and
+--- a/pcmanfm/launcher.cpp
++++ b/pcmanfm/launcher.cpp
+@@ -20,6 +20,7 @@
+ 
+ #include "launcher.h"
+ #include <QFileInfo>
++#include <QProcess>
+ #include "mainwindow.h"
+ #include "application.h"
+ #include <libfm-qt6/core/filepath.h>
+@@ -38,54 +39,13 @@
+ 
+ Launcher::~Launcher() = default;
+ 
+-bool Launcher::openFolder(GAppLaunchContext* ctx, const Fm::FileInfoList& folderInfos, Fm::GErrorPtr& /*err*/) {
+-    auto fi = folderInfos[0];
+-    Application* app = static_cast<Application*>(qApp);
+-    MainWindow* mainWindow = mainWindow_;
+-    Fm::FilePath path = fi->path();
+-    if(!mainWindow) {
+-        // Launch folders with the default file manager if:
+-        //   1. There is no main window (i.e., folders are on desktop),
+-        //   2. The folders are not supposed to be opened in new tabs, and
+-        //   3. The default file manager exists and is not PCManFM-Qt.
+-        if(openWithDefaultFileManager_ && !openInNewTab_) {
+-            auto defaultApp = Fm::GAppInfoPtr{g_app_info_get_default_for_type("inode/directory", FALSE), false};
+-            if(defaultApp != nullptr
+-               && strcmp(g_app_info_get_id(defaultApp.get()), "pcmanfm-qt.desktop") != 0) {
+-                for(const auto & folder : folderInfos) {
+-                    Fm::FileLauncher::launchWithDefaultApp(folder, ctx);
+-                }
+-                return true;
+-            }
+-        }
+-        mainWindow = new MainWindow(std::move(path));
+-        mainWindow->resize(app->settings().windowWidth(), app->settings().windowHeight());
+-
+-        if(app->settings().windowMaximized()) {
+-            mainWindow->setWindowState(mainWindow->windowState() | Qt::WindowMaximized);
+-        }
+-    }
+-    else {
+-        if(openInNewTab_) {
+-            mainWindow->addTab(std::move(path));
+-        }
+-        else {
+-            mainWindow->chdir(std::move(path));
+-        }
+-    }
+-
+-    for(size_t i = 1; i < folderInfos.size(); ++i) {
+-        fi = folderInfos[i];
+-        path = fi->path();
+-        mainWindow->addTab(std::move(path));
+-    }
+-    mainWindow->show();
+-    if(!app->underWayland()) {
+-        mainWindow->raise();
+-        mainWindow->activateWindow();
+-    }
++bool Launcher::openFolder(GAppLaunchContext*, const Fm::FileInfoList& folderInfos, Fm::GErrorPtr&) {
++    QStringList uris;
++    for (const auto& folder : folderInfos)
++        uris.append(QString::fromUtf8(folder->path().uri().get()));
++    if (uris.isEmpty()) return false;
+     openInNewTab_ = false;
+-    return true;
++    return QProcess::startDetached(QStringLiteral("/usr/bin/strata"), uris);
+ }
+ 
+ void Launcher::launchedFiles(const Fm::FileInfoList& files) const {
+--- a/pcmanfm/autorundialog.cpp
++++ b/pcmanfm/autorundialog.cpp
+@@ -20,6 +20,7 @@
+ 
+ #include "autorundialog.h"
+ #include <QListWidgetItem>
++#include <QDir>
+ #include "application.h"
+ #include "mainwindow.h"
+ #include <libfm-qt6/core/filepath.h>
+@@ -74,18 +75,10 @@
+             g_list_free(filelist);
+         }
+         else {
+-            // the default action, open the mounted folder in the file manager
+-            Application* app = static_cast<Application*>(qApp);
+-            Settings& settings = app->settings();
++            // Mounted folders use the sole file browser, with literal URI argv.
+             Fm::FilePath path{gf, true};
+-            // open the path in a new window
+-            // FIXME: or should we open it in a new tab? Make this optional later
+-            MainWindow* win = new MainWindow(path);
+-            win->resize(settings.windowWidth(), settings.windowHeight());
+-            if(settings.windowMaximized()) {
+-                win->setWindowState(win->windowState() | Qt::WindowMaximized);
+-            }
+-            win->show();
++            static_cast<Application*>(qApp)->launchFiles(QDir::currentPath(),
++                QStringList{QString::fromUtf8(path.uri().get())}, true, false);
+         }
+         g_object_unref(gf);
+     }
+--- a/pcmanfm/CMakeLists.txt
++++ b/pcmanfm/CMakeLists.txt
+@@ -59,14 +59,6 @@
+     INSTALL_DIR "${CMAKE_INSTALL_DATADIR}/${PROJECT_NAME}/translations"
+ )
+ 
+-# translate desktop entry files for pcmanfm-qt and desktop preferences
+-lxqt_translate_desktop(DESKTOP_FILES
+-    SOURCES
+-        pcmanfm-qt.desktop.in
+-        pcmanfm-qt-desktop-pref.desktop.in
+-    USE_YAML
+-)
+-
+ add_executable(pcmanfm-qt
+     ${pcmanfm_SRCS}
+     ${pcmanfm_DBUS_SRCS}
+@@ -77,7 +69,7 @@
+ 
+ target_compile_definitions(pcmanfm-qt
+     PRIVATE
+-        PCMANFM_DATA_DIR="${CMAKE_INSTALL_PREFIX}/share/pcmanfm-qt"
++        PCMANFM_DATA_DIR="${CMAKE_INSTALL_PREFIX}/share/greyward/files/desktop"
+         PCMANFM_QT_VERSION="${PCMANFM_QT_VERSION}"
+         LIBFM_DATA_DIR="${PKG_FM_PREFIX}/share/libfm"
+ )
+@@ -96,9 +88,5 @@
+ 
+ install(TARGETS pcmanfm-qt RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+ 
+-# install a desktop entry file for pcmanfm-qt and desktop preferences
+-install(FILES ${DESKTOP_FILES} DESTINATION "${CMAKE_INSTALL_DATADIR}/applications"
+-)
+-
+ # prevent the generated files from being deleted during make clean
+ set_directory_properties(PROPERTIES CLEAN_NO_CUSTOM true)
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -35,7 +35,6 @@
+ include(LXQtPreventInSourceBuilds)
+ include(LXQtConfigVars)
+ include(LXQtTranslateTs)
+-include(LXQtTranslateDesktop)
+ include(LXQtCompilerSettings NO_POLICY_SCOPE)
+ 
+ set(CMAKE_AUTOMOC TRUE)
+@@ -76,5 +75,4 @@
+     DESTINATION "${CMAKE_INSTALL_PREFIX}/share/icons/hicolor/scalable/apps"
+ )
+ 
+-add_subdirectory(autostart)
+ add_subdirectory(config)
