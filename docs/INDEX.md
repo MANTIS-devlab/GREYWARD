@@ -1,7 +1,7 @@
 # GREYWARD documentation index
 
 The [DMS2 RC3 release notes](patch-notes/0.5.0-dms2-rc3.md) identify the latest
-existing installer candidate and distinguish its contents from the later
+published installer candidate and distinguish its contents from the later
 security/privacy notification packages installed on the physical reference.
 
 The composed and verified DMS2 RC3 combines the accepted Polkit and lock visuals

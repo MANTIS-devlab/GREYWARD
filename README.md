@@ -20,13 +20,13 @@
 </p>
 
 <p align="center">
-  <a href="https://sourceforge.net/projects/greyward/files/v0.4.5/GREYWARD-0.4.5-Dawn-x86_64.iso/download">
-    <img alt="Download GREYWARD 0.4.5 Dawn" src="https://img.shields.io/badge/Download-0.4.5%20Dawn-C9CCD1?style=for-the-badge&labelColor=24262A">
+  <a href="https://sourceforge.net/projects/greyward/files/v0.5.0-dms2-rc3/GREYWARD-0.5.0-DMS2-RC3-x86_64.iso/download">
+    <img alt="Download GREYWARD 0.5.0 DMS2 RC3" src="https://img.shields.io/badge/Download-0.5.0%20DMS2%20RC3-C9CCD1?style=for-the-badge&labelColor=24262A">
   </a>
 </p>
 
 <p align="center">
-  <sub>Latest linked published image: 0.4.5 Dawn. Features described below may reflect newer development builds and are not necessarily included in this ISO.</sub>
+  <sub>Latest image: 0.5.0 DMS2 RC3 prerelease candidate. Later notification changes are in current source only; read the release notes for contents and validation limits.</sub>
 </p>
 
 <p align="center">

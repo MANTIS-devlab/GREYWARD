@@ -1,6 +1,24 @@
 # GREYWARD current status
 
-## 24 October publication preparation
+## Public source and RC3 publication — 24 October
+
+The sanitized DMS2 source update is integrated on public `main` through
+[PR 28](https://github.com/MANTIS-devlab/GREYWARD/pull/28), whose five CI jobs pass.
+A follow-up scopes secret-scanner exceptions to named rules with path/content
+AND matching; a synthetic credential in the same file is still rejected, and
+full source/history rescans pass. Existing public visuals are retained; private
+history and unrelated local work remain private and preserved.
+
+[RC3 and its corresponding source archive](patch-notes/0.5.0-dms2-rc3.md) are now
+published on SourceForge. A complete SFTP readback matches all 5,284,036,608 ISO
+bytes and the recorded SHA-256, plus all six companion files. No new ISO was
+built for publication. RC3 retains Center 119 / Context 111; the later
+notification update is source/physical-reference work only. Publication does
+not change the outstanding clean-install, physical offline, three-screen or
+recovery acceptance limits. The public build guide now documents explicit
+DMS 2.0 selection without promoting the separate active manifest.
+
+## Historical publication preparation — 24 October
 
 The owner authorizes updating the sanitized public source and uploading the
 latest existing ISO. [RC3 notes](patch-notes/0.5.0-dms2-rc3.md) record the exact
