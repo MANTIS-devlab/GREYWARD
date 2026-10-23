@@ -8,7 +8,7 @@ set -euo pipefail
 
 usage() {
   cat <<'EOF'
-Usage: environment/image/build.sh [--output DIRECTORY] [--security-rpm FILE]... [--security-build-manifest FILE] [--security-source-root DIRECTORY] [--dms-rpm FILE] [--files-rpm FILE] [--production-rpm FILE]... [--enrollment-rpm FILE]... --branding-rpm FILE [--baseline FILE] [--require-complete]
+Usage: environment/image/build.sh [--output DIRECTORY] [--security-rpm FILE]... [--security-build-manifest FILE] [--security-source-root DIRECTORY] [--dms-rpm FILE] [--files-rpm FILE] [--production-rpm FILE]... [--enrollment-rpm FILE]... --branding-rpm FILE [--baseline FILE] [--dms-candidate] [--require-complete]
 
 Without --security-rpm this prepares an incomplete development input set and
 marks the missing production RPMs in the manifest. A production image tool
@@ -39,6 +39,7 @@ security_build_manifest=''
 security_source_root=''
 baseline=''
 require_complete=false
+dms_candidate=false
 # Package-file inspection does not need the host RPM database. When the image
 # builder is launched through sudo, keep these read-only queries under the
 # invoking user's namespace; a full or damaged host root must not turn a valid
@@ -55,6 +56,7 @@ rpm_query() {
 
 while (($#)); do
   case "$1" in
+    --dms-candidate) dms_candidate=true; shift ;;
     --enrollment-rpm)
       (($# >= 2)) || exit 2
       enrollment_rpms+=("$(realpath -e "$2")")
@@ -142,6 +144,13 @@ esac
 test ! -e "$output" || { echo "Output already exists; choose a new directory: $output" >&2; exit 2; }
 
 production="$repo_root/environment/production"
+release_manifest="$production/dms-release.json"
+plugin_source="$repo_root/environment/session/dankmaterialshell/plugins"
+if $dms_candidate; then
+  release_manifest="$production/dms-2.0-candidate.json"
+  plugin_source="$repo_root/environment/session/dms-2.0-plugins"
+fi
+test -s "$release_manifest"
 session="$repo_root/environment/session"
 flatpak="$repo_root/environment/flatpak"
 branding="$repo_root/branding"
@@ -256,6 +265,34 @@ if [[ -n "$session_rpm" ]]; then
   if ! rpm2cpio "$session_rpm" | cpio -i --quiet --to-stdout "$session_labwc_path" | cmp -s - "$session/labwc/rc.xml"; then
     echo 'The greyward-session RPM contains stale Labwc defaults (including window snapping); rebuild it before ISO staging.' >&2
     exit 1
+  fi
+  if $dms_candidate; then
+    # BEGIN candidate visual payload contract
+    (
+    # Both the system theme DMS reads and the next-account Overview must match
+    # canonical sources. A matching NEVRA alone cannot establish these bytes.
+    # RPM can encode identical files as newc hard links, with the data only on
+    # the last member. Extract this closed three-file set together in a private
+    # directory; selecting each member with --to-stdout can return empty data.
+    visual_contracts=(
+      './usr/share/greyward/dms/greyward-obsidian.json|dankmaterialshell/greyward-obsidian.json'
+      './usr/share/greyward/defaults/dankmaterialshell/greyward-obsidian.json|dankmaterialshell/greyward-obsidian.json'
+      './usr/share/greyward/defaults/dms-2.0/experience.json|dms-2.0-defaults/experience.json'
+    )
+    visual_stage=$(mktemp -d -t greyward-visual-XXXXXXXX)
+    trap 'rm -rf -- "$visual_stage"' EXIT
+    rpm2cpio "$session_rpm" | (cd "$visual_stage"; cpio -id --quiet --no-absolute-filenames "${visual_contracts[@]%%|*}")
+    for visual_contract in "${visual_contracts[@]}"; do
+      visual_rpm_path=${visual_contract%%|*}
+      visual_source_path=${visual_contract#*|}
+      visual_file="$visual_stage/${visual_rpm_path#./}"
+      if [[ ! -f "$visual_file" || -L "$visual_file" ]] || ! cmp -s "$visual_file" "$session/$visual_source_path"; then
+        echo "The greyward-session RPM contains stale or missing visual defaults at $visual_rpm_path; rebuild it before ISO staging." >&2
+        exit 1
+      fi
+    done
+    )
+    # END candidate visual payload contract
   fi
 fi
 
@@ -427,7 +464,8 @@ cp -a "$production/packages.txt" "$production/repositories.txt" "$production/ins
   "$production/firstboot-status.service" "$production/greyward-sync-greeter-wallpaper" \
   "$production/greyward-start-dms-greeter" \
   "$production/manifest.json" \
-  "$production/artifact-policy.json" "$production/dms-release.json" "$production/security-center-contract.tsv" "$output/"
+  "$production/artifact-policy.json" "$production/security-center-contract.tsv" "$output/"
+cp -a "$release_manifest" "$output/dms-release.json"
 cp -a "$production/dms-greeter-ui" "$output/dms-greeter-ui"
 mkdir -p "$output/desktop-entry-overrides"
 cp -a "$production/desktop-entry-overrides/rygel-preferences.desktop" \
@@ -514,10 +552,10 @@ security_source_tree_sha256() {
 }
 
 if $require_complete; then
-  release_id=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["releaseId"])' "$production/dms-release.json")
+  release_id=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["releaseId"])' "$release_manifest")
   receipt_path="./usr/lib/greyward/dms/$release_id/release.json"
   rpm2cpio "$dms_rpm" | cpio -i --quiet --to-stdout "$receipt_path" > "$output/artifacts/dms-build-manifest.json"
-  python3 - "$production/dms-release.json" "$output/artifacts/dms-build-manifest.json" <<'PY'
+  python3 - "$release_manifest" "$output/artifacts/dms-build-manifest.json" <<'PY'
 import json,sys
 expected,actual=[json.load(open(p)) for p in sys.argv[1:]]
 for key in ('schema','releaseId','dms','inputs','patches','shell','build','compatibility'):
@@ -558,12 +596,11 @@ PY
   # import its stale generator merely because its active seat verifies.
   python3 "$repo_root/environment/image/verify-usbguard-inputs.py" --repo "$repo_root" --kind ordinary-role --rpm "$appsec_rpm"
   if [[ "$security_manifest_schema" == 'greyward.security-center-build/v1' ]]; then
-    python3 "$repo_root/environment/image/verify-usbguard-inputs.py" --repo "$repo_root" --kind dms --rpm "$dms_rpm"
+    python3 "$repo_root/environment/image/verify-usbguard-inputs.py" --repo "$repo_root" --kind dms --rpm "$dms_rpm" --dms-manifest "$release_manifest"
     python3 "$repo_root/environment/image/verify-usbguard-inputs.py" --repo "$repo_root" --kind context --rpm "$usb_context_rpm"
     python3 "$repo_root/environment/image/verify-usbguard-inputs.py" --repo "$repo_root" --kind application-security --rpm "$appsec_rpm"
     python3 "$repo_root/environment/image/verify-usbguard-inputs.py" --repo "$repo_root" --kind enrollment --rpm "$enrollment_rpm"
   fi
-  plugin_source="$session/dankmaterialshell/plugins"
   plugin_count=0
   if [[ "$security_manifest_schema" == 'greyward.security-center-build/v1' ]]; then
     while IFS= read -r -d '' plugin_file; do
@@ -630,7 +667,7 @@ PY
       echo "Security Center RPM contract is missing $path from $package." >&2
       exit 1
     }
-  done < "$production/security-center-contract.tsv"
+  done < <(tr -d '\r' < "$production/security-center-contract.tsv")
   cp -a "$security_build_manifest" "$output/artifacts/security-center-build-manifest.tsv"
 fi
 
@@ -642,7 +679,7 @@ fi
   while IFS= read -r package; do
     [[ -z "$package" || "$package" == \#* ]] && continue
     printf 'rpm\t%s\t%s\tUNRESOLVED_AT_IMAGE_BUILD\n' "$package" "$package"
-  done < "$production/packages.txt"
+  done < <(tr -d '\r' < "$production/packages.txt")
   if [[ -n "$branding_rpm" ]]; then
     printf 'rpm\t%s\t%s\tGREYWARD_PACKAGE_INPUT\n' "$(basename "$branding_rpm")" "$(basename "$branding_rpm")"
   fi
@@ -670,14 +707,14 @@ fi
   while IFS= read -r repository; do
     [[ -z "$repository" || "$repository" == \#* ]] && continue
     printf '%s\tBUILD_ID=UNRESOLVED_AT_IMAGE_BUILD\n' "$repository"
-  done < "$production/repositories.txt"
+  done < <(tr -d '\r' < "$production/repositories.txt")
 } > "$output/artifacts/copr-build-record.txt"
 {
   printf 'application\tref\tcommit\tversion\n'
   while IFS='|' read -r application desktop; do
     [[ -z "$application" || "$application" == \#* ]] && continue
     printf '%s\tREF=UNRESOLVED_AT_IMAGE_BUILD\tCOMMIT=UNRESOLVED_AT_IMAGE_BUILD\tVERSION=UNRESOLVED_AT_IMAGE_BUILD\n' "$application"
-  done < "$flatpak/default-applications.list"
+  done < <(tr -d '\r' < "$flatpak/default-applications.list")
 } > "$output/artifacts/flatpak-refs.tsv"
 {
   printf '{\n'
@@ -713,7 +750,8 @@ cat > "$output/build-manifest.json" <<EOF
   "dms_rpm": "$(basename "${dms_rpm:-MISSING}")",
   "session_rpm": "$(basename "${session_rpm:-MISSING}")",
   "files_rpm": "$(basename "${files_rpm:-MISSING}")",
-  "dms_release_manifest_sha256": "$(sha256 "$production/dms-release.json")",
+  "dms_release_manifest_sha256": "$(sha256 "$release_manifest")",
+  "dms_candidate_selected": $dms_candidate,
   "security_rpm_count": ${#security_rpms[@]},
   "security_build_manifest": "$(if [[ -n "$security_build_manifest" ]]; then printf '%s' artifacts/security-center-build-manifest.tsv; else printf '%s' MISSING; fi)",
   "production_dependency_rpm_count": ${#production_rpms[@]},

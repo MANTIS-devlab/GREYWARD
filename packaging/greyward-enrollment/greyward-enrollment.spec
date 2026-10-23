@@ -1,6 +1,6 @@
 Name: greyward-application-enrollment
 Version: 0.1.0
-Release: 61%{?dist}
+Release: 80%{?dist}
 Summary: GREYWARD protected-session installation inputs
 License: GPL-2.0-only AND GPL-3.0-only AND MIT
 Source0: %{name}-%{version}.tar.gz
@@ -29,8 +29,9 @@ BuildRequires: pkgconfig(libsfdo-desktop)
 BuildRequires: pkgconfig(libsfdo-icon)
 BuildRequires: gettext
 BuildRequires: pkgconfig(cmocka)
-Requires: greyward-application-security-experimental = 0.1.0-70%{?dist}
-Requires: greyward-dms = 1.6.2-26%{?dist}
+Requires: greyward-application-security-experimental = 0.1.0-83%{?dist}
+%{!?greyward_dms_dependency:%global greyward_dms_dependency 1.6.2-26}
+Requires: greyward-dms = %{greyward_dms_dependency}%{?dist}
 Requires: greyward-session >= 0.1.0-10
 Requires: selinux-policy-targeted = 44.11-1.fc44
 Requires: flatpak-selinux
@@ -107,6 +108,18 @@ install -Dm0644 security-center/packaging/application-security/greyward-maintena
 %{_unitdir}/greyward-maintenance-console.service
 
 %changelog
+* Fri Oct 23 2026 MANTIS SYSTEMS - 0.1.0-80
+- Match Application Security 83 with the offline collector correction and accepted authentication visuals.
+
+* Fri Oct 23 2026 MANTIS SYSTEMS - 0.1.0-79
+- Require Application Security 82 for the verified protected lock wallpaper and native settings loader.
+
+* Fri Oct 23 2026 MANTIS SYSTEMS - 0.1.0-78
+- Require Application Security 81 for synchronous authorization artwork and independent mirror cancellation.
+
+* Fri Oct 23 2026 MANTIS SYSTEMS - 0.1.0-77
+- Require the matching protected Polkit presentation assembler in Application Security 80.
+
 * Wed Oct 21 2026 MANTIS SYSTEMS - 0.1.0-61
 - Require the runtime containing the fresh-install ordinary-coverage correction.
 

@@ -146,6 +146,16 @@ if [[ "$target_install" == 1 || "${GREYWARD_LOCAL_FINALIZE:-0}" != 1 ]]; then
     dnf -y install "${packages[@]}"
   fi
 
+  # Retired public applications are not part of the installed desktop. The
+  # desktop-only PCManFM binary is owned independently by greyward-files.
+  retired_packages=()
+  for package in obs-studio qterminal pcmanfm-qt; do
+    rpm -q "$package" >/dev/null 2>&1 && retired_packages+=("$package")
+  done
+  if (( ${#retired_packages[@]} )); then
+    dnf -y remove --no-autoremove "${retired_packages[@]}"
+  fi
+
   # GREYWARD production layers a small, supported Fedora crypto-policy module
   # on DEFAULT. Keep RSA-2048 compatibility while removing legacy algorithms.
   test -x /usr/bin/update-crypto-policies
@@ -231,7 +241,8 @@ if [[ "$target_install" == 1 || "${GREYWARD_LOCAL_FINALIZE:-0}" != 1 ]]; then
   test "${#enrollment_rpms[@]}" -eq 2
   dnf -y install "${branding_rpms[0]}" "${security_rpms[@]}" "${dms_rpms[0]}" "${session_rpms[0]}" "${files_rpms[0]}" "${enrollment_rpms[@]}"
   rpm -q greyward-branding plymouth-plugin-script
-  rpm -q greyward-files pcmanfm-qt nautilus
+  rpm -q greyward-files nautilus
+  test -x /usr/libexec/greyward/files/pcmanfm-qt
   test "$(rpm -qf --qf '%{NAME}' /usr/lib/systemd/user/greyward-desktop-icons.service)" = greyward-files
   test -x /usr/bin/strata
   plymouth-set-default-theme greyward

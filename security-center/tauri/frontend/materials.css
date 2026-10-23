@@ -1,27 +1,12 @@
-/* Canonical GREYWARD tokens and material/interaction treatment.
+/* GREYWARD material/interaction treatment; theme-tokens.css owns palette roles.
    styles.css owns feature composition; workspace.css owns navigation geometry. */
 :root {
-  color-scheme: dark;
-  --canvas: #090b0d;
-  --canvas-deep: #07090b;
-  --graphite: #171a1d;
-  --graphite-raised: #292d30;
-  --graphite-soft: #1b1e21;
   --line: rgba(216,230,241,.13);
   --line-bright: rgba(228,240,249,.28);
-  --text: #f2f5f7;
-  --pearl: #dde5eb;
-  --muted: #bec8d0;
-  --subtle: #9eacb7;
-  --positive: #a5dbb7;
-  --review: #edca85;
-  --critical: #f4a59b;
-  --uncertain: #bcb4df;
   --content-width: 1360px;
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
-  --accent: #c5dbe8;
   --accent-soft: rgba(169, 217, 238, .12);
   --surface: rgba(16, 23, 30, .74);
   --surface-strong: rgba(21, 30, 39, .88);
@@ -35,11 +20,8 @@
   --frost-shadow: 0 20px 52px rgba(0, 0, 0, .58);
   --surface-gutter: clamp(24px, 2.4vw, 34px);
   --surface-gutter-compact: clamp(16px, 1.8vw, 24px);
-  --tone-yellow: #edca85;
   --tone-yellow-soft: rgba(232, 195, 111, .11);
-  --tone-green: #a5dbb7;
   --tone-green-soft: rgba(158, 216, 177, .11);
-  --tone-red: #f4a59b;
   --tone-red-soft: rgba(237, 145, 136, .11);
   --glass-highlight: rgba(247, 251, 253, .075);
   --glass-shadow: rgba(0, 0, 0, .42);
@@ -48,7 +30,6 @@
   --ease-out: cubic-bezier(.2, .7, .2, 1);
   --control-edge: rgba(226,240,249,.29);
   --line-soft: rgba(216,230,241,.12);
-  --glass-surface: #2b2e31;
   --material-focal: linear-gradient(125deg,rgba(76,79,81,.62),rgba(43,46,48,.78) 55%,rgba(35,38,40,.88)), url("./assets/greyward-grain.svg");
   --material-overlay: linear-gradient(135deg,#34383b,#222629), url("./assets/greyward-grain.svg");
   --material-control: linear-gradient(180deg,rgba(221,225,229,.095),rgba(178,185,190,.045));

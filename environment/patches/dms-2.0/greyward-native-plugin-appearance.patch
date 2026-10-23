@@ -1,0 +1,38 @@
+--- a/quickshell/dms/Services/AppSearchService.qml
++++ b/quickshell/dms/Services/AppSearchService.qml
+@@ -193,8 +193,7 @@
+             "dms_settings": {
+                 id: "dms_settings",
+                 name: I18n.tr("Settings", "settings window title"),
+-                icon: "svg+corner:" + dmsLogoPath + "|settings",
+-                cornerIcon: "settings",
++                icon: "svg:" + Qt.resolvedUrl("../assets/greyward-settings.svg"),
+                 comment: "dms",
+                 action: "ipc:settings",
+                 categories: ["Settings", "System"],
+--- a/quickshell/dms/Modules/Plugins/PluginComponent.qml
++++ b/quickshell/dms/Modules/Plugins/PluginComponent.qml
+@@ -20,6 +20,7 @@
+     property string section: "center"
+     property var parentScreen: null
+     property real widgetThickness: 30
++    property bool widgetBackground: !(barConfig?.noBackground ?? false)
+     property real barThickness: 48
+     property real barSpacing: 4
+     property var barConfig: null
+@@ -212,6 +213,7 @@
+         barThickness: root.barThickness
+         barSpacing: root.barSpacing
+         barConfig: root.barConfig
++        widgetBackground: root.widgetBackground
+         blurBarWindow: root.blurBarWindow
+         content: root.horizontalBarPill
+         isFirst: root.isFirst
+@@ -258,6 +260,7 @@
+         barThickness: root.barThickness
+         barSpacing: root.barSpacing
+         barConfig: root.barConfig
++        widgetBackground: root.widgetBackground
+         blurBarWindow: root.blurBarWindow
+         content: root.verticalBarPill
+         isVerticalOrientation: true

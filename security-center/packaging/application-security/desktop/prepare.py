@@ -189,7 +189,7 @@ def prepare(source, labwc, account_name, materialize_runtime=True):
     sys.path.insert(0, str(source))
     from materialize import materialize
     if materialize_runtime:
-        materialize(uid, gid)
+        materialize(uid, gid, dms.name)
     from ctypes import CDLL, c_char_p, byref
     seuser, serange = c_char_p(), c_char_p()
     if CDLL('libselinux.so.1').getseuserbyname(name.encode(), byref(seuser), byref(serange)) != 0:

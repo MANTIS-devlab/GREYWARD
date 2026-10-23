@@ -142,7 +142,7 @@ class RuntimeTests(unittest.TestCase):
                 ipc = ipc_error or (lambda args, **kwargs: json.dumps(
                     {'loginctlLocked': False, 'shouldLock': False, 'sessionLockSecure': False}
                     if args[-2:] == ['lock', 'status'] else ''))
-                with patch.dict(os.environ, {'DMS_SOCKET': str(path)}), patch.object(runtime.subprocess, 'check_output', side_effect=ipc), patch('builtins.print') as output:
+                with patch.object(runtime, 'selected_api_version', return_value=34), patch.dict(os.environ, {'DMS_SOCKET': str(path)}), patch.object(runtime.subprocess, 'check_output', side_effect=ipc), patch('builtins.print') as output:
                     if expected_error:
                         with self.assertRaisesRegex(ValueError, expected_error): runtime.check()
                     else:

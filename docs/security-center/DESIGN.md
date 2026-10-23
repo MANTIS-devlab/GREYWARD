@@ -123,8 +123,11 @@ The reusable signature is:
 
 ### Material hierarchy
 
-`materials.css` is the current token and material authority, loaded after
-feature composition (`styles.css`) and workspace geometry (`workspace.css`).
+`branding/source/greyward-desktop-palette.json` owns shared palette roles.
+`tools/generate-desktop-theme.py` generates `theme-tokens.css`, loaded after
+feature composition (`styles.css`) and workspace geometry (`workspace.css`),
+before `materials.css`, which owns material and interaction treatment.
+Security Center currently supports the dark appearance only.
 Tokens have one definition rather than successive competing `:root` blocks.
 Navigation remains graphite; consequential work uses an illuminated cool-silver
 plane over obsidian. Detail and confirmation surfaces share that treatment.

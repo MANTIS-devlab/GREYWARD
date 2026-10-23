@@ -1,5 +1,179 @@
 # GREYWARD repository map
 
+The current publication artifact contract is
+[`patch-notes/0.5.0-dms2-rc3.md`](patch-notes/0.5.0-dms2-rc3.md): exact ISO
+identity, package tuple, validation limits and later-source differences.
+`tools/public-export.py` also masks Windows paths written with either separator;
+`tests/test_public_export.py` covers this. `.gitleaks.toml` permits only the
+exact pinned upstream Polkit preimage hash, not arbitrary credentials.
+
+Security/privacy notification transitions: `security-center/security-context/greyward_security_context/security_notices.py`
+owns verified Update Center notices and optional per-application sensor starts. `shell_runtime.py` composes
+them, `notification_router.py` owns deduplication/daily delivery, and the existing
+Security Center Privacy page owns the boolean preference through typed Rust and
+session-bus calls. The canonical contract is
+[`LIVE_PRIVACY_CAPSULE.md`](security-context/LIVE_PRIVACY_CAPSULE.md#security-and-privacy-notifications);
+tests are `test_security_notices.py`, `test_notification_router.py`,
+`test_shell_runtime.py` and `tauri/frontend/ux-contract.test.mjs`.
+`environment/production/security-center-contract.tsv` requires the new session
+notification module in imported RPMs, image composition and installed acceptance.
+
+Offline firewall health is collected in the Rust backend `adapters.rs` through
+the fixed `GetFirewallState` read in `security-center/security-context/greyward_security_context/network_policy_service.py`.
+The existing system-bus policy permits that read for ordinary callers; mutations
+still require the existing administrator review and Polkit path.
+`security-context/tests/test_network_authorization.py` covers the bounded read
+and provider failures; Rust network collector tests cover absent/failed links
+without calling the authorization-triggering desktop state command. The
+contract is in `docs/security-context/LIVE_PRIVACY_CAPSULE.md`.
+The explicit Fedora `tests/test_offline_firewall_boundary.py` runs an extracted
+posture executable as an ordinary user in a network namespace, with a private
+bus forwarding the packaged read method to the real host firewall. It samples
+four refreshes and provider loss without altering the installed desktop.
+
+Protected lock wallpaper and native styling are selected by
+`security-center/packaging/application-security/desktop/materialize.py`.
+The authentication assembler pins and adapts the 2.0 settings/theme loaders to
+read one immutable profile, and bypasses the native GPU blur layer only for
+software rendering. `tests/test_lock_wallpaper.py` exercises the actual native
+lock against an unavailable folder worker; `test_authentication_input_focus.py`
+provides its isolated display/profile fixture. The contract and evidence limits
+are in `docs/security-center/PRIVILEGE_MODEL.md` and `docs/STATUS.md`; the native
+command is in `security-center/README.md`. Existing source-aware image checks
+bind both packaged Python inputs, preventing JSON-only or stale-assembler fixes.
+
+Protected Polkit presentation is owned by
+`security-center/packaging/application-security/authentication/assemble.py`:
+one Obsidian/Platinum card, canonical SVG paths compiled into synchronous shapes,
+scrollable plain-text requests and keyboard/mouse actions for input and mirrored
+outputs. Mirrors cancel the shared flow without needing the input controller.
+The contract is
+in `docs/security-center/PRIVILEGE_MODEL.md`; the explicit native checks are
+`tests/test_authentication_input_focus.py` and
+`tests/test_authentication_presentation.py` (commands in `security-center/README.md`).
+`environment/image/verify-usbguard-inputs.py` also refuses a missing or stale
+authentication emblem; the existing per-file negative controls in
+`tests/test_usbguard_release_inputs.py` cover that input. See status for the
+distinction between isolated rendering, prepared packages and live activation.
+
+DMS 2.0 migration authority: `docs/architecture/DMS_2_0_MIGRATION.md`.
+The RC3 composition and Windows media evidence are recorded in `docs/STATUS.md`;
+that candidate does not establish fresh-install or hardware acceptance. RC2's
+offline failure is retained there as historical diagnosis.
+`environment/image/build-iso.sh` and `build.sh` own explicit `--dms-candidate`
+composition: candidate receipt and plugin sources are selected together, while
+`verify-usbguard-inputs.py` checks the selected receipt and helper sources.
+`tests/test_usbguard_release_inputs.py` covers explicit candidate receipt selection
+and stale-input refusal. The default validated release is not implicitly promoted.
+`test_image_offline.py` also executes the stager's package-contract reader with
+CRLF input and a missing-payload negative control; inventory readers normalize
+Windows line endings before comparing Linux package paths.
+`tools/greyward-dev/desktop-baseline.py` owns metadata/private recovery capture;
+`desktop-performance-gate.py` owns comparable-evidence regression decisions.
+Tests: `python -m unittest discover -s tests -p 'test_desktop_migration_evidence.py'`.
+These tools do not activate a desktop or establish release acceptance.
+The separate `environment/production/dms-2.0-candidate.json`,
+`environment/patches/dms-2.0/`, `environment/session/dms-2.0/` and
+`packaging/greyward-dms/toolchain.py` own candidate source, managed settings and
+pinned build tooling. `tests/test_dms_candidate.py` guards incomplete-selection
+refusal/toolchain inputs; explicit Linux `test_dms20_shell.py` and
+`test_authentication_input_focus.py` use private headless displays. The protected
+adapter remains in the canonical authentication assembler; its 2.0 pins and
+native-control adapter do not establish installed-session acceptance.
+`desktop/materialize.py` owns the versioned protected profile and schema;
+`packaging/greyward-dms/assemble.py` binds the candidate manifest schema to the
+pinned native settings declaration. `test_dms20_shell.py` additionally compares
+the actual shell declaration against the protected profile, closing constant-only
+fixture agreement. The schema-corrected revision-7 successor is active with fresh
+seat/schema readback passing; physical acceptance remains pending (see current status).
+`desktop/session.py` and `prepare.py` consume it using the verified generation.
+The clipboard/profile and desktop fixtures cover both generations, alias
+refusal and preservation of legacy input.
+Candidate first-party surfaces live in `environment/session/dms-2.0-plugins/`;
+`greywardSecure/SecurityClient.qml` is the single ordinary observer/action owner,
+with native taskbar, dashboard and launcher adapters.
+`greywardSecure/StatusModel.js` owns conservative read-only card rendering and
+`StatusCard.qml` owns responsive layouts; `StatePalette.js` is generated by the
+canonical desktop palette tool. Tests: `node --test tests/dms-security-cards.test.mjs`,
+`test_desktop_palette.py` and the explicit native `test_dms20_plugins.py`.
+`SecureWidget.qml` sizes its taskbar emblem four pixels above the native bar
+icon size; content measurement accommodates it without another pill layer.
+The client preserves rich evidence only within its original lease on positive
+aggregate fallback; negative findings remain immediate. The native fallback
+fixture covers expiry, pending actions and aggregate-only card rendering.
+`docs/STATUS.md` distinguishes the supplied R6 session presentation from its
+separate root-fallback capture: no visible flapping is now user-reported, but
+the status paths have not been shown to agree. This is RC1 installed evidence,
+not acceptance of the undeployed follow-up packages.
+The same native suite also loads the generated theme through DMS's actual
+custom-theme loader and checks the resolved reference dark surface roles.
+The card model keeps filtering status primary and projects VPN as optional,
+secondary information. `shell_summary.py` owns the bounded VPN projection from
+fresh existing root DNS/link observations; `shell_experience.py` exposes the
+closed state vocabulary without interface names. Their Python fixtures cover
+split VPN, observed absence, stale/malformed data and protection independence.
+`greyward-security-backends/src/adapters.rs` owns known-disconnected collection
+and independent live-firewall readback; `facts.rs` defaults legacy absence to
+unconfirmed and `policy.rs` evaluates that typed evidence. Rust collector and
+policy fixtures distinguish offline from failed providers. The overall posture
+evaluator remains unchanged.
+The Center/AppSec RPM specs rebuild first-party release artifacts explicitly
+while retaining third-party dependency caches. `test_security_package_builds.py`
+executes their Cargo directives against intentionally stale executable outputs;
+installed payload/compiled-helper canaries remain separate acceptance evidence.
+
+Package-only DMS revisions are declared by `build.rpmRelease`; the DMS builder,
+Enrollment dependency and image component identity guard consume that same pin.
+`test_dms_build_inputs.py` executes the actual spec/dependency generators.
+`environment/session/greyward-dms` keys the ordinary QML disk cache by the
+verified receipt digest, preventing old compiled plugins surviving fixed RPM
+timestamps. `tests/test_dms_qml_cache.py` executes the wrapper through the kernel
+and checks same-mtime upgrades, warm reuse and preservation. Its optional
+`GREYWARD_QML_CACHE_NATIVE=1` private Quickshell replay reports unavailable cache
+generation explicitly; installed cache mappings are separate evidence. Session
+owns this ordinary wrapper; protected authentication is unchanged.
+The visual successor is activated for physical review and remains a release candidate. Candidate presets live in
+`environment/session/dms-2.0-defaults/`, installed by the matched candidate Session RPM. The existing
+state/session migration scripts own four-root backup/readback, previous-copy
+reconciliation and preference preservation. `test_dms20_plugins.py` and
+`test_dms20_state.py` cover isolated native views and the real unprivileged CLI.
+`experience.json` also owns the portable physical appearance preset, applied
+only to new accounts. `greyward-native-plugin-appearance.patch` forwards the
+native widget Background option into both PluginComponent pills and selects
+the standalone gear in `environment/session/dms-2.0/assets/` for Settings.
+The native plugin fixture exercises both background states and retention of
+last-known network identity during refresh; the state fixture covers exact
+factory geometry/options and preservation of established user layouts.
+`greyward-dms-session-migrate` seeds the native `dms_settings` taskbar pin only
+for fresh DMS 2.0 lists; Session 34 owns the helper. Existing lists and legacy
+generation defaults are preserved. The Bash/jq state fixture checks both
+generations; image staging compares the actual packaged helper to source.
+`desktop/materialize.py` owns the protected lock wallpaper selection, covered
+by `test_application_authentication.py`; ordinary preferences cannot override it.
+`production/packages.txt`, `flatpak/default-applications.list`, `baseline.py`
+and `build-offline.py` define the reduced application selection and prevent
+retired packages from re-entering through captured floors or installer groups.
+These candidate source paths do not change the active 1.6 profile or authorize
+publication, installation, session changes or ISO composition.
+The separate physical-trial manifest explicitly retains incomplete release
+acceptance. `packaging/greyward-dms/verify.py` validates that classification and
+the installed dependency tuple; it does not authorize the activation window.
+Strata security actions use the native literal-argv manifests under
+`environment/session/desktop/actions`, seeded without overwriting preferences
+by `greyward-files-seed`. The existing file-context companion owns bounded
+Safe Open/scan dispatch. Tests: `tests/test_strata_file_actions.py`.
+`packaging/greyward-files/pcmanfm-strata-routing.patch` keeps the desktop private,
+routes folder opens to Strata and packages only private Qt translations; it
+does not generate a second public file-browser launcher. The RPM/build helper
+share one explicit Cargo target. `tests/run_desktop_outputs.py` and its linked
+native driver test routing and output ownership in a private Wayland seat.
+Equivalent GIO/Qt URI encodings must resolve to the exact synthetic destination.
+`environment/session/desktop/strata-launcher` is the canonical public wrapper.
+Its LF checkout attribute and Files RPM normalization prevent a Windows CR from
+entering the kernel interpreter path. `tests/test_files_launchers.py` exercises
+the source and packaged wrapper with literal argv and a CRLF negative control;
+the Files spec runs it against the staged payload before accepting the RPM.
+
 Public source validation: `.github/workflows/source-validation.yml` owns the
 repository, frontend, Python, Rust and secret-scan gates. The migration fixture
 in `tests/test_dms_shell_migration.py` retains real label copying on SELinux
@@ -15,9 +189,9 @@ desktop. Session 23 rebuilds canonical LF defaults for exact image staging.
 representations of canonical Go source in reviewed helper receipts, while
 rejecting missing or changed source evidence. Validate with
 `tests/test_usbguard_release_inputs.py` and `tests/test_image_offline.py`.
-The 0.4.5 media gate passes. The same Files 18 RPM is now installed on `<validation-host>`,
-with clean RPM verification; loading at the next login and physical placement
-remain separate checks. Installed/physical acceptance remains tracked in
+The 0.4.5 media gate passes. The same Files 18 RPM was installed on `<validation-host>`
+with clean RPM verification before the later Files 19 migration trial; physical
+placement remains a separate check. Installed/physical acceptance remains tracked in
 [current status](STATUS.md) and [ISO creation](architecture/ISO_CREATION.md).
 
 ISO package provenance and the explicitly non-source-rebuilt `<validation-host>` test import
@@ -42,11 +216,11 @@ The [post-0.3.8 bare-metal follow-up](patch-notes/post-0.3.8-bare-metal-follow-u
 records the physical test configuration, confirmed results, and next-ISO
 acceptance gaps. Canonical source ownership remains with the paths below.
 
-Security Center status and firmware HSI presentation: `security-center/security-context/greyward_security_context/shell_experience.py` gives the ordinary-session DMS widget a bounded display-only refresh grace without extending `fresh_until`; `environment/session/dankmaterialshell/plugins/greywardSecure/SecureWidget.qml` uses the read-only `ApplicationSecurity1.GetSystemPosture()` aggregate when the protected compositor's private session bus has no Context owner, and labels stale evidence as refreshing without attention/actions. `security-center/crates/greyward-application-security/src/development_bus.rs` owns the bounded system-bus projection; `security-center/crates/greyward-security-backends/src/adapters.rs` reads current `SecurityAttributes` only (not historical `SecurityEvents`), `src/presentation.rs` carries measured HSI differences into `security-center/tauri/frontend/app.js`, and firmware settings remain user-controlled. The latest `<validation-host>` deployment is Security Center 115 / Context 108 / DMS 1.6.2-26 / Application Security 69 / Enrollment 60. HSI live presentation and ISO validation remain pending. Validate with the broker tests, `security-center/tauri/frontend/ux-contract.test.mjs`, `tests/static.ps1`, and `tools/validate-repository.ps1`. See [live taskbar presentation](security-context/LIVE_PRIVACY_CAPSULE.md), [backend contract](security-center/BACKENDS.md) and [current status](STATUS.md).
+Security Center status and firmware HSI presentation: `security-center/security-context/greyward_security_context/shell_experience.py` gives the ordinary-session DMS widget a bounded display-only refresh grace without extending `fresh_until`; `environment/session/dankmaterialshell/plugins/greywardSecure/SecureWidget.qml` uses the read-only `ApplicationSecurity1.GetSystemPosture()` aggregate when the protected compositor's private session bus has no Context owner, and labels stale evidence as refreshing without attention/actions. `security-center/crates/greyward-application-security/src/development_bus.rs` owns the bounded system-bus projection; `security-center/crates/greyward-security-backends/src/adapters.rs` reads current `SecurityAttributes` only (not historical `SecurityEvents`), `src/presentation.rs` carries measured HSI differences into `security-center/tauri/frontend/app.js`, and firmware settings remain user-controlled. The pre-migration `<validation-host>` deployment was Security Center 115 / Context 108 / DMS 1.6.2-26 / Application Security 69 / Enrollment 60; current trial versions are in [status](STATUS.md). HSI live presentation and ISO validation remain pending. Validate with the broker tests, `security-center/tauri/frontend/ux-contract.test.mjs`, `tests/static.ps1`, and `tools/validate-repository.ps1`. See [live taskbar presentation](security-context/LIVE_PRIVACY_CAPSULE.md), [backend contract](security-center/BACKENDS.md) and [current status](STATUS.md).
 
 Login display and Polkit input ownership: environment/production/dms-greeter-ui is the pinned DMS Greeter shell selected by environment/production/provision.sh; it renders one surface per Wayland output and exposes a keyboard-accessible username correction action. environment/production/greyward-start-dms-greeter explicitly selects GLES2 on physical systems to match the protected compositor's validated cross-GPU path, retaining Pixman only for known virtual GPUs or missing DRM render nodes. security-center/packaging/application-security/authentication/assemble.py styles the protected authorization prompt and keeps one real password field while mirroring masked input feedback across protected outputs. Production acceptance and tests/test_dms_greeter.py / tests/test_application_authentication.py guard the selected UI, renderer boundary and input ownership. The source UI and launcher are now deployed on <validation-host>; the greeter loaded the external shell, but the latest DRM snapshot exposed only the built-in panel, so three-screen behavior still requires a connected-output check. See [desktop architecture](architecture/ARCHITECTURE.md) and [current status](STATUS.md).
 
-Protected Polkit multi-display entry: `security-center/packaging/application-security/authentication/assemble.py` gives one protected field ownership of the password and mirrors the same bounded GREYWARD card, masked character count, request summary and actions across the other protected outputs. `desktop/session.py` applies the layout selected during installation to the protected compositor without displaying the layout in Polkit. `tests/test_application_authentication.py` and `tests/test_protected_keyboard_layout.py` guard the display and input contracts. Application Security 69 / Enrollment 60 are installed on `<validation-host>`; migration to DMS 1.6.2-26 completed. Physical three-screen visual confirmation remains pending. See [current status](STATUS.md).
+Protected Polkit multi-display entry: `security-center/packaging/application-security/authentication/assemble.py` gives one protected field ownership of the password and mirrors the same bounded GREYWARD card, masked character count, request summary and actions across the other protected outputs. `desktop/session.py` applies the layout selected during installation to the protected compositor without displaying the layout in Polkit. `tests/test_application_authentication.py` and `tests/test_protected_keyboard_layout.py` guard the display and input contracts. The earlier `<validation-host>` baseline installed Application Security 69 / Enrollment 60 with DMS 1.6.2-26; the later physical trial is tracked in [status](STATUS.md). Physical three-screen visual confirmation remains pending. See [current status](STATUS.md).
 
 Wi-Fi/Bluetooth firmware ownership: `environment/production/packages.txt` is
 the single package-selection source; `environment/image/build-offline.py`
@@ -151,6 +325,31 @@ and the pending real lock/PAM retry. Authority:
 The matched candidate is installed and its protected runtime refreshed after
 approved session closure. New-session lock/PAM and stability acceptance remain
 pending. No new locker, daemon or policy allowance is introduced.
+
+Candidate desktop-only routing is the pinned third native patch in
+`packaging/greyward-files/pcmanfm-strata-routing.patch`. It rejects public browsing
+arguments, routes folders to literal Strata URI argv and installs translations
+privately. Native routing/output acceptance is being built; the installed
+reference still retains its validated packages. Enrollment candidate dependency
+selection is explicit in `packaging/greyward-enrollment/build.sh`; its default
+continues to use the production DMS receipt.
+
+Shared desktop palette ownership: `branding/source/greyward-desktop-palette.json`
+and `tools/generate-desktop-theme.py` generate the DMS dark/light roles, Strata
+Obsidian/Silver themes, private desktop Qt palette and Security Center dark
+`security-center/tauri/frontend/theme-tokens.css`. Material/interaction treatment
+remains in `materials.css`; this does not add a Security Center light mode.
+The palette's closed `dms.dark` role overrides retain the observed reference's
+darker native shell surfaces without changing application surfaces. Session owns
+the actual `/usr/share/greyward/dms/greyward-obsidian.json`, its factory copy and
+the reference Overview grid. Candidate image staging checks all three payloads;
+the explicit `GREYWARD_SESSION_RPM` fixture tests real RPM readback and stale
+theme/preset refusal in `test_image_offline.py`. It reads the closed set together
+so identical RPM hard-link members are verified correctly.
+Validation: `python tools/generate-desktop-theme.py --check`,
+`python -m unittest discover -s tests -p 'test_desktop_palette.py'` and
+`test_desktop_defaults.py`. Migration/installed visual acceptance remains
+explicit in [DMS 2.0 migration](architecture/DMS_2_0_MIGRATION.md).
 
 Shared icon-family ownership: `branding/source/greyward-icon-family.json`,
 `tools/generate-file-icons.py`, desktop-only QIcon selection in

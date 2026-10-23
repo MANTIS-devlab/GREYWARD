@@ -204,7 +204,9 @@ def worker(kind, uid, gid, sid):
         env['QT_WAYLAND_DISABLED_INTERFACES'] = (
             'wl_data_device_manager,zwp_primary_selection_device_manager_v1,'
             'zwlr_data_control_manager_v1,ext_data_control_manager_v1')
-        env.update({f'XDG_{n}_HOME': str(auth / n.lower()) for n in ['CONFIG', 'STATE', 'CACHE']})
+        sys.path.insert(0, str(BASE))
+        from materialize import authentication_environment
+        env.update(authentication_environment(auth, manifest['source']['dms']))
         command = [str(BASE / 'bin/auth-python'), '-I', str(BASE / 'authentication.py')]
     elif kind == 'display':
         # The protected compositor uses its root-owned XDG config directory
@@ -265,7 +267,7 @@ def start(uid, pid, ticks):
     os.setxattr(tty_path, 'security.selinux', b'system_u:object_r:greyward_as_seat_tty_t:s0')
     sys.path.insert(0, str(BASE))
     from materialize import materialize
-    materialize(uid, int(account['gid']))
+    materialize(uid, int(account['gid']), manifest['source']['dms'])
     for name in ['authentication.log', 'authentication-ready.json', 'bus', 'wayland-0']:
         old = STATE / f'auth-{uid}/runtime' / name
         if old.exists() or old.is_symlink():

@@ -1,6 +1,6 @@
 Name: greyward-session
 Version: 0.1.0
-Release: 23%{?dist}
+Release: 34%{?dist}
 Summary: GREYWARD static desktop session policy and factory defaults
 License: GPL-3.0-only
 BuildArch: noarch
@@ -40,6 +40,8 @@ install -Dm0644 environment/session/greyward-labwc.desktop %{buildroot}/usr/shar
 install -Dm0644 environment/session/greyward-dms-lock.pam %{buildroot}/etc/pam.d/greyward-dms-lock
 mkdir -p %{buildroot}/usr/share/greyward/defaults
 cp -a environment/session/dankmaterialshell %{buildroot}/usr/share/greyward/defaults/
+cp -a environment/session/dms-2.0-defaults %{buildroot}/usr/share/greyward/defaults/dms-2.0
+install -Dm0644 environment/session/dankmaterialshell/greyward-obsidian.json %{buildroot}/usr/share/greyward/dms/greyward-obsidian.json
 rm -rf %{buildroot}/usr/share/greyward/defaults/dankmaterialshell/plugins
 cp -a environment/session/labwc %{buildroot}/usr/share/greyward/defaults/
 install -m0644 environment/production/labwc-environment %{buildroot}/usr/share/greyward/defaults/labwc/environment
@@ -65,8 +67,20 @@ done
 /etc/xdg-desktop-portal/greyward
 /usr/share/wayland-sessions/greyward-labwc.desktop
 /usr/share/greyward/defaults
+/usr/share/greyward/dms/greyward-obsidian.json
 
 %changelog
+* Fri Oct 23 2026 MANTIS SYSTEMS - 0.1.0-34
+- Pin native Settings in fresh DMS 2.0 taskbars, preserving existing user choices.
+
+* Fri Oct 23 2026 MANTIS SYSTEMS - 0.1.0-32
+- Ship the observed reference Overview grid and darker native Obsidian surfaces.
+- Own the installed shell theme so RPM verification covers visual drift.
+
+* Thu Oct 22 2026 MANTIS SYSTEMS - 0.1.0-24
+- Stage recoverable 2.0 directory migration and additive experience defaults.
+- Preserve established layouts, pins, preferences and customized plugin copies.
+
 * Wed Oct 21 2026 MANTIS SYSTEMS - 0.1.0-23
 - Rebuild canonical LF defaults for exact installer payload verification.
 - Retain native window snapping and the current session integration inputs.

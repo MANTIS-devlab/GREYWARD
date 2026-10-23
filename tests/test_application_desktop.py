@@ -14,8 +14,20 @@ SESSION_SPEC = importlib.util.spec_from_file_location('greyward_desktop_session'
 session = importlib.util.module_from_spec(SESSION_SPEC)
 SESSION_SPEC.loader.exec_module(session)
 
+MATERIALIZE_SPEC = importlib.util.spec_from_file_location('greyward_desktop_materialize', SOURCE.with_name('materialize.py'))
+materialize = importlib.util.module_from_spec(MATERIALIZE_SPEC)
+MATERIALIZE_SPEC.loader.exec_module(materialize)
+
 
 class DesktopLifetime(unittest.TestCase):
+    def setUp(self):
+        paths = mock.patch.object(session.sys, 'path', list(session.sys.path))
+        paths.start()
+        self.addCleanup(paths.stop)
+        modules = mock.patch.dict(session.sys.modules, {'materialize': materialize})
+        modules.start()
+        self.addCleanup(modules.stop)
+
     def test_hybrid_gpu_display_uses_gles2_but_authentication_stays_software(self):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)
@@ -78,11 +90,11 @@ class DesktopLifetime(unittest.TestCase):
     def test_worker_sets_renderer_per_protected_scope(self):
         library = SimpleNamespace(setexeccon=lambda value: 0)
 
-        def capture(kind):
+        def capture(kind, release="v1.6.2-26"):
             captured = {}
             def execve(command, args, env):
                 captured.update(env)
-            with mock.patch.object(session, 'generation', return_value={'accounts': {
+            with mock.patch.object(session, 'generation', return_value={'source': {'dms': release}, 'accounts': {
                     '1001': {'name': 'user', 'home': '/home/user'}}}), \
                  mock.patch.object(session.os, 'read', return_value=b'G'), \
                  mock.patch.object(session.os, 'close'), \
@@ -104,6 +116,10 @@ class DesktopLifetime(unittest.TestCase):
         self.assertNotIn('LIBGL_ALWAYS_SOFTWARE', display)
         self.assertEqual(authentication['WLR_RENDERER'], 'pixman')
         self.assertEqual(authentication['LIBGL_ALWAYS_SOFTWARE'], '1')
+        candidate = capture('authentication', 'v2.0.0-7')
+        for key in ('XDG_CONFIG_HOME', 'XDG_STATE_HOME', 'XDG_CACHE_HOME', 'XDG_DATA_HOME'):
+            self.assertEqual(Path(candidate[key]).name, 'dms20')
+        self.assertNotIn('XDG_DATA_HOME', authentication)
 
     def test_qt_clipboard_protocol_suppression_is_private_and_keeps_native_authentication(self):
         captured = {}
@@ -111,7 +127,7 @@ class DesktopLifetime(unittest.TestCase):
         library = SimpleNamespace(setexeccon=lambda value: 0)
         for kind in ('authentication','display'):
             captured.clear()
-            with mock.patch.object(session,'generation',return_value={'accounts':{'1001':{'name':'user','home':'/home/user'}}}), \
+            with mock.patch.object(session,'generation',return_value={'source':{'dms':'v1.6.2-26'},'accounts':{'1001':{'name':'user','home':'/home/user'}}}), \
                  mock.patch.object(session.os,'read',return_value=b'G'), \
                  mock.patch.object(session.os,'close'), \
                  mock.patch.object(session.os,'setgroups',create=True), \

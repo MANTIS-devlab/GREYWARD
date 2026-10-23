@@ -13,7 +13,7 @@ Usage: environment/image/build-iso.sh --base-iso FILE --output FILE \
   --branding-rpm FILE --dms-rpm FILE --session-rpm FILE --files-rpm FILE --security-rpm FILE --security-rpm FILE \
   --security-build-manifest FILE --security-source-root DIRECTORY --production-rpm FILE... \
   --enrollment-rpm FILE --enrollment-rpm FILE \
-  --baseline FILE --base-sha256 SHA256
+  --baseline FILE --base-sha256 SHA256 [--dms-candidate]
 
 The base ISO must be Fedora Everything/netinst media with an Anaconda stage2.
 Do not pass a Fedora Workstation/KDE live ISO: those profiles may hide the
@@ -40,6 +40,7 @@ security_build_manifest=''
 security_source_root=''
 baseline=''
 base_sha256=''
+dms_candidate=false
 
 # mkksiso/mkefiboot must run as root.  Re-exec the complete canonical build
 # non-interactively instead of merely checking sudo and failing at the final
@@ -54,6 +55,7 @@ fi
 
 while (($#)); do
   case "$1" in
+    --dms-candidate) dms_candidate=true; shift ;;
     --enrollment-rpm) (($# >= 2)) || exit 2; enrollment_rpms+=("$(realpath -e "$2")"); shift 2 ;;
     --baseline) (($# >= 2)) || exit 2; baseline=$(realpath -e "$2"); shift 2 ;;
     --base-sha256) (($# >= 2)) || exit 2; base_sha256="$2"; shift 2 ;;
@@ -202,6 +204,7 @@ for rpm in "${production_rpms[@]}"; do
   staging_args+=(--production-rpm "$rpm")
 done
 for rpm in "${enrollment_rpms[@]}"; do staging_args+=(--enrollment-rpm "$rpm"); done
+if $dms_candidate; then staging_args+=(--dms-candidate); fi
 bash "$repo_root/environment/image/build.sh" "${staging_args[@]}" --require-complete
 # Inject only the GREYWARD GTK branding assets into Anaconda's supported
 # updates.img mechanism. Do not replace Anaconda's account pages, storage

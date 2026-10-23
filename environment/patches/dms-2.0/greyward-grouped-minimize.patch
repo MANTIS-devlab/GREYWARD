@@ -1,0 +1,13 @@
+--- a/quickshell/dms/Modules/Dock/DockAppButton.qml
++++ b/quickshell/dms/Modules/Dock/DockAppButton.qml
+@@ -155,6 +155,10 @@
+             return;
+ 
+         const currentIndex = getActiveGroupedToplevelIndex(toplevels);
++        if (currentIndex >= 0 && CompositorService.canMinimize(toplevels[currentIndex])) {
++            CompositorService.toggleToplevel(toplevels[currentIndex]);
++            return;
++        }
+         const nextToplevel = toplevels[(currentIndex + 1) % toplevels.length];
+         if (restoreSpecialWorkspaceWindow(nextToplevel))
+             return;

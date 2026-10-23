@@ -2,7 +2,10 @@
 import importlib.util
 import hashlib
 import json
+import os
 from pathlib import Path
+import shutil
+import subprocess
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -14,6 +17,60 @@ spec.loader.exec_module(offline)
 
 
 class OfflineTests(unittest.TestCase):
+    @unittest.skipUnless(os.name != 'nt' and os.environ.get('GREYWARD_SESSION_RPM') and shutil.which('cpio'),
+                         'Explicit built Session RPM visual closure')
+    def test_built_session_visual_contract_rejects_stale_theme_and_overview(self):
+        import shlex
+        source = (ROOT / 'environment/image/build.sh').read_text()
+        reader = source.split('# BEGIN candidate visual payload contract', 1)[1].split('# END candidate visual payload contract', 1)[0]
+        package = os.environ['GREYWARD_SESSION_RPM']
+        with tempfile.TemporaryDirectory() as directory:
+            session = Path(directory)
+            for name in ('dankmaterialshell/greyward-obsidian.json', 'dms-2.0-defaults/experience.json'):
+                destination = session / name
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                destination.write_bytes((ROOT / 'environment/session' / name).read_bytes())
+            script = 'set -euo pipefail\nsession_rpm=' + shlex.quote(package) + '\n' + reader
+            env = dict(os.environ, session=str(session))
+            result = subprocess.run(['bash', '-c', script], env=env, text=True, capture_output=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            for name in ('dankmaterialshell/greyward-obsidian.json', 'dms-2.0-defaults/experience.json'):
+                destination = session / name
+                original = destination.read_bytes()
+                destination.write_bytes(b'stale visual defaults\n')
+                result = subprocess.run(['bash', '-c', script], env=env, text=True, capture_output=True)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn('stale or missing visual defaults', result.stderr)
+                destination.write_bytes(original)
+
+    @unittest.skipUnless(os.name != 'nt' and shutil.which('bash'), 'Native Bash contract reader')
+    def test_package_contract_accepts_crlf_but_rejects_missing_payload(self):
+        source = (ROOT / 'environment/image/build.sh').read_text()
+        reader = source.split("  while IFS='|' read -r package path; do", 1)[1].split(
+            '  cp -a "$security_build_manifest"', 1)[0]
+        reader = "while IFS='|' read -r package path; do" + reader
+        with tempfile.TemporaryDirectory() as directory:
+            contract = Path(directory) / 'security-center-contract.tsv'
+            script = '''set -euo pipefail
+center_rpm=center
+context_rpm=context
+rpm_query() {
+  case "$2" in
+    center) printf '/usr/bin/fixture\\n' ;;
+    context) printf '/usr/libexec/fixture-context\\n' ;;
+    *) return 1 ;;
+  esac
+}
+''' + reader
+            for missing in (False, True):
+                content = 'greyward-security-center|/usr/bin/fixture\r\ngreyward-security-context|/usr/libexec/fixture-context\r\n'
+                if missing:
+                    content = content.replace('/usr/bin/fixture', '/usr/bin/missing')
+                contract.write_bytes(content.encode())
+                result = subprocess.run(['bash', '-c', script], capture_output=True, text=True,
+                                        env={**os.environ, 'production': directory})
+                self.assertEqual(result.returncode == 0, not missing, result.stderr)
+
     def test_local_flathub_descriptor_is_url_and_key_pinned(self):
         with tempfile.TemporaryDirectory() as temporary:
             source = Path(temporary) / 'flathub.flatpakrepo'
@@ -469,6 +526,16 @@ class OfflineTests(unittest.TestCase):
         self.assertIn('"kitty-kitten"', baseline)
         self.assertIn('"tabby"', baseline)
         self.assertIn('OMITTED_RPM_NAMES', offline)
+        for name in ('obs-studio', 'qterminal', 'pcmanfm-qt'):
+            self.assertIn('"' + name + '"', baseline)
+
+    def test_retired_applications_cannot_reenter_resolved_image_payload(self):
+        for name in ('obs-studio', 'obs-studio-plugin-browser', 'qterminal', 'pcmanfm-qt'):
+            with self.subTest(name=name), self.assertRaisesRegex(ValueError, 'Excluded application'):
+                offline.reject_excluded_packages({name + '.x86_64': ['0','1','1']})
+        offline.reject_excluded_packages({'greyward-files.x86_64': ['0','1','1']})
+        self.assertNotIn('org.kde.haruna', (ROOT/'environment/flatpak/default-applications.list').read_text())
+        self.assertNotIn('org.kde.haruna', (ROOT/'environment/flatpak/mimeapps.list').read_text())
 
     def test_vmware_candidate_preflight_refuses_persistent_iso_boot(self):
         private_harness = ROOT / "tools/greyward-dev/validate-vmware-candidate.ps1"
@@ -512,8 +579,11 @@ class OfflineTests(unittest.TestCase):
             stager,
         )
         self.assertIn("rebuild it from this checkout before ISO staging", stager)
-        self.assertIn("Release: 61%{?dist}", spec)
-        self.assertIn("Requires: greyward-application-security-experimental = 0.1.0-70%{?dist}", spec)
+        candidate = json.loads((ROOT / "environment/production/dms-2.0-candidate.json").read_text())
+        enrollment = candidate["candidatePackages"]["enrollment"]
+        appsec = candidate["candidatePackages"]["applicationSecurity"]
+        self.assertIn("Release: " + enrollment.rsplit("-", 1)[1] + "%{?dist}", spec)
+        self.assertIn("Requires: greyward-application-security-experimental = " + appsec + "%{?dist}", spec)
 
     def test_files_is_a_first_party_offline_package_and_desktop_default(self):
         builder = (ROOT / "environment/image/build.sh").read_text()
@@ -531,7 +601,8 @@ class OfflineTests(unittest.TestCase):
         self.assertIn("greyward-files", validator)
         self.assertIn('"${files_rpms[0]}"', provision)
         self.assertIn("greyward-desktop-icons.service", provision)
-        self.assertIn("pcmanfm-qt", packages)
+        self.assertNotIn("pcmanfm-qt", packages)
+        self.assertNotIn("obs-studio", packages)
         self.assertIn("nautilus", packages)
         self.assertIn("inode/directory=io.github.lgse.Strata.desktop;", mimeapps)
         self.assertIn('io.github.lgse.Strata', session_defaults)

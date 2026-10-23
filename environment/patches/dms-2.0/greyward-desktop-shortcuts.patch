@@ -1,0 +1,70 @@
+--- a/quickshell/dms/Modules/Dock/DockContextMenu.qml
++++ b/quickshell/dms/Modules/Dock/DockContextMenu.qml
+@@ -6,6 +6,51 @@
+ 
+ DockContextMenuBase {
+     id: root
++
++    property int shortcutGeneration: 0
++    property bool shortcutAvailable: false
++    property string shortcutReason: I18n.tr("Checking installed launcher…")
++
++    function checkDesktopShortcut() {
++        const generation = ++shortcutGeneration;
++        shortcutAvailable = false;
++        shortcutReason = I18n.tr("Checking installed launcher…");
++        const identifier = desktopEntry?.id || "";
++        if (!identifier || isDmsWindow) {
++            shortcutReason = I18n.tr("No verified installed launcher is available.");
++            return;
++        }
++        Proc.runCommand("greywardDesktopShortcut.check." + (root.screen?.name || "default") + "." + (root.dockApps?.surfaceContext?.id || "default") + "." + generation,
++            ["/usr/local/libexec/greyward-desktop-shortcut", "check", identifier],
++            function(stdout, code) {
++                if (generation !== root.shortcutGeneration) return;
++                let result = {};
++                try { result = JSON.parse(stdout); } catch (error) {}
++                root.shortcutAvailable = code === 0 && result.available === true;
++                root.shortcutReason = root.shortcutAvailable ? "" : I18n.tr("No verified installed launcher is available.");
++            }, 0, 3000);
++    }
++
++    function createDesktopShortcut() {
++        if (!shortcutAvailable || !desktopEntry?.id) return;
++        const identifier = desktopEntry.id;
++        Proc.runCommand("greywardDesktopShortcut.create." + (root.screen?.name || "default") + "." + (root.dockApps?.surfaceContext?.id || "default") + "." + (++shortcutGeneration),
++            ["/usr/local/libexec/greyward-desktop-shortcut", "create", identifier],
++            function(stdout, code) {
++                let result = {};
++                try { result = JSON.parse(stdout); } catch (error) {}
++                if (code === 0 && result.available === true) {
++                    ToastService.showInfo(I18n.tr("Desktop shortcut"), result.created
++                        ? I18n.tr("Shortcut created. Review its launcher when opening it for the first time.")
++                        : I18n.tr("This shortcut already exists on your desktop."));
++                } else {
++                    ToastService.showError(I18n.tr("Desktop shortcut"), I18n.tr("Could not create the desktop shortcut."));
++                }
++            }, 0, 3000);
++        close();
++    }
++
++    onVisibleChanged: { if (visible) checkDesktopShortcut(); else ++shortcutGeneration; }
+ 
+     property var appData: null
+     property bool hidePin: false
+@@ -38,6 +83,15 @@
+                 groups[groups.length - 1].push(entry);
+         }
+         return groups.filter(group => group.length > 0);
++    }
++
++    DButton {
++        visible: !root.isDmsWindow
++        enabled: root.shortcutAvailable
++        width: parent.width
++        text: I18n.tr("Create desktop shortcut")
++        tooltipText: root.shortcutReason || text
++        onClicked: root.createDesktopShortcut()
+     }
+ 
+     Repeater {

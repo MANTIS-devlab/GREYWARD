@@ -26,6 +26,8 @@ SOURCES = {
     'application-security': {
         'security-center/packaging/application-security/authentication/assemble.py':
             '/usr/share/greyward-application-security/authentication/assemble.py',
+        'security-center/data/greyward-security-status.svg':
+            '/usr/share/greyward-application-security/authentication/greyward-security-status.svg',
         'security-center/packaging/application-security/desktop/materialize.py':
             '/usr/share/greyward-application-security/desktop/materialize.py',
     },
@@ -58,14 +60,14 @@ def normalized(value):
     return value.replace(b'\r\n', b'\n')
 
 
-def verify(repo, package, kind, read=rpm_file):
+def verify(repo, package, kind, read=rpm_file, manifest=None):
     for source, installed in SOURCES[kind].items():
         expected = (repo / source).read_bytes()
         actual = read(package, installed)
         if not actual or normalized(actual) != normalized(expected):
             raise ValueError('Stale or missing USB approval payload; rebuild ' + kind + ': ' + installed)
     if kind == 'dms':
-        release = json.loads((repo / 'environment/production/dms-release.json').read_text())['releaseId']
+        release = json.loads((manifest or repo / 'environment/production/dms-release.json').read_text())['releaseId']
         receipt = json.loads(read(package, '/usr/lib/greyward/dms/' + release + '/release.json'))
         for key, source in [('usbguardApprovalSourceSha256', 'usbguard-approval.go'),
                             ('usbguardAuthApprovalSourceSha256', 'usbguard-approval-execute.go')]:
@@ -84,6 +86,7 @@ if __name__ == '__main__':
     parser.add_argument('--repo', type=Path, required=True)
     parser.add_argument('--rpm', type=Path, required=True)
     parser.add_argument('--kind', choices=sorted(SOURCES), required=True)
+    parser.add_argument('--dms-manifest', type=Path)
     args = parser.parse_args()
-    verify(args.repo, args.rpm, args.kind)
+    verify(args.repo, args.rpm, args.kind, manifest=args.dms_manifest)
     print('USB approval packaged inputs match canonical source: ' + args.kind)

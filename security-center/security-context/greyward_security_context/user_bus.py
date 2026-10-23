@@ -930,7 +930,9 @@ class SecurityContext(dbus.service.Object):
    digest=build_security_digest(summary,network=network,device_state=summary.get("usb",{}).get("device_state") if isinstance(summary,dict) else None,store=store,now_value=summary_observed_at)
    try: dns=secure_dns_state()
    except Exception: dns={}
-   value=build_shell_summary(summary,network,clamav,profile,_update_transaction(),now_value=summary_observed_at,security_digest=digest,secure_dns=dns)
+   # DNS GetState refreshes its observation after the summary sample. Compare
+   # that evidence against completion time without renewing the posture lease.
+   value=build_shell_summary(summary,network,clamav,profile,_update_transaction(),now_value=summary_observed_at,security_digest=digest,secure_dns=dns,vpn_now_value=now())
   except Exception:
    # Keep the shell contract callable when an optional provider, state file,
    # or bounded history store is unavailable. The returned projection is
@@ -945,6 +947,14 @@ class SecurityContext(dbus.service.Object):
  @dbus.service.method(BUS_NAME,in_signature="",out_signature="s")
  def GetShellPresentation(self):
   return json.dumps(self.shell_runtime.read(),sort_keys=True,separators=(",",":"))
+ @dbus.service.method(BUS_NAME,in_signature="",out_signature="s")
+ def GetNotificationPreferences(self):
+  return json.dumps(self.shell_runtime.notice_preferences.read(),separators=(",",":"))
+ @dbus.service.method(BUS_NAME,in_signature="b",out_signature="s")
+ def SetSensorStartNotifications(self,enabled):
+  value=self.shell_runtime.notice_preferences.set_sensor_start(bool(enabled))
+  self.shell_runtime.invalidate()
+  return json.dumps(value,separators=(",",":"))
  @dbus.service.method(BUS_NAME,in_signature="ss",out_signature="s")
  def RequestUsbTrust(self,connection_ref,mode):
   return json.dumps(self.shell_runtime.trust(str(connection_ref),str(mode)),separators=(",",":"))

@@ -2047,6 +2047,19 @@ fn get_filesecurity() -> Result<serde_json::Value, String> {
 }
 
 #[tauri::command(async)]
+fn get_notification_preferences() -> Result<Value, String> {
+    security_context_method("systems.mantis.greyward.SecurityContext1.GetNotificationPreferences")
+}
+
+#[tauri::command(async)]
+fn set_sensor_start_notifications(enabled: bool) -> Result<Value, String> {
+    security_context_json_call(
+        "systems.mantis.greyward.SecurityContext1.SetSensorStartNotifications",
+        (enabled,),
+    )
+}
+
+#[tauri::command(async)]
 fn get_privacy() -> Result<PrivacyPayload, String> {
     let actual = read_actual_state().ok();
     let (items, activity_state) = activity_summaries();
@@ -2631,6 +2644,8 @@ pub fn run() {
             restore_backup_files,
             get_evidence,
             get_privacy,
+            get_notification_preferences,
+            set_sensor_start_notifications,
             get_filesecurity,
             export_posture,
             clear_history,

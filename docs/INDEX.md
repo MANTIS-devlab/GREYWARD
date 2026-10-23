@@ -1,5 +1,69 @@
 # GREYWARD documentation index
 
+The [DMS2 RC3 release notes](patch-notes/0.5.0-dms2-rc3.md) identify the latest
+existing installer candidate and distinguish its contents from the later
+security/privacy notification packages installed on the physical reference.
+
+The composed and verified DMS2 RC3 combines the accepted Polkit and lock visuals
+with the noninteractive offline firewall-state correction. Factory and Windows
+media checks pass, including the final RPM offline regression; fresh-install
+and physical offline acceptance are still pending.
+See [current status](STATUS.md) for precise evidence.
+
+The protected native lock correction is installed and user-validated on the
+physical reference: GREYWARD wallpaper, native clock/date and successful unlock.
+The physical reference uses Application Security 82 / Enrollment 79; the RC3
+successor retains those designs in its matched 83 / 80 inputs.
+The protected Polkit visual successor is installed on the physical reference;
+the user accepts its emblem and external-screen cancellation. RC2 has a confirmed
+offline Polkit-loop blocker and is not release accepted; the successor correction
+and its remaining acceptance boundaries are tracked above. See
+[current status](STATUS.md) and [the privilege model](security-center/PRIVILEGE_MODEL.md).
+
+The latest physical appearance capture includes the full taskbar options and
+per-widget backgrounds, plus native plugin background forwarding, larger
+security icons, a settings gear and refresh-stable network identity. OBS,
+QTerminal and Haruna are removed on the reference and from future image inputs.
+The matched update is installed with fresh protected-seat/runtime verification;
+the protected lock profile now selects the GREYWARD wallpaper. DMS2 RC2 now
+includes these changes and the native Settings taskbar pin. Offline factory and
+copied-media checks pass; fresh-install and physical acceptance remain separate. See
+[current status](STATUS.md) for exact deployed versus prepared evidence.
+
+The R6 follow-up records the physical reference's darker native shell palette
+and Overview grid in canonical candidate defaults. A tested bounded fallback
+correction avoids false Network review labels from missing details. The supplied
+R6 report confirms the RC1 packages and a working Protected session presentation;
+the user no longer observes flapping. A separate root fallback still reports
+reviews, so status-path agreement, candidate activation and successor media
+remain pending. See
+[current status](STATUS.md) for the distinction from the installed physical tuple.
+
+The approved [DMS 2.0 desktop migration](architecture/DMS_2_0_MIGRATION.md)
+is in progress: Labwc and Strata are retained, with a refined taskbar, optional
+dock, coherent visuals and measured acceptance. The physical trial packages and
+protected runtime are installed and the first active protected seat verifies.
+The protected settings-schema correction and semantic-color Security dashboard
+refresh are active as revision 7, with fresh protected-seat and runtime-schema
+readback passing. Physical workflow acceptance remains pending. Production/ISO
+defaults retain the validated release.
+
+The current matched physical follow-up runs DMS 2.0.0-7.6 / Center 118 / Context 110,
+AppSec 78 and Enrollment 73 after an approved quiet activation:
+Network protection is primary, with observed VPN Active/Off underneath; quieter
+graphite cards use functional state accents. The canonical offline collector
+checks the local firewall independently, and packaged CLI canaries distinguish
+confirmed disconnection from provider failure. Fresh readback confirms Protected,
+Operating filtering and VPN Active with a verified fresh protected seat. Physical
+offline/user visual acceptance remains separate. Receipt-keyed ordinary QML
+caches and fresh first-party package builds prevent stale compiled code from
+surviving source updates. See [current status](STATUS.md) for actual versus future
+matched protected packages and the remaining release gates.
+The matched physical update and the DMS 2.0 internal ISO candidate are now verified:
+the Windows media contract covers 40 paths and all embedded first-party RPM bytes
+match their selected artifacts. Fresh-install and recovery acceptance remain open;
+the ISO has not been publicly published.
+
 21 October source update: Files 18 now replaces the provisional desktop binary
 on the production reference; the corrected 0.4.5 internal candidate contains
 the R6 greeter/ordinary-role and per-screen icon fixes. Media checks and installed

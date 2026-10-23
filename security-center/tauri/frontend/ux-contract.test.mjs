@@ -4,11 +4,36 @@ import test from "node:test";
 import vm from "node:vm";
 
 const source = readFileSync(new URL("./app.js", import.meta.url), "utf8");
-const styles = ["styles.css", "materials.css"].map(file => readFileSync(new URL(file, import.meta.url), "utf8")).join("\n");
+const styles = ["styles.css", "theme-tokens.css", "materials.css"].map(file => readFileSync(new URL(file, import.meta.url), "utf8")).join("\n");
 const workspaceStyles = readFileSync(new URL("./workspace.css", import.meta.url), "utf8");
 const index = readFileSync(new URL("./index.html", import.meta.url), "utf8");
 const i18nSource = readFileSync(new URL("./i18n.js", import.meta.url), "utf8");
 const iconCatalog = readFileSync(new URL("./assets/network-icons/catalog.js", import.meta.url), "utf8");
+
+test("sensor-start preference requires confirmed readback and rolls back failed changes", async () => {
+  const cached = {data: {notification_preferences: {sensor_start: false}}};
+  let success = true;
+  const context = {
+    invokeBounded: async (method, payload) => {
+      assert.equal(method, "set_sensor_start_notifications");
+      if (!success) throw new Error("Unavailable");
+      return {sensor_start: payload.enabled};
+    },
+    pageCache: new Map([["privacy", cached]]), copy: key => key, setStatus: () => {},
+  };
+  vm.createContext(context);
+  vm.runInContext(source.slice(source.indexOf("async function setSensorStartNotifications("), source.indexOf("function setPrivacyProfilePendingDom(")), context);
+  const control = {checked: true, disabled: false};
+  await context.setSensorStartNotifications({target: control});
+  assert.equal(cached.data.notification_preferences.sensor_start, true);
+  assert.equal(control.disabled, false);
+  success = false;
+  control.checked = false;
+  await context.setSensorStartNotifications({target: control});
+  assert.equal(control.checked, true);
+  assert.equal(cached.data.notification_preferences.sensor_start, true);
+  assert.equal(control.disabled, false);
+});
 
 test("navigation symbols resolve intentionally and unrelated destinations stay distinct", () => {
   const context = {};

@@ -1,0 +1,17 @@
+--- a/quickshell/dms/Common/TrayMenuManager.qml
++++ b/quickshell/dms/Common/TrayMenuManager.qml
+@@ -196,9 +196,13 @@
+             }
+             if (icon.startsWith("/") && !icon.startsWith("file://"))
+                 return `file://${icon}`;
++            if (icon.startsWith("image://icon/"))
++                return Paths.resolveIconPath(icon.substring("image://icon/".length)) || icon;
++            if (!icon.startsWith("image://"))
++                return Paths.resolveIconPath(icon) || icon;
+             return icon;
+         }
+-        return "";
++        return Paths.resolveIconPath(trayItem?.id || "");
+     }
+ 
+     function callContextMenuFallback(trayItemId, globalX, globalY) {

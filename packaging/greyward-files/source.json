@@ -21,11 +21,16 @@
         "pcmanfm/application.cpp": "f289df0777b4e989bc6a6dab5baf508c96bc2e00fbc1b58afed6ff58f6a958ba",
         "pcmanfm/application.h": "539a2dd970462f2cfa26650e17a2f77bf23b1917cb00952f5b74980e52b95c34",
         "pcmanfm/desktopwindow.cpp": "31addf7ab218f27b4480bca6375da21a608e74b857709156f0ca3ca6d4b8a90f",
-        "pcmanfm/desktopwindow.h": "506cf8a3d42ca73f2ea82992f8247e29a6f57b3bfad8d323e82225738bcd2ce8"
+        "pcmanfm/desktopwindow.h": "506cf8a3d42ca73f2ea82992f8247e29a6f57b3bfad8d323e82225738bcd2ce8",
+        "pcmanfm/launcher.cpp": "fc7f14d0e58c207bac7a0ea7b707e3dae1226b613c3d7534a30a05270ea18692",
+        "pcmanfm/autorundialog.cpp": "5b300893e8094637cbf8424b3f3694921743a780eef01a59bd963d84f51b38f7",
+        "pcmanfm/CMakeLists.txt": "f63736bc1b5e6d6eff74b7ff97c12a86153cd33961fd2764dfa6a5da6057e694",
+        "CMakeLists.txt": "2aa586a1871b66d40a2c1a42f397040297a63f271bc281d4b737c6fda72765f2"
       },
       "patches": {
         "pcmanfm-desktop-only.patch": "1293bca12801ce1dde5717c60e88e66d15e83973245caf3ec3b023cb85abeb4f",
-        "pcmanfm-multi-output.patch": "e944868f458959041f701737a7fe170ae34413d661ddfc45b6514a53fde1c755"
+        "pcmanfm-multi-output.patch": "e944868f458959041f701737a7fe170ae34413d661ddfc45b6514a53fde1c755",
+        "pcmanfm-strata-routing.patch": "4b00ae95b5f2de4aed3be8555c1b6f507d003243a505f0daef582780ac21ccd3"
       },
       "integrationInputs": {
         "environment/session/desktop/output-layout.h": "b1ccd0a94bddde382ce278145a4b92dc8ee52a099c26cd9f3467fc499aed9f3a"

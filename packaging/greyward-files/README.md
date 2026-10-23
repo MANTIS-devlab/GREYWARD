@@ -1,5 +1,27 @@
 # GREYWARD file integration candidate
 
+Revision 20 corrects the extensionless Strata launcher after the physical trial
+found a CRLF shebang. The checkout attribute and RPM installation preserve LF;
+`tests/test_files_launchers.py` executes source and packaged wrappers through the
+kernel with fixed synthetic callees and a CRLF negative control. This complements
+the native ELF/routing fixtures, which did not exercise the public wrapper.
+The physical launcher has a backed-up LF correction, and the user confirms
+Strata opens. The source-built Files 20 RPM now passes its normal checks, the
+three kernel-wrapper tests and exact packaged desktop reconciliation on a
+private three-output seat. It is installed with clean RPM verification and the
+protected seat still verifies. Reopening the rebuilt native payload and
+installed security-action/visual acceptance remain pending.
+
+Revision 19 adds native Strata command actions for Safe Open, scanning and
+Security Context through the existing companion. They use literal argv and a
+single regular-file selection, without another provider process or Rust UI fork.
+Missing defaults are seeded; existing edits and disabled actions are preserved.
+The paired Center 116 companion reports verified launch as started, not workload
+completion. Files 19 and Center 116 are installed for the migration trial;
+installed action parity remains pending. Nautilus removal
+waits for installed workflow parity. See the
+[2.0 migration](../../docs/architecture/DMS_2_0_MIGRATION.md).
+
 Candidate only; installed workflow and clean-install acceptance remain
 pending. The owning evidence and rollout gates are in
 [file manager and desktop integration](../../docs/architecture/FILE_MANAGER_DESKTOP.md).

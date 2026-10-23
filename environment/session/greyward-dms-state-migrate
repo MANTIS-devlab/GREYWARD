@@ -24,10 +24,82 @@ def uses_protected_authentication():
     return subject == 'greyward_guard_u:greyward_guard_r:greyward_guard_t:s0'
 
 
+def atomic_json(path, value):
+    descriptor, temporary = tempfile.mkstemp(prefix='.greyward-json-', dir=path.parent)
+    try:
+        with os.fdopen(descriptor, 'w', encoding='utf-8') as stream:
+            stream.write(json.dumps(value, indent=2) + '\n')
+            stream.flush()
+            os.fsync(stream.fileno())
+        Path(temporary).replace(path)
+    finally:
+        Path(temporary).unlink(missing_ok=True)
+
+
+def directory_migration(roots, release, binary):
+    """Back up all four XDG roots before the unchanged 2.0 CLI migrates them.
+
+    Called as the ordinary account only, before starting its shell. Ambiguous
+    destinations are refused before the upstream merge can move any entries.
+    Existing aliases are accepted only when they identify the same tree.
+    """
+    if release != 'v2.0.0-7' or set(roots) != {'config', 'state', 'cache', 'data'}:
+        raise ValueError('Unreviewed directory migration')
+    for base in roots.values():
+        old, new = base / 'DankMaterialShell', base / 'dms'
+        if old.exists() and not old.is_dir() or new.exists() and not new.is_dir():
+            raise ValueError('Malformed DMS directory; migration refused')
+        if old.is_symlink() and not old.exists() or new.is_symlink() and not new.exists():
+            raise ValueError('Dangling DMS directory alias; migration refused')
+        if old.exists() and new.exists() and old.resolve() != new.resolve():
+            # Even disjoint trees can contain different settings/session files.
+            # Do not choose one silently or partially merge user preferences.
+            raise ValueError('Both DMS directory generations exist; review required')
+    backup = roots['state'] / 'greyward/dms-migration' / release
+    backup.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    if backup.is_symlink():
+        raise ValueError('Unsafe DMS migration backup')
+    if not backup.exists():
+        temporary = Path(tempfile.mkdtemp(prefix='directory-backup-', dir=backup.parent))
+        try:
+            for name, base in roots.items():
+                for generation in ('DankMaterialShell', 'dms'):
+                    path = base / generation
+                    if path.exists():
+                        # Copy user data, retaining nested links. The top-level
+                        # alias is recorded below; its content is recoverable.
+                        shutil.copytree(path, temporary / name / generation, symlinks=True)
+            for path in temporary.rglob('*'):
+                if not path.is_symlink():
+                    path.chmod(0o700 if path.is_dir() else 0o600)
+            metadata = {'schema': 'greyward.dms-directory-migration/v1', 'release': release,
+                        'roots': {k: str(v) for k, v in roots.items()},
+                        'aliases': {k: {g: os.readlink(v / g) for g in ('DankMaterialShell', 'dms') if (v / g).is_symlink()}
+                                    for k, v in roots.items()}}
+            (temporary / 'receipt.json').write_text(json.dumps(metadata, indent=2) + '\n')
+            (temporary / 'receipt.json').chmod(0o600)
+            temporary.rename(backup)
+        except BaseException:
+            shutil.rmtree(temporary)
+            raise
+    metadata = json.loads((backup / 'receipt.json').read_text())
+    if metadata.get('schema') != 'greyward.dms-directory-migration/v1' or metadata.get('release') != release:
+        raise ValueError('Unverified DMS directory backup')
+    environment = dict(os.environ, **{f'XDG_{name.upper()}_HOME': str(path) for name, path in roots.items()})
+    subprocess.run([str(binary), 'version'], env=environment, check=True, timeout=30,
+                   stdout=subprocess.DEVNULL)
+    for base in roots.values():
+        old, new = base / 'DankMaterialShell', base / 'dms'
+        if old.exists() and (not new.exists() or old.resolve() != new.resolve()):
+            raise ValueError('Upstream DMS directory migration did not complete; backup preserved')
+    return backup
+
+
 def migrate(config, state, cache, system_plugins, release, default_monitors=None,
-            protected_authentication=False):
-    marker = config / '.changelog-1.6'
-    first_session = not marker.exists()
+            protected_authentication=False, previous_plugins=None, experience=None):
+    line = '2.0' if release == 'v2.0.0-7' else '1.6'
+    marker = config / ('.changelog-' + line)
+    first_session = not marker.exists() and not (line == '2.0' and (config / '.changelog-1.6').exists())
     backup = state.parent / 'greyward/dms-migration' / release
     backup.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     if not backup.exists():
@@ -47,10 +119,45 @@ def migrate(config, state, cache, system_plugins, release, default_monitors=None
             shutil.rmtree(temporary)
             raise
     config.mkdir(parents=True, exist_ok=True, mode=0o700)
+    first_2_session = line == "2.0" and not marker.exists()
     settings_file = config / 'settings.json'
     settings = json.loads(settings_file.read_text()) if settings_file.exists() else {}
     if not isinstance(settings, dict):
         raise ValueError('Malformed desktop settings; preserved backup, activation refused')
+    if first_session and line == '2.0' and experience is not None:
+        # Replace only the newly seeded legacy factory layout. Established
+        # accounts keep their own bars, docks and appearance preferences.
+        appearance = experience.get('appearance', {})
+        if not isinstance(appearance, dict):
+            raise ValueError('Malformed DMS 2.0 appearance preset')
+        settings.update(appearance)
+    if first_2_session and experience is not None:
+        for key in ('dashTabs', 'dashCards'):
+            value = experience.get(key)
+            if not isinstance(value, list) or any(not isinstance(row, dict) or not isinstance(row.get('id'), str) for row in value):
+                raise ValueError('Malformed DMS 2.0 experience preset')
+            # A real user layout, including an intentionally empty one, wins.
+            settings.setdefault(key, value)
+        privacy = experience.get('privacyDefaults', {})
+        if not isinstance(privacy, dict):
+            raise ValueError('Malformed DMS 2.0 privacy defaults')
+        for key in ('weatherEnabled', 'useAutoLocation'):
+            if key in privacy:
+                settings.setdefault(key, privacy[key])
+        options = settings.setdefault('dashOptions', {})
+        if not isinstance(options, dict) or not isinstance(options.get('media', {}), dict):
+            raise ValueError('Malformed media preferences; migration refused')
+        media = options.setdefault('media', {})
+        for key, value in privacy.get('media', {}).items():
+            media.setdefault(key, value)
+        plugin_settings = config / 'plugin_settings.json'
+        plugins = json.loads(plugin_settings.read_text()) if plugin_settings.exists() else {}
+        if not isinstance(plugins, dict) or not isinstance(plugins.get('greywardSecure', {}), dict):
+            raise ValueError('Malformed plugin settings; migration refused')
+        enabled = plugins.get('greywardSecure', {}).get('enabled', True) is True
+        for name in ('greywardProtection', 'greywardNetwork', 'greywardUpdates'):
+            plugins.setdefault(name, {'enabled': enabled})
+        atomic_json(plugin_settings, plugins)
     if first_session:
         # Auto-select preserves the hardware's current/preferred modes when no
         # matching profile exists. The packaged Virtual-1 profile supplies the
@@ -93,8 +200,12 @@ def migrate(config, state, cache, system_plugins, release, default_monitors=None
                     lockAtStartup=False, lockScreenPowerOffMonitorsOnLock=False)
     for source in ('ac', 'battery'):
         for timer in ('MonitorTimeout', 'LockTimeout', 'SuspendTimeout', 'PostLockMonitorTimeout'):
-            settings[source + timer] = {'MonitorTimeout': 900, 'LockTimeout': 600,
-                                        'SuspendTimeout': 0, 'PostLockMonitorTimeout': 300}[timer]
+            value = {'MonitorTimeout': 900, 'LockTimeout': 600,
+                     'SuspendTimeout': 0, 'PostLockMonitorTimeout': 300}[timer]
+            if line == '2.0':
+                settings.setdefault(source + timer, value)
+            else:
+                settings[source + timer] = value
     descriptor, temporary_name = tempfile.mkstemp(prefix='.greyward-settings-', dir=config)
     temporary_settings = Path(temporary_name)
     with os.fdopen(descriptor, 'w') as stream:
@@ -112,7 +223,13 @@ def migrate(config, state, cache, system_plugins, release, default_monitors=None
         links = user.is_symlink() or any(p.is_symlink() for p in user.rglob('*'))
         user_paths = {p.relative_to(user).as_posix() for p in user.rglob('*')}
         system_paths = {p.relative_to(plugin).as_posix() for p in plugin.rglob('*')}
-        if not links and user_paths == system_paths and file_map(user) == file_map(plugin) and file_map(plugin):
+        previous = {name.removeprefix(plugin.name + '/'): digest
+                    for name, digest in (previous_plugins or {}).items()
+                    if name.startswith(plugin.name + '/')}
+        if not links and previous and file_map(user) == previous:
+            shutil.rmtree(user)
+            results[plugin.name] = 'previous-system-copy-after-backup'
+        elif not links and user_paths == system_paths and file_map(user) == file_map(plugin) and file_map(plugin):
             shutil.rmtree(user)
             results[plugin.name] = 'system-copy-after-backup'
         else:
@@ -124,14 +241,38 @@ def migrate(config, state, cache, system_plugins, release, default_monitors=None
 
 if __name__ == '__main__':
     home = Path.home()
-    config = Path(os.environ.get('XDG_CONFIG_HOME', home / '.config')) / 'DankMaterialShell'
-    state = Path(os.environ.get('XDG_STATE_HOME', home / '.local/state')) / 'DankMaterialShell'
-    cache = Path(os.environ.get('XDG_CACHE_HOME', home / '.cache')) / 'DankMaterialShell'
+    roots = {name: Path(os.environ.get('XDG_' + name.upper() + '_HOME', default))
+             for name, default in [('config', home / '.config'), ('state', home / '.local/state'),
+                                   ('cache', home / '.cache'), ('data', home / '.local/share')]}
     release = Path('/etc/greyward/dms-release').read_text().strip()
-    subprocess.run(['/usr/libexec/greyward-dms-verify', '--selection-only'], check=True,
-                   stdout=subprocess.DEVNULL, timeout=30)
-    if not re.fullmatch(r'v1\.6\.2-[1-9][0-9]*', release):
+    selected = subprocess.check_output(['/usr/libexec/greyward-dms-verify', '--selection-only'],
+                                       text=True, timeout=30).strip()
+    if not re.fullmatch(r'v1\.6\.2-[1-9][0-9]*', release) and release != 'v2.0.0-7':
         raise SystemExit('Unsupported migration release')
-    migrate(config, state, cache, Path('/etc/xdg/quickshell/dms-plugins'), release,
+    directory = 'DankMaterialShell'
+    previous_plugins, experience = None, None
+    if release == 'v2.0.0-7':
+        import fcntl
+        import stat
+        lock_parent = roots['state'] / 'greyward/dms-migration'
+        lock_parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+        migration_lock = os.open(lock_parent / '.directory.lock', os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600)
+        info = os.fstat(migration_lock)
+        if not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid() or info.st_nlink != 1 or info.st_mode & 0o077:
+            raise SystemExit('Unsafe DMS migration lock')
+        fcntl.flock(migration_lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        # Keep the descriptor until this short-lived migration process exits.
+        receipt = json.loads((Path(selected) / 'release.json').read_text())
+        previous_plugins = receipt.get('previousFirstPartyFiles')
+        if not isinstance(previous_plugins, dict) or not previous_plugins:
+            raise SystemExit('Matched previous plugin inputs are required')
+        experience = json.loads(Path('/usr/share/greyward/defaults/dms-2.0/experience.json').read_text())
+        if not isinstance(experience, dict) or not all(isinstance(experience.get(key), list) for key in ('dashTabs','dashCards')):
+            raise SystemExit('Matched DMS 2.0 experience preset is required')
+        directory_migration(roots, release, Path(selected) / 'bin/dms')
+        directory = 'dms'
+    migrate(*(roots[name] / directory for name in ('config', 'state', 'cache')),
+            Path('/etc/xdg/quickshell/dms-plugins'), release,
             Path('/usr/share/greyward/defaults/dankmaterialshell/monitors.json'),
-            protected_authentication=uses_protected_authentication())
+            protected_authentication=uses_protected_authentication(),
+            previous_plugins=previous_plugins, experience=experience)

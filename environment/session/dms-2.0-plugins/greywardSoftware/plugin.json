@@ -1,0 +1,21 @@
+{
+  "id": "greywardSoftware",
+  "name": "GREYWARD Software",
+  "description": "Open GREYWARD Software recommendations",
+  "version": "1.0.0",
+  "author": "MANTIS SYSTEMS",
+  "type": "widget",
+  "capabilities": [
+    "dankbar-widget",
+    "software-launch"
+  ],
+  "component": "./SoftwareWidget.qml",
+  "icon": "storefront",
+  "requires_dms": "=2.0.0",
+  "dependencies": [
+    "greyward-software-selection"
+  ],
+  "permissions": [
+    "settings_read"
+  ]
+}

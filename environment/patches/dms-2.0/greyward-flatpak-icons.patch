@@ -1,0 +1,59 @@
+--- a/quickshell/dms/Services/IconThemeService.qml
++++ b/quickshell/dms/Services/IconThemeService.qml
+@@ -23,6 +23,9 @@
+     property string systemProbedTheme: ""
+     readonly property string managedTheme: settingsTheme || systemProbedTheme
+     property bool ready: false
++    property var flatpakActiveShares: []
++    property int flatpakGeneration: 0
++    onFlatpakActiveSharesChanged: Qt.callLater(_rebuild)
+     property var _iconPaths: Object.create(null)
+     property bool _initialized: false
+     property bool _probing: false
+@@ -43,7 +46,7 @@
+             if (!dataDirs.includes(flatpak))
+                 dataDirs.push(flatpak);
+         }
+-        return dataDirs.filter((dir, index) => dir && dataDirs.indexOf(dir) === index);
++        return dataDirs.concat(flatpakActiveShares).filter((dir, index) => dir && dataDirs.indexOf(dir) === index);
+     }
+ 
+     readonly property var _baseDirs: {
+@@ -70,6 +73,7 @@
+     Component.onCompleted: {
+         _initialized = true;
+         Paths.iconResolver = name => resolve(name);
++        _probeActiveExports();
+         if (!settingsTheme)
+             _probeSystemTheme();
+         Qt.callLater(_rebuild);
+@@ -86,10 +90,29 @@
+         target: DesktopEntries
+ 
+         function onApplicationsChanged() {
++            root._probeActiveExports();
+             if (!root.ready)
+                 return;
+             rebuildDebounce.restart();
+         }
++    }
++
++    // Resolve real directories rather than passing wildcard paths to find.
++    function _probeActiveExports() {
++        const generation = ++flatpakGeneration;
++        const localData = Paths.strip(StandardPaths.writableLocation(StandardPaths.GenericDataLocation));
++        const script = `for base; do
++for dir in "$base"/app/*/*/*/active/export/share; do
++[ -d "$dir/icons" ] && printf '%s\\n' "$dir"
++done
++done`;
++        Proc.runCommand("greywardActiveExports", ["sh", "-c", script, "active-exports", localData + "/flatpak", "/var/lib/flatpak"], (out, code) => {
++            if (root.flatpakGeneration !== generation)
++                return;
++            const shares = (out || "").trim().split("\n").filter(s => s);
++            if (JSON.stringify(shares) !== JSON.stringify(root.flatpakActiveShares))
++                root.flatpakActiveShares = shares;
++        });
+     }
+ 
+     function _probeSystemTheme() {

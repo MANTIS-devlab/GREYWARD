@@ -24,7 +24,8 @@ SAFE_TERMINAL = {"font", "opacity", "theme-dark", "theme-light", "style-preferen
 # floor so a retired Kitty/Tabby package on .149 cannot block a valid image.
 OMITTED_RPM_NAMES = {
     "kitty", "kitty-kitten", "kitty-shell-integration", "kitty-terminfo",
-    "tabby", "dgop",
+    "tabby", "dgop", "obs-studio", "obs-studio-plugin-browser",
+    "obs-studio-plugin-pwvideo", "obs-studio-plugin-vlc-video", "qterminal", "pcmanfm-qt",
 }
 
 

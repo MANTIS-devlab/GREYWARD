@@ -4,15 +4,42 @@ The [migration tracker](../../docs/architecture/DMS_1_6_MIGRATION_PLAN.md) owns
 architecture and acceptance. [dms-release.json](../../environment/production/dms-release.json)
 is the canonical source, dependency, patch and compatibility receipt.
 
-Build in Fedora 44 with the exact build packages in that receipt. Acquire the two
-immutable archives separately, verify their SHA-256 values, and place them in an
+Build in Fedora 44 with the exact build inputs in that receipt. Acquire all
+listed immutable archives separately, verify their SHA-256 values, and use an
 input directory. The build never downloads dependencies. Use an unprivileged
-builder inside an empty network namespace, with a new writable output directory:
+builder inside an isolated network namespace with only loopback enabled, and a
+new writable output directory. Keep TMPDIR short enough for Unix sockets:
 
 ```bash
-sudo unshare --net runuser -u builder -- \
-  bash packaging/greyward-dms/build.sh /srv/dms-inputs /srv/dms-output-new
+sudo unshare --net sh -eu -c 'ip link set dev lo up; exec "$@"' greyward-isolated-build \
+  runuser -u builder -- bash packaging/greyward-dms/build.sh /srv/dms-inputs /srv/dms-output-new
 ```
+
+An optional third argument selects an explicit candidate manifest for that build
+only. It is copied into the isolated package source bundle; the production
+manifest and active selector are unchanged. Source/vendor names, minimum Go,
+shared QML directory and version linker metadata derive from that receipt.
+An optional `build.rpmRelease` adds a positive numeric suffix to the runtime
+generation (for example `7.2` for `v2.0.0-7`) for an ordinary-plugin-only package
+correction. The selector and protected generation stay unchanged. Before live
+installation, compare extracted executable/shell/helper payloads against the
+installed generation and require byte identity. `build.packageOnlyRuntime` pins
+all three executable digests; the RPM build rejects drift before providing the
+predecessor's exact DMS runtime dependency. This lets the existing Enrollment
+package remain installed without rebuilding or changing protected inputs.
+Changes to those inputs require
+a new matched runtime generation and its normal protected migration. Enrollment's
+exact RPM dependency for a new matched build and the image identity-reuse guard
+consume the package pin. Fresh-image staging still requires that newly matched
+Enrollment RPM; runtime compatibility does not waive image checks.
+A candidate can pin a separately verified Go toolchain extracted only inside
+its new build tree. The host compiler is unchanged. Reviewed shell additions
+have a closed inventory and individual hashes; existing upstream files can only
+change through exact-preimage patches. Incomplete activation receipts are
+refused by every selector path, including compatibility projection.
+The active 1.6 build remains the default. The 2.0 physical trial is installed;
+hardware, recovery and release acceptance remain pending; see the
+[migration authority](../../docs/architecture/DMS_2_0_MIGRATION.md).
 
 The spec verifies inputs and matching backend source inventories, assembles
 exact patch preimages/hunks, preserves upstream vanilla shell generation, runs

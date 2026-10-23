@@ -52,6 +52,24 @@ class NetworkAuthorizationTests(unittest.TestCase):
             with self.assertRaises(service.PolicyError):
                 service.legacy_remove_id(value)
 
+    def test_firewall_state_read_is_fixed_bounded_and_never_authorizes_edits(self):
+        self.subject.manager = Mock()
+        self.subject.authorize = Mock(side_effect=AssertionError('Read requested authorization'))
+        props = Mock()
+        for value, expected in [('RUNNING', 'running'), ('FAILED', 'not-running'),
+                                ('INIT', 'not-running'), ('', 'not-running')]:
+            props.Get.return_value = value
+            with patch.object(service.dbus, 'Interface', return_value=props):
+                self.assertEqual(self.subject.GetFirewallState(':1.2'), expected)
+            props.Get.assert_called_with('org.fedoraproject.FirewallD1', 'state', timeout=2)
+        props.Get.side_effect = service.dbus.DBusException('Absent provider')
+        with patch.object(service.dbus, 'Interface', return_value=props):
+            self.assertEqual(self.subject.GetFirewallState(':1.2'), 'unavailable')
+        with self.assertRaises(service.PolicyError):
+            self.subject.GetFirewallState(None)
+        self.subject.authorize.assert_not_called()
+        self.assertEqual(self.subject.manager.mock_calls, [])
+
     def test_legacy_dns_port_allow_remains_an_ordinary_review(self):
         self.subject.peer = Mock(return_value=1001)
         self.subject.engine_ready = Mock()

@@ -1140,7 +1140,6 @@ if ((Test-Path -LiteralPath $defaultAppsPath) -and (Test-Path -LiteralPath $mime
     $expectedDefaults = @{
         'io.github.hkdb.Aerion' = 'io.github.hkdb.Aerion.desktop'
         'com.collaboraoffice.Office' = 'com.collaboraoffice.Office.desktop'
-        'org.kde.haruna' = 'org.kde.haruna.desktop'
         'com.brave.Browser' = 'com.brave.Browser.desktop'
         'com.protonvpn.www' = 'com.protonvpn.www.desktop'
     }
@@ -1164,7 +1163,6 @@ if ((Test-Path -LiteralPath $defaultAppsPath) -and (Test-Path -LiteralPath $mime
         'image/png' = 'org.gnome.Loupe.desktop'
         'image/jpeg' = 'org.gnome.Loupe.desktop'
         'application/vnd.openxmlformats-officedocument.wordprocessingml.document' = 'com.collaboraoffice.Office.desktop'
-        'video/mp4' = 'org.kde.haruna.desktop'
     }
     foreach ($mime in $expectedMimeDefaults.Keys) {
         $pattern = '(?m)^' + [regex]::Escape($mime) + '=' + [regex]::Escape($expectedMimeDefaults[$mime]) + ';'

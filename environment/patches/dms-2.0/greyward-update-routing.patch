@@ -1,0 +1,77 @@
+--- a/quickshell/dms/Services/SystemUpdateService.qml
++++ b/quickshell/dms/Services/SystemUpdateService.qml
+@@ -12,7 +12,7 @@
+     property int refCount: 0
+     // `Ref { modules: ["releases"] }` also holds the feed document; a plain Ref only keeps the daemon polling.
+     property int releasesRefCount: 0
+-    readonly property bool pollWanted: refCount > 0 || SettingsData.updaterNotify
++    readonly property bool pollWanted: false
+ 
+     function addRef(modules) {
+         refCount++;
+@@ -140,23 +140,8 @@
+     }
+ 
+     function checkCapabilities() {
+-        if (!DMSService.capabilities || !Array.isArray(DMSService.capabilities)) {
+-            sysupdateAvailable = false;
+-            Qt.callLater(() => root._maybeStartupCheck());
+-            return;
+-        }
+-        const has = DMSService.capabilities.includes("sysupdate");
+-        if (has && !sysupdateAvailable) {
+-            sysupdateAvailable = true;
+-            if (pollWanted) {
+-                requestState();
+-                // The daemon persists its last check but not the interval; re-apply it on every fresh connection.
+-                setInterval(SettingsData.updaterIntervalSeconds);
+-            }
+-        } else if (!has) {
+-            sysupdateAvailable = false;
+-        }
+-        Qt.callLater(() => root._maybeStartupCheck());
++        // GREYWARD Update Center owns polling, transactions and recovery.
++        sysupdateAvailable = false;
+     }
+ 
+     function requestState() {
+@@ -342,9 +327,7 @@
+     }
+ 
+     function checkForUpdates() {
+-        DMSService.sysupdateRefresh(false, null);
+-        if (releasesRefCount > 0)
+-            loadReleases(true);
++        Quickshell.execDetached(["/usr/bin/greyward-security-center-route", "updates"]);
+     }
+ 
+     function loadReleases(force) {
+@@ -362,24 +345,16 @@
+     }
+ 
+     function runUpdates(opts) {
+-        const params = opts || {};
+-        params.ignored = SettingsData.updaterIgnoredPackages || [];
+-        if (useCustomCommand) {
+-            params.customCommand = SettingsData.updaterCustomCommand.trim();
+-            const termArgs = (SettingsData.updaterTerminalAdditionalParams || "").trim();
+-            if (termArgs.length > 0) {
+-                params.terminalArgs = termArgs.split(/\s+/);
+-            }
+-        }
+-        DMSService.sysupdateUpgrade(params, null);
++        Quickshell.execDetached(["/usr/bin/greyward-security-center-route", "updates"]);
+     }
+ 
+     function cancelUpdates() {
+-        DMSService.sysupdateCancel(null);
++        Quickshell.execDetached(["/usr/bin/greyward-security-center-route", "updates"]);
+     }
+ 
+     function setInterval(seconds) {
+-        DMSService.sysupdateSetInterval(seconds, null);
++        // An ordinary shell preference cannot configure GREYWARD policy.
++        return false;
+     }
+ 
+     property bool _startupCheckDone: false

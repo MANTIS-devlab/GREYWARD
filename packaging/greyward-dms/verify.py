@@ -38,6 +38,21 @@ def verify(selector=Path('/etc/greyward/dms-release'), base=Path('/usr/lib/greyw
     receipt = json.loads(manifest.read_text())
     if receipt['schema'] != 'greyward.dms-release/v1' or receipt['releaseId'] != release_id:
         raise ValueError('DMS release pairing mismatch')
+    # Explicit experimental receipts must never become a runtime merely because
+    # a build completed. Legacy validated receipts predate this field.
+    activation = receipt.get('activation')
+    if 'activation' in receipt and (not isinstance(activation, dict)
+                                   or activation.get('eligible') is not True
+                                   or activation.get('pending') != []):
+        raise ValueError('DMS candidate is not activation eligible')
+    if isinstance(activation, dict) and activation.get('scope') is not None:
+        acceptance = receipt.get('acceptance', {})
+        if (activation['scope'] != 'physical-migration-test'
+                or not isinstance(acceptance, dict)
+                or acceptance.get('releaseAccepted') is not False
+                or not isinstance(acceptance.get('pending'), list)
+                or not acceptance['pending']):
+            raise ValueError('DMS trial must retain explicit incomplete release acceptance')
     packages = {'dms-greeter' if key == 'greeter' else key: value
                 for key, value in receipt['compatibility'].items()
                 if key in {'quickshell', 'labwc', 'uwsm', 'greeter'}}

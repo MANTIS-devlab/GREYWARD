@@ -1,0 +1,28 @@
+{
+  "id": "greywardProtection",
+  "name": "GREYWARD Protection",
+  "description": "Observed GREYWARD protection and its existing Security Center workflow",
+  "version": "1.1.0",
+  "author": "MANTIS SYSTEMS",
+  "type": "dashCard",
+  "capabilities": [
+    "dash-card"
+  ],
+  "component": "./Card.qml",
+  "icon": "shield_lock",
+  "requires_dms": "=2.0.0",
+  "dash": {
+    "card": {
+      "title": "Protection",
+      "w": 2,
+      "h": 2,
+      "minW": 2,
+      "minH": 2,
+      "maxW": 4,
+      "maxH": 3
+    }
+  },
+  "permissions": [
+    "process"
+  ]
+}

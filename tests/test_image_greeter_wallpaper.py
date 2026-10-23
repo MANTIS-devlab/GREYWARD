@@ -4,6 +4,7 @@ import importlib.util
 import json
 import os
 from pathlib import Path
+import subprocess
 import tempfile
 import unittest
 
@@ -43,15 +44,36 @@ class GreeterWallpaperTests(unittest.TestCase):
         self.assertNotIn('--no-save-session', production)
         self.assertIn('--no-save-username', production)
 
-    def test_embedded_greeter_shader_uses_cpu_opengl_without_a_ui_override(self):
+    def test_greeter_uses_reviewed_ui_and_hardware_appropriate_renderer(self):
         production = (ROOT/'environment/production/provision.sh').read_text()
-        command = next(line for line in production.splitlines() if line.startswith('command = '))
-        for setting in ('WLR_RENDERER=pixman', 'LIBGL_ALWAYS_SOFTWARE=1',
-                        'QT_QUICK_BACKEND=rhi', 'QSG_RHI_BACKEND=opengl',
-                        'QT_OPENGL=software'):
-            self.assertIn(setting, command)
-        self.assertNotIn('QT_QUICK_BACKEND=software', command)
-        self.assertNotIn('--shell-dir', command)
+        command = next(line for line in production.splitlines() if line.startswith('greeter_command='))
+        self.assertIn('/usr/local/libexec/greyward-start-dms-greeter', command)
+        self.assertIn('--shell-dir /usr/share/greyward/dms-greeter-ui', command)
+        self.assertIn('command = "$greeter_command"', production)
+        wrapper = (ROOT/'environment/production/greyward-start-dms-greeter').read_text()
+        keys = ('WLR_RENDERER', 'LIBGL_ALWAYS_SOFTWARE', 'QT_QUICK_BACKEND',
+                'QSG_RHI_BACKEND', 'QT_OPENGL')
+        for virtual, render_node in ((False, True), (True, True), (False, False)):
+            with self.subTest(virtual=virtual, render_node=render_node), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                vendor = root/'sys/class/dmi/id/sys_vendor'
+                vendor.parent.mkdir(parents=True)
+                vendor.write_text('Microsoft Virtual Machine' if virtual else 'Physical hardware')
+                dri = root/'dev/dri'
+                dri.mkdir(parents=True)
+                if render_node:
+                    (dri/'renderD128').touch()
+                capture = root/'capture'
+                capture.write_text('#!/usr/bin/python3\nimport os,json\nprint(json.dumps({k:os.environ.get(k) for k in ' + repr(keys) + '}))\n')
+                capture.chmod(0o755)
+                fixture = wrapper.replace('/sys/', str(root/'sys')+'/').replace('/dev/dri/', str(dri)+'/').replace('/usr/bin/dms-greeter', str(capture))
+                result = subprocess.run(['sh', '-eu', '-c', fixture], check=True, capture_output=True,
+                                        text=True, env={**os.environ, **{key: 'old-override' for key in keys}})
+                observed = json.loads(result.stdout)
+                if virtual or not render_node:
+                    self.assertEqual(observed, dict(zip(keys, ('pixman', '1', 'rhi', 'opengl', 'software'))))
+                else:
+                    self.assertEqual(observed, dict(zip(keys, ('gles2', None, None, None, None))))
 
     def test_malformed_cache_and_symlink_are_preserved(self):
         with tempfile.TemporaryDirectory() as temporary:

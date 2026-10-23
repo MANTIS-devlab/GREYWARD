@@ -35,10 +35,21 @@ def validate_lock_status(lock):
         raise ValueError('Native lock surface is not secure or is awaiting restoration')
 
 
+def selected_api_version():
+    selected = subprocess.check_output(['/usr/libexec/greyward-dms-verify', '--selection-only'],
+                                       text=True, timeout=30).strip()
+    receipt = json.loads((Path(selected) / 'release.json').read_text())
+    api = receipt.get('dms', {}).get('apiVersion')
+    if type(api) is not int or api <= 0:
+        raise ValueError('Selected DMS API receipt is unavailable')
+    return api
+
+
 def check(desktop_only=False):
+    expected_api = selected_api_version()
     runtime = Path(os.environ.get('XDG_RUNTIME_DIR', f'/run/user/{os.getuid()}'))
     explicit = os.environ.get('DMS_SOCKET')
-    candidates = [Path(explicit)] if explicit else list(runtime.glob('danklinux-*.sock'))
+    candidates = [Path(explicit)] if explicit else [*runtime.glob('danklinux-*.sock'), *runtime.glob('dms-*.sock')]
     selected = []
     for path in candidates:
         info = path.stat()
@@ -52,7 +63,7 @@ def check(desktop_only=False):
     if len(selected) != 1:
         raise ValueError('Expected one ready DMS backend on this session bus')
     path, data = selected[0]
-    if data.get('apiVersion') != 34 or 'dgop' not in data.get('capabilities', []):
+    if data.get('apiVersion') != expected_api or 'dgop' not in data.get('capabilities', []):
         raise ValueError('Incompatible DMS API/capabilities')
     snapshot = request(path, 'dgop.meta', {'modules': ['network']})
     if not isinstance(snapshot, dict) or 'network' not in snapshot:

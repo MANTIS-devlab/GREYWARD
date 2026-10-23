@@ -4,6 +4,14 @@ from greyward_security_context.shell_experience import build_experience
 
 
 class ShellExperienceTests(unittest.TestCase):
+    def test_vpn_is_secondary_typed_information_and_never_changes_protection(self):
+        for state in ("ACTIVE", "OFF", "UNAVAILABLE", "invented"):
+            value = self.render(shell={"posture": {"state": "PROTECTED"}, "vpn": {"state": state}})
+            vpn = next(row for row in value["details"] if row["label"] == "VPN")
+            self.assertEqual(vpn["state"], state if state in {"ACTIVE", "OFF"} else "UNAVAILABLE")
+            self.assertEqual(value["label"], "Protected")
+            self.assertEqual(value["items"], [])
+
     def test_trusted_device_clears_only_its_own_approval_notice(self):
         blocked = [self.device(connection_ref='hub'), self.device(connection_ref='camera')]
         previous = self.render(devices=blocked)['items']

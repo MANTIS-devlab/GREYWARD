@@ -218,6 +218,20 @@ class OpenSnitchPolicy(dbus.service.Object):
             GLib.idle_add(lambda: (reply(response), False)[1])
         self.workers.submit(work)
 
+    @dbus.service.method(BUS_NAME, in_signature='', out_signature='s', sender_keyword='sender')
+    def GetFirewallState(self, sender=None):
+        # firewalld protects Properties.Get(state) with CONFIG authorization.
+        # Read it here as the existing system authority, never as a desktop
+        # collector. No caller-selected property, mutation or interactive auth.
+        self.peer(sender)
+        try:
+            obj = Firewall._object(self.bus, '/org/fedoraproject/FirewallD1')
+            props = dbus.Interface(obj, 'org.freedesktop.DBus.Properties')
+            state = str(props.Get('org.fedoraproject.FirewallD1', 'state', timeout=2))
+            return 'running' if state == 'RUNNING' else 'not-running'
+        except dbus.DBusException:
+            return 'unavailable'
+
     @dbus.service.method(BUS_NAME, in_signature='s', out_signature='s', sender_keyword='sender')
     def GetRules(self, payload, sender=None):
         try:

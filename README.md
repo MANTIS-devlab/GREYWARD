@@ -72,6 +72,15 @@ These capabilities have different scopes. Ordinary native applications are not u
 > [!WARNING]
 > **GREYWARD is pre-release software and has not received an independent security audit.** Development-system results do not establish equivalent behavior in every downloadable image or on every device. Read the [current limitations](#current-state-and-limitations) before testing.
 
+## Latest source and installer
+
+The DMS 2.0 integration and corrected Polkit/lock appearance are now available in source.
+The latest existing installer is the **0.5.0 DMS2 RC3 prerelease candidate**; see its
+[package contents, checksum and validation limits](docs/patch-notes/0.5.0-dms2-rc3.md).
+Later verified-update and optional microphone/camera notices are included in the
+current source and physical-reference packages, **not in RC3**. Strata remains the
+only public file manager.
+
 # Why GREYWARD?
 
 Linux already provides powerful security mechanisms. GREYWARD explores how to make them work together as a coherent desktop experience: understandable status, deliberate access to sensitive resources, practical administration and recoverable changes.

@@ -5,6 +5,22 @@ frontend is presentation-only; the existing Rust domain and backend crates
 remain responsible for collection, evaluation, evidence, privacy state, and
 network controls.
 
+## Package build consistency
+
+The Center and Application Security RPM specs explicitly rebuild first-party
+release executables before installation into the RPM, preserving cached external
+dependencies. Reproducible source timestamps and a shared Cargo target must not
+silently select old helpers. `python3 -m unittest discover -s ../tests -p 'test_security_package_builds.py'` executes the spec Cargo commands against
+stale outputs on Linux. Source tests alone do not establish packaged behavior:
+verify extracted payloads and exercise the packaged posture helper separately.
+The offline collector uses confirmed NetworkManager absence plus a live firewall
+reply through the fixed system `OpenSnitchPolicy1.GetFirewallState` read. It
+never invokes the desktop `firewall-cmd --state` path, which can request
+configuration authentication on every disconnected refresh. Failed probes
+remain uncertain and policy changes still require their existing review.
+See the current status and
+[bounded shell contract](../docs/security-context/LIVE_PRIVACY_CAPSULE.md).
+
 ## Workspace
 
 Sensitive-access notification **Review** routes to the affected registered resource
@@ -227,6 +243,29 @@ the child network namespace and sends only synthetic input to offscreen windows.
 It checks late window-focus entry and preserves button navigation. It never
 joins the user's compositor. Passing it does not prove physical keyboard input,
 successful authentication or USBGuard persistence on the installed desktop.
+
+For DMS 2.0 Polkit presentation changes, use the same assembled shell and private
+display runner. The optional preview directory contains synthetic UI images:
+
+```bash
+GREYWARD_AUTH_FOCUS_SHELL=/path/to/candidate/shell GREYWARD_AUTH_PREVIEW_DIR=/private/preview python3 -m unittest discover -s tests -p test_authentication_presentation.py -v
+```
+
+Run this command from the repository root. It checks keyboard actions, busy
+state, the masked mirror and a constrained viewport without a real Polkit flow.
+
+For the protected DMS 2.0 lock wallpaper, run from the repository root as root
+on the isolated Fedora test host with the canonical wallpaper/theme installed:
+
+```bash
+GREYWARD_LOCK_SHELL=/path/to/candidate/shell GREYWARD_LOCK_BASELINE=/path/to/previous/shell GREYWARD_LOCK_PREVIEW=/private/lock.png python3 -m unittest discover -s tests -p test_lock_wallpaper.py -v
+```
+
+The optional baseline must fail when its configuration-directory worker is
+unavailable; the candidate must apply its real profile and theme, decode the
+image and use its direct software-rendering path. Visually inspect the exported
+render too: `Image.Ready` alone does not establish painted pixels. The test
+does not acquire the installed session lock or submit a real password.
 
 Use an isolated builder for dependency acquisition. Do not upgrade the active
 desktop's runtime libraries just to obtain headers. The experimental peer

@@ -17,6 +17,25 @@ except ModuleNotFoundError as error:
 
 @unittest.skipIf(user_bus is None, "Security Context runtime dependencies are unavailable on this host")
 class UsbSummaryTests(unittest.TestCase):
+    def test_shell_collection_compares_vpn_at_completion_without_renewing_posture(self):
+        import datetime as dt
+        sample = dt.datetime(2026, 8, 24, 12, 0, tzinfo=dt.timezone.utc)
+        summary = {"state": "PROTECTED", "fresh_until": "2026-08-24T12:02:00Z"}
+        context = SimpleNamespace(GetSummary=lambda: json.dumps(summary))
+        dns = {"schema": "greyward.secure-dns/v1", "generated_at": "2026-08-24T12:00:02Z",
+               "effective_policy": "VPNOwned", "vpn_links": ["synthetic0"]}
+        with patch.object(user_bus, 'now', side_effect=[sample, sample + dt.timedelta(seconds=3)]), \
+             patch.object(user_bus, 'network_summary', return_value={}), \
+             patch.object(user_bus, '_profile_call', return_value={}), \
+             patch.object(user_bus, 'user_store'), \
+             patch.object(user_bus, 'build_security_digest', return_value={}), \
+             patch.object(user_bus, 'secure_dns_state', return_value=dns), \
+             patch.object(user_bus, '_update_transaction', return_value={}), \
+             patch.object(user_bus, '_write_shell_summary_cache'):
+            value = json.loads(user_bus.SecurityContext.GetShellSummary(context))
+        self.assertEqual(value['vpn']['state'], 'ACTIVE')
+        self.assertEqual(value['fresh_until'], '2026-08-24T12:00:30Z')
+
     def test_dbus_thread_support_precedes_service_observer_construction(self):
         import greyward_security_context.session10_bus as session10
         for module, constructor in [(user_bus, 'SecurityContext'), (session10, 'Session10SecurityContext')]:

@@ -1,0 +1,38 @@
+/* Generated from branding/source/greyward-desktop-palette.json; do not edit colors here. */
+:root {
+  color-scheme: dark;
+  --canvas: #090B0D;
+  --canvas-deep: #07090B;
+  --graphite: #171A1D;
+  --graphite-soft: #1B1E21;
+  --graphite-raised: #292D30;
+  --text: #F2F5F7;
+  --pearl: #DDE5EB;
+  --muted: #BEC8D0;
+  --subtle: #9EACB7;
+  --positive: #A5DBB7;
+  --review: #EDCA85;
+  --critical: #F4A59B;
+  --uncertain: #BCB4DF;
+  --accent: #C5DBE8;
+  --tone-yellow: #EDCA85;
+  --tone-green: #A5DBB7;
+  --tone-red: #F4A59B;
+  --glass-surface: #292D30;
+  --surface-rgb: 23, 26, 29;
+  --deep-rgb: 7, 9, 11;
+  --soft-rgb: 27, 30, 33;
+  --raised-rgb: 41, 45, 48;
+  --text-rgb: 242, 245, 247;
+  --subtle-rgb: 158, 172, 183;
+  --accent-rgb: 197, 219, 232;
+  --onPrimary-rgb: 20, 33, 42;
+  --border-rgb: 72, 85, 96;
+  --primary-rgb: 221, 229, 235;
+  --canvas-rgb: 9, 11, 13;
+  --muted-rgb: 190, 200, 208;
+  --positive-rgb: 165, 219, 183;
+  --warning-rgb: 237, 202, 133;
+  --error-rgb: 244, 165, 155;
+  --highest-rgb: 52, 56, 59;
+}

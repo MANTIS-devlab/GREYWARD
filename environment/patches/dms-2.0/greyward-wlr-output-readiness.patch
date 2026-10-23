@@ -1,0 +1,119 @@
+--- a/quickshell/dms/Services/WlrOutputService.qml
++++ b/quickshell/dms/Services/WlrOutputService.qml
+@@ -15,6 +15,10 @@
+     property var outputs: []
+     property int serial: 0
+ 
++    onWlrOutputAvailableChanged: {
++        log.info("wlr output readiness changed:", wlrOutputAvailable)
++    }
++
+     signal stateChanged
+     signal configurationApplied(bool success, string message)
+ 
+@@ -22,62 +26,67 @@
+         target: DMSService
+ 
+         function onCapabilitiesReceived() {
+-            checkCapabilities();
++            requestState();
+         }
+ 
+         function onConnectionStateChanged() {
++            log.info("DMS connection state changed:", DMSService.isConnected)
+             if (DMSService.isConnected) {
+-                checkCapabilities();
++                requestState();
+                 return;
+             }
+             wlrOutputAvailable = false;
++            stateRequestPending = false;
++            outputs = [];
++            serial = 0;
++            stateChanged();
+         }
+ 
+         function onWlrOutputStateUpdate(data) {
+-            if (!wlrOutputAvailable) {
++            if (!data || !Array.isArray(data.outputs)) {
+                 return;
+             }
++            wlrOutputAvailable = true;
+             handleStateUpdate(data);
+         }
+     }
+ 
+-    Component.onCompleted: {
+-        if (!DMSService.dmsAvailable) {
+-            return;
+-        }
+-        checkCapabilities();
+-    }
+-
+-    function checkCapabilities() {
+-        if (!DMSService.capabilities || !Array.isArray(DMSService.capabilities)) {
+-            wlrOutputAvailable = false;
+-            return;
+-        }
+-
+-        const hasWlrOutput = DMSService.capabilities.includes("wlroutput");
+-        if (hasWlrOutput && !wlrOutputAvailable) {
++    Component.onCompleted: requestState()
++
++    Timer {
++        interval: 1000
++        repeat: true
++        running: DMSService.isConnected && !wlrOutputAvailable
++        onTriggered: requestState()
++    }
++
++    property bool stateRequestPending: false
++
++    function requestState() {
++        if (!DMSService.isConnected) {
++            stateRequestPending = false;
++            return;
++        }
++        if (stateRequestPending) {
++            return;
++        }
++
++        stateRequestPending = true;
++        DMSService.sendRequest("wlroutput.getState", null, response => {
++            stateRequestPending = false;
++            if (response.error || !response.result || !Array.isArray(response.result.outputs)) {
++                wlrOutputAvailable = false;
++                if (response.error) {
++                    log.warn("wlroutput.getState failed:", response.error);
++                } else {
++                    log.warn("wlroutput.getState returned no output state");
++                }
++                return;
++            }
+             wlrOutputAvailable = true;
+-            log.info("wlr-output-management capability detected");
+-            requestState();
+-            return;
+-        }
+-
+-        if (!hasWlrOutput) {
+-            wlrOutputAvailable = false;
+-        }
+-    }
+-
+-    function requestState() {
+-        if (!DMSService.isConnected || !wlrOutputAvailable) {
+-            return;
+-        }
+-
+-        DMSService.sendRequest("wlroutput.getState", null, response => {
+-            if (!response.result) {
+-                return;
+-            }
++            log.info("wlroutput.getState returned", response.result.outputs.length, "outputs");
+             handleStateUpdate(response.result);
+-        });
++        }, 5000);
+     }
+ 
+     function handleStateUpdate(state) {

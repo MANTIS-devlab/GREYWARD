@@ -1,0 +1,11 @@
+# Generated from branding/source/greyward-desktop-palette.json; do not edit colors here.
+name = "GREYWARD Silver"
+background = "#EFF3F6"
+surface = "#F7F9FB"
+text = "#1D2D38"
+accent = "#2F5C70"
+danger = "#9C4851"
+muted = "#607888"
+highlight = "#DDE6EC"
+border = "#B9C8D2"
+dim_text = "#4D6575"
