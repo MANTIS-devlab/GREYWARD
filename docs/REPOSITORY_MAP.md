@@ -6,6 +6,10 @@ identity, package tuple, validation limits and later-source differences.
 `tools/public-export.py` also masks Windows paths written with either separator;
 `tests/test_public_export.py` covers this. `.gitleaks.toml` permits only the
 exact pinned upstream Polkit preimage hash, not arbitrary credentials.
+Path-scoped scanner exceptions target named rules and combine path/content with
+AND; the publication tests prevent whole-file exclusions. The public ISO guide
+templates document explicit DMS 2.0 selection without changing the active
+validated manifest.
 
 Security/privacy notification transitions: `security-center/security-context/greyward_security_context/security_notices.py`
 owns verified Update Center notices and optional per-application sensor starts. `shell_runtime.py` composes

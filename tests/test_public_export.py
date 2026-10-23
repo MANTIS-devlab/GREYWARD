@@ -3,6 +3,7 @@ import importlib.util
 import json
 from pathlib import Path
 import tempfile
+import tomllib
 import unittest
 from unittest.mock import patch
 
@@ -14,6 +15,16 @@ POLICY = json.loads((ROOT / 'tools/publication-policy.json').read_text())
 
 
 class PublicationBoundaryTests(unittest.TestCase):
+    def test_path_scoped_secret_exceptions_cannot_skip_entire_files(self):
+        config = tomllib.loads((ROOT / '.gitleaks.toml').read_text())
+        for exception in config['allowlists']:
+            if exception.get('paths'):
+                self.assertEqual(exception.get('condition'), 'AND')
+                self.assertTrue(exception.get('targetRules'))
+                self.assertLessEqual(set(exception['targetRules']),
+                                     {'generic-api-key', 'discord-api-token'})
+                self.assertTrue(exception.get('regexes'))
+
     def test_validation_host_and_account_are_not_published_in_runtime_notes(self):
         text = 'Readback on `.150` at 192.168.1.150 for cicada.'
         cleaned = EXPORT.sanitized_text(text, 'docs/STATUS.md', set())
