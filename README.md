@@ -26,7 +26,7 @@
 </p>
 
 <p align="center">
-  <sub>Latest image: 0.5.0 DMS2 RC3 prerelease candidate. Later notification changes are in current source only; read the release notes for contents and validation limits.</sub>
+  <sub>Latest public download: 0.5.0 DMS2 RC3 prerelease candidate. Screenshots show newer development builds, including Office integration; consult the release notes for image contents and validation limits.</sub>
 </p>
 
 <p align="center">
@@ -44,16 +44,19 @@
   · <a href="#protected-data">Protected Data</a>
   · <a href="#security-center">Security Center</a>
   · <a href="#a-desktop-of-its-own">Desktop</a>
+  · <a href="#office-powered-by-artcraft">Office</a>
   · <a href="#current-state-and-limitations">Status</a>
 </p>
 
 <p align="center">
-  <img src="docs/assets/screenshots/greyward-desktop-network-activity.png" alt="GREYWARD desktop with Security Center Network activity and Strata" width="960">
+  <img src="docs/assets/screenshots/2026-10-25/desktop-overview.png" alt="GREYWARD desktop with Writer, Sheets, Slides and PDF shortcuts and the security dashboard" width="960">
 </p>
 
 <p align="center">
   <img src="docs/assets/screenshots/greyward-desktop-overview.gif" alt="GREYWARD desktop, Security Center and security notifications" width="960">
 </p>
+
+<p align="center"><sub>Desktop workflow animation from an earlier development build.</sub></p>
 
 <p align="center">
   <img src="docs/assets/readme/section-divider.svg" width="860" alt="GREYWARD section divider">
@@ -71,15 +74,6 @@ These capabilities have different scopes. Ordinary native applications are not u
 
 > [!WARNING]
 > **GREYWARD is pre-release software and has not received an independent security audit.** Development-system results do not establish equivalent behavior in every downloadable image or on every device. Read the [current limitations](#current-state-and-limitations) before testing.
-
-## Latest source and installer
-
-The DMS 2.0 integration and corrected Polkit/lock appearance are now available in source.
-The latest existing installer is the **0.5.0 DMS2 RC3 prerelease candidate**; see its
-[package contents, checksum and validation limits](docs/patch-notes/0.5.0-dms2-rc3.md).
-Later verified-update and optional microphone/camera notices are included in the
-current source and physical-reference packages, **not in RC3**. Strata remains the
-only public file manager.
 
 # Why GREYWARD?
 
@@ -106,6 +100,7 @@ The guiding principles are straightforward:
 | **Network & devices** | Integrated application networking, firewall zones, managed DNS and USBGuard visibility. |
 | **Files & maintenance** | Scanning, quarantine, Safe Open, updates, recovery points and personal backup workflows. |
 | **GREYWARD desktop** | Labwc, an adapted DankMaterialShell and GREYWARD Files, with a shared visual identity. |
+| **Office applications** | Writer, Sheets, PDF and Slides: four independent applications built on ArtCraft projects, integrated with GREYWARD's desktop. |
 
 These features have different implementation and validation levels; the [status table](#current-state-and-limitations) describes their limits.
 
@@ -161,7 +156,7 @@ Security Center makes security state, supported actions and failures understanda
 
 | Network Activity | Unified Updates |
 | :---: | :---: |
-| <img src="docs/assets/screenshots/security-center-network-activity.png" alt="Network Activity in GREYWARD Security Center" width="460"> | <img src="docs/assets/screenshots/security-center-updates.png" alt="Update Center in GREYWARD Security Center" width="460"> |
+| <img src="docs/assets/screenshots/2026-10-25/network-activity-strata.png" alt="Security Center Network activity beside the Strata file manager" width="460"> | <img src="docs/assets/screenshots/2026-10-25/updates-notification.png" alt="Security Center Updates and its security-update notification" width="460"> |
 
 | Area | What users can inspect or manage |
 | --- | --- |
@@ -175,7 +170,11 @@ Security Center makes security state, supported actions and failures understanda
 
 
 
-<p align="center"><sub>Security information should stay visible without taking over the desktop.</sub></p>
+| Protection at a glance | Microphone activity |
+| :---: | :---: |
+| <img src="docs/assets/screenshots/2026-10-25/security-dashboard.png" alt="Desktop dashboard showing protection, network security and available security updates" width="460"> | <img src="docs/assets/screenshots/2026-10-25/microphone-notification.png" alt="GREYWARD notification identifying Brave microphone input during a microphone test" width="460"> |
+
+<p align="center"><sub>Security information should stay visible without taking over the desktop. The microphone-start notification is optional; an activity observation is not a permission grant.</sub></p>
 
 ### Evidence before reassurance
 
@@ -201,13 +200,42 @@ The desktop is part of GREYWARD's identity: obsidian and graphite surfaces, rest
 
 Labwc provides the Wayland compositor, UWSM manages the session and an adapted DankMaterialShell provides the shell and settings. GREYWARD Files integrates Strata with the shared file-icon family; PCManFM-Qt handles desktop icons, while DMS owns the wallpaper.
 
-![GREYWARD Security Center](docs/assets/screenshots/greyward-desktop-security-center.png)
-
 <p align="center">
-  <img src="docs/assets/screenshots/greyward-desktop-workflow.png" width="920" alt="GREYWARD development desktop workflow">
+  <img src="docs/assets/screenshots/2026-10-25/terminal-strata.png" width="960" alt="Black Box terminal and Strata on the GREYWARD desktop">
 </p>
 
+Strata keeps file browsing, previews and supported file actions together. GREYWARD scan results appear in its job panel and desktop notifications.
+
+| File-scan results | Completed scan jobs |
+| :---: | :---: |
+| <img src="docs/assets/screenshots/2026-10-25/file-scan-completed.png" alt="Strata showing completed GREYWARD scan jobs and a no-threats-detected notification" width="460"> | <img src="docs/assets/screenshots/2026-10-25/file-scan-jobs.png" alt="Strata job panel listing three completed GREYWARD scans" width="460"> |
+
 The terminal and underlying Fedora system remain accessible. Compatibility, accessibility, multiple displays and reliable session behavior remain development priorities alongside visual consistency.
+
+# Office, powered by ArtCraft
+
+GREYWARD integrates four independent desktop applications built on **ArtCraft's open-source work**:
+
+| In GREYWARD | Upstream project | Everyday work |
+| --- | --- | --- |
+| **Writer** | [WordCraft](https://github.com/storytold/wordcraft) | Documents, text formatting and tables. |
+| **Sheets** | [GridCraft](https://github.com/storytold/gridcraft) | Spreadsheets, formulas and CSV data. |
+| **PDF** | [PdfCraft](https://github.com/storytold/pdfcraft) | Reading, annotations, forms and page editing. |
+| **Slides** | [DeckCraft](https://github.com/storytold/deckcraft) | Presentations and slide shows. |
+
+The application engines and interfaces are the work of **ArtCraft and the upstream contributors**. GREYWARD's contribution is the downstream Fedora packaging, names, icons, dark palette and desktop/file associations. Thank you to the people building and maintaining these projects; please visit the upstream repositories to explore their work and contribute.
+
+These are GREYWARD-customized builds, not official ArtCraft releases. Their upstream licenses, notices and attribution are preserved. The integration keeps upstream interfaces and document engines intact, with four direct launchers and no suite launcher.
+
+<p align="center">
+  <img src="docs/assets/screenshots/2026-10-25/writer.png" width="960" alt="GREYWARD Writer, based on WordCraft, displaying a two-page document with headings and a table">
+</p>
+
+| PDF — based on PdfCraft | Slides — based on DeckCraft |
+| :---: | :---: |
+| <img src="docs/assets/screenshots/2026-10-25/pdf.png" alt="GREYWARD PDF showing a comment and a filled interactive form field" width="460"> | <img src="docs/assets/screenshots/2026-10-25/slides.png" alt="GREYWARD Slides showing the ribbon, slide thumbnails and presentation canvas" width="460"> |
+
+The integration is included in the locally composed **0.5.2 Sophon** image; it is newer than the public RC3 download linked above. These applications are still young, and complete Microsoft Office or LibreOffice compatibility is not promised. See the [integration notes](docs/software/OFFICE_INTEGRATION.md) for tested workflows, format limits and update-channel status.
 
 # Security and usability are a trade-off
 
@@ -221,6 +249,7 @@ Unsupported access remains denied rather than falling back to unrestricted execu
 
 | Capability | Current evidence and remaining limits |
 | --- | --- |
+| **Office** | Four native applications are integrated and have reference-system editing/save/reopen checks. Format compatibility, printing and new-image acceptance remain limited; see the [Office notes](docs/software/OFFICE_INTEGRATION.md). |
 | **Desktop & Security Center** | Implemented in development. Files integration has selected real-desktop checks; broader hardware and everyday compatibility remain incomplete. |
 | **SELinux & Protected Data** | Enforcing policy, registered-resource denials and bounded reviewed grants have development evidence. Resource coverage and legitimate access workflows remain limited. |
 | **Application Guard** | Broker and supported managed launches are implemented with bounded tests. Ordinary same-user applications are not universally separated. |

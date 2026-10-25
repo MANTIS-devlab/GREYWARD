@@ -22,3 +22,14 @@ history; do not replace public history with a newly initialized repository.
 ISO composition, clean installation, live desktop behavior and security/recovery
 acceptance are separate evidence. Do not publish an unvalidated experiment as a
 completed feature. See `AGENTS.md` for permanent maintenance obligations.
+
+## Approved README gallery — 25 October 2026
+
+The owner approved publication of the supplied screenshots, explicitly allowing
+the visible Swiss VPN addresses. The [inventory](assets/screenshots/README.md)
+records the eleven selected original PNGs and omitted one-pixel/near-duplicate
+inputs. The existing overview GIF is unchanged. Legacy static images are
+removed from this public tree; the engineering originals are preserved.
+The export requires the current gallery and rejects missing image inputs.
+This update covers presentation and attribution, with no ISO upload or change
+to the public RC3 download.

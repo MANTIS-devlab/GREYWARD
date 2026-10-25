@@ -29,7 +29,11 @@
     ".env",
     ".env.*",
     "id_rsa",
-    "id_ed25519"
+    "id_ed25519",
+    "docs/assets/screenshots/greyward-desktop-security-center.png",
+    "docs/assets/screenshots/greyward-desktop-workflow.png",
+    "docs/assets/screenshots/security-center-network-activity.png",
+    "docs/assets/screenshots/security-center-updates.png"
   ],
   "retainedHistoryIndex": "docs/history/README.md",
   "publicTemplates": {
@@ -52,6 +56,22 @@
     "environment/production/dms-release.json",
     "packaging/greyward-enrollment/greyward-enrollment.spec",
     "security-center/Cargo.lock",
-    "security-center/tauri/package-lock.json"
+    "security-center/tauri/package-lock.json",
+    "docs/assets/screenshots/2026-10-25/desktop-overview.png",
+    "docs/assets/screenshots/2026-10-25/file-scan-completed.png",
+    "docs/assets/screenshots/2026-10-25/file-scan-jobs.png",
+    "docs/assets/screenshots/2026-10-25/microphone-notification.png",
+    "docs/assets/screenshots/2026-10-25/network-activity-strata.png",
+    "docs/assets/screenshots/2026-10-25/pdf.png",
+    "docs/assets/screenshots/2026-10-25/security-dashboard.png",
+    "docs/assets/screenshots/2026-10-25/slides.png",
+    "docs/assets/screenshots/2026-10-25/terminal-strata.png",
+    "docs/assets/screenshots/2026-10-25/updates-notification.png",
+    "docs/assets/screenshots/2026-10-25/writer.png",
+    "docs/assets/screenshots/README.md",
+    "docs/assets/screenshots/greyward-desktop-overview.gif",
+    "docs/software/OFFICE_INTEGRATION.md",
+    "packaging/greyward-office/licenses/README.md",
+    "packaging/greyward-office/licenses/CC-BY-SA-4.0.txt"
   ]
 }

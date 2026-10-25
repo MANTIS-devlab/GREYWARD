@@ -1,5 +1,12 @@
 # GREYWARD current status
 
+The README's [25 October gallery](assets/screenshots/README.md) contains eleven
+owner-approved original screenshots, grouped by feature, and the unchanged
+overview GIF. [Office integration](software/OFFICE_INTEGRATION.md) credits the
+upstream ArtCraft projects and separates newer reference work from the public
+RC3 download.
+
+
 ## Public source and RC3 publication — 24 October
 
 The sanitized DMS2 source update is integrated on public `main` through
