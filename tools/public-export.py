@@ -19,7 +19,7 @@ def excluded(path, policy):
 
 def sanitized_text(text, relative, excluded_files):
     if relative == 'README.md':
-        safe_image = 'docs/assets/screenshots/greyward-desktop-security-center.png'
+        safe_image = 'docs/assets/screenshots/2026-10-25/desktop-overview.png'
         text = re.sub(r'<p align="center">\s*<img src="docs/assets/screenshots/greyward-desktop-threat-notification.png"[^>]*>\s*</p>', '', text)
         text = re.sub(r'\| Desktop overview \| Everyday application use \|\s*\| :---: \| :---: \|\s*\| <img[^\n]+greyward-desktop-browser.png[^\n]+\|',
                       '![GREYWARD Security Center](' + safe_image + ')', text)

@@ -1,5 +1,12 @@
 # GREYWARD repository map
 
+The README's [25 October gallery](assets/screenshots/README.md) contains eleven
+owner-approved original screenshots, grouped by feature, and the unchanged
+overview GIF. [Office integration](software/OFFICE_INTEGRATION.md) credits the
+upstream ArtCraft projects and separates newer reference work from the public
+RC3 download.
+
+
 The current publication artifact contract is
 [`patch-notes/0.5.0-dms2-rc3.md`](patch-notes/0.5.0-dms2-rc3.md): exact ISO
 identity, package tuple, validation limits and later-source differences.

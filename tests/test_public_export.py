@@ -1,6 +1,7 @@
 """The public export cannot delete private originals or copy private Git refs."""
 import importlib.util
 import json
+import re
 from pathlib import Path
 import tempfile
 import tomllib
@@ -101,14 +102,21 @@ class PublicationBoundaryTests(unittest.TestCase):
         result = EXPORT.sanitized_text(text, 'docs/STATUS.md', set())
         self.assertEqual(result, 'ISO: `<local workspace>`.')
 
-    def test_public_readme_does_not_embed_sensitive_desktop_captures(self):
+    def test_public_readme_retains_approved_gallery_and_existing_gif(self):
         text = (ROOT / 'README.md').read_text(encoding='utf-8')
         result = EXPORT.sanitized_text(text, 'README.md', set())
-        for name in ('greyward-desktop-browser.png', 'greyward-desktop-threat-notification.png'):
+        for name in ('greyward-desktop-browser.png', 'greyward-desktop-threat-notification.png',
+                     'greyward-desktop-security-center.png', 'greyward-desktop-workflow.png',
+                     'security-center-network-activity.png', 'security-center-updates.png'):
             self.assertNotIn(name, result)
-        self.assertIn('greyward-desktop-security-center.png', result)
-        self.assertIn('greyward-desktop-overview.gif', result)
-        self.assertFalse(EXPORT.excluded('docs/assets/screenshots/greyward-desktop-overview.gif', POLICY))
+            self.assertTrue(EXPORT.excluded('docs/assets/screenshots/' + name, POLICY))
+        captures = re.findall(r'<img[^>]+src="(docs/assets/screenshots/[^"]+)"', result)
+        self.assertEqual(len(captures), 12)  # Eleven selected scenes and the retained GIF.
+        self.assertIn('docs/assets/screenshots/greyward-desktop-overview.gif', captures)
+        for path in captures:
+            self.assertTrue((ROOT / path).is_file(), path)
+            self.assertFalse(EXPORT.excluded(path, POLICY), path)
+            self.assertIn(path, POLICY['requiredPaths'])
 
     def test_destination_cannot_overwrite_private_source_or_existing_work(self):
         with tempfile.TemporaryDirectory() as temporary:
