@@ -1,9 +1,8 @@
 # GREYWARD Office integration
 
-This page describes the newer development integration shown in the README.
-The public ISO download remains 0.5.0 DMS2 RC3 and does not include this Office
-integration. The maintainer has composed a local 0.5.2 Sophon image; composition
-checks do not establish a clean-install or security acceptance result.
+The published [0.5.2 Sophon ISO](../patch-notes/0.5.2-sophon.md) includes all four
+applications at GREYWARD revision 6. Composition checks and reference-system
+workflows do not establish clean-install or security acceptance.
 
 ## Applications and upstream credit
 
@@ -25,7 +24,7 @@ and [resource license notes](../../packaging/greyward-office/licenses/README.md)
 
 The four applications have independent launchers and no suite launcher. Strata
 remains the file manager. Application tiles are distinct from document icons.
-The development default associations replace Collabora and Papers while keeping
+The image default associations replace Collabora and Papers while keeping
 browser, image and plain-text associations separate.
 
 ## Observed workflows and limits
@@ -40,6 +39,6 @@ No AI service or automation channel was enabled by the integration.
 
 Updates are designed to reuse Update Center's DNF5 provider with validated
 GREYWARD rebuilds. A real Writer revision update was exercised on the reference,
-but no public Office RPM feed is operational. The Office package implementation
-is separate unpublished development work; this documentation publication does
-not provide a new build/install recipe or announce a public update channel.
+but no public Office RPM feed is operational. The frozen GREYWARD source and four complete
+Office source RPMs are supplied with the SourceForge release. Use those matching
+inputs rather than assuming public main contains the exact release implementation.

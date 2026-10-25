@@ -17,6 +17,7 @@
     ".secrets/*",
     ".vmtest/*",
     "desktop-*.png",
+    "spikes/dms-v1.5.3/settings.json",
     "vmconnect*.png",
     "security-center-fixed.png",
     "docs/assets/screenshots/greyward-desktop-browser.png",

@@ -1,5 +1,18 @@
 # Public source maintenance
 
+## Sophon 0.5.2 publication — 25 October 2026
+
+[0.5.2 Sophon](patch-notes/0.5.2-sophon.md) is the latest public SourceForge
+installer. The export also excludes historical machine-specific prototype settings,
+while preserving the private original. Full SFTP readback verifies all
+5,147,983,872 ISO bytes and SHA-256,
+plus the ten source/provenance/checksum companions. The existing image was
+uploaded without rebuilding. It includes Office revision 6, desktop presentation
+and Bazaar Explore recovery, alongside the retained offline Polkit and lock fixes.
+Clean-install, physical offline and recovery acceptance remain separate; the
+Office public RPM update feed is not operational. Use the release's frozen
+source archive and four Office source RPMs; public main is not that exact tree.
+
 `main` is the only permanent public branch. Preserve unique work before
 integrating and removing temporary branches. Check CI at the exact integrated
 commit. Never force-push or rewrite public history without explicit approval.

@@ -1,10 +1,20 @@
 # GREYWARD current status
 
+## Sophon 0.5.2 publication — 25 October 2026
+
+[0.5.2 Sophon](patch-notes/0.5.2-sophon.md) is the latest public SourceForge
+installer. Full SFTP readback verifies all 5,147,983,872 ISO bytes and SHA-256,
+plus the ten source/provenance/checksum companions. The existing image was
+uploaded without rebuilding. It includes Office revision 6, desktop presentation
+and Bazaar Explore recovery, alongside the retained offline Polkit and lock fixes.
+Clean-install, physical offline and recovery acceptance remain separate; the
+Office public RPM update feed is not operational. Use the release's frozen
+source archive and four Office source RPMs; public main is not that exact tree.
+
 The README's [25 October gallery](assets/screenshots/README.md) contains eleven
 owner-approved original screenshots, grouped by feature, and the unchanged
 overview GIF. [Office integration](software/OFFICE_INTEGRATION.md) credits the
-upstream ArtCraft projects and separates newer reference work from the public
-RC3 download.
+upstream ArtCraft projects and separates newer reference work from image-composition acceptance.
 
 
 ## Public source and RC3 publication — 24 October

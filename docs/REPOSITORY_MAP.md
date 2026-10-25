@@ -1,14 +1,18 @@
 # GREYWARD repository map
 
+[0.5.2 Sophon release notes](patch-notes/0.5.2-sophon.md) own the current
+SourceForge download, exact package tuple, checksums, corresponding sources and
+publication readback. Composition and installed acceptance remain separate.
+
+
 The README's [25 October gallery](assets/screenshots/README.md) contains eleven
 owner-approved original screenshots, grouped by feature, and the unchanged
 overview GIF. [Office integration](software/OFFICE_INTEGRATION.md) credits the
-upstream ArtCraft projects and separates newer reference work from the public
-RC3 download.
+upstream ArtCraft projects and separates newer reference work from image-composition acceptance.
 
 
 The current publication artifact contract is
-[`patch-notes/0.5.0-dms2-rc3.md`](patch-notes/0.5.0-dms2-rc3.md): exact ISO
+[`patch-notes/0.5.2-sophon.md`](patch-notes/0.5.2-sophon.md): exact ISO
 identity, package tuple, validation limits and later-source differences.
 `tools/public-export.py` also masks Windows paths written with either separator;
 `tests/test_public_export.py` covers this. `.gitleaks.toml` permits only the

@@ -1,11 +1,11 @@
-# Current installer candidate — 24 October 2026
+# Current published installer — 25 October 2026
 
-The latest existing installer is **0.5.0 DMS2 RC3**. Its exact package tuple,
-checksum and remaining acceptance limits are in the
-[RC3 notes](../../docs/patch-notes/0.5.0-dms2-rc3.md). Current source also includes the
-later Center 120 / Context 112 notification work, absent from that ISO. Use the
-frozen corresponding-source archive when inspecting the RC3 inputs; building
-today's source creates a successor, not the same artifact.
+The latest public installer is **0.5.2 Sophon**. Its exact component tuple,
+checksums, frozen corresponding sources and validation limits are in the
+[Sophon notes](../../docs/patch-notes/0.5.2-sophon.md). The SourceForge directory
+also provides four complete Office source RPMs with vendored dependencies.
+Current public main is not the exact ISO source; use those frozen inputs when
+inspecting or rebuilding this release. No public Office RPM feed is operational.
 
 The DMS 2.0 input is `environment/production/dms-2.0-candidate.json`. Pass it as
 the third argument to `packaging/greyward-dms/build.sh` when building that DMS

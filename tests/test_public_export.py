@@ -51,7 +51,7 @@ class PublicationBoundaryTests(unittest.TestCase):
                      'tests/security/exploit_priv_esc.sh',
                      'tests/security/results.md', 'output/receipt.json',
                      '.codex-attachments/request.png', 'desktop-current.png',
-                     'id_rsa', 'server.key'):
+                     'id_rsa', 'server.key', 'spikes/dms-v1.5.3/settings.json'):
             with self.subTest(path=path):
                 self.assertTrue(EXPORT.excluded(path, POLICY))
 
