@@ -20,6 +20,7 @@ if [[ "$selected_release" == v2.0.0-7 ]]; then
   # Native DMS 2.0 Settings action; keep the legacy generation's identities.
   default_pins+=("dms_settings")
 fi
+default_pins+=("io.github.kolunmi.Bazaar")
 default_pins_json=$(printf '%s\n' "${default_pins[@]}" | jq -R . | jq -sc .)
 mkdir -p "$(dirname "$state_file")"
 

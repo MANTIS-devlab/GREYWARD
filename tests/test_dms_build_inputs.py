@@ -21,6 +21,38 @@ COMPONENT_BUILDER_SPEC.loader.exec_module(COMPONENT_BUILDER)
 
 
 class BuildInputVerificationTests(unittest.TestCase):
+    def test_plugin_update_rejects_stale_sources_and_out_of_scope_payload(self):
+        spec = importlib.util.spec_from_file_location('dms_visual_update', ROOT / 'packaging/greyward-dms/build-artwork-update.py')
+        module = importlib.util.module_from_spec(spec); spec.loader.exec_module(module)
+        import hashlib
+        allowed = ['greywardSecure/SecureWidget.qml', 'greywardSecure/StatusCard.qml', 'greywardSecure/plugin.json']
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary); source = root / 'source'; payload = root / 'payload'
+            installed = payload / 'etc/xdg/quickshell/dms-plugins'
+            names = allowed + ['greywardSecure/SecurityClient.qml']
+            for name in names:
+                for base in (source, installed):
+                    path = base / name; path.parent.mkdir(parents=True, exist_ok=True); path.write_bytes(b'before')
+            old = dict.fromkeys(names, hashlib.sha256(b'before').hexdigest())
+            for name in allowed: (source / name).write_bytes(b'after')
+            new = {name: module.digest(source / name) for name in names}
+            receipt = {'firstPartyFiles': old.copy(), 'firstPartySources': old.copy()}
+            manifest = {'firstPartyDirectory': 'source', 'firstPartySources': new,
+                        'build': {'pluginUpdate': {'baseFirstPartySha256': module.tree_digest(old),
+                                  'changedFirstPartyFiles': allowed, 'requiresProtectedMigration': False}}}
+            # A changed collector cannot slip through even when its new hash is supplied.
+            collector = source / names[-1]; collector.write_bytes(b'changed collector')
+            with self.assertRaisesRegex(ValueError, 'reviewed visual update'):
+                module.update_plugins(payload, manifest, receipt, root)
+            collector.write_bytes(b'before')
+            (installed / allowed[0]).write_bytes(b'unexpected predecessor')
+            with self.assertRaisesRegex(ValueError, 'Predecessor plugin payload'):
+                module.update_plugins(payload, manifest, receipt, root)
+            (installed / allowed[0]).write_bytes(b'before')
+            module.update_plugins(payload, manifest, receipt, root)
+            self.assertEqual(receipt['firstPartyFiles'], new)
+            self.assertEqual((installed / names[-1]).read_bytes(), b'before')
+
     def test_package_only_runtime_provide_requires_exact_pinned_executables(self):
         names = ('binarySha256', 'usbguardApprovalSha256', 'usbguardAuthApprovalSha256')
         pins = dict.fromkeys(names, 'a' * 64)

@@ -49,11 +49,31 @@
       "version": "go1.27.3",
       "goVersion": "go version go1.27.3 linux/amd64"
     },
-    "rpmRelease": "7.9",
+    "rpmRelease": "7.11",
     "packageOnlyRuntime": {
       "binarySha256": "0eb5a9b5bdcd16882b41f8bdf03a37bcbb9f6a8d7723e2b0f0640aada0d0f532",
       "usbguardApprovalSha256": "0eece46c693dd271b655b3e9596124abdbb7ede28f69b5f66fec97d18751e95a",
       "usbguardAuthApprovalSha256": "27d8063b1f43ef8003b235cb62b958dbd0a6449d6dd1ab1f17737b439a7dbe8e"
+    },
+    "artworkUpdate": {
+      "baseRpmSha256": "ab1c12a1c961c60354b47f993c70e859479fd53326efde5d60163c54955c512c",
+      "baseShellSha256": "c094da5ec9b2d6df275bb17e4111290d9b278d461b2925e83a236e73e59edfef",
+      "changedShellFiles": [
+        "assets/greyward-settings.svg"
+      ],
+      "requiresProtectedMigration": true
+    },
+    "pluginUpdate": {
+      "baseRpmSha256": "0020354022a7b62f75254098909a99672c3be4623beb1fb28acf4bc9728b41fe",
+      "basePackage": "greyward-dms-2.0.0-7.10.fc44.x86_64",
+      "baseShellSha256": "dfd99d5a7effb1ae1f2b584c3c5fde5efc44cd6d6037043365fc7b46ec271852",
+      "baseFirstPartySha256": "22ca884566bbcb169f6d7603fae207263dc779e0fb97a370e52e8560844263e4",
+      "changedFirstPartyFiles": [
+        "greywardSecure/SecureWidget.qml",
+        "greywardSecure/StatusCard.qml",
+        "greywardSecure/plugin.json"
+      ],
+      "requiresProtectedMigration": false
     }
   },
   "compatibility": {
@@ -147,7 +167,7 @@
     }
   ],
   "shell": {
-    "sha256": "c094da5ec9b2d6df275bb17e4111290d9b278d461b2925e83a236e73e59edfef",
+    "sha256": "dfd99d5a7effb1ae1f2b584c3c5fde5efc44cd6d6037043365fc7b46ec271852",
     "patchedFiles": 11,
     "qmlFiles": 987,
     "commonQmlFiles": 160,
@@ -189,7 +209,7 @@
   "shellAdditions": {
     "files": {
       "Modules/Settings/GreywardManagedTab.qml": "929bb847eb6a6ac961c2333d8738a11112dac32d45cebbf02091a620dda35ae4",
-      "assets/greyward-settings.svg": "16780388124c05dbc6b84b113667304a20be0ec1acf872bf428e2edc156b4261"
+      "assets/greyward-settings.svg": "e88d8d47663ffd5ab5929aecc39f8d53fabec67aa416f89709afc19703af908b"
     }
   },
   "firstPartyDirectory": "environment/session/dms-2.0-plugins",
@@ -204,13 +224,13 @@
     "greywardProtection/plugin.json": "b952bf2b993a20dde27750f5cd6e36ac11b8ddff0c6698c8106dbaedf9bfcc19",
     "greywardPublicIp/plugin.json": "96791222834499c8c54e57caf24196283c94692f22eb0c5a7bb38de551d2fb61",
     "greywardPublicIp/PublicIpWidget.qml": "d8a5e7d1fc73195e024324f2cf980ed4ef4125adff9539ea8244605c26ee2df0",
-    "greywardSecure/plugin.json": "485c473ac54965db7acf47813098ea3314b5f762f9e884fce200bda0742c5a1a",
-    "greywardSecure/SecureWidget.qml": "9d0fbe79539610a5ff8825e0cb29fb7e559c4d1f826efae314df5fc0e3af363b",
+    "greywardSecure/plugin.json": "1cb85adb62f84a49b15f635456e9ef9abfb7a8a03b19c7fe81c4616f77e4173a",
+    "greywardSecure/SecureWidget.qml": "73618093654f58efa8b2b7a412b29fc3ad26c7f3749d8768b52597449057ad76",
     "greywardSecure/SecurityClient.qml": "357c8179bf85e9f624720d8cd5dfa0fd1c4a34ff22f2dbde04a00028a8b8d6ba",
     "greywardSecure/SecurityLauncher.qml": "a58f1d655b21191cf0f309326f4005ca700907a9117a8c0342f34d901b3266f7",
     "greywardSecure/SecurityTab.qml": "df5320df4763d5ed5dd01fd8868e6bd7afc38828ec18d8e7a82e66594ef5e5fe",
     "greywardSecure/StatePalette.js": "a575b3ddcccb9e2a756891bf524d81319a89afc590dfc455905d8ec1989dbbff",
-    "greywardSecure/StatusCard.qml": "a831b33e634f6b3e89945fadf1999e692e76a0669f75765ea3e62470bc127126",
+    "greywardSecure/StatusCard.qml": "f7873f7df970021bd7cc1018ae39dc548c63d4d58dbb12300dc0deb20af54163",
     "greywardSecure/StatusModel.js": "5a2b1b8c8669e678e44613a00f5affb368a1a0519c4b927831abe500e8330100",
     "greywardSoftware/plugin.json": "a6c01e07d657fca590f2f077ba66204909eba35e03ad3f9593e0d40fe8f5e1b3",
     "greywardSoftware/SoftwareWidget.qml": "2e21ca7de59d5388befdab529419b6aedf098716612f8de28fd6636898f48a5c",
@@ -230,13 +250,13 @@
     "greywardSoftware/plugin.json": "b8857ea5ba800b9b21964b0bd0380cd0f1ebc8318cc6d41ce8cfe540fe04fd70"
   },
   "candidatePackages": {
-    "dms": "2.0.0-7.9",
-    "session": "0.1.0-34",
-    "files": "1.0.0-20",
-    "securityCenter": "0.1.0-119",
-    "applicationSecurity": "0.1.0-83",
-    "enrollment": "0.1.0-80",
-    "securityContext": "0.1.0-111"
+    "dms": "2.0.0-7.11",
+    "session": "0.1.0-38",
+    "files": "1.0.0-21",
+    "securityCenter": "0.1.0-122",
+    "applicationSecurity": "0.1.0-84",
+    "enrollment": "0.1.0-86",
+    "securityContext": "0.1.0-113"
   },
   "acceptance": {
     "releaseAccepted": false,

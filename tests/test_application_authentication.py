@@ -149,7 +149,8 @@ class AuthenticationAssembly(unittest.TestCase):
         self.assertIn('WlrLayershell.layer: WlrLayer.Background', assembly.SHELL)
         self.assertIn('WlrLayershell.keyboardFocus: WlrKeyboardFocus.None', assembly.SHELL)
         self.assertIn('mask: Region { item: Item {} }', assembly.SHELL)
-        self.assertIn('Starting your secure desktop', assembly.SHELL)
+        self.assertIn('GreywardStartup { anchors.fill: parent }', assembly.SHELL)
+        self.assertIn('Preparing your desktop', assembly.startup_content())
 
     def test_early_startup_surface_is_minimal_noninteractive_and_in_auth_shell_receipt(self):
         splash = assembly.STARTUP_SHELL
@@ -160,6 +161,17 @@ class AuthenticationAssembly(unittest.TestCase):
         self.assertIn('mask: Region { item: Item {} }', splash)
         self.assertNotIn('PolkitService', splash)
         self.assertNotIn('onClicked', splash)
+
+    def test_shared_startup_visual_is_input_free_and_returns_to_idle(self):
+        visual = assembly.startup_content()
+        self.assertIn('enabled: false', visual)
+        self.assertIn('loops: 4', visual)
+        self.assertNotIn('Animation.Infinite', visual)
+        for denied in ('Image {', 'MouseArea', 'TapHandler', 'Process {', 'FileView', 'PolkitService'):
+            self.assertNotIn(denied, visual)
+        symbol = ET.parse(SOURCE.parents[4] / 'branding/source/greyward-symbol.svg').getroot()
+        for path in symbol.findall('{http://www.w3.org/2000/svg}path'):
+            self.assertIn(json.dumps(path.get('d')), visual)
 
     def test_authentication_worker_starts_optional_splash_before_full_dms(self):
         source = (Path(__file__).resolve().parents[1] /
@@ -302,6 +314,10 @@ readonly property bool u2fSuppressedByPrimaryPam: SettingsData.lockPamExternally
             self.assertIn('startup/shell.qml', first['shellFiles'])
             self.assertEqual((base / 'first/shell/startup/shell.qml').read_text(encoding='utf-8'),
                              assembly.STARTUP_SHELL)
+            self.assertEqual((base / 'first/shell/GreywardStartup.qml').read_text(encoding='utf-8'),
+                             assembly.startup_content())
+            self.assertEqual((base / 'first/shell/startup/GreywardStartup.qml').read_bytes(),
+                             (base / 'first/shell/GreywardStartup.qml').read_bytes())
             auth_shell = (base / 'first/shell/shell.qml').read_text(encoding='utf-8')
             self.assertIn('split(String.fromCharCode(10))', auth_shell)
             self.assertNotIn('split(/\n', auth_shell)

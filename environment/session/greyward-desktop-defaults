@@ -1,0 +1,139 @@
+#!/usr/bin/python3 -I
+"""Seed the OS desktop once, using installed launchers and native Home/Trash."""
+import importlib.machinery
+import importlib.util
+import json
+import os
+from pathlib import Path
+import stat
+import sys
+
+APPLICATIONS = (
+    'systems.mantis.greyward.Writer', 'systems.mantis.greyward.Sheets',
+    'systems.mantis.greyward.PDF', 'systems.mantis.greyward.Slides',
+    'com.brave.Browser', 'com.raggesilver.BlackBox',
+)
+
+
+def trust_defaults(state, desktop, launcher, approve=None):
+    """Approve only exact factory copies, once; preserve later user choices."""
+    marker = state / 'greyward/desktop-default-trust-v1.json'
+    if marker.exists() or marker.is_symlink():
+        return
+    if approve is None:
+        from gi.repository import Gio, GLib
+
+        def approve(path):
+            file = Gio.File.new_for_path(str(path))
+            flags = Gio.FileQueryInfoFlags.NOFOLLOW_SYMLINKS
+            try:
+                file.set_attribute_string('metadata::trust', 'true', flags, None)
+                info = file.query_info('metadata::trust', flags, None)
+            except GLib.Error as error:
+                raise OSError('Desktop launcher metadata unavailable: ' + str(error)) from error
+            if info.get_attribute_string('metadata::trust') != 'true':
+                raise OSError('Desktop launcher trust was not persisted.')
+
+    approved = []
+    for identifier in APPLICATIONS:
+        # installed_launcher verifies the root-controlled source and entry.
+        name, _, content = launcher.installed_launcher(identifier)
+        path = desktop / name
+        try:
+            descriptor = os.open(path, os.O_RDONLY | getattr(os, 'O_NOFOLLOW', 0)
+                                 | getattr(os, 'O_NONBLOCK', 0))
+        except FileNotFoundError:
+            continue  # Never restore a shortcut the user deleted.
+        except OSError:
+            if path.is_symlink():
+                continue
+            raise
+        with os.fdopen(descriptor, 'rb') as stream:
+            info = os.fstat(stream.fileno())
+            if (not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid()
+                    or info.st_mode & 0o022 or info.st_size != len(content)
+                    or stream.read(len(content) + 1) != content):
+                continue  # Never approve customized files or name lookalikes.
+            approve(path)
+            approved.append(name)
+    marker.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    with marker.open('x', encoding='utf-8') as stream:
+        json.dump({'schema': 'greyward.desktop-default-trust/v1',
+                   'approved': approved}, stream)
+        stream.write('\n')
+
+
+def seed_defaults(config, state, desktop, launcher):
+    marker = state / 'greyward/desktop-defaults-v1.json'
+    # A later deletion is an intentional user choice, not a repair request.
+    if marker.exists() or marker.is_symlink():
+        return
+    marker.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    entries = []
+    missing = []
+    for identifier in APPLICATIONS:
+        try:
+            entries.append(launcher.installed_launcher(identifier))
+        except (OSError, ValueError):
+            missing.append(identifier)
+    desktop.mkdir(parents=True, exist_ok=True)
+    for name, _, content in entries:
+        # An existing shortcut, including a customized one, always wins.
+        destination = desktop / name
+        try:
+            descriptor = os.open(destination, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o700)
+        except FileExistsError:
+            continue
+        with os.fdopen(descriptor, 'wb') as stream:
+            stream.write(content)
+    settings = config / 'pcmanfm-qt/greyward/settings.conf'
+    settings.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        descriptor = os.open(settings, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    except FileExistsError:
+        pass
+    else:
+        base = Path('/usr/share/greyward/files/settings.conf').read_text()
+        if base.count('DesktopShortcuts=Home\n') != 1:
+            os.close(descriptor)
+            settings.unlink()
+            raise ValueError('Unexpected packaged desktop defaults')
+        with os.fdopen(descriptor, 'w') as stream:
+            stream.write(base.replace('DesktopShortcuts=Home\n', 'DesktopShortcuts=Home, Trash\n'))
+    if missing:
+        print('Desktop defaults: installed launchers not yet available: ' + ', '.join(missing), file=sys.stderr)
+        return  # Retry after installation; never invent Exec commands.
+    try:
+        descriptor = os.open(marker, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    except FileExistsError:
+        return
+    with os.fdopen(descriptor, 'w') as stream:
+        json.dump({'schema': 'greyward.desktop-defaults/v1', 'applications': list(APPLICATIONS)}, stream)
+        stream.write('\n')
+
+
+def main():
+    import pwd
+    if os.getuid() == 0:
+        raise SystemExit('Run as the ordinary desktop user.')
+    helper = '/usr/local/libexec/greyward-desktop-shortcut'
+    loader = importlib.machinery.SourceFileLoader('desktop_shortcut', helper)
+    module = importlib.util.module_from_spec(importlib.util.spec_from_loader(loader.name, loader))
+    loader.exec_module(module)
+    home = Path(pwd.getpwuid(os.getuid()).pw_dir)
+    config = Path(os.environ.get('XDG_CONFIG_HOME', str(home / '.config')))
+    state = Path(os.environ.get('XDG_STATE_HOME', str(home / '.local/state')))
+    if not config.is_absolute() or not state.is_absolute():
+        raise SystemExit('Absolute XDG directories required.')
+    desktop = module.desktop_directory()
+    seed_defaults(config, state, desktop, module)
+    try:
+        trust_defaults(state, desktop, module)
+    except (OSError, ValueError) as error:
+        # An unavailable metadata service must not prevent the desktop opening.
+        # Without the receipt, the next login retries the same bounded set.
+        print('Desktop defaults: trust pending: ' + str(error), file=sys.stderr)
+
+
+if __name__ == '__main__':
+    main()

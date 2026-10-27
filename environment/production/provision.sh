@@ -239,7 +239,15 @@ if [[ "$target_install" == 1 || "${GREYWARD_LOCAL_FINALIZE:-0}" != 1 ]]; then
   test "${#files_rpms[@]}" -eq 1
   enrollment_rpms=("$stage/rpms/greyward-application-security-experimental-"*.rpm "$stage/rpms/greyward-application-enrollment-"*.rpm)
   test "${#enrollment_rpms[@]}" -eq 2
-  dnf -y install "${branding_rpms[0]}" "${security_rpms[@]}" "${dms_rpms[0]}" "${session_rpms[0]}" "${files_rpms[0]}" "${enrollment_rpms[@]}"
+  office_rpms=()
+  for office_app in writer sheets pdf slides; do
+    matches=("$stage/rpms/greyward-$office_app-"*.rpm)
+    test "${#matches[@]}" -eq 1
+    office_rpms+=("${matches[0]}")
+  done
+  python3 "$stage/office-source/packaging/greyward-office/verify-inputs.py" \
+    --repo "$stage/office-source" --stage "$stage"
+  dnf -y install "${branding_rpms[0]}" "${security_rpms[@]}" "${dms_rpms[0]}" "${session_rpms[0]}" "${files_rpms[0]}" "${enrollment_rpms[@]}" "${office_rpms[@]}"
   rpm -q greyward-branding plymouth-plugin-script
   rpm -q greyward-files nautilus
   test -x /usr/libexec/greyward/files/pcmanfm-qt
@@ -331,6 +339,7 @@ install -D -m 0644 "$flatpak/greyward-privacy-runtime.yaml" /usr/share/greyward/
 install -D -m 0644 "$flatpak/greyward-software-banner.svg" /usr/share/greyward/bazaar/greyward-software-banner.svg
 install -D -m 0644 "$branding/source/greyward-symbol.svg" /usr/share/greyward/bazaar/greyward-symbol.svg
 install -D -m 0755 "$flatpak/greyward-software" /usr/local/libexec/greyward-software
+install -D -m 0644 "$flatpak/greyward-bazaar-start" /usr/share/greyward/bazaar/greyward-bazaar-start
 install -D -m 0755 "$flatpak/greyward-software-selection" /usr/local/libexec/greyward-software-selection
 install -D -m 0644 "$flatpak/software-runtime.desktop" /usr/local/share/applications/io.github.kolunmi.Bazaar.desktop
 install -D -m 0644 "$flatpak/mimeapps.list" /etc/xdg/mimeapps.list

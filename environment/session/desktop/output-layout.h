@@ -3,6 +3,7 @@
 #pragma once
 
 #include <QDir>
+#include <QCryptographicHash>
 #include <QFileInfo>
 #include <QHash>
 #include <QSettings>
@@ -24,17 +25,36 @@ public:
         }
     }
 
-    QString owner(const QString& name, const QStringList& screens, const QString& primary) const {
+    QString owner(const QString& name, const QStringList& screens, const QString& primary) {
         const auto preferred = owners_.value(name);
         if(!preferred.isEmpty() && screens.contains(preferred)) {
             return preferred;
         }
         // A disconnected output keeps its saved preference. Show the icon on
         // exactly one available output until that output returns.
-        if(screens.contains(primary)) {
-            return primary;
+        const auto fallback = screens.contains(primary) ? primary
+            : screens.isEmpty() ? QString() : screens.first();
+        if(preferred.isEmpty() && !fallback.isEmpty()) {
+            // Remember the first placement too: changing the primary output
+            // must not move every icon which was never manually dragged.
+            assign({name}, fallback, screens);
         }
-        return screens.isEmpty() ? QString() : screens.first();
+        return fallback;
+    }
+
+    static QString positionFile(const QString& profile, const QString& screen, QStringList screens) {
+        screens.removeDuplicates();
+        screens.sort(Qt::CaseSensitive);
+        QByteArray identity;
+        for(const auto& output : screens) {
+            // Length-prefix names so neither separators nor enumeration order
+            // can alias another connected-output configuration.
+            const auto bytes = output.toUtf8();
+            identity += QByteArray::number(bytes.size()) + ':' + bytes;
+        }
+        const auto key = QCryptographicHash::hash(identity, QCryptographicHash::Sha256).toHex();
+        return QDir(profile).filePath(QStringLiteral("desktop-layout-%1-%2.conf")
+            .arg(QString::fromLatin1(key), keyFor(screen)));
     }
 
     bool assign(const QStringList& names, const QString& screen, const QStringList& available) {

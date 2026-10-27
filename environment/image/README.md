@@ -186,3 +186,8 @@ the appended EFI partition, before publication. Tests are in
 actual installer acceptance must boot only the product ISO, with no auxiliary
 answer media or preseeded account/encryption. See the active
 [compatibility investigation](../../docs/architecture/ISO_INSTALLER_COMPATIBILITY.md).
+
+Office integration adds four required `--office-rpm FILE` inputs to both staging
+and composition. See [Office build/update/acceptance](../../docs/software/OFFICE_INTEGRATION.md).
+Source/RPM/artwork closure is verified before dependency resolution and again
+after media extraction; supplying an older eight-component set is incomplete.

@@ -42,6 +42,9 @@ class StageTextTests(unittest.TestCase):
             (root / 'artifacts').mkdir()
             baseline = root / 'artifacts/runtime-baseline.json'
             baseline.write_bytes(b'{"original":true}\r\n')
+            office = root / 'office-source/packaging/greyward-office/source.json'
+            office.parent.mkdir(parents=True)
+            office.write_bytes(b'{"hash_bound":true}\r\n')
             self.assertNotEqual(subprocess.run(['bash', str(script)], capture_output=True).returncode, 0)
             report = stage_text.prepare(root)
             result = subprocess.run(['bash', str(script)], capture_output=True, check=True)
@@ -49,6 +52,7 @@ class StageTextTests(unittest.TestCase):
             self.assertEqual(config.read_bytes(), b'key=value\n')
             self.assertEqual(binary.read_bytes(), b'\0\r\n')
             self.assertEqual(baseline.read_bytes(), b'{"original":true}\r\n')
+            self.assertEqual(office.read_bytes(), b'{"hash_bound":true}\r\n')
             self.assertEqual(len(report['normalized_files']), 2)
             self.assertEqual(stage_text.prepare(root)['normalized_files'], [])
 

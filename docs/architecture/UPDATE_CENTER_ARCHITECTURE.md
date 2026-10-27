@@ -81,6 +81,20 @@ Bus name:    org.greyward.Update1
 Object path: /org/greyward/Update1
 ```
 
+Signed-repository first use: DNF5 stores metadata keys separately from RPM
+keys and can prompt again when a repository URL/cache changes. On Fedora 44's
+DNF5 5.4.6, the newer upstream `auto_import_local_keys` option is unavailable.
+Fixed read-only CLI calls (`check-upgrade`, `updateinfo list`, driver
+`repoquery`, including the posture security-only check) therefore pass
+`--assumeyes` to accept keys from administrator-configured repositories without
+a TTY. No install, erase, reboot or arbitrary command is added; package and
+metadata signature checks remain required. The authenticated native apply
+boundary is unchanged. Trust continues to come from the administrator's
+repository configuration, as it does in the native API/provider.
+See [upstream DNF5 issue 2923](https://github.com/rpm-software-management/dnf5/issues/2923).
+The fallback first-key regression is in `test_update_center.py`; the native
+Office fixture tests both untrusted RPMs and invalid metadata signatures.
+
 The UI consumes only this service. It must not invoke rpm-ostree, Flatpak, fwupd, freshclam, or provider-specific command-line tools.
 
 The DMS Secure plugin does not call `org.greyward.Update1` directly. Security

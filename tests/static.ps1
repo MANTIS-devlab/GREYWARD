@@ -23,6 +23,7 @@ $defaultAppsPath = Join-Path $repo 'environment\flatpak\default-applications.lis
 $mimeAppsPath = Join-Path $repo 'environment\flatpak\mimeapps.list'
 $braveFlagsPath = Join-Path $repo 'environment\flatpak\brave-flags.conf'
 $softwareWrapperPath = Join-Path $repo 'environment\flatpak\greyward-software'
+$softwareStartupPath = Join-Path $repo 'environment\flatpak\greyward-bazaar-start'
 $softwareDesktopPath = Join-Path $repo 'environment\flatpak\software.desktop'
 $softwareRuntimeDesktopPath = Join-Path $repo 'environment\flatpak\software-runtime.desktop'
 $productionProvisionPath = Join-Path $repo 'environment\production\provision.sh'
@@ -1139,7 +1140,6 @@ if ((Test-Path -LiteralPath $defaultAppsPath) -and (Test-Path -LiteralPath $mime
     }
     $expectedDefaults = @{
         'io.github.hkdb.Aerion' = 'io.github.hkdb.Aerion.desktop'
-        'com.collaboraoffice.Office' = 'com.collaboraoffice.Office.desktop'
         'com.brave.Browser' = 'com.brave.Browser.desktop'
         'com.protonvpn.www' = 'com.protonvpn.www.desktop'
     }
@@ -1159,10 +1159,12 @@ if ((Test-Path -LiteralPath $defaultAppsPath) -and (Test-Path -LiteralPath $mime
         'x-scheme-handler/http' = 'com.brave.Browser.desktop'
         'x-scheme-handler/https' = 'com.brave.Browser.desktop'
         'text/plain' = 'org.gnome.TextEditor.desktop'
-        'application/pdf' = 'org.gnome.Papers.desktop'
+        'application/pdf' = 'systems.mantis.greyward.PDF.desktop'
         'image/png' = 'org.gnome.Loupe.desktop'
         'image/jpeg' = 'org.gnome.Loupe.desktop'
-        'application/vnd.openxmlformats-officedocument.wordprocessingml.document' = 'com.collaboraoffice.Office.desktop'
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document' = 'systems.mantis.greyward.Writer.desktop'
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' = 'systems.mantis.greyward.Sheets.desktop'
+        'application/vnd.openxmlformats-officedocument.presentationml.presentation' = 'systems.mantis.greyward.Slides.desktop'
     }
     foreach ($mime in $expectedMimeDefaults.Keys) {
         $pattern = '(?m)^' + [regex]::Escape($mime) + '=' + [regex]::Escape($expectedMimeDefaults[$mime]) + ';'
@@ -1180,6 +1182,12 @@ if ((Test-Path -LiteralPath $defaultAppsPath) -and (Test-Path -LiteralPath $mime
     }
 
     $softwareWrapper = Get-Content -Raw -LiteralPath $softwareWrapperPath
+    if (-not (Test-Path -LiteralPath $softwareStartupPath) -or
+        $softwareWrapper -notmatch '--command=sh io\.github\.kolunmi\.Bazaar' -or
+        $softwareWrapper -notmatch '\$config_root/greyward-bazaar-start' -or
+        $provision -notmatch '\$flatpak/greyward-bazaar-start') {
+        $errors.Add('GREYWARD Software cold-cache Explore startup helper is missing or bypassed.')
+    }
     if ($softwareWrapper -match '\.var/app/io\.github\.kolunmi\.Bazaar' -or $softwareWrapper -notmatch '\$config_root/greyward-privacy\.yaml') {
         $errors.Add('GREYWARD Software wrapper does not pass the sandbox-visible curated configuration path.')
     }

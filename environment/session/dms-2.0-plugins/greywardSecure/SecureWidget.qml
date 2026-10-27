@@ -15,7 +15,7 @@ PluginComponent {
     layerNamespacePlugin: "greyward-secure"
     readonly property var provider: pluginService?.pluginDaemonInstances?.[pluginId] ?? null
     readonly property int securityIconSize: root.iconSizeLarge + 4
-    readonly property int flyoutWidth: Math.min(400, Math.max(280, Number(parentScreen?.width || 432) - 32))
+    readonly property int flyoutWidth: Math.min(440, Math.max(280, Number(parentScreen?.width || 472) - 32))
     readonly property int flyoutHeightLimit: Math.max(180, Math.min(660, Number(parentScreen?.height || 756) - 96))
     property bool detailsOpen: false
     property bool activityOpen: false
@@ -119,22 +119,22 @@ PluginComponent {
     popoutContent: Component {
         Rectangle {
             width: root.flyoutWidth - Theme.spacingXL * 2
-            implicitHeight: Math.min(content.implicitHeight + 32, root.flyoutHeightLimit)
+            implicitHeight: Math.min(content.implicitHeight + 40, root.flyoutHeightLimit)
             height: implicitHeight
             color: Theme.surfaceContainer; radius: 14; border.width: 1; border.color: Theme.outlineVariant
             ScrollView {
-                anchors.fill: parent; anchors.margins: 16; clip: true
+                anchors.fill: parent; anchors.margins: 20; clip: true
                 contentWidth: availableWidth
                 ColumnLayout {
                     id: content
-                    width: parent.width; spacing: 12
+                    width: parent.width; spacing: 14
                     RowLayout {
                         Layout.fillWidth: true; spacing: 12
-                        Image { source: Quickshell.iconPath("greyward-security-status"); sourceSize: Qt.size(72,72); Layout.preferredWidth: 36; Layout.preferredHeight: 36 }
+                        Image { source: Quickshell.iconPath("greyward-security-status"); sourceSize: Qt.size(88,88); Layout.preferredWidth: 44; Layout.preferredHeight: 44 }
                         ColumnLayout {
                             Layout.fillWidth: true; spacing: 3
                             Text { text: qsTr("Security Center"); color: Theme.surfaceVariantText; font.family: Theme.fontFamily; font.pixelSize: 12 }
-                            Text { text: root.statusLabel; color: root.accent; font.family: Theme.fontFamily; font.pixelSize: 16; font.weight: Font.DemiBold; Layout.fillWidth: true; wrapMode: Text.Wrap }
+                            Text { text: root.statusLabel; color: root.accent; font.family: Theme.fontFamily; font.pixelSize: 20; font.weight: Font.DemiBold; Layout.fillWidth: true; wrapMode: Text.Wrap }
                         }
                     }
                     Text { text: root.statusReason; color: Theme.surfaceVariantText; font.family: Theme.fontFamily; font.pixelSize: 13; Layout.fillWidth: true; wrapMode: Text.Wrap }
@@ -145,8 +145,8 @@ PluginComponent {
                             required property var modelData
                             Layout.fillWidth: true
                             implicitHeight: eventBody.implicitHeight + 24
-                            radius: 10; color: modelData.severity === "CRITICAL" ? Theme.errorContainer : Theme.surfaceContainerHigh
-                            border.width: 1; border.color: modelData.severity === "CRITICAL" ? Theme.error : Theme.outlineVariant
+                            radius: 12; color: modelData.severity === "CRITICAL" ? Theme.errorContainer : Theme.surfaceContainerHigh
+                            border.width: 1; border.color: modelData.severity === "CRITICAL" ? Theme.error : Qt.alpha(root.accent, 0.30)
                             ColumnLayout {
                                 id: eventBody
                                 anchors.fill: parent; anchors.margins: 12; spacing: 8

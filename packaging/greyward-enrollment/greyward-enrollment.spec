@@ -1,6 +1,6 @@
 Name: greyward-application-enrollment
 Version: 0.1.0
-Release: 80%{?dist}
+Release: 86%{?dist}
 Summary: GREYWARD protected-session installation inputs
 License: GPL-2.0-only AND GPL-3.0-only AND MIT
 Source0: %{name}-%{version}.tar.gz
@@ -29,7 +29,7 @@ BuildRequires: pkgconfig(libsfdo-desktop)
 BuildRequires: pkgconfig(libsfdo-icon)
 BuildRequires: gettext
 BuildRequires: pkgconfig(cmocka)
-Requires: greyward-application-security-experimental = 0.1.0-83%{?dist}
+Requires: greyward-application-security-experimental = 0.1.0-84%{?dist}
 %{!?greyward_dms_dependency:%global greyward_dms_dependency 1.6.2-26}
 Requires: greyward-dms = %{greyward_dms_dependency}%{?dist}
 Requires: greyward-session >= 0.1.0-10
@@ -55,6 +55,7 @@ mkdir compositor
 tar -xf %{SOURCE1} -C compositor
 patch --batch --fuzz=0 -d compositor -p1 < security-center/packaging/application-security/desktop/labwc-protected-input.patch
 patch --batch --fuzz=0 -d compositor -p1 < security-center/packaging/application-security/desktop/labwc-administration-indicator.patch
+patch --batch --fuzz=0 -d compositor -p1 < security-center/packaging/application-security/desktop/labwc-screenshot.patch
 
 %build
 meson setup compositor/build compositor --buildtype=release --wrap-mode=nofallback -Dman-pages=disabled -Dtest=enabled
@@ -73,13 +74,15 @@ binary=pathlib.Path('compositor/build/labwc')
 pathlib.Path('inputs.json').write_text(json.dumps({'schema':'greyward.enrollment-inputs/v1',
  'labwcCommit':'12987307a5de32db5acbb3f59d41277373ab969e',
  'labwcSourceSha256':'67fe996c4e5afd855fdbfbc3af0b05245667ec97666f463472a1961b46047f48',
- 'labwcSha256':hashlib.sha256(binary.read_bytes()).hexdigest()},indent=2)+'\n')
+ 'labwcSha256':hashlib.sha256(binary.read_bytes()).hexdigest(),
+ 'screenshotPatchSha256':hashlib.sha256(pathlib.Path('security-center/packaging/application-security/desktop/labwc-screenshot.patch').read_bytes()).hexdigest()},indent=2)+'\n')
 PY
 
 %check
 meson test -C compositor/build --print-errorlogs
 python3 -m py_compile packaging/greyward-enrollment/enroll.py packaging/greyward-enrollment/installer-accounts.py security-center/packaging/application-security/maintenance.py
 python3 -m py_compile packaging/greyward-enrollment/migrate-dms-shell.py
+python3 -m py_compile packaging/greyward-enrollment/migrate-screenshot.py
 bash -n packaging/greyward-enrollment/build.sh
 
 %install
@@ -87,6 +90,8 @@ base=%{buildroot}%{_datadir}/greyward-application-security/enrollment
 install -d "$base/policy"
 # Retain the exact public compiler inputs for source-aware ISO staging.
 install -m0444 policy/*.te policy/*.fc "$base/policy/"
+install -Dm0444 security-center/packaging/application-security/desktop/labwc-screenshot.patch "$base/patches/labwc-screenshot.patch"
+install -Dm0755 packaging/greyward-enrollment/migrate-screenshot.py %{buildroot}/usr/libexec/greyward-migrate-screenshot
 install -m0444 policy/*.pp environment/production/selinux/greyward-application-auth.cil environment/production/selinux/greyward-application-metadata.cil environment/production/selinux/greyward-administration.cil packaging/greyward-enrollment/runtime-boundary.cil "$base/policy/"
 install -m0444 inputs.json "$base/"
 install -m0444 packaging/greyward-enrollment/installer-accounts.py "$base/"
@@ -98,6 +103,7 @@ install -Dm0644 security-center/packaging/application-security/greyward-maintena
 install -Dm0644 security-center/packaging/application-security/greyward-maintenance-console.service %{buildroot}%{_unitdir}/greyward-maintenance-console.service
 
 %files
+/usr/libexec/greyward-migrate-screenshot
 %license compositor/LICENSE
 %{_datadir}/greyward-application-security/enrollment/
 %{_libexecdir}/greyward-enrollment
@@ -108,6 +114,21 @@ install -Dm0644 security-center/packaging/application-security/greyward-maintena
 %{_unitdir}/greyward-maintenance-console.service
 
 %changelog
+* Tue Oct 27 2026 MANTIS SYSTEMS - 0.1.0-86
+- Match the shared protected startup visual without changing admission or input policy.
+
+* Sun Oct 25 2026 MANTIS SYSTEMS - 0.1.0-84
+- Match the manifest-verified DMS Settings artwork package for future installations.
+
+* Sat Oct 24 2026 MANTIS SYSTEMS - 0.1.0-83
+- Restore only an orphaned protected VT label during a verified quiescent screenshot migration.
+
+* Sat Oct 24 2026 MANTIS SYSTEMS - 0.1.0-82
+- Give physical Print Screen a restricted temporary channel, revoked before protected session locks.
+
+* Sat Oct 24 2026 MANTIS SYSTEMS - 0.1.0-81
+- Preserve AMD metadata-only startup and permit Flatpak's returned revokefs socket and FUSE symlink staging.
+
 * Fri Oct 23 2026 MANTIS SYSTEMS - 0.1.0-80
 - Match Application Security 83 with the offline collector correction and accepted authentication visuals.
 

@@ -38,13 +38,14 @@ runtime surfaces. This is an active-development contract, not a release claim:
   available it truthfully reports that the update is being prepared.
 - GREYWARD Security Center as the GREYWARD-specific security/privacy surface.
   Its production RPM and desktop entry are inputs to the production provisioner.
-- A practical desktop baseline: Firefox as an alternate browser, Nautilus,
-  Terminal (Black Box engine, GREYWARD-owned identity), GNOME Screenshot, OBS Studio, Papers, File Roller, CUPS printer
-  support, and the system Flathub applications Aerion mail, Collabora Office,
-  Haruna, Brave, and Proton VPN. The installed set and default handlers are defined
+- A practical desktop baseline: Firefox as an alternate browser, Strata,
+  Terminal (Black Box engine, GREYWARD-owned identity), Swappy screenshots, native GREYWARD Office, File Roller, CUPS printer
+  support, and the system Flathub applications Aerion mail,
+  Brave, and Proton VPN. The installed set and default handlers are defined
   by `environment/flatpak/default-applications.list` and
   `environment/flatpak/mimeapps.list`. GTK/libadwaita applications prefer
-  dark Adwaita; Haruna is network-isolated by default for local playback.
+  dark Adwaita. Native Office is owned by `packaging/greyward-office/`; the
+  production package list supplies its four independent applications.
 
 The final ISO must not ship the removed standalone GREYWARD Settings
 application, its RPM, its deployment script, or its dedicated backend/design

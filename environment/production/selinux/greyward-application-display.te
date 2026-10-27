@@ -74,6 +74,11 @@ allow greyward_as_display_t greyward_as_seat_tty_t:chr_file { open read write io
 manage_dirs_pattern(greyward_as_display_t, user_tmp_t, user_tmp_t)
 manage_sock_files_pattern(greyward_as_display_t, user_tmp_t, user_tmp_t)
 allow greyward_guard_t greyward_as_display_t:unix_stream_socket connectto;
+# Physical screenshots receive an already-connected socketpair FD from the
+# compositor. It is restricted by exact wl_client identity, not the creator's
+# display SID, and revoked before protected locks or after three seconds.
+# No authentication socket, process inspection or permanent capture global.
+allow greyward_guard_t greyward_as_display_t:unix_stream_socket { read write getattr getopt };
 allow greyward_as_display_t greyward_guard_t:unix_stream_socket connectto;
 
 corecmd_exec_bin(greyward_as_display_t)

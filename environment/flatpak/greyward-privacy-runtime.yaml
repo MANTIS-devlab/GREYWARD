@@ -21,7 +21,6 @@ rows:
       appids:
         list:
           - io.github.hkdb.Aerion
-          - com.collaboraoffice.Office
           - com.brave.Browser
 
   - section:

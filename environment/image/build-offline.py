@@ -26,7 +26,9 @@ nvme-cli
 NetworkManager chrony dnf5 dnf-plugins-core plymouth plymouth-scripts
 plymouth-plugin-script plymouth-plugin-label dracut curl ca-certificates patch
 tar gzip util-linux""".split()
-EXCLUDED = "openssh-server,gnome-initial-setup,gnome-session-wayland-session,initial-setup,initial-setup-gui,obs-studio,obs-studio-plugin-*,qterminal,pcmanfm-qt"
+# Runtime closure must never inherit optional tooling from a physical builder.
+# Exclude compiler/factory applications, not their shared runtime libraries.
+EXCLUDED = "papers,openssh-server,gnome-initial-setup,gnome-session-wayland-session,initial-setup,initial-setup-gui,obs-studio,obs-studio-plugin-*,qterminal,pcmanfm-qt,haruna,gnome-screenshot,gcc,gcc-c++,meson,ninja-build,rpm-build,cargo,rust,lorax,lorax-templates-generic,mock"
 FLATHUB_REPO_URL = "https://dl.flathub.org/repo/"
 FLATHUB_REPO_GPG_KEY_SHA256 = "8b124b52da2b0c8a54b338969ebc108488ca1caf718fb45ba6ffee6c7adfcbe0"
 
@@ -134,10 +136,19 @@ def prepare_repositories(stage, work, offline):
         (configs / (name + ".repo")).write_text(
             f"[{name}]\nname={name}\n{source}\nenabled=1\ngpgcheck=1\n"
             f"gpgkey=file://{keys / key}\nskip_if_unavailable=False\n")
+    # The signed Office feed is for later installed updates, never a substitute
+    # for the four exact staged RPMs or part of online dependency resolution.
+    office = stage / 'office-source'
+    run('python3', office / 'packaging/greyward-office/stage-channel.py',
+        '--repo', office, '--offline', offline, '--require-published')
     return configs
 
 
 def build_rpms(stage, work, offline, baseline):
+    # Refuse stale/incomplete office packages before resolving any image inputs.
+    office_source = stage / 'office-source'
+    run('python3', office_source / 'packaging/greyward-office/verify-inputs.py',
+        '--repo', office_source, '--stage', stage)
     configs = prepare_repositories(stage, work, offline)
     repo = offline / "rpm"
     packages = repo / "Packages"

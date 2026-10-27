@@ -1,0 +1,20 @@
+#!/bin/sh
+# Runs INSIDE Bazaar's existing Flatpak sandbox. Keep its normal daemon,
+# permissions, settings backend and application arguments.
+set -eu
+
+cache_root=${XDG_CACHE_HOME:-"$HOME/.cache"}
+explore_cache="$cache_root/io.github.kolunmi.Bazaar/core/flathub-cache"
+
+# Bazaar 0.9.7 applies its three-hour startup interval even without Explore
+# state. Allow a cold-cache launch to fetch immediately; never delete a cache
+# or reset the interval when cached content is already available.
+if [ ! -s "$explore_cache" ]; then
+    if ! gsettings set io.github.kolunmi.Bazaar last-refresh-time 0; then
+        printf '%s\n' 'GREYWARD Software: could not enable cold-cache Explore refresh.' >&2
+        # Existing store/install functionality must remain available if an
+        # upstream settings schema changes or its backend cannot be written.
+    fi
+fi
+
+exec bazaar-daemon "$@"

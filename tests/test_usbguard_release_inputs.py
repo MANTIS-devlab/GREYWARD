@@ -29,6 +29,10 @@ class UsbApprovalReleaseInputs(unittest.TestCase):
 
     def payloads(self, kind):
         result = {installed: (ROOT / source).read_bytes() for source, installed in CHECK.SOURCES[kind].items()}
+        if kind == 'screenshot-enrollment':
+            content = CHECK.normalized((ROOT / 'security-center/packaging/application-security/desktop/labwc-screenshot.patch').read_bytes())
+            result['/usr/share/greyward-application-security/enrollment/inputs.json'] = json.dumps({
+                'screenshotPatchSha256': hashlib.sha256(content).hexdigest()}).encode()
         if kind == 'dms':
             release = json.loads((ROOT / 'environment/production/dms-release.json').read_text())['releaseId']
             result['/usr/lib/greyward/dms/' + release + '/release.json'] = json.dumps({
@@ -112,6 +116,19 @@ class UsbApprovalReleaseInputs(unittest.TestCase):
         if condition >= 0:
             self.assertLess(role, condition)
         self.assertLess(role, build.index('--kind dms --rpm ', start))
+
+    def test_flatpak_policy_hotfix_cannot_be_lost_in_rpm_import(self):
+        payloads = self.payloads('flatpak-session')
+        path = '/usr/share/greyward-application-security/enrollment/policy/greyward_application_session.te'
+        payloads[path] = b'policy_module(greyward_application_session, 0.1.0)\n'
+        with self.assertRaisesRegex(ValueError, 'Stale or missing'):
+            CHECK.verify(ROOT, Path('pre-hotfix.rpm'), 'flatpak-session',
+                         lambda rpm, name: payloads[name])
+        build = (ROOT / 'environment/image/build.sh').read_text()
+        start = build.index('test -n "$usb_context_rpm"')
+        check = build.index('--kind flatpak-session --rpm ', start)
+        condition = build.index('if [[ "$security_manifest_schema"', start)
+        self.assertLess(check, condition)
 
 
 if __name__ == '__main__':

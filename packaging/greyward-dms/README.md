@@ -32,6 +32,30 @@ a new matched runtime generation and its normal protected migration. Enrollment'
 exact RPM dependency for a new matched build and the image identity-reuse guard
 consume the package pin. Fresh-image staging still requires that newly matched
 Enrollment RPM; runtime compatibility does not waive image checks.
+
+The accepted 27 October plugin presentation is package revision `7.11`.
+For an offline build without rebuilding identical executables, run
+`build-artwork-update.py --plugins-only BASE-RPM NEW-OUTPUT` as an unprivileged
+builder. `build.pluginUpdate` locks predecessor NEVRA/RPM/shell/plugin digests
+and exactly the two visual QML adapters plus their versioned manifest. Collector,
+state palette/model, executables and protected shell stay identical. Undeclared
+changes or stale source hashes refuse the build. The normal `build.sh` route
+remains available and consumes the same source lock. Both routes provide the
+verified predecessor's exact DMS dependency for an existing Enrollment 84;
+future image builds use the new matched Enrollment 85 requiring DMS 7.11.
+This plugin-only update does not require protected-profile migration or logout.
+
+The explicit artwork-only successor is different from an ordinary-plugin-only
+update: `build.artworkUpdate` pins the complete accepted predecessor RPM and its
+shell digest. `build-artwork-update.py BASE-RPM NEW-OUTPUT` runs unprivileged,
+verifies the three unchanged executables, unchanged plugin/source/patch locks,
+and changes only the canonical Settings SVG plus its receipt. It does not build
+from arbitrary installed files or load code from the predecessor. Normal full
+source builds remain available. The successor requires a newly matched
+Enrollment RPM for image composition and the protected-profile migration at
+activation; the shared selector is not evidence that the old profile matches.
+An incompatible executable, extra changed artwork path, stale icon copy or
+different predecessor stops this route. No public artifact is published by it.
 A candidate can pin a separately verified Go toolchain extracted only inside
 its new build tree. The host compiler is unchanged. Reviewed shell additions
 have a closed inventory and individual hashes; existing upstream files can only

@@ -12,10 +12,10 @@ Usage: environment/image/build.sh [--output DIRECTORY] [--security-rpm FILE]... 
 
 Without --security-rpm this prepares an incomplete development input set and
 marks the missing production RPMs in the manifest. A production image tool
-must supply exactly eight GREYWARD RPMs: greyward-branding, greyward-session,
+must supply twelve GREYWARD RPMs: greyward-branding, greyward-session,
 greyward-security-center, greyward-security-context, greyward-dms,
 greyward-application-security-experimental, greyward-application-enrollment,
-and greyward-files, plus every pinned external production RPM listed in
+greyward-files, and the four --office-rpm inputs, plus every pinned external production RPM listed in
 environment/production/external-rpms.txt. Use
   --require-complete to reject an incomplete input set instead of preparing it
   for source inspection. Complete staging also requires the manifest emitted
@@ -31,6 +31,7 @@ output="$repo_root/output/greyward-production-inputs"
 security_rpms=()
 production_rpms=()
 enrollment_rpms=()
+office_rpms=()
 branding_rpm=''
 dms_rpm=''
 session_rpm=''
@@ -57,6 +58,11 @@ rpm_query() {
 while (($#)); do
   case "$1" in
     --dms-candidate) dms_candidate=true; shift ;;
+    --office-rpm)
+      (($# >= 2)) || exit 2
+      office_rpms+=("$(realpath -e "$2")")
+      shift 2
+      ;;
     --enrollment-rpm)
       (($# >= 2)) || exit 2
       enrollment_rpms+=("$(realpath -e "$2")")
@@ -136,6 +142,13 @@ while (($#)); do
       ;;
   esac
 done
+
+python3 "$repo_root/packaging/greyward-office/verify-inputs.py" --repo "$repo_root" --sources-only
+if $require_complete || ((${#office_rpms[@]})); then
+  office_args=()
+  for rpm in "${office_rpms[@]}"; do office_args+=(--rpm "$rpm"); done
+  python3 "$repo_root/packaging/greyward-office/verify-inputs.py" --repo "$repo_root" "${office_args[@]}"
+fi
 
 case "$output" in
   "$repo_root"|"$repo_root"/*) ;;
@@ -525,6 +538,17 @@ if [[ -n "$branding_rpm" ]]; then cp -a "$branding_rpm" "$output/rpms/"; fi
 for rpm in "${security_rpms[@]}"; do cp -a "$rpm" "$output/rpms/"; done
 for rpm in "${production_rpms[@]}"; do cp -a "$rpm" "$output/rpms/"; done
 for rpm in "${enrollment_rpms[@]}"; do cp -a "$rpm" "$output/rpms/"; done
+for rpm in "${office_rpms[@]}"; do cp -a "$rpm" "$output/rpms/"; done
+mkdir -p "$output/office-source/packaging/greyward-office" "$output/office-source/branding"
+# Copy declared source types only: no interpreter caches or builder artifacts.
+cp -a "$repo_root/packaging/greyward-office/"*.py \
+  "$repo_root/packaging/greyward-office/"*.json \
+  "$repo_root/packaging/greyward-office/"*.in \
+  "$repo_root/packaging/greyward-office/patches" \
+  "$repo_root/packaging/greyward-office/licenses" \
+  "$repo_root/packaging/greyward-office/keys" \
+  "$output/office-source/packaging/greyward-office/"
+cp -a "$branding/source" "$output/office-source/branding/"
 cp -a "$repo_root/packaging/greyward-enrollment/installer-accounts.py" "$output/"
 
 mkdir -p "$output/artifacts"
@@ -595,6 +619,12 @@ PY
   # A migrated reference does not exercise first-install role assembly. Never
   # import its stale generator merely because its active seat verifies.
   python3 "$repo_root/environment/image/verify-usbguard-inputs.py" --repo "$repo_root" --kind ordinary-role --rpm "$appsec_rpm"
+  # Reference-only policy modules are absent from installed-RPM exports. Refuse
+  # stale Flatpak session inputs on both source and imported artifact paths.
+  python3 "$repo_root/environment/image/verify-usbguard-inputs.py" --repo "$repo_root" --kind flatpak-session --rpm "$enrollment_rpm"
+  python3 "$repo_root/environment/image/verify-usbguard-inputs.py" --repo "$repo_root" --kind screenshot-enrollment --rpm "$enrollment_rpm"
+  python3 "$repo_root/environment/image/verify-usbguard-inputs.py" --repo "$repo_root" --kind screenshot-session --rpm "$session_rpm"
+  python3 "$repo_root/environment/image/verify-usbguard-inputs.py" --repo "$repo_root" --kind desktop-session --rpm "$session_rpm"
   if [[ "$security_manifest_schema" == 'greyward.security-center-build/v1' ]]; then
     python3 "$repo_root/environment/image/verify-usbguard-inputs.py" --repo "$repo_root" --kind dms --rpm "$dms_rpm" --dms-manifest "$release_manifest"
     python3 "$repo_root/environment/image/verify-usbguard-inputs.py" --repo "$repo_root" --kind context --rpm "$usb_context_rpm"
@@ -698,6 +728,9 @@ fi
   for rpm in "${security_rpms[@]}"; do
     printf 'rpm\t%s\t%s\tNEVRA_REQUIRES_FEDORA_QUERY\n' "$(basename "$rpm")" "$(basename "$rpm")"
   done
+  for rpm in "${office_rpms[@]}"; do
+    printf 'rpm\t%s\t%s\tGREYWARD_PACKAGE_INPUT\n' "$(basename "$rpm")" "$(basename "$rpm")"
+  done
   for rpm in "${production_rpms[@]}"; do
     printf 'rpm\t%s\t%s\tPINNED_EXTERNAL_INPUT\n' "$(basename "$rpm")" "$(basename "$rpm")"
   done
@@ -756,7 +789,8 @@ cat > "$output/build-manifest.json" <<EOF
   "security_build_manifest": "$(if [[ -n "$security_build_manifest" ]]; then printf '%s' artifacts/security-center-build-manifest.tsv; else printf '%s' MISSING; fi)",
   "production_dependency_rpm_count": ${#production_rpms[@]},
   "enrollment_rpm_count": ${#enrollment_rpms[@]},
-  "production_inputs_complete": $([[ -n "$session_rpm" && -n "$files_rpm" && -n "$dms_rpm" && -n "$branding_rpm" && $center_count -eq 1 && $context_count -eq 1 && ${#enrollment_rpms[@]} -eq 2 && ${#production_rpms[@]} -eq ${#expected_production_rpms[@]} ]] && printf true || printf false),
+  "office_rpm_count": ${#office_rpms[@]},
+  "production_inputs_complete": $([[ -n "$session_rpm" && -n "$files_rpm" && -n "$dms_rpm" && -n "$branding_rpm" && $center_count -eq 1 && $context_count -eq 1 && ${#enrollment_rpms[@]} -eq 2 && ${#office_rpms[@]} -eq 4 && ${#production_rpms[@]} -eq ${#expected_production_rpms[@]} ]] && printf true || printf false),
   "security_rpms": [$security_rpm_json],
   "artifacts": {
     "package_inventory": "artifacts/package-inventory.txt",
@@ -769,10 +803,12 @@ cat > "$output/build-manifest.json" <<EOF
 }
 EOF
 
-if [[ -z "$branding_rpm" || -z "$dms_rpm" || -z "$session_rpm" || -z "$files_rpm" ]] || ((${#security_rpms[@]} != 2 || ${#enrollment_rpms[@]} != 2 || ${#production_rpms[@]} != ${#expected_production_rpms[@]})); then
-  echo "WARNING: staged inputs are incomplete; provide all eight GREYWARD RPMs and every pinned external RPM for production image construction." >&2
+if [[ -z "$branding_rpm" || -z "$dms_rpm" || -z "$session_rpm" || -z "$files_rpm" ]] || ((${#security_rpms[@]} != 2 || ${#enrollment_rpms[@]} != 2 || ${#office_rpms[@]} != 4 || ${#production_rpms[@]} != ${#expected_production_rpms[@]})); then
+  echo "WARNING: staged inputs are incomplete; provide all twelve GREYWARD RPMs and every pinned external RPM for production image construction." >&2
 fi
 # cp preserves Windows checkout line endings. Normalize only the staged source
 # after provenance checks, before dependency building and payload hashing.
 python3 "$repo_root/environment/image/stage-text.py" --stage "$output"
+python3 "$repo_root/environment/image/verify-software-inputs.py" \
+  --repo "$repo_root" --stage "$output"
 printf 'Prepared GREYWARD production image inputs: %s\n' "$output"

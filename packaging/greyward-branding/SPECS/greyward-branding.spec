@@ -1,9 +1,10 @@
 Name:           greyward-branding
 Version:        0.1.0
-Release:        16%{?dist}
+Release:        18%{?dist}
 Summary:        GREYWARD-owned shell, Anaconda, wallpaper, and Plymouth branding assets
 License:        GPL-3.0-only AND LicenseRef-GREYWARD-Branding
 BuildArch:      noarch
+BuildRequires:  librsvg2-tools
 Requires:       plymouth-plugin-script
 Requires:       plymouth-plugin-label
 Source0:        greyward.plymouth
@@ -15,6 +16,11 @@ Source5:        greyward-anaconda.conf
 Source6:        greyward-symbol.svg
 Source7:        greyward-cockpit-branding.css
 Source8:        GREYWARD-Branding-NOTICE
+Source9:        greyward-software.svg
+Source10:       greyward-image-viewer.svg
+Source11:       greyward-settings.svg
+Source12:       org.gnome.Loupe.desktop
+Source13:       software-runtime.desktop
 
 %description
 Canonical GREYWARD presentation assets. This package does not replace Fedora
@@ -24,6 +30,12 @@ rebuilds initramfs; removal restores the prior theme when one was recorded.
 %prep
 
 %build
+for item in software image-viewer settings; do
+  case "$item" in software) source=%{SOURCE9} ;; image-viewer) source=%{SOURCE10} ;; settings) source=%{SOURCE11} ;; esac
+  for size in 24 32 48 64 128 256; do
+    rsvg-convert -w "$size" -h "$size" "$source" -o "$item-$size.png"
+  done
+done
 
 %install
 install -d %{buildroot}%{_datadir}/greyward/branding
@@ -43,9 +55,24 @@ install -m 0644 %{SOURCE5} %{buildroot}%{_sysconfdir}/anaconda/profile.d/greywar
 install -m 0644 %{SOURCE7} %{buildroot}%{_sysconfdir}/cockpit/branding/branding.css
 install -m 0644 %{SOURCE6} %{buildroot}%{_sysconfdir}/cockpit/branding/greyward-symbol.svg
 install -D -m 0644 %{SOURCE8} %{buildroot}%{_licensedir}/%{name}/GREYWARD-Branding-NOTICE
+install -Dm0644 %{SOURCE12} %{buildroot}/usr/local/share/applications/org.gnome.Loupe.desktop
+install -Dm0644 %{SOURCE13} %{buildroot}/usr/local/share/applications/io.github.kolunmi.Bazaar.desktop
+for item in software image-viewer settings; do
+  case "$item" in software) source=%{SOURCE9}; alias=io.github.kolunmi.Bazaar ;; image-viewer) source=%{SOURCE10}; alias=org.gnome.Loupe ;; settings) source=%{SOURCE11}; alias=dms_settings ;; esac
+  install -Dm0644 "$source" %{buildroot}%{_datadir}/icons/hicolor/scalable/apps/greyward-$item.svg
+  install -Dm0644 "$source" %{buildroot}%{_datadir}/icons/Greyward/scalable/apps/$alias.svg
+  for size in 24 32 48 64 128 256; do
+    install -Dm0644 "$item-$size.png" %{buildroot}%{_datadir}/icons/Greyward/${size}x${size}/apps/$alias.png
+  done
+done
 ln -s ../greyward-update-status.service %{buildroot}%{_unitdir}/system-update.target.wants/greyward-update-status.service
 
 %files
+/usr/local/share/applications/org.gnome.Loupe.desktop
+/usr/local/share/applications/io.github.kolunmi.Bazaar.desktop
+%{_datadir}/icons/hicolor/scalable/apps/greyward-*.svg
+%{_datadir}/icons/Greyward/scalable/apps/*
+%{_datadir}/icons/Greyward/*/apps/*.png
 %{_datadir}/greyward
 %{_datadir}/plymouth/themes/greyward
 %{_datadir}/anaconda/pixmaps/greyward-anaconda-logo.png
@@ -58,6 +85,12 @@ ln -s ../greyward-update-status.service %{buildroot}%{_unitdir}/system-update.ta
 %license %{_licensedir}/%{name}/GREYWARD-Branding-NOTICE
 
 %changelog
+* Tue Oct 27 2026 MANTIS SYSTEMS - 0.1.0-18
+- Select shutdown and reboot text from Plymouth's native lifecycle mode.
+
+* Sun Oct 25 2026 MANTIS SYSTEMS - 0.1.0-17
+- Package the coordinated Software, Image Viewer and Settings application icons.
+
 * Sun Oct 11 2026 MANTIS SYSTEMS - 0.1.0-16
 - Rebuild the package from the integrated GREYWARD branding sources.
 

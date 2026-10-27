@@ -63,40 +63,13 @@ ShellRoot {
             anchors.bottom: true
             anchors.left: true
             anchors.right: true
-            color: "#151a20"
+            color: "#0B0D10"
 
             // Show a trusted background during protected-login startup. The
             // normal desktop wallpaper replaces it at the same layer.
             mask: Region { item: Item {} }
 
-            Rectangle {
-                anchors.fill: parent
-                gradient: Gradient {
-                    GradientStop { position: 0.0; color: "#202830" }
-                    GradientStop { position: 1.0; color: "#11161b" }
-                }
-            }
-
-            Column {
-                anchors.centerIn: parent
-                spacing: 12
-
-                Text {
-                    anchors.horizontalCenter: parent.horizontalCenter
-                    text: "GREYWARD"
-                    color: "#d9e1e7"
-                    font.pixelSize: 28
-                    font.weight: Font.DemiBold
-                    font.letterSpacing: 4
-                }
-
-                Text {
-                    anchors.horizontalCenter: parent.horizontalCenter
-                    text: "Starting your secure desktop…"
-                    color: "#aab7c2"
-                    font.pixelSize: 15
-                }
-            }
+            GreywardStartup { anchors.fill: parent }
         }
     }
 
@@ -256,38 +229,98 @@ ShellRoot {
             anchors.bottom: true
             anchors.left: true
             anchors.right: true
-            color: "#151a20"
+            color: "#0B0D10"
             mask: Region { item: Item {} }
 
+            GreywardStartup { anchors.fill: parent }
+        }
+    }
+}
+'''
+
+
+# One visual source for the early backdrop and the full protected shell.
+# The animation is deliberately finite: the long-lived auth background must
+# return to idle after login rather than animate invisibly behind the desktop.
+STARTUP_CONTENT = '''import QtQuick
+import QtQuick.Shapes
+
+Item {
+    id: startupVisual
+    objectName: "greywardStartupVisual"
+    enabled: false
+
+    Rectangle {
+        anchors.fill: parent
+        gradient: Gradient {
+            GradientStop { position: 0.0; color: "#12181E" }
+            GradientStop { position: 0.55; color: "#0D1116" }
+            GradientStop { position: 1.0; color: "#080B0E" }
+        }
+    }
+
+    Column {
+        anchors.centerIn: parent
+        width: 460
+        spacing: 0
+        scale: Math.max(0.35, Math.min(1, (startupVisual.width - 48) / width,
+                                     (startupVisual.height - 48) / implicitHeight))
+
+        Item {
+            anchors.horizontalCenter: parent.horizontalCenter
+            width: 112; height: 140
+@STARTUP_EMBLEM@
+        }
+        Item { width: 1; height: 22 }
+        Text {
+            width: parent.width
+            horizontalAlignment: Text.AlignHCenter
+            text: "GREYWARD"
+            color: "#E1E7EC"
+            font.family: "Inter"
+            font.pixelSize: 30
+            font.weight: Font.Medium
+            font.letterSpacing: 5.5
+        }
+        Item { width: 1; height: 14 }
+        Text {
+            width: parent.width
+            horizontalAlignment: Text.AlignHCenter
+            text: "Preparing your desktop"
+            color: "#A3B0BC"
+            font.family: "Inter"
+            font.pixelSize: 14
+        }
+        Item { width: 1; height: 30 }
+        Rectangle {
+            anchors.horizontalCenter: parent.horizontalCenter
+            width: 120; height: 2; radius: 1
+            color: "#26313B"
+            clip: true
             Rectangle {
-                anchors.fill: parent
-                gradient: Gradient {
-                    GradientStop { position: 0.0; color: "#202830" }
-                    GradientStop { position: 1.0; color: "#11161b" }
-                }
-            }
-
-            Column {
-                anchors.centerIn: parent
-                spacing: 12
-
-                Text {
-                    anchors.horizontalCenter: parent.horizontalCenter
-                    text: "GREYWARD"
-                    color: "#d9e1e7"
-                    font.pixelSize: 28
-                    font.weight: Font.DemiBold
-                    font.letterSpacing: 4
-                }
-
-                Text {
-                    anchors.horizontalCenter: parent.horizontalCenter
-                    text: "Starting your secure desktop…"
-                    color: "#aab7c2"
-                    font.pixelSize: 15
+                width: 34; height: parent.height; radius: 1
+                color: "#BBCBD7"
+                NumberAnimation on x {
+                    id: waitSweep
+                    from: -34; to: 120
+                    duration: 1600
+                    loops: 4
+                    running: startupVisual.visible
+                    easing.type: Easing.InOutSine
                 }
             }
         }
+    }
+
+    Text {
+        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.bottom: parent.bottom
+        anchors.bottomMargin: 24
+        text: "MANTIS SYSTEMS"
+        color: "#65717D"
+        font.family: "Inter"
+        font.pixelSize: 10
+        font.letterSpacing: 2
     }
 }
 '''
@@ -390,6 +423,77 @@ def branded_authorization_content(text):
     text = replace_once(text, 'import QtQuick\n', 'import QtQuick\nimport QtQuick.Shapes\n')
     text = block(text, "    Item {\n        id: headerSection", "")
     return block(text, "    Column {\n        id: bottomSection", authorization_card())
+
+
+def startup_content():
+    """Compile only canonical OS logo paths; no image worker or file at runtime."""
+    source = Path(__file__).with_name('greyward-symbol.svg')
+    if not source.exists():
+        source = Path(__file__).resolve().parents[3] / 'data/greyward-symbol.svg'
+    if source.is_symlink() or source.stat().st_size > 65536:
+        raise ValueError('Invalid startup emblem')
+    svg = ET.fromstring(source.read_bytes())
+    ns = '{http://www.w3.org/2000/svg}'
+    if svg.tag != ns + 'svg' or svg.get('viewBox') != '0 0 1024 1024':
+        raise ValueError('Unsupported startup emblem geometry')
+    def color(value, opacity=1):
+        value = '#FFFFFF' if value == 'white' else value
+        if not re.fullmatch(r'#[0-9a-fA-F]{6}', value) or not 0 <= opacity <= 1:
+            raise ValueError('Unsupported startup emblem paint')
+        rgb = [int(value[i:i + 2], 16) / 255 for i in (1, 3, 5)]
+        return 'Qt.rgba(' + ', '.join(map(str, [*rgb, opacity])) + ')'
+    gradients = {}
+    for defs in svg.findall(ns + 'defs'):
+        for gradient in defs:
+            if (gradient.tag != ns + 'linearGradient'
+                    or gradient.get('id') != 'gradient_0' or gradients
+                    or gradient.get('gradientUnits') != 'userSpaceOnUse'
+                    or set(gradient.attrib) != {'id', 'gradientUnits', 'x1', 'y1', 'x2', 'y2'}):
+                raise ValueError('Unsupported startup emblem gradient')
+            coordinates = {key: float(gradient.get(key)) for key in ('x1', 'y1', 'x2', 'y2')}
+            if not all(abs(value) <= 4096 for value in coordinates.values()) or not 2 <= len(gradient) <= 16:
+                raise ValueError('Invalid startup emblem gradient')
+            stops = []
+            for stop in gradient:
+                if stop.tag != ns + 'stop' or set(stop.attrib) != {'offset', 'stop-color', 'stop-opacity'}:
+                    raise ValueError('Unsupported startup emblem gradient stop')
+                position = float(stop.get('offset'))
+                if not 0 <= position <= 1:
+                    raise ValueError('Invalid startup emblem gradient stop')
+                stops.append('GradientStop { position: ' + str(position) + '; color: '
+                             + color(stop.get('stop-color'), float(stop.get('stop-opacity'))) + ' }')
+            gradients['url(#gradient_0)'] = 'fillGradient: LinearGradient { ' + '; '.join(
+                key + ': ' + str(value) for key, value in coordinates.items()) + '; ' + ' '.join(stops) + ' }'
+    paths = []
+    for child in svg:
+        # Nonrendered metadata is omitted; local definitions are compiled above.
+        if child.tag in {ns + 'metadata', ns + 'defs', ns + 'title', ns + 'desc'}:
+            continue
+        if (child.tag != ns + 'path' or not {'d', 'fill'}.issubset(child.attrib)
+                or set(child.attrib) - {'d', 'fill', 'fill-opacity'}):
+            raise ValueError('Unsupported startup emblem paint')
+        opacity = float(child.get('fill-opacity', '1'))
+        if not 0 <= opacity <= 1:
+            raise ValueError('Invalid startup emblem opacity')
+        fill = child.get('fill')
+        paint = gradients.get(fill) or 'fillColor: ' + color(fill, opacity)
+        if fill in gradients and opacity != 1:
+            raise ValueError('Unsupported startup gradient opacity')
+        paths.append('                ShapePath { strokeColor: "transparent"; ' + paint
+                     + '\n                    PathSvg { path: ' + json.dumps(child.attrib['d']) + ' } }')
+    if not paths:
+        raise ValueError('Empty startup emblem')
+    emblem = '''            Shape {
+                objectName: "greywardStartupEmblem"
+                width: 1024; height: 1024
+                scale: parent.width / 512
+                x: -256 * scale; y: -192 * scale
+                transformOrigin: Item.TopLeft
+                asynchronous: false
+                preferredRendererType: Shape.GeometryRenderer
+@PATHS@
+            }'''.replace('@PATHS@', '\n'.join(paths))
+    return STARTUP_CONTENT.replace('@STARTUP_EMBLEM@', emblem)
 
 
 def authorization_emblem():
@@ -1237,6 +1341,9 @@ def assemble(source, release_receipt, output):
     startup = output / "shell/startup"
     startup.mkdir()
     (startup / "shell.qml").write_bytes(STARTUP_SHELL.encode())
+    visual = startup_content().encode()
+    (output / "shell/GreywardStartup.qml").write_bytes(visual)
+    (startup / "GreywardStartup.qml").write_bytes(visual)
     generated, digest = receipt(output / "shell")
     result = {"schema": "greyward.authentication-shell/v1", "sourceRelease": release["releaseId"],
               "sourceDigest": release["shell"]["sha256"], "shellDigest": digest,

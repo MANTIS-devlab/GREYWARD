@@ -9,23 +9,24 @@ test -r "$stage/offline/flathub.flatpakrepo"
 test -d "$stage/offline/flatpak/.ostree/repo"
 flatpak remote-add "$scope" --if-not-exists --from --disable \
   flathub "$stage/offline/flathub.flatpakrepo"
-# The offline transaction must not even attempt Flathub metadata refresh.  The
-# remote is restored on both success and failure so ordinary post-install
-# updates retain the normal system Flathub source.
+# Keep the canonical origin on installed refs. A temporary remote followed by
+# remote-delete --force leaves deployments pointing at a missing origin, which
+# breaks later dependency transactions even when Flathub is enabled.
+online_uri=https://dl.flathub.org/repo/
+# The verified media supplies the local summary and exact captured commits.
+# Restore the online URL and commit signature verification on success AND
+# failure. Neither restoration command resolves metadata over the network.
 restore_flathub() {
-  flatpak remote-modify "$scope" --enable flathub 2>/dev/null || true
+  flatpak remote-modify "$scope" --url="$online_uri" --gpg-verify --enable flathub
 }
 trap restore_flathub EXIT
-flatpak remote-modify "$scope" --disable flathub
 offline_repo="$stage/offline/flatpak/.ostree/repo"
 offline_uri="file://$offline_repo"
-offline_remote=greyward-offline
 # create-usb exports a partial collection mirror. The image factory publishes
 # a local summary over ordinary heads, so clean targets resolve the refs from
-# the ISO even when Flathub is unreachable. This remote is removed only after
-# every selected commit has been installed; a failed retry keeps it available.
-flatpak remote-add "$scope" --if-not-exists --no-gpg-verify "$offline_remote" "$offline_uri"
-flatpak remote-modify "$scope" --no-gpg-verify --url="$offline_uri" "$offline_remote"
+# the ISO even when Flathub is unreachable. Unsigned local-summary use is
+# restricted to this verified media transaction, never retained for HTTPS.
+flatpak remote-modify "$scope" --no-gpg-verify --url="$offline_uri" --enable flathub
 python3 "$stage/baseline.py" flatpak-args --baseline "$stage/artifacts/runtime-baseline.json" > "$stage/flatpak-baseline.tsv"
 refs=()
 commits=()
@@ -40,8 +41,8 @@ test "${#refs[@]}" -gt 0
 # single transaction avoids repeating Flatpak's repository and deployment
 # setup for every application while preserving per-ref commit verification.
 flatpak install "$scope" --noninteractive \
-  --sideload-repo="$offline_repo" "$offline_remote" "${refs[@]}"
+  --sideload-repo="$offline_repo" flathub "${refs[@]}"
 for index in "${!refs[@]}"; do
   test "$(flatpak info "$scope" --show-commit "${refs[$index]}")" = "${commits[$index]}"
+  test "$(flatpak info "$scope" --show-origin "${refs[$index]}")" = flathub
 done
-flatpak remote-delete "$scope" --force "$offline_remote"

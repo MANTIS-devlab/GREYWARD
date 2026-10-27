@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Screenshot
+Name[fr]=Capture d’écran
+Comment=Press Print Screen, then select an area with the mouse
+Comment[fr]=Appuyez sur Impr. écran puis sélectionnez une zone à la souris
+Exec=/usr/local/libexec/greyward-screenshot
+Icon=swappy
+Terminal=false
+Categories=Utility;Graphics;
+Keywords=screenshot;capture;Print;screen;Swappy;
+StartupNotify=false

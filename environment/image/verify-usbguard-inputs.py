@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Refuse stale packaged USB approval inputs before complete ISO staging."""
+"""Refuse stale protected-session and USB approval inputs before ISO staging."""
 import argparse
 import hashlib
 import json
@@ -8,6 +8,30 @@ import subprocess
 
 
 SOURCES = {
+    'desktop-session': {
+        'environment/session/greyward-desktop-defaults': '/usr/local/libexec/greyward-desktop-defaults',
+        'environment/session/greyward-desktop-defaults.conf': '/usr/lib/systemd/user/greyward-desktop-icons.service.d/10-default-shortcuts.conf',
+        'environment/session/greyward-dms-session-migrate': '/usr/local/libexec/greyward-dms-session-migrate',
+    },
+    'screenshot-enrollment': {
+        'packaging/greyward-enrollment/migrate-screenshot.py':
+            '/usr/libexec/greyward-migrate-screenshot',
+        'security-center/packaging/application-security/desktop/labwc-screenshot.patch':
+            '/usr/share/greyward-application-security/enrollment/patches/labwc-screenshot.patch',
+        **{'environment/production/selinux/greyward-application-display.' + suffix:
+           '/usr/share/greyward-application-security/enrollment/policy/greyward_application_display.' + suffix
+           for suffix in ('te', 'fc')},
+    },
+    'screenshot-session': {
+        'environment/session/greyward-screenshot': '/usr/local/libexec/greyward-screenshot',
+        'environment/session/greyward-screenshot.desktop': '/usr/local/share/applications/org.gnome.Screenshot.desktop',
+    },
+    # A live policy-only repair is not present in an imported Enrollment RPM.
+    'flatpak-session': {
+        'environment/production/selinux/greyward-application-session.' + suffix:
+            '/usr/share/greyward-application-security/enrollment/policy/greyward_application_session.' + suffix
+        for suffix in ('te', 'fc')
+    },
     # Required for both source builds and installed-RPM imports: a migrated
     # desktop can work while the same RPM's fresh-enrollment generator is stale.
     'ordinary-role': {
@@ -28,6 +52,8 @@ SOURCES = {
             '/usr/share/greyward-application-security/authentication/assemble.py',
         'security-center/data/greyward-security-status.svg':
             '/usr/share/greyward-application-security/authentication/greyward-security-status.svg',
+        'security-center/data/greyward-symbol.svg':
+            '/usr/share/greyward-application-security/authentication/greyward-symbol.svg',
         'security-center/packaging/application-security/desktop/materialize.py':
             '/usr/share/greyward-application-security/desktop/materialize.py',
     },
@@ -66,6 +92,11 @@ def verify(repo, package, kind, read=rpm_file, manifest=None):
         actual = read(package, installed)
         if not actual or normalized(actual) != normalized(expected):
             raise ValueError('Stale or missing USB approval payload; rebuild ' + kind + ': ' + installed)
+    if kind == 'screenshot-enrollment':
+        receipt = json.loads(read(package, '/usr/share/greyward-application-security/enrollment/inputs.json'))
+        source = repo / 'security-center/packaging/application-security/desktop/labwc-screenshot.patch'
+        if receipt.get('screenshotPatchSha256') != hashlib.sha256(normalized(source.read_bytes())).hexdigest():
+            raise ValueError('Stale or missing screenshot compositor source receipt')
     if kind == 'dms':
         release = json.loads((manifest or repo / 'environment/production/dms-release.json').read_text())['releaseId']
         receipt = json.loads(read(package, '/usr/lib/greyward/dms/' + release + '/release.json'))

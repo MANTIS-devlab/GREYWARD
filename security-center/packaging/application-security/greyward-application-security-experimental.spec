@@ -1,6 +1,6 @@
 Name:           greyward-application-security-experimental
 Version:        0.1.0
-Release:        83%{?dist}
+Release:        84%{?dist}
 Summary:        Experimental GREYWARD application-security runtime and Guard CLI
 License:        GPL-3.0-only AND MIT
 Source0:        %{name}-%{version}.tar.gz
@@ -108,6 +108,8 @@ install -Dm0444 packaging/application-security/authentication/assemble.py \
     %{buildroot}%{_datadir}/greyward-application-security/authentication/assemble.py
 install -m0444 data/greyward-security-status.svg \
     %{buildroot}%{_datadir}/greyward-application-security/authentication/greyward-security-status.svg
+install -m0444 data/greyward-symbol.svg \
+    %{buildroot}%{_datadir}/greyward-application-security/authentication/greyward-symbol.svg
 install -d %{buildroot}%{_libexecdir}
 install -m0755 greyward-wayland-context %{buildroot}%{_libexecdir}/greyward-wayland-context
 # Empty fail-closed mount target. Prepared code exists only in the unit's
@@ -161,6 +163,9 @@ install -Dm0644 packaging/application-security/systems.mantis.greyward.Applicati
 %{_datadir}/dbus-1/system.d/systems.mantis.greyward.ApplicationSecurityDevelopment1.conf
 
 %changelog
+* Tue Oct 27 2026 MANTIS SYSTEMS - 0.1.0-84
+- Share a noninteractive graphite/platinum startup visual with the canonical OS emblem.
+
 * Fri Oct 23 2026 MANTIS SYSTEMS - 0.1.0-83
 - Rebuild the shared collector with the noninteractive system firewall-state read.
 

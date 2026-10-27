@@ -14,7 +14,7 @@ def prepare(stage):
     for path in sorted(stage.rglob('*')):
         relative = path.relative_to(stage)
         # These are hash-bound inputs, not editable source files.
-        if relative.parts[0] in {'artifacts', 'rpms', 'offline'}:
+        if relative.parts[0] in {'artifacts', 'rpms', 'offline', 'office-source'}:
             continue
         if path.is_symlink() or not path.is_file():
             continue

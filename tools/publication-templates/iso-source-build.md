@@ -1,17 +1,26 @@
-# Current published installer — 25 October 2026
+# Current published installer — 28 October 2026
 
-The latest public installer is **0.5.2 Sophon**. Its exact component tuple,
-checksums, frozen corresponding sources and validation limits are in the
-[Sophon notes](../../docs/patch-notes/0.5.2-sophon.md). The SourceForge directory
-also provides four complete Office source RPMs with vendored dependencies.
-Current public main is not the exact ISO source; use those frozen inputs when
-inspecting or rebuilding this release. No public Office RPM feed is operational.
+The current release is **0.5.3 Sophon**. Its exact component tuple, checksums,
+frozen source archive, four Office source RPMs and acceptance limits are in the
+[Sophon notes](../../docs/patch-notes/0.5.3-sophon.md). Use the frozen source
+inputs for this ISO; current main can contain later documentation or source.
+The signed four-package Office channel is active through the existing DNF5
+Update Center. Its build/sign/retention implementation is in
+`packaging/greyward-office/automation/` and runs in the dedicated distribution
+repository, not on installed desktops.
 
-The DMS 2.0 input is `environment/production/dms-2.0-candidate.json`. Pass it as
-the third argument to `packaging/greyward-dms/build.sh` when building that DMS
-RPM, and select `--dms-candidate` in the image entrypoints. This leaves the
-separate validated 1.6 manifest intact. Keep the package, source-manifest and
-image checks active; candidate selection does not grant release acceptance.
+Build the selected DMS 2.0 RPM using `environment/production/dms-2.0-candidate.json`
+as the third `packaging/greyward-dms/build.sh` argument. Select `--dms-candidate`
+in the image entrypoints. Supply all four `--office-rpm` inputs, the other eight
+matched GREYWARD RPMs, pinned external RPMs and the exact Core build/source
+manifest. Keep source, payload, dependency and signature guards enabled. The
+baseline is a fresh portable capture, not a clone of the builder. No personal
+accounts, keys, VPN settings or development overlay become runtime defaults.
+
+The reference factory used a Git archive: the embedded stager Git field is
+`UNKNOWN`, while the archive PAX commit and SHA-256 bind the frozen source.
+Composition, media verification, VM boot, installed acceptance and recovery are
+separate evidence. Publishing the installer does not certify all hardware.
 
 # Historical corrected candidate — 21 October 2026
 

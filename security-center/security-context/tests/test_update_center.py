@@ -142,6 +142,33 @@ class UpdateHistoryTests(unittest.TestCase):
         self.assertEqual(payload, {"upgrades": []})
         self.assertIsNone(error)
 
+    def test_fresh_signed_repository_fallback_does_not_require_a_tty(self):
+        from greyward_security_context import dms_compatibility
+        queries = []
+
+        def first_use(argv, **kwargs):
+            queries.append(argv)
+            if "--assumeyes" not in argv and "history" not in argv:
+                return SimpleNamespace(returncode=1, stdout="", stderr="Signing key not found; Is this ok [y/N]:")
+            value = '{"upgrades": []}' if "check-upgrade" in argv else "[]"
+            return SimpleNamespace(returncode=0, stdout=value, stderr="")
+
+        with (
+            patch.object(dms_compatibility, "constraints", return_value={}),
+            patch.object(update_center, "dnf5_daemon_upgrades", side_effect=RuntimeError("Native daemon unavailable")),
+            patch.object(update_center.subprocess, "run", side_effect=first_use),
+            patch.object(update_center.shutil, "which", return_value="/usr/bin/dnf5"),
+            patch.object(update_center, "installed_rpm_versions", return_value={}),
+            patch.object(update_center, "essential_driver_records", return_value=([], [])),
+        ):
+            health, records = update_center.dnf5()
+        self.assertEqual(health["state"], "AVAILABLE")
+        self.assertTrue(records)
+        self.assertTrue(all(item["update_available"] is False for item in records))
+        self.assertTrue(queries)
+        self.assertTrue(all(set(argv) & {"check-upgrade", "updateinfo", "history"} for argv in queries))
+        self.assertFalse(any(set(argv) & {"install", "upgrade", "do", "reboot", "--nogpgcheck"} for argv in queries))
+
     def test_fwupd_urgency_does_not_infer_a_reboot_requirement(self):
         payload = {"Devices": [{"DeviceId": "device-1", "Name": "Device", "Version": "1", "Releases": [{"Version": "2", "IsUrgent": True}]}]}
         with patch.object(update_center, "run_json", return_value=(payload, None)), patch.object(update_center.shutil, "which", return_value="/usr/bin/fwupdmgr"):

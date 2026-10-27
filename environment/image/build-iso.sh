@@ -32,6 +32,7 @@ output=''
 security_rpms=()
 production_rpms=()
 enrollment_rpms=()
+office_rpms=()
 branding_rpm=''
 dms_rpm=''
 session_rpm=''
@@ -56,6 +57,7 @@ fi
 while (($#)); do
   case "$1" in
     --dms-candidate) dms_candidate=true; shift ;;
+    --office-rpm) (($# >= 2)) || exit 2; office_rpms+=("$(realpath -e "$2")"); shift 2 ;;
     --enrollment-rpm) (($# >= 2)) || exit 2; enrollment_rpms+=("$(realpath -e "$2")"); shift 2 ;;
     --baseline) (($# >= 2)) || exit 2; baseline=$(realpath -e "$2"); shift 2 ;;
     --base-sha256) (($# >= 2)) || exit 2; base_sha256="$2"; shift 2 ;;
@@ -150,9 +152,23 @@ check_shell_syntax() {
   local path=$1
   tr -d '\r' < "$path" | bash -n
 }
+verify_flatpak_helper() {
+  local canonical=$1 embedded=$2
+  # Match the whole current offline transaction, including its EXIT restoration
+  # of the trusted online origin. An old substring gate required the retired
+  # disable-only implementation and rejected the verified origin repair.
+  tr -d '\r' < "$canonical" | cmp - "$embedded" || {
+    echo 'Final ISO offline Flatpak helper differs from canonical source.' >&2; return 1;
+  }
+  if grep -Eq 'remote-add.*flathub[[:space:]]+https?://' "$embedded"; then
+    echo 'Final ISO offline Flatpak helper contains a network Flathub remote.' >&2; return 1
+  fi
+}
 check_shell_syntax "$repo_root/environment/production/provision-firstboot.sh"
 check_shell_syntax "$repo_root/environment/production/provision.sh"
 check_shell_syntax "$repo_root/environment/production/install-offline-flatpaks.sh"
+check_shell_syntax "$repo_root/environment/flatpak/greyward-software"
+check_shell_syntax "$repo_root/environment/flatpak/greyward-bazaar-start"
 python3 -c 'import rpm, libdnf5'
 if [[ "$(id -u)" != 0 ]]; then
   sudo -n true || { echo 'Offline dependency validation requires noninteractive sudo.' >&2; exit 1; }
@@ -204,6 +220,7 @@ for rpm in "${production_rpms[@]}"; do
   staging_args+=(--production-rpm "$rpm")
 done
 for rpm in "${enrollment_rpms[@]}"; do staging_args+=(--enrollment-rpm "$rpm"); done
+for rpm in "${office_rpms[@]}"; do staging_args+=(--office-rpm "$rpm"); done
 if $dms_candidate; then staging_args+=(--dms-candidate); fi
 bash "$repo_root/environment/image/build.sh" "${staging_args[@]}" --require-complete
 # Inject only the GREYWARD GTK branding assets into Anaconda's supported
@@ -227,6 +244,11 @@ branding/generated/boot/greyward-symbol-256.png|usr/share/anaconda/pixmaps/greyw
 packaging/greyward-branding/SOURCES/greyward.script|usr/share/plymouth/themes/greyward/greyward.script
 packaging/greyward-branding/SOURCES/greyward.plymouth|usr/share/plymouth/themes/greyward/greyward.plymouth
 packaging/greyward-branding/SOURCES/greyward-update-status.service|usr/lib/systemd/system/greyward-update-status.service
+branding/source/greyward-software.svg|usr/share/icons/hicolor/scalable/apps/greyward-software.svg
+branding/source/greyward-image-viewer.svg|usr/share/icons/hicolor/scalable/apps/greyward-image-viewer.svg
+branding/source/greyward-settings.svg|usr/share/icons/hicolor/scalable/apps/greyward-settings.svg
+environment/production/desktop-entry-overrides/org.gnome.Loupe.desktop|usr/local/share/applications/org.gnome.Loupe.desktop
+environment/flatpak/software-runtime.desktop|usr/local/share/applications/io.github.kolunmi.Bazaar.desktop
 BRANDING
 for installer_branding_path in \
   etc/anaconda/profile.d/greyward.conf \
@@ -259,6 +281,12 @@ fi
 # Validate only after the offline repository, Flatpak inventory and payload
 # manifest have been generated. This is the complete tree copied into the ISO.
 bash "$stage_validator" "$stage/production"
+python3 "$repo_root/environment/image/verify-software-inputs.py" \
+  --repo "$repo_root" --stage "$stage/production"
+python3 "$repo_root/packaging/greyward-office/verify-inputs.py" \
+  --repo "$repo_root" --stage "$stage/production"
+python3 "$repo_root/packaging/greyward-office/stage-channel.py" \
+  --repo "$repo_root" --offline "$stage/production/offline" --verify --require-published
 
 # The target Kickstart resolves this tree from the mounted installer media
 # (normally /run/install/repo/greyward, with controlled fallbacks). Keep the
@@ -315,19 +343,19 @@ xorriso -osirrox on -indev "$publication/image.iso" \
   -extract /greyward/production "$publication/production"
 (cd "$publication/production" && sha256sum --quiet -c payload.sha256)
 bash "$stage_validator" "$publication/production"
+python3 "$repo_root/environment/image/verify-software-inputs.py" \
+  --repo "$repo_root" --stage "$publication/production"
+python3 "$repo_root/packaging/greyward-office/verify-inputs.py" \
+  --repo "$repo_root" --stage "$publication/production"
+python3 "$repo_root/packaging/greyward-office/stage-channel.py" \
+  --repo "$repo_root" --offline "$publication/production/offline" --verify --require-published
 # Exercise the same recursive copy boundary used by Anaconda. This catches a
 # manifest/tree mismatch before a candidate is attached to a VM.
 mkdir -p "$publication/payload-copy"
 cp -a "$publication/production" "$publication/payload-copy/"
 (cd "$publication/payload-copy/production" && sha256sum --quiet -c payload.sha256)
-grep -Fq 'remote-modify "$scope" --disable flathub' \
-  "$publication/production/install-offline-flatpaks.sh" || {
-  echo 'Final ISO is missing the disabled Flathub offline guard.' >&2; exit 1;
-}
-if grep -Eq 'remote-add.*flathub[[:space:]]+https?://' \
-  "$publication/production/install-offline-flatpaks.sh"; then
-  echo 'Final ISO offline Flatpak helper contains a network Flathub remote.' >&2; exit 1
-fi
+verify_flatpak_helper "$repo_root/environment/production/install-offline-flatpaks.sh" \
+  "$publication/production/install-offline-flatpaks.sh"
 grep -Fq 'tee -a "$log" "$console"' \
   "$publication/production/provision-firstboot.sh" || {
   echo 'Final ISO does not stream first-boot logs to tty1.' >&2; exit 1;
@@ -349,6 +377,7 @@ def sha(path):
     with open(path, 'rb') as f:
         return hashlib.file_digest(f, 'sha256').hexdigest()
 json.dump({'schema': 'greyward.iso-provenance/v1', 'iso_sha256': sha(root/'image.iso'),
+           'release': json.loads((root/'production/manifest.json').read_text()).get('release'),
            'base_iso_sha256': sha(sys.argv[2]), 'baseline_sha256': sha(sys.argv[3]),
            'branding_rpm_sha256': sha(sys.argv[4]), 'security_manifest_sha256': sha(sys.argv[5]),
            'payload_manifest_sha256': sha(root/'production/payload.sha256'),

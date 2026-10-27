@@ -200,8 +200,7 @@
             "id": "spacer",
             "enabled": true,
             "size": 10
-          },
-          "greywardSoftware"
+          }
         ],
         "maximizeDetection": true,
         "maximizeWidgetIcons": false,

@@ -26,6 +26,20 @@ if "$require_marker"; then
   test -f /etc/greyward-production-complete || fail 'production completion marker is missing'
 fi
 checkpoint 'required production packages and login boundary'
+for office_app in writer sheets pdf slides; do
+  rpm -q "greyward-$office_app" >/dev/null || fail "Office application missing: $office_app"
+  rpm -V "greyward-$office_app" >/dev/null || fail "Office package files changed: $office_app"
+  test -x "/usr/bin/greyward-$office_app" || fail "Office launcher missing: $office_app"
+done
+if rpm -q papers >/dev/null 2>&1; then fail 'retired Papers package is installed'; fi
+for software_input in greyward-software greyward-bazaar-start; do
+  source="/usr/lib/greyward/installer/production/flatpak/$software_input"
+  case "$software_input" in
+    greyward-software) installed=/usr/local/libexec/greyward-software ;;
+    greyward-bazaar-start) installed=/usr/share/greyward/bazaar/greyward-bazaar-start ;;
+  esac
+  cmp -s "$source" "$installed" || fail "Software startup input is absent or stale: $software_input"
+done
 rpm -q greyward-application-security-experimental greyward-application-enrollment >/dev/null || fail 'enrollment package closure is missing'
 /usr/libexec/greyward-enrollment check || fail 'installer enrollment is not prepared'
 if [[ "$require_marker" == false ]]; then

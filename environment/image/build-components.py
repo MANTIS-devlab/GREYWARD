@@ -101,7 +101,9 @@ def main():
               'session': ['packaging/greyward-session', 'environment/session',
                           'environment/production/greyward-start-labwc',
                           'environment/production/labwc-autostart', 'environment/production/labwc-environment'],
-              'branding': ['packaging/greyward-branding', 'branding']}
+              'branding': ['packaging/greyward-branding', 'branding',
+                           'environment/production/desktop-entry-overrides/org.gnome.Loupe.desktop',
+                           'environment/flatpak/software-runtime.desktop']}
     results = json.loads((output/'selected-components.json').read_text()) if (output/'selected-components.json').exists() else {}
     for name in args.only.split(','):
         if name not in inputs: parser.error('Unknown component: ' + name)
@@ -183,7 +185,11 @@ def main():
             build=entry/'build'
             for folder in ('BUILD','BUILDROOT','SOURCES','SPECS','RPMS','SRPMS'): (build/folder).mkdir(parents=True, exist_ok=True)
             shutil.copytree(REPO/'packaging/greyward-branding/SOURCES', build/'SOURCES', dirs_exist_ok=True)
-            for source in ('branding/generated/boot/greyward-symbol-256.png','branding/source/greyward-symbol.svg'):
+            for source in ('branding/generated/boot/greyward-symbol-256.png','branding/source/greyward-symbol.svg',
+                           'branding/source/greyward-software.svg', 'branding/source/greyward-image-viewer.svg',
+                           'branding/source/greyward-settings.svg',
+                           'environment/production/desktop-entry-overrides/org.gnome.Loupe.desktop',
+                           'environment/flatpak/software-runtime.desktop'):
                 shutil.copyfile(REPO/source, build/'SOURCES'/Path(source).name)
             spec=REPO/'packaging/greyward-branding/SPECS/greyward-branding.spec'
             run('rpmbuild','--define','_topdir '+str(build),'-bb',spec)

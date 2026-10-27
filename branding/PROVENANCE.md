@@ -45,3 +45,26 @@ reference. The repository SVG is a polygonal refinement of that candidate;
 the launcher SVG and PNG are derived assets. The previous small emblem hash
 `8f9768936e6c6227bc567dfe06404f4230a2f098f0789e21effd15d3bedde46d`
 describes the historical design.
+
+Original GREYWARD application bag: `source/greyward-software.svg`, SHA-256
+`cc026f6f65e1c98ec1ae095f366bfece864a766fe9b74d29474d4b84e1139598` (25 October 2026).
+
+Original GREYWARD photograph frame: `source/greyward-image-viewer.svg`, SHA-256
+`452f433b812e909e635a0b75df78939491306f445da5941a9967082a73f23930` (25 October 2026).
+
+Original GREYWARD machined gear: `source/greyward-settings.svg`, SHA-256
+`e88d8d47663ffd5ab5929aecc39f8d53fabec67aa416f89709afc19703af908b` (25 October 2026).
+
+## Office application/document separation — 25 October 2026
+
+The four `greyward-*-document.svg` files retain the accepted revision-5
+application artwork byte-for-byte. The new application vectors use coordinated
+graphite tiles and independent functional marks. The Office source manifest
+locks both families; no third-party logos or external SVG resources are added.
+
+| Family | Application SHA-256 | Retained document SHA-256 |
+|---|---|---|
+| Writer | `a9fd4a79f5a3dd2209cf143eeb63d6af050b0c053525cb966179a893ee777903` | `f9dbbb6d310485b72213b69c0411d0de5857e9c2132c432444e95d0515a1ad9d` |
+| Sheets | `38d024ddacea88f9b4a095a5516f3365a4844652829e08c43c49d1563970f053` | `1cadb11395d3461f855180e7004cb58a896e384ceb26413b2fac54af48d52794` |
+| PDF | `b563f79413565aacb182e444db31532b687547bc7d310ea27c3b2ba9e2669b19` | `f15b53a789886de48e4fe9857fb8e50d8478ca2873bf0fef3a65d286f45944bf` |
+| Slides | `3a065e665ec0fc53e97dd5beef4e059537d90532716353df162352e2ed9ef801` | `1d224eaf5e43524967d364701b3dcd348e9342cc1a85afed679af20a5745b33c` |

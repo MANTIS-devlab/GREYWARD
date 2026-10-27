@@ -1,9 +1,19 @@
 # Public source maintenance
 
-## Sophon 0.5.2 publication — 25 October 2026
+## Sophon 0.5.3 release — 28 October 2026
 
-[0.5.2 Sophon](patch-notes/0.5.2-sophon.md) is the latest public SourceForge
-installer. The export also excludes historical machine-specific prototype settings,
+[0.5.3 Sophon](patch-notes/0.5.3-sophon.md) supersedes the preceding public
+download. Its ISO, checksums, provenance, frozen corresponding sources and four
+signed Office source RPMs are published together. The existing ISO is reused;
+its exact SHA-256 and composition limits remain in the release notes. The
+public code update contains the matched release fixes and active GitHub Office
+channel, while preserving public-only release/gallery records and the GIF.
+Clean-install, recovery and physical acceptance remain separate from publication.
+
+## Historical Sophon 0.5.2 publication — 25 October 2026
+
+[0.5.2 Sophon](patch-notes/0.5.2-sophon.md) was the public SourceForge
+installer at that publication. The export also excludes historical machine-specific prototype settings,
 while preserving the private original. Full SFTP readback verifies all
 5,147,983,872 ISO bytes and SHA-256,
 plus the ten source/provenance/checksum companions. The existing image was

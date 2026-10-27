@@ -24,7 +24,7 @@ DashCardComponent {
     readonly property string heading: section === "protection" ? qsTr("Protection") : section === "network" ? qsTr("Network security") : qsTr("Updates")
     readonly property string emblem: section === "protection" ? "shield_lock" : section === "network" ? "hub" : "system_update"
 
-    pad: Theme.spacingL
+    pad: root.height < 220 ? 14 : Theme.spacingL
     clipContent: true
     clickable: true
     color: Theme.surfaceContainer
@@ -39,13 +39,13 @@ DashCardComponent {
     ColumnLayout {
         objectName: "greywardStatusContent"
         anchors.fill: parent
-        spacing: root.compact ? 6 : 8
+        spacing: root.height < 220 ? 5 : 8
         RowLayout {
             Layout.fillWidth: true; spacing: 10
             Rectangle {
-                Layout.preferredWidth: 30; Layout.preferredHeight: 30
+                Layout.preferredWidth: 32; Layout.preferredHeight: 32
                 radius: 9; color: Qt.alpha(root.stateColor, Theme.isLightMode ? 0.10 : 0.13)
-                DIcon { anchors.centerIn: parent; name: root.emblem; size: 18; color: root.stateColor }
+                DIcon { anchors.centerIn: parent; name: root.emblem; size: 22; color: root.stateColor }
             }
             StyledText {
                 text: root.heading; Layout.fillWidth: true; Layout.minimumWidth: 0
@@ -57,16 +57,16 @@ DashCardComponent {
         StyledText {
             Layout.fillWidth: true; Layout.minimumWidth: 0
             text: root.value; color: root.stateColor
-            font.pixelSize: Theme.fontSizeXLarge + 2; font.weight: Font.DemiBold
-            maximumLineCount: root.compact ? 1 : 2; wrapMode: Text.Wrap; elide: Text.ElideRight
+            font.pixelSize: Theme.fontSizeXLarge; font.weight: Font.DemiBold
+            maximumLineCount: 2; wrapMode: Text.Wrap; elide: Text.ElideRight
         }
         StyledText {
             Layout.fillWidth: true; Layout.minimumWidth: 0; visible: root.height >= 170
             text: root.detail; color: Theme.surfaceVariantText; font.pixelSize: Theme.fontSizeSmall
-            maximumLineCount: root.height < 240 ? 1 : 2; wrapMode: Text.Wrap; elide: Text.ElideRight
+            maximumLineCount: root.section === "updates" ? (root.height < 220 ? 3 : 4) : root.height < 240 ? 1 : 2; wrapMode: Text.Wrap; elide: Text.ElideRight
         }
         ColumnLayout {
-            Layout.fillWidth: true; spacing: 4; visible: root.height >= 200
+            Layout.fillWidth: true; spacing: 4; visible: root.height >= 195 && root.section !== "updates"
             Repeater {
                 model: root.rows.slice(0, root.height >= 240 ? 3 : 2)
                 RowLayout {
@@ -79,8 +79,8 @@ DashCardComponent {
                     }
                     StyledText {
                         text: modelData.value
-                        Layout.preferredWidth: (root.width - root.pad * 2) * 0.53
-                        Layout.maximumWidth: (root.width - root.pad * 2) * 0.53
+                        Layout.preferredWidth: (root.width - root.pad * 2) * 0.50
+                        Layout.maximumWidth: (root.width - root.pad * 2) * 0.50
                         Layout.minimumWidth: 0
                         font.pixelSize: Theme.fontSizeSmall
                         color: modelData.tone === "info" ? Theme.surfaceVariantText : Palette.color(modelData.tone, Theme.isLightMode)
@@ -96,7 +96,7 @@ DashCardComponent {
             Rectangle { width: 5; height: 5; radius: 2.5; color: root.stateColor }
             StyledText {
                 Layout.fillWidth: true; Layout.minimumWidth: 0
-                text: !root.fresh ? qsTr("Evidence unavailable") : root.section === "updates" ? qsTr("Review updates") : qsTr("Current assessment")
+                text: !root.fresh ? qsTr("Evidence unavailable") : root.section === "updates" ? qsTr("Open Update Center") : qsTr("Protection details")
                 font.pixelSize: Theme.fontSizeSmall - 1; color: Theme.surfaceVariantText
                 elide: Text.ElideRight; maximumLineCount: 1
             }

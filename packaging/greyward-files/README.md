@@ -1,5 +1,14 @@
 # GREYWARD file integration candidate
 
+Revision 21 preserves icon coordinates independently for each connected-output
+set. It saves before hot-unplug destruction, remembers first placement and
+imports existing per-output positions without rewriting their files. The native
+three-output test now covers repeated 3/1/3 cycles and desktop-process restarts
+with exact coordinate readback. Source manifest hashes bind both the patch and
+layout helper; image preparation rejects older inputs. Physical monitor
+acceptance is tracked separately in the
+[owning record](../../docs/architecture/FILE_MANAGER_DESKTOP.md#persistent-screen-configurations--27-october-2026).
+
 Revision 20 corrects the extensionless Strata launcher after the physical trial
 found a CRLF shebang. The checkout attribute and RPM installation preserve LF;
 `tests/test_files_launchers.py` executes source and packaged wrappers through the

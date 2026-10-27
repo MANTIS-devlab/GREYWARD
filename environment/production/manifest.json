@@ -1,6 +1,10 @@
 {
   "schema": "greyward.production-system/v1",
   "status": "active-development",
+  "release": {
+    "version": "0.5.3",
+    "codename": "Sophon"
+  },
   "runtime": {
     "compositor": "labwc",
     "fallbackCompositor": "hyprland",
@@ -22,7 +26,9 @@
     "imageInputStager": "../image/build.sh",
     "dmsReleaseManifest": "dms-release.json",
     "dmsRuntimePackage": "greyward-dms",
-    "sessionPolicyPackage": "greyward-session"
+    "sessionPolicyPackage": "greyward-session",
+    "officeSourceManifest": "office-source/packaging/greyward-office/source.json",
+    "officePackages": ["greyward-writer", "greyward-sheets", "greyward-pdf", "greyward-slides"]
   },
   "notProduction": [
     "environment/development",

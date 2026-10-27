@@ -8,7 +8,7 @@ x-scheme-handler/https=com.brave.Browser.desktop;
 text/html=com.brave.Browser.desktop;
 application/xhtml+xml=com.brave.Browser.desktop;
 text/plain=org.gnome.TextEditor.desktop;
-application/pdf=org.gnome.Papers.desktop;
+application/pdf=systems.mantis.greyward.PDF.desktop;
 
 # Local image viewing belongs to the native viewer, not the web browser.
 image/png=org.gnome.Loupe.desktop;
@@ -20,22 +20,25 @@ image/tiff=org.gnome.Loupe.desktop;
 image/svg+xml=org.gnome.Loupe.desktop;
 image/avif=org.gnome.Loupe.desktop;
 
-# GREYWARD default office application. PDF remains with the installed
-# document viewer rather than being claimed by the office suite.
-application/msword=com.collaboraoffice.Office.desktop;
-application/vnd.ms-word=com.collaboraoffice.Office.desktop;
-application/vnd.openxmlformats-officedocument.wordprocessingml.document=com.collaboraoffice.Office.desktop;
-application/vnd.openxmlformats-officedocument.wordprocessingml.template=com.collaboraoffice.Office.desktop;
-application/vnd.oasis.opendocument.text=com.collaboraoffice.Office.desktop;
-application/rtf=com.collaboraoffice.Office.desktop;
-text/rtf=com.collaboraoffice.Office.desktop;
-application/vnd.ms-excel=com.collaboraoffice.Office.desktop;
-application/vnd.openxmlformats-officedocument.spreadsheetml.sheet=com.collaboraoffice.Office.desktop;
-application/vnd.openxmlformats-officedocument.spreadsheetml.template=com.collaboraoffice.Office.desktop;
-application/vnd.oasis.opendocument.spreadsheet=com.collaboraoffice.Office.desktop;
-text/csv=com.collaboraoffice.Office.desktop;
-application/vnd.ms-powerpoint=com.collaboraoffice.Office.desktop;
-application/vnd.openxmlformats-officedocument.presentationml.presentation=com.collaboraoffice.Office.desktop;
-application/vnd.openxmlformats-officedocument.presentationml.slideshow=com.collaboraoffice.Office.desktop;
-application/vnd.openxmlformats-officedocument.presentationml.template=com.collaboraoffice.Office.desktop;
-application/vnd.oasis.opendocument.presentation=com.collaboraoffice.Office.desktop;
+# Native GREYWARD Office. Legacy PPT and ODP are deliberately not claimed.
+# Sheets ODS import is limited; see docs/software/OFFICE_INTEGRATION.md.
+application/msword=systems.mantis.greyward.Writer.desktop;
+application/msword-template=systems.mantis.greyward.Writer.desktop;
+application/vnd.ms-word.document.macroEnabled.12=systems.mantis.greyward.Writer.desktop;
+application/vnd.ms-word.template.macroEnabled.12=systems.mantis.greyward.Writer.desktop;
+application/vnd.openxmlformats-officedocument.wordprocessingml.document=systems.mantis.greyward.Writer.desktop;
+application/vnd.openxmlformats-officedocument.wordprocessingml.template=systems.mantis.greyward.Writer.desktop;
+application/vnd.oasis.opendocument.text=systems.mantis.greyward.Writer.desktop;
+application/rtf=systems.mantis.greyward.Writer.desktop;
+text/rtf=systems.mantis.greyward.Writer.desktop;
+application/vnd.ms-excel=systems.mantis.greyward.Sheets.desktop;
+application/vnd.ms-excel.sheet.macroEnabled.12=systems.mantis.greyward.Sheets.desktop;
+application/vnd.ms-excel.sheet.binary.macroEnabled.12=systems.mantis.greyward.Sheets.desktop;
+application/vnd.openxmlformats-officedocument.spreadsheetml.sheet=systems.mantis.greyward.Sheets.desktop;
+application/vnd.oasis.opendocument.spreadsheet=systems.mantis.greyward.Sheets.desktop;
+text/csv=systems.mantis.greyward.Sheets.desktop;
+text/tab-separated-values=systems.mantis.greyward.Sheets.desktop;
+application/x-deckcraft=systems.mantis.greyward.Slides.desktop;
+application/vnd.openxmlformats-officedocument.presentationml.presentation=systems.mantis.greyward.Slides.desktop;
+application/vnd.openxmlformats-officedocument.presentationml.slideshow=systems.mantis.greyward.Slides.desktop;
+application/vnd.openxmlformats-officedocument.presentationml.template=systems.mantis.greyward.Slides.desktop;

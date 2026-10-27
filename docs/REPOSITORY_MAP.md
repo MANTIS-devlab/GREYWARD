@@ -1,15 +1,176 @@
 # GREYWARD repository map
 
-[0.5.2 Sophon release notes](patch-notes/0.5.2-sophon.md) own the current
+[0.5.3 Sophon notes](patch-notes/0.5.3-sophon.md) own the public artifact checksum,
+frozen source/archive binding, selected component inputs and Linux/Windows media
+readback. Publication does not establish clean-install or recovery acceptance.
+
+Plymouth lifecycle copy: `packaging/greyward-branding/SOURCES/greyward.script`
+selects boot/shutdown/reboot labels through `Plymouth.GetMode()`; the Branding
+RPM and installed initramfs carry the same canonical script. See
+[branding](../branding/BRANDING.md). Validate with the two repository gates and
+packaged/installed/initramfs byte readback; an actual shutdown observation stays
+separate from these checks.
+
+Security Center text encoding: `security-center/tauri/frontend/app.js` owns
+protocol/port separators and shared presentation punctuation. Explicit Unicode
+escapes prevent double-decoded literals; the actual `networkActivityMeta`
+renderer is exercised in `tauri/frontend/ux-contract.test.mjs`. The display
+contract is in [UX specification](security-center/UX_SPEC.md); no network data
+or policy contract changes with this presentation correction.
+
+[0.5.3 Sophon release notes](patch-notes/0.5.3-sophon.md) own the current
 SourceForge download, exact package tuple, checksums, corresponding sources and
 publication readback. Composition and installed acceptance remain separate.
 
 
-The README's [25 October gallery](assets/screenshots/README.md) contains eleven
-owner-approved original screenshots, grouped by feature, and the unchanged
-overview GIF. [Office integration](software/OFFICE_INTEGRATION.md) credits the
-upstream ArtCraft projects and separates newer reference work from image-composition acceptance.
+README presentation: `README.md` owns the public feature narrative and ArtCraft
+credit. `docs/assets/screenshots/README.md` inventories the approved original
+images and retained GIF; `docs/PUBLICATION.md` records the scoped owner approval.
+`tools/publication-policy.json` requires the current gallery and excludes legacy
+static captures; `tools/public-export.py` preserves the approved images. Validate
+with `python3 -m unittest tests.test_public_export` and both repository gates.
 
+Factory desktop applications: `environment/session/greyward-desktop-defaults`
+and its service drop-in, packaged by Session, seed six installed application
+shortcuts and native Home/Trash once. Its separate one-time trust receipt approves
+only exact factory copies via native GVfs metadata; the image input gate rejects
+stale helper bytes. The DMS session pin seed and 2.0 experience
+own Software's ordinary pin/widget removal. Branding owns the three canonical
+application SVGs, native aliases and launchers; the DMS manifest locks its
+Settings copy. Authority: [file manager and desktop integration](architecture/FILE_MANAGER_DESKTOP.md#factory-desktop-applications--25-october)
+and [branding](../branding/BRANDING.md). Tests: `python3 -m unittest
+tests.test_desktop_application_defaults tests.test_desktop_defaults
+tests.test_desktop_shortcuts tests.test_dms20_state
+tests.test_usbguard_release_inputs`; run both repository gates.
+Image staging checks the helper/pin/drop-in bytes and composition checks the
+branding payload. `packaging/greyward-dms/build-artwork-update.py` provides the
+closed, hash-bound artwork-only build route described in its packaging README.
+
+Office is owned by `packaging/greyward-office/` and its exact `source.json` lock;
+canonical vectors are the four application SVGs and their four
+`greyward-*-document.svg` counterparts in `branding/source/`. The shared
+`artwork.py` owns MIME identities and derived document-icon XML, retaining the
+hash-locked upstream detection rules. `tests/fixtures/office-mime-icons-native.py`
+checks real GIO/GTK lookups in disposable state without modifying the host.
+[Office integration](software/OFFICE_INTEGRATION.md) defines the native RPMs,
+associations, update and acceptance boundaries. `upstream.py` and
+`check-updates.py` own read-only official stable-release discovery;
+`.github/workflows/office-upstream.yml` is its manual diagnostic; its former
+unpublished six-hour schedule is retired in source.
+The [six-day GitHub chain](software/OFFICE_INTEGRATION.md#six-day-github-automation)
+is owned by `packaging/greyward-office/automation/`: `model.py` owns cadence,
+retention and exact-hunk compatibility; `candidate.py` locks official sources;
+`seal.py` verifies candidate/RPM closure; `transfer.py` limits artifact storage;
+`release.py` signs, switches immutable metadata and expires only owned objects;
+`github.py` scopes API credentials and redirects. `bootstrap.py` exports the
+dedicated component and its three workflow templates. Its production policy
+starts disabled; the deployed component is now enabled after its complete
+generation-9 production run and signed public DNF acceptance. Client staging
+uses the published channel policy; future exports still start disabled. Run `python3 -m unittest
+tests.test_office_automation tests.test_office_upstream tests.test_office_channel`,
+both repository gates and native `packaging/greyward-office/automation/dnf-check.py`
+in disposable roots.
+Physical/real Update Center activation is separate from source/fixture checks.
+First-use signed-metadata key handling belongs to the existing Update Center
+read-only DNF adapters, including the posture check and unattended check entry
+point. The canonical Update Center architecture and
+`security-center/security-context/tests/test_update_center.py` record this
+noninteractive-read boundary; it does not change apply authorization.
+`tests.test_office_upstream` covers version ordering, release ownership,
+publication eligibility and incomplete network checks. No upstream executable
+is an installation source: reviewed signed RPMs use the existing DNF5 provider.
+`channel.json`, `keys/` and `stage-channel.py` own the separate distribution
+approval/key pin and future installed DNF configuration. The offline builder
+requires publication approval before staging it; it never resolves image dependencies
+from that remote feed. `tests.test_office_channel` exercises unpublished-channel
+isolation, signature/scope preservation, key/template drift and staging reuse.
+The offline/composition gates refuse an unpublished or missing/stale channel,
+including after media extraction.
+Image staging accepts four
+`--office-rpm` inputs; its shared `verify-inputs.py` gates source/RPM closure,
+offline resolution and final extracted media. Run `python3 -m unittest
+tests.test_office_integration tests.test_office_upstream tests.test_office_channel tests.test_image_offline tests.test_image_baseline`,
+then both repository gates. `tests/fixtures/office-roundtrip.py` owns opt-in
+real-engine round trips. No upstream engine or privileged provider is forked.
+`tests/fixtures/office-repository-native.py` owns opt-in real DNF signature and
+upgrade transaction tests in disposable RPM roots; its test keys/negative feed
+are not publication inputs. Actual Update Center/runtime acceptance stays separate.
+Reference acceptance now records the real offline Writer revision update,
+21 native MIME defaults and retirement of Collabora/Papers with retained data.
+The local 0.5.2 ISO includes these packages; no public Office update channel is operational.
+
+Software's [Explore recovery and next-image acceptance](software/FLATPAK_BAZAAR_INTEGRATION_PLAN.md#explore-recovery-and-next-image-acceptance--25-october-2026)
+owns the installed Bazaar 0.9.7 evidence and prepared missing/empty-cache fix.
+`environment/flatpak/greyward-software` calls the sandbox-local
+`environment/flatpak/greyward-bazaar-start`; the production provisioner installs
+both. `environment/image/verify-software-inputs.py` rejects stale/missing inputs
+at source staging and before/after composition; installed acceptance checks the
+deployed files against the installer payload. Run
+`python3 -m unittest tests.test_software_explore_recovery`, then both PowerShell
+gates. The opt-in `tests/fixtures/bazaar-explore-native.py` compares real Bazaar
+startup/cache behavior in disposable sandbox profiles; full installed UI and
+offline acceptance remain distinct. The local 0.5.2 ISO includes this correction.
+
+The current 0.5.2 Sophon inventory and composition evidence live in
+[`patch-notes/0.5.2-sophon.md`](patch-notes/0.5.2-sophon.md); the preceding
+0.5.1 inventory and acceptance record live in
+[`patch-notes/0.5.1-sophon.md`](patch-notes/0.5.1-sophon.md). The production
+manifest owns version/codename; the existing ISO builder copies that release
+identity into its provenance. Explicit DMS2 selection, source/RPM closure and
+offline gates still apply; an image name does not establish installed acceptance.
+The final-media Flatpak helper guard in `environment/image/build-iso.sh` compares
+the complete normalized canonical transaction, including trusted-origin
+restoration; `tests/test_image_offline.py` exercises current and stale helpers.
+
+Software's curated banner is generated by `tools/generate-software-banner.py`
+from the canonical symbol/palette into
+`environment/flatpak/greyward-software-banner.svg`. The Software wrapper and
+production provisioner consume that same asset. See the visual customization
+section of [Software integration](software/FLATPAK_BAZAAR_INTEGRATION_PLAN.md);
+validation is native SVG rendering at full and narrow cover widths plus both
+repository gates. This artwork does not alter Bazaar configuration or sandbox
+permissions.
+
+Manual screenshots: `security-center/packaging/application-security/desktop/labwc-screenshot.patch`
+owns physical input admission, the private capture client, deadline and protected
+frame barrier. `environment/session/greyward-screenshot` owns the ordinary PNG
+receiver, frozen per-output previews, Slurp selection, crop/save and editor;
+Session owns its launcher and dependencies. Enrollment owns
+the compositor/policy and `packaging/greyward-enrollment/migrate-screenshot.py`.
+The authority is [Manual screenshots](software/SCREENSHOTS.md); tests are
+`test_screenshot_boundary.py`, `test_screenshot_migration.py` and compiled display
+policy in `test_flatpak_session_compatibility.py`. `verify-usbguard-inputs.py`
+checks both screenshot package payloads/receipts on complete image staging.
+The migration also owns stopped-seat recovery of an orphaned VT label;
+`test_screenshot_migration.py` checks active-seat/worker/device refusal. The
+canonical screenshot document records the required workflow-broker mode check.
+`desktop-compatibility-kernel-check.py` binds that mode/method to the running
+workflow bus-owner PID; `test_desktop_broker_readback.py` covers the read-only
+mode regression and owner/method failures.
+`test_screenshot_region.py` verifies crop coordinates, descriptor lifetime,
+cancellation and native PNG saving. The unprivileged opt-in
+`tests/fixtures/screenshot-region-headless.py` exercises the real selector on a
+separate headless display, including mixed DPI and cross-output input. The
+ordinary receiver update does not require protected-profile migration.
+
+Flatpak startup and installation SELinux compatibility are owned by
+`environment/production/selinux/greyward-application-session.te` and packaged
+initially by Enrollment 81 and retained by the Enrollment 83 successor selected
+in `environment/production/dms-2.0-candidate.json`.
+The canonical contract is [Software integration](software/FLATPAK_BAZAAR_INTEGRATION_PLAN.md#flatpak-installation-compatibility--24-october-2026).
+`tests/test_flatpak_session_compatibility.py` compiles the actual policy without
+loading it; `tools/greyward-dev/desktop-compatibility-kernel-check.py` verifies
+live rights and protected denials. The ordinary-user
+`tools/greyward-dev/flatpak-revokefs-check.py` exercises scratch staging without
+deploying an app. Offline deployment origins and online trust restoration are
+owned by `environment/production/install-offline-flatpaks.sh`, tested through
+`tests/test_flatpak_offline_origins.py` (explicit native namespace gate) and
+`tests/test_image_offline.py`. Run the compiled-policy and origin tests with
+`python3 -m unittest tests.test_flatpak_session_compatibility tests.test_flatpak_offline_origins`;
+the origin gate requires `GREYWARD_TEST_FLATHUB_REPO` as documented above.
+`environment/image/verify-usbguard-inputs.py --kind flatpak-session` rejects
+stale Enrollment policy inputs on both image import paths;
+`tests/test_usbguard_release_inputs.py` covers the former policy-only-hotfix gap.
 
 The current publication artifact contract is
 [`patch-notes/0.5.2-sophon.md`](patch-notes/0.5.2-sophon.md): exact ISO
@@ -113,6 +274,14 @@ canonical desktop palette tool. Tests: `node --test tests/dms-security-cards.tes
 `test_desktop_palette.py` and the explicit native `test_dms20_plugins.py`.
 `SecureWidget.qml` sizes its taskbar emblem four pixels above the native bar
 icon size; content measurement accommodates it without another pill layer.
+The owner accepted the 27 October appearance trial (private development evidence).
+Its `StatusCard.qml` and `SecureWidget.qml` refinements are canonical in plugin
+4.1.3 / DMS 7.11, preserving the palette/state contracts. The source manifest
+locks the new inventory; `packaging/greyward-dms/build-artwork-update.py
+--plugins-only` provides the closed ordinary-plugin RPM route, alongside the
+normal source build. `tests/test_dms_build_inputs.py` checks refusal of stale
+or out-of-scope updates. Current activation and future Enrollment 85 boundaries
+are recorded in [status](STATUS.md).
 The client preserves rich evidence only within its original lease on positive
 aggregate fallback; negative findings remain immediate. The native fallback
 fixture covers expiry, pending actions and aggregate-only card rendering.
@@ -391,16 +560,19 @@ registered in `branding/manifest.json`. Earlier entries below are historical.
 
 Multi-output icon placement ownership: `environment/session/desktop/output-layout.h`
 and `packaging/greyward-files/pcmanfm-multi-output.patch`, pinned through
-`source.json` and applied by the Files 18 spec. It owns one entry per named
-output, native drag/menu placement, disconnected-screen fallback and restoration,
-and Bottom-layer surface reconciliation above DMS wallpaper. Validation:
-`tests/test_desktop_output_layout.cpp` in RPM `%check` and explicit
+`packaging/greyward-files/source.json` and applied by the Files 21 spec. It owns
+preferred output/first placement, native drag/menu placement, disconnected-screen
+fallback and Bottom-layer reconciliation above DMS wallpaper. Coordinates are
+stored per connected-output set, saved before direct window destruction and
+restored when that configuration returns; legacy per-output files are preserved.
+Validation: `tests/test_desktop_output_layout.cpp` in RPM `%check` and explicit
 `tests/run_desktop_outputs.py` / `test_desktop_outputs.cpp` on a private headless
-three-output seat, with PIE and Qt signal-binding gates. `environment/image/build.sh` checks the installed source
-manifest against canonical input, including the layout header digest. `<validation-host>` has
-a scoped native update over Files 17; the full Files 18 RPM and physical
-acceptance remain pending.
-Authority: [file manager integration](architecture/FILE_MANAGER_DESKTOP.md).
+three-output seat, including repeated 3/1/3 transitions, exact coordinates and
+icon-process restarts, PIE and Qt signal-binding gates. Native checks pass on the
+physical reference, including a fresh process and default sticky settings. Files 21 is installed at the greeter with clean RPM verification and unchanged user profiles/protected receipts; physical monitor acceptance is pending.
+`environment/image/build.sh` checks the installed source manifest against the
+canonical patch/header digests. Authority:
+[file manager integration](architecture/FILE_MANAGER_DESKTOP.md#persistent-screen-configurations--27-october-2026).
 
 Desktop-only FileManager1 routing is scoped by
 `packaging/greyward-files/pcmanfm-desktop-only.patch` and the pinned source
@@ -504,7 +676,7 @@ canonical row or add one before creating a new implementation boundary.
 | Installed Application Guard live UI connection | `security-center/tauri/frontend/application-security.js`, `application-view.js`, `app.js` in the same frontend directory; runtime `broker.rs`, `enrollment.rs`, `selinux_readback.rs` | `docs/security-center/APPLICATION_SECURITY_PLAN.md`; installed receipts `docs/history/security-center/2026-10-08-application-security-normal-session.md`, `docs/history/security-center/2026-10-08-security-center-workspace.md` | Center 73 / Context 69 / runtime 26 installed on deliberately enrolled `<development-host>`; automatic production lifecycle unvalidated | `security-center/tauri/frontend/application-workflows.test.mjs`, `application-view.test.mjs` in the same directory; runtime broker/enrollment tests | Focused Node tests, Cargo broker/enrollment tests; actual normal-desktop native UI refresh and broker loss/recovery | `docs/STATUS.md`, existing Context freshness and operations |
 | Application Security enrollment (normal development enrollment; automatic production lifecycle unvalidated) | `security-center/crates/greyward-application-security/src/enrollment.rs`, `store.rs`, `workflow.rs`, `development_bus.rs`, `selinux_readback.rs` in the same runtime source directory; `security-center/packaging/application-security/maintenance.py` | `docs/security-center/APPLICATION_SECURITY_ENROLLMENT.md`; scoped receipt `docs/history/security-center/2026-10-07-application-security-enrollment-initial.md` | `security-center/packaging/application-security/greyward-maintenance.target`, `security-center/packaging/application-security/greyward-maintenance-console.service`; offline maintenance remains inactive; deliberate normal development enrollment is recorded in the authority | `tests/test_application_enrollment.py`, `tools/greyward-dev/application-security-enrollment-boundary.py`; incompatible fixture `spikes/application-security/selinux/greyward_enrollment_boundary_probe.te`, `spikes/application-security/selinux/greyward_enrollment_boundary_deny.cil` | `python -m unittest discover -s tests -p test_application_enrollment.py`; explicit Linux/root synthetic LUKS fixture; runtime Cargo tests/Clippy; E0–E5 unpassed | `environment/production/`, existing Fedora PAM/UWSM/DMS and update/recovery owners |
 | Protected authentication and tested persistent tool profiles (scoped source; no production activation) | `security-center/crates/greyward-application-security/src/tool_profile.rs`, `policy_intent.rs`, `managed_grant.rs`, `reviewed_launch.rs`, `workflow.rs`, `selinux_readback.rs` in the same runtime source directory; `security-center/packaging/application-security/authentication/assemble.py` | `docs/security-center/APPLICATION_SECURITY_ENROLLMENT.md`; scoped receipt `docs/history/security-center/2026-10-07-application-security-authentication.md` | `environment/production/selinux/greyward-application-auth.te`, `environment/production/selinux/greyward-application-auth.cil`, `environment/production/selinux/greyward-application-grants.te`; excluded from experimental RPM and image activation | `tests/test_application_authentication.py`, `tests/test_application_desktop.py`, `tools/greyward-dev/application-security-authentication-check.sh`, `tools/greyward-dev/application-security-authentication-boundary.py`, `tools/greyward-dev/application-security-authentication-session.py`, `tools/greyward-dev/application-security-lock.py`, `spikes/application-security/selinux/greyward_authentication_boundary_probe.te` | Pinned shell assembly; separate UID-1002 enforcing cross-domain, native PAM, fresh GUI Polkit and tool reuse/withdrawal probes; runtime tests/Clippy | `docs/STATUS.md`, installed DMS native lock remains canonical |
-| Protected login startup and readiness | security-center/packaging/application-security/desktop/materialize.py, authentication.py, and session.py, plus packaging/greyward-enrollment/migrate-dms-shell.py | docs/architecture/ARCHITECTURE.md; docs/security-center/APPLICATION_SECURITY_PLAN.md; docs/security-center/APPLICATION_SECURITY_ENROLLMENT.md; packaging/greyward-enrollment/README.md | Seed private authentication settings at DMS schema v18; pass the private compositor socket through a broker-created relative `wayland-0` alias; preserve broker admission until protected Polkit registration; refresh the profile helper, authentication worker and session worker plus receipts only through quiescent rollback-capable migration; start a minimal noninteractive backdrop before the full protected DMS shell starts | tests/test_application_authentication.py; tests/test_dms_shell_migration.py | Five migration and nine authentication tests pass with static/repository validation. After packages 40/15 were installed, the user observed about 3 s black then 3 s backdrop; the protected-session worker took 2.37 s. Application Security 41 and Enrollment 16 both build successfully and are installed on `<development-host>`; migration refreshed and verified the protected desktop receipt and shell inputs with SELinux Enforcing. The user visually confirmed the new splash appears early; normal DMS is active afterward | security-center/packaging/application-security/greyward-application-security-experimental.spec, protected desktop preparation in prepare.py
+| Protected login startup and readiness | `security-center/packaging/application-security/desktop/materialize.py`, `authentication.py`, `session.py`, `authentication/assemble.py`; `packaging/greyward-enrollment/migrate-dms-shell.py`; `branding/source/greyward-symbol.svg` | docs/security-center/APPLICATION_SECURITY_ENROLLMENT.md; branding/BRANDING.md; packaging/greyward-enrollment/README.md | Keep broker admission until protected Polkit registration; refresh the profile only through quiescent rollback-capable migration; generate identical receipt-bound early/full-shell startup visuals from one graphite/QML source and canonical symbol; retain background layer, no keyboard focus and empty input region; stop animation after four sweeps | tests/test_application_authentication.py; tests/test_dms_shell_migration.py; tests/test_authentication_input_focus.py; tests/test_authentication_presentation.py; environment/image/verify-usbguard-inputs.py | AppSec 84 / Enrollment 86 installed for DMS 2.0.0-7.11 after approved logout; native preview and three private-display input/cancel/layout tests pass. Quiescent migration verifies 1,645 desktop files and Administration; installed visual copies match the assembly/receipt, RPM verification is clean and SELinux remains Enforcing. Actual login observation remains pending. Earlier 41/16 timing evidence is historical in the enrollment document | Protected readiness, PAM/Polkit and admission contracts |
 | Installed GREYWARD system | `environment/production/` | `ARCHITECTURE.md`, `docs/architecture/PRODUCTION_VS_DEVELOPMENT.md`, `environment/production/README.md`, `docs/security/crypto-policy.md` | `environment/production/manifest.json`, `environment/production/packages.txt`, `environment/production/external-rpms.txt`, `environment/production/desktop-entry-overrides/`, `environment/production/blackbox/`, `environment/production/dconf/`, `environment/production/configure-zsh.sh`, `environment/production/zsh/`, `environment/session/`, `branding/` | `tests/guest-acceptance.sh` | `tests/static.ps1`, `tools/validate-repository.ps1` | `environment/development/`, `packaging/` |
 | Development VM overlay | `environment/development/`, `tools/greyward-dev/` | `docs/architecture/PRODUCTION_VS_DEVELOPMENT.md`, `docs/development/DEVELOPMENT.md`, `docs/development/VMWARE_WAYLAND_DISPLAY_DIAGNOSTIC.md` | `environment/http/greyward-dev-bootstrap.ks.tmpl`, `.secrets/` | `tests/guest-acceptance.sh` | `tools/greyward-dev/health.ps1`, `tools/greyward-dev/graphics-gate.ps1`, `tools/greyward-dev/iterate-security-center.ps1`, `tools/greyward-dev/run-security-center-interaction.ps1`, `tools/greyward-dev/deploy-security-center.ps1` | `environment/greyward.pkr.hcl` |
 | Image/install boundary (including target-kernel initramfs branding, final ISO closure validation, Hyper-V-first candidate workflow, direct Rock Ridge ISO inspection, and fabrication incident ledger) | `environment/image/build.sh`, `environment/image/build-iso.sh`, `environment/image/validate-production-stage.sh`, `environment/image/baseline.py`, `environment/image/build-offline.py`, `environment/image/build-components.py`, `environment/image/stage-text.py`, `environment/image/installer-contract.py`, `environment/production/install-offline-flatpaks.sh`, `tools/greyward-dev/capture-image-baseline.ps1`, `tools/greyward-dev/validate-vmware-iso.py` (legacy filename; hardware-neutral), `environment/image/installer.ks.tmpl`, `environment/production/provision-firstboot.sh`, `environment/production/provision-firstboot.service`, `environment/production/firstboot-status.sh`, `environment/production/firstboot-status.service` | `docs/architecture/ISO_CREATION.md`, `docs/architecture/ISO_REBUILD_QUICKSTART.md`, `docs/architecture/ISO_INSTALLER_COMPATIBILITY.md`, `docs/architecture/PRODUCTION_VS_DEVELOPMENT.md`, `environment/production/README.md` | `environment/production/production-acceptance.sh`, `environment/production/audit/greyward.rules`, `environment/production/selinux/greyward-dms-greeter.cil`, `environment/production/greyward-start-labwc`, `environment/production/greyward-sync-greeter-wallpaper`, `environment/production/manifest.json`, `environment/production/external-rpms.txt`, `environment/production/artifact-policy.json` | `tests/production-acceptance.sh`, `tests/static.ps1`, `tests/test_image_baseline.py`, `tests/test_image_offline.py`, `tests/test_image_stage_text.py`, `tests/test_image_installer_contract.py`, `tests/test_image_greeter_wallpaper.py`, `tests/test_component_cache.py`, `tests/test_session_policy.py` | `tools/validate-repository.ps1`, `tests/static.ps1`, `environment/image/build.sh`, `environment/image/build-iso.sh`, `environment/image/validate-production-stage.sh`, `tools/greyward-dev/validate-vmware-iso.py`, `python3 -m unittest discover -s tests -p "test_image_*.py"` | `environment/greyward.pkr.hcl` |

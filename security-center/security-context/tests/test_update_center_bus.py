@@ -218,7 +218,7 @@ class UpdateCenterBusTests(unittest.TestCase):
         completed = types.SimpleNamespace(returncode=0, stdout='{"upgrades": []}')
         with patch.object(update_center_bus.shutil, "which", return_value="/usr/bin/dnf5"), patch.object(update_center_bus.subprocess, "run", return_value=completed) as run, patch.object(update_center_bus, "essential_driver_package_names", return_value=[]), patch.object(update_center_bus.dms_compatibility, "dnf_options", return_value=["--exclude=quickshell"]):
             self.assertEqual(update_center_bus.cli_upgrade_items(), [])
-        self.assertEqual(run.call_args.args[0], ["dnf5", "check-upgrade", "--json", "--exclude=quickshell"])
+        self.assertEqual(run.call_args.args[0], ["dnf5", "--assumeyes", "check-upgrade", "--json", "--exclude=quickshell"])
 
     def test_pending_snapshot_uses_only_the_selected_system_provider(self):
         with patch.object(update_center_bus, "selected_system_provider", return_value=("DNF5", None)):
