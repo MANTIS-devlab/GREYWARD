@@ -48,6 +48,19 @@ optional_policy(`
 # No credential, label, host route or owner-domain permission is added.
 # Primary implementation: common/flatpak-run.c / network.c at these exact tags.
 allow greyward_guard_t self:cap_userns net_admin;
+# Flatpak 1.18 returns a revokefs socket through its system-bus helper. Receiving
+# that already-open descriptor requires socket read/write as well as the
+# existing fd-use permission. No connectto, helper-file, process-control or
+# installation authorization is granted; Deploy keeps its normal Polkit check.
+gen_require(` type flatpak_helper_t; ')
+allow greyward_guard_t flatpak_helper_t:unix_stream_socket { read write };
+# OSTree stages symbolic-link objects through revokefs before the privileged
+# helper verifies/imports them. The ordinary template already permits FUSE
+# directory and regular-content operations, but omits symlink creation and
+# atomic replacement/cleanup. Keep this restricted to FUSE symlinks: no write
+# authority over installed Flatpak files, protected types or host mount caps.
+gen_require(` type fusefs_t; ')
+allow greyward_guard_t fusefs_t:lnk_file { create rename unlink };
 # Bubblewrap v0.12.0 drops the new user namespace's capability bounding set
 # with PR_CAPBSET_DROP. This permits that local setup operation, not host
 # CAP_SETPCAP or a Protected Data exception. The worker requires all capability
@@ -142,6 +155,12 @@ allow greyward_guard_t home_cert_t:dir mounton;
 # give applications DMA access or relax protected input/console isolation.
 gen_require(` type dma_device_t; ')
 allow greyward_guard_t dma_device_t:chr_file { getattr mounton };
+# Flatpak's existing --device=dri sandbox setup also binds /dev/kfd on AMD
+# systems. Its hsa_device_t label needs the same metadata-only permissions:
+# stat and a private namespace mount destination, never compute-device I/O.
+# In particular do not add open/read/write/ioctl or change Flatpak overrides.
+gen_require(` type hsa_device_t; ')
+allow greyward_guard_t hsa_device_t:chr_file { getattr mounton };
 # The generated user-dirs metadata target inside ~/.var/app is ordinary content.
 gen_require(`
     type user_home_t;

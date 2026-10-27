@@ -202,10 +202,11 @@ rpm_query() {
         self.assertIn("prepare_sideload_repo(repo, refs)", source)
         self.assertIn('"flatpak", "build-update-repo"', source)
         install = (ROOT / "environment/production/install-offline-flatpaks.sh").read_text()
-        self.assertIn('offline_remote=greyward-offline', install)
         self.assertIn('--no-gpg-verify', install)
-        self.assertIn('"$offline_remote" "${refs[@]}"', install)
-        self.assertIn('flatpak remote-delete "$scope" --force "$offline_remote"', install)
+        self.assertIn('flathub "${refs[@]}"', install)
+        self.assertIn('--gpg-verify --enable flathub', install)
+        self.assertIn('--show-origin', install)
+        self.assertNotIn('flatpak remote-delete', install)
         self.assertNotIn('--commit=', install)
 
     def test_offline_validation_cannot_silently_use_network(self):
@@ -221,8 +222,27 @@ rpm_query() {
         source = (ROOT / "environment/production/install-offline-flatpaks.sh").read_text()
         self.assertIn("--sideload-repo=", source)
         self.assertIn("unshare --net", (ROOT / "environment/production/provision.sh").read_text())
-        self.assertIn('flatpak remote-modify "$scope" --disable flathub', source)
-        self.assertIn('flatpak remote-modify "$scope" --enable flathub', source)
+        self.assertIn('--no-gpg-verify --url="$offline_uri" --enable flathub', source)
+        self.assertIn('--url="$online_uri" --gpg-verify --enable flathub', source)
+
+    @unittest.skipUnless(os.name != 'nt' and shutil.which('bash'), 'Native final-media helper guard')
+    def test_final_media_rejects_retired_or_modified_flatpak_helper(self):
+        builder = (ROOT / 'environment/image/build-iso.sh').read_text()
+        function = 'verify_flatpak_helper() {' + builder.split('verify_flatpak_helper() {', 1)[1].split('\n}\n', 1)[0] + '\n}\n'
+        self.assertIn('verify_flatpak_helper "$repo_root/environment/production/install-offline-flatpaks.sh"', builder)
+        current = (ROOT / 'environment/production/install-offline-flatpaks.sh').read_bytes().replace(b'\r\n', b'\n')
+        with tempfile.TemporaryDirectory() as temporary:
+            canonical, embedded = (Path(temporary) / name for name in ('canonical', 'embedded'))
+            canonical.write_bytes(current.replace(b'\n', b'\r\n'))
+            for candidate, expected in [
+                    (current, 0),
+                    (b'#!/bin/bash\nflatpak remote-modify "$scope" --disable flathub\n', 1),
+                    (current.replace(b'trap restore_flathub EXIT', b'# restoration missing'), 1),
+                    (current.replace(b'--gpg-verify --enable flathub', b'--no-gpg-verify --enable flathub'), 1)]:
+                embedded.write_bytes(candidate)
+                result = subprocess.run(['bash', '-c', function + 'verify_flatpak_helper "$1" "$2"',
+                                         'fixture', str(canonical), str(embedded)], capture_output=True, text=True)
+                self.assertEqual(result.returncode, expected, result.stderr)
 
     def test_first_boot_enables_security_context_user_service(self):
         source = (ROOT / "environment/production/provision.sh").read_text()

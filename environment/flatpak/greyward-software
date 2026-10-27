@@ -8,7 +8,15 @@ config_root="${XDG_CONFIG_HOME:-$HOME/.config}/bazaar"
 template="/usr/share/greyward/bazaar/greyward-privacy.yaml"
 banner_template="/usr/share/greyward/bazaar/greyward-software-banner.svg"
 symbol_template="/usr/share/greyward/bazaar/greyward-symbol.svg"
+start_template="/usr/share/greyward/bazaar/greyward-bazaar-start"
 mkdir -p "$config_root"
+# This GREYWARD-owned file uses the existing read-only config exposure. Running
+# the check inside Flatpak resolves the actual cache and GSettings namespace.
+test -r "$start_template" || {
+  printf '%s\n' 'GREYWARD Software: required Explore startup helper is missing.' >&2
+  exit 1
+}
+install -m 0644 "$start_template" "$config_root/greyward-bazaar-start"
 if [[ -r "$template" ]]; then
   tmp="$config_root/greyward-privacy.yaml.tmp.$$"
   escaped_home=$(printf '%s' "$HOME" | sed 's/[&|]/\&/g')
@@ -30,6 +38,8 @@ fi
 if [[ -r "$config_root/greyward-privacy.yaml" ]]; then
   # The system override exposes the host user's ~/.config/bazaar directory
   # read-only at the same path inside the Flatpak sandbox.
-  exec /usr/bin/flatpak run io.github.kolunmi.Bazaar --extra-curated-config "$config_root/greyward-privacy.yaml" "$@"
+  exec /usr/bin/flatpak run --command=sh io.github.kolunmi.Bazaar \
+    "$config_root/greyward-bazaar-start" --extra-curated-config "$config_root/greyward-privacy.yaml" "$@"
 fi
-exec /usr/bin/flatpak run io.github.kolunmi.Bazaar "$@"
+exec /usr/bin/flatpak run --command=sh io.github.kolunmi.Bazaar \
+  "$config_root/greyward-bazaar-start" "$@"

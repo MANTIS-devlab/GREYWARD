@@ -1,15 +1,75 @@
 # GREYWARD documentation index
 
-[0.5.2 Sophon release notes](patch-notes/0.5.2-sophon.md) own the current
+[0.5.3 Sophon](patch-notes/0.5.3-sophon.md) records the current SourceForge release, completed Office
+channel commissioning, frozen sources, Linux/Windows media checks and remaining
+installed/hardware acceptance.
+
+The [accepted Security Center presentation](STATUS.md#accepted-security-center-presentation--27-october-2026)
+is packaged as DMS 7.11 for future image builds. The
+preceding cache trial (private development evidence) retains
+its visual audit and rollback evidence; its temporary overrides are retired.
+
+[0.5.3 Sophon release notes](patch-notes/0.5.3-sophon.md) own the current
 SourceForge download, exact package tuple, checksums, corresponding sources and
 publication readback. Composition and installed acceptance remain separate.
 
 
-The README's [25 October gallery](assets/screenshots/README.md) contains eleven
-owner-approved original screenshots, grouped by feature, and the unchanged
-overview GIF. [Office integration](software/OFFICE_INTEGRATION.md) credits the
-upstream ArtCraft projects and separates newer reference work from image-composition acceptance.
+The [README screenshot inventory](assets/screenshots/README.md) maps the approved
+25 October gallery to its original files and features; [publication guidance](PUBLICATION.md)
+records its export boundary. The README credits the upstream ArtCraft Office projects.
 
+[GREYWARD 0.5.2 Sophon](patch-notes/0.5.2-sophon.md) records the locally composed and verified
+image, all changes since 0.5.1 and its exact component tuple. Linux/Windows media
+checks pass; installed acceptance remains separate.
+
+[Factory desktop applications](architecture/FILE_MANAGER_DESKTOP.md#factory-desktop-applications--25-october)
+owns Home/Trash, the six application shortcuts, Software's ordinary pin and the
+coordinated launcher icons, including native first-login trust for the six verified
+factory shortcuts. Its reference activation and visual checks are
+separate from image composition; these inputs are included in the local 0.5.2 ISO.
+
+[GREYWARD Office integration](software/OFFICE_INTEGRATION.md) owns Writer,
+Sheets, PDF and Slides, their source/RPM locks, artwork, native associations and
+signed DNF5 update preparation. Its revision-6 artwork separates application
+tiles from the retained page-style document icons. Acceptance evidence and
+pending checks are recorded there; the 0.5.2 ISO includes these RPMs, with no public
+Office update channel claimed.
+The current Office source also prepares official stable-release discovery,
+generation-9 rebuilds and the verified, signed future-image DNF channel.
+Source preparation is separate from installed and public-channel acceptance.
+The [six-day GitHub chain](software/OFFICE_INTEGRATION.md#six-day-github-automation)
+implements signed delivery and retention of three complete Office generations.
+The dedicated public component has completed its first production delivery,
+including public DNF readback; the reference channel is active. Installed app
+versions and physical acceptance remain separate from channel publication.
+
+The [Software Explore recovery record](software/FLATPAK_BAZAAR_INTEGRATION_PLAN.md#explore-recovery-and-next-image-acceptance--25-october-2026)
+documents the reproduced missing-cache refresh suppression and the prepared
+GREYWARD startup correction. Source/staged/extracted byte checks enforce its
+inclusion in the next build. Original cache loss and next-image acceptance
+remain separate; the prepared correction is included in the local 0.5.2 ISO.
+
+[GREYWARD 0.5.1 Sophon](patch-notes/0.5.1-sophon.md) is composed locally
+from the complete fix inventory, including the later notifications, Bazaar
+policy/origin fixes, mouse-area screenshots and refreshed banner. Its notes own
+the artifact checksum, composition/readback evidence and remaining acceptance.
+Historical publication boundary: RC3 was the public image at the time of 0.5.1 composition.
+
+[Manual screenshots](software/SCREENSHOTS.md) defines the physical Print Screen
+workflow, its temporary private channel, protected-frame exclusion, Swappy
+editor and package/physical acceptance boundaries. The matched packages are
+activated on the reference; the first login failed and console/broker-mode
+recovery has been applied. Login/manual capture are confirmed and the user
+reports the locked-screen test. Session 36 adds frozen mouse-area selection;
+native tests pass and the user confirms physical region selection and Esc.
+
+The [Software integration contract](software/FLATPAK_BAZAAR_INTEGRATION_PLAN.md#flatpak-installation-compatibility--24-october-2026)
+records AMD startup metadata, Flatpak descriptor/FUSE staging compatibility and
+the offline installation-origin correction. Its visual customization section
+also owns the self-contained 1600 x 220 curated banner and native narrow-width
+render checks. Current status distinguishes live
+scoped policy fixes, Enrollment 83 successor inputs, GUI acceptance and the
+separate personal-VPN transport limitation; the published RC3 is unchanged.
 
 The [DMS2 RC3 release notes](patch-notes/0.5.0-dms2-rc3.md) identify the preceding
 published installer candidate and distinguish its contents from the later

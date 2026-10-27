@@ -20,13 +20,13 @@
 </p>
 
 <p align="center">
-  <a href="https://sourceforge.net/projects/greyward/files/v0.5.2-sophon/GREYWARD-0.5.2-Sophon-x86_64.iso/download">
-    <img alt="Download GREYWARD 0.5.2 Sophon" src="https://img.shields.io/badge/Download-0.5.2%20Sophon-C9CCD1?style=for-the-badge&labelColor=24262A">
+  <a href="https://sourceforge.net/projects/greyward/files/v0.5.3-sophon/GREYWARD-0.5.3-Sophon-x86_64.iso/download">
+    <img alt="Download GREYWARD 0.5.3 Sophon" src="https://img.shields.io/badge/Download-0.5.3%20Sophon-C9CCD1?style=for-the-badge&labelColor=24262A">
   </a>
 </p>
 
 <p align="center">
-  <sub>Latest public download: 0.5.2 Sophon prerelease, including Office integration. Consult the <a href="docs/patch-notes/0.5.2-sophon.md">release notes</a> for checksums, frozen sources and validation limits.</sub>
+  <sub>Latest public download: 0.5.3 Sophon prerelease, including Office integration. Consult the <a href="docs/patch-notes/0.5.3-sophon.md">release notes</a> for checksums, frozen sources and validation limits.</sub>
 </p>
 
 <p align="center">
@@ -235,7 +235,7 @@ These are GREYWARD-customized builds, not official ArtCraft releases. Their upst
 | :---: | :---: |
 | <img src="docs/assets/screenshots/2026-10-25/pdf.png" alt="GREYWARD PDF showing a comment and a filled interactive form field" width="460"> | <img src="docs/assets/screenshots/2026-10-25/slides.png" alt="GREYWARD Slides showing the ribbon, slide thumbnails and presentation canvas" width="460"> |
 
-The integration is included in the published **0.5.2 Sophon** image linked above. These applications are still young, and complete Microsoft Office or LibreOffice compatibility is not promised. See the [integration notes](docs/software/OFFICE_INTEGRATION.md) for tested workflows, format limits and update-channel status.
+The integration is included in the published **0.5.3 Sophon** image linked above. These applications are still young, and complete Microsoft Office or LibreOffice compatibility is not promised. See the [integration notes](docs/software/OFFICE_INTEGRATION.md) for tested workflows, format limits and update-channel status.
 
 # Security and usability are a trade-off
 

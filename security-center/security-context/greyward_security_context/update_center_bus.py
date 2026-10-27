@@ -510,7 +510,10 @@ def cli_upgrade_items():
     env["LANG"] = "C"
     try:
         completed = subprocess.run(
-            ["dnf5", "check-upgrade", "--json", *dms_compatibility.dnf_options()],
+            # Metadata keys are separate from RPM keys in DNF5. This fixed
+            # read-only command accepts configured repository keys without a
+            # TTY; install/apply authorization remains in the native helper.
+            ["dnf5", "--assumeyes", "check-upgrade", "--json", *dms_compatibility.dnf_options()],
             capture_output=True,
             text=True,
             timeout=60,

@@ -1,6 +1,6 @@
 Name: greyward-files
 Version: 1.0.0
-Release: 20%{?dist}
+Release: 21%{?dist}
 Summary: GREYWARD Strata file manager and transparent desktop integration
 License: MIT AND GPL-3.0-only AND GPL-2.0-or-later AND Apache-2.0 AND OFL-1.1 AND ISC AND LGPL-2.0-or-later AND LicenseRef-UnRAR AND LicenseRef-GREYWARD-Branding
 URL: https://github.com/lgse/strata
@@ -211,6 +211,10 @@ PY
 %license %{_licensedir}/%{name}
 
 %changelog
+* Tue Oct 27 2026 MANTIS SYSTEMS - 1.0.0-21
+- Preserve desktop coordinates across connected-output configurations and icon-process restarts.
+- Save positions before hot-unplug deletion and retain existing per-output layouts for rollback.
+
 * Thu Oct 22 2026 MANTIS SYSTEMS - 1.0.0-19
 - Seed native Strata Safe Open, scanning and file-context actions without replacing user edits.
 

@@ -292,6 +292,12 @@ not navigation.
 Network Activity is a bounded live security view, not a generic telemetry
 platform. Its default row hierarchy is **Application → destination →
 allowed/blocked/unknown**. Protocol, port, and observed time are secondary.
+Protocol/port metadata renders a single middle-dot separator (`UDP · Port 53`).
+Shared separators and the provider-order arrow use explicit JavaScript Unicode
+escapes in `app.js`, preventing the previously double-decoded source literals.
+The Updates package category/provider and last-operation labels use the same
+clean separator. Native renderer tests cover both views, including actual Updates
+markup; reopening a window is required after replacing its installed executable.
 `type` means a connection classification only when it adds information beyond
 the transport `protocol`; redundant fields are omitted. Throughput, active
 connection counts, DNS history, reputation, server-location enrichment, and

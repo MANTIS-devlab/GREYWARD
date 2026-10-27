@@ -258,7 +258,17 @@ fun message_callback(message) {
 
 logo.sprite.SetX(screen.center_x - logo.image.GetWidth() / 2);
 logo.sprite.SetY(screen.center_y - 132);
-set_text(message.sprite, "Starting GREYWARD", palette.secondary_r, palette.secondary_g, palette.secondary_b, screen.center_y + 166);
+// The same theme is loaded at boot and when leaving the graphical session.
+// Use Plymouth's lifecycle mode, never infer shutdown from status messages.
+lifecycle_text = "Starting GREYWARD";
+if (Plymouth.GetMode() == "shutdown") {
+  state.name = "shutdown";
+  lifecycle_text = "Shutting down GREYWARD";
+} else if (Plymouth.GetMode() == "reboot") {
+  state.name = "shutdown";
+  lifecycle_text = "Restarting GREYWARD";
+}
+set_text(message.sprite, lifecycle_text, palette.secondary_r, palette.secondary_g, palette.secondary_b, screen.center_y + 166);
 
 Plymouth.SetRefreshFunction(refresh_callback);
 Plymouth.SetDisplayNormalFunction(display_normal_callback);

@@ -1,0 +1,378 @@
+#!/usr/bin/python3 -I
+"""Ordinary screenshot receiver/editor. Only a physical compositor gesture grants FD 3."""
+import datetime
+from contextlib import contextmanager
+import json
+import math
+import os
+from pathlib import Path
+import re
+import socket
+import stat
+import struct
+import subprocess
+import sys
+import tempfile
+
+DISPLAY_CONTEXT = b'greyward_guard_u:greyward_guard_r:greyward_as_display_t:s0'
+
+
+def public_environment():
+    environment = dict(os.environ)
+    environment.pop('WAYLAND_SOCKET', None)
+    return environment
+
+
+def output_signature():
+    """Read ordinary output metadata, never a capture or a display mutation."""
+    result = subprocess.run(['/usr/bin/wlr-randr', '--json'],
+                            env=public_environment(), capture_output=True,
+                            text=True, timeout=2, check=True)
+    if len(result.stdout) > 256 * 1024:
+        raise RuntimeError('Display layout response is too large')
+    outputs = json.loads(result.stdout)
+    if not isinstance(outputs, list) or not 1 <= len(outputs) <= 32:
+        raise RuntimeError('Display layout unavailable')
+    signature = []
+    for output in outputs:
+        if not output.get('enabled'):
+            continue
+        mode = next(mode for mode in output['modes'] if mode.get('current'))
+        signature.append((output['name'], output['position']['x'], output['position']['y'],
+                          output['scale'], output['transform'], mode['width'], mode['height']))
+    if not signature:
+        raise RuntimeError('No enabled display')
+    return tuple(sorted(signature))
+
+
+def canvas_bounds(rectangles):
+    if not rectangles or len(rectangles) > 32:
+        raise RuntimeError('Display geometry unavailable')
+    for rectangle in rectangles:
+        if (len(rectangle) != 4 or any(type(value) is not int for value in rectangle)
+                or rectangle[2] <= 0 or rectangle[3] <= 0):
+            raise RuntimeError('Invalid display geometry')
+    left = min(r[0] for r in rectangles)
+    top = min(r[1] for r in rectangles)
+    width = max(r[0] + r[2] for r in rectangles) - left
+    height = max(r[1] + r[3] for r in rectangles) - top
+    if width > 32768 or height > 32768:
+        raise RuntimeError('Display layout exceeds the supported size')
+    return left, top, width, height
+
+
+def pixel_rectangle(rectangle, bounds, pixels):
+    """Map global logical coordinates to the frozen PNG, including negative origins."""
+    x, y, width, height = rectangle
+    left, top, canvas_width, canvas_height = bounds
+    pixel_width, pixel_height = pixels
+    if (width <= 0 or height <= 0 or x < left or y < top
+            or x + width > left + canvas_width or y + height > top + canvas_height):
+        raise RuntimeError('Selection is outside the captured desktop')
+    scale_x, scale_y = pixel_width / canvas_width, pixel_height / canvas_height
+    if (pixel_width <= 0 or pixel_height <= 0
+            or abs(scale_x - scale_y) * max(canvas_width, canvas_height) > 2):
+        raise RuntimeError('Display layout changed; take a new screenshot')
+    x0 = max(0, math.floor((x - left) * scale_x))
+    y0 = max(0, math.floor((y - top) * scale_y))
+    x1 = min(pixel_width, math.ceil((x + width - left) * scale_x))
+    y1 = min(pixel_height, math.ceil((y + height - top) * scale_y))
+    return x0, y0, x1 - x0, y1 - y0
+
+
+def parse_selection(text, bounds, pixels):
+    if len(text) > 128:
+        raise RuntimeError('Invalid screenshot selection')
+    match = re.fullmatch(r'(-?\d+),(-?\d+) ([1-9]\d*)x([1-9]\d*)', text.strip())
+    if match is None:
+        raise RuntimeError('Invalid screenshot selection')
+    return pixel_rectangle(tuple(map(int, match.groups())), bounds, pixels)
+
+
+def decode_png(image, width, height):
+    from gi.repository import GdkPixbuf, GLib
+    loader = GdkPixbuf.PixbufLoader.new_with_type('png')
+    try:
+        image.seek(0)
+        while chunk := image.read(65536):
+            loader.write(chunk)
+        loader.close()
+        pixels = loader.get_pixbuf()
+    except GLib.Error as error:
+        raise RuntimeError('The captured PNG could not be decoded') from error
+    if pixels is None or (pixels.get_width(), pixels.get_height()) != (width, height):
+        raise RuntimeError('The captured PNG dimensions changed')
+    return pixels
+
+
+def message(text, error=False):
+    import gi
+    gi.require_version('Gtk', '3.0')
+    from gi.repository import Gtk
+    dialog = Gtk.MessageDialog(
+        message_type=Gtk.MessageType.ERROR if error else Gtk.MessageType.INFO,
+        buttons=Gtk.ButtonsType.CLOSE, text='Screenshot')
+    dialog.format_secondary_text(text)
+    dialog.run()
+    dialog.destroy()
+
+
+def capture():
+    # Arguments/environment alone grant nothing. Check the actual inherited
+    # socket peer; the compositor separately restricts this exact client and
+    # revokes it after three seconds or before a native protected lock starts.
+    with socket.socket(fileno=3) as channel:
+        if channel.family != socket.AF_UNIX or channel.type != socket.SOCK_STREAM:
+            raise RuntimeError('Screenshot channel unavailable')
+        peer = channel.getsockopt(socket.SOL_SOCKET, socket.SO_PEERSEC, 256).rstrip(b'\0')
+        if peer != DISPLAY_CONTEXT:
+            raise RuntimeError('Use the physical Print Screen key to capture')
+        signature = output_signature()
+        environment = dict(os.environ, WAYLAND_SOCKET='3')
+        # Spool privately; no partially captured image is exposed as a saved file.
+        with tempfile.TemporaryFile() as image:
+            result = subprocess.run(['/usr/bin/grim', '-'], env=environment,
+                                    pass_fds=(3,), stdout=image,
+                                    stderr=subprocess.PIPE, timeout=5)
+            if result.returncode:
+                raise RuntimeError('Capture cancelled or a protected screen is active')
+            size = image.tell()
+            image.seek(0)
+            header = image.read(24)
+            if len(header) != 24 or header[:8] != b'\x89PNG\r\n\x1a\n' or header[12:16] != b'IHDR':
+                raise RuntimeError('The compositor did not return a PNG image')
+            width, height = struct.unpack('>II', header[16:24])
+            if not (0 < width <= 32768 and 0 < height <= 32768 and
+                    width * height <= 100_000_000 and 0 < size <= 128 * 1024 * 1024):
+                raise RuntimeError('Screenshot exceeds the supported image size')
+            # Drop the capture channel before any GUI, user paths or editor starts.
+            channel.close()
+            os.environ.pop('WAYLAND_SOCKET', None)
+            pixels = decode_png(image, width, height)
+    if output_signature() != signature:
+        raise RuntimeError('Display layout changed; take a new screenshot')
+    return pixels, signature
+
+
+def select_region(pixels, signature):
+    """Ordinary frozen previews plus Slurp; the capture FD is already closed."""
+    import gi
+    gi.require_version('Gtk', '3.0')
+    gi.require_version('GtkLayerShell', '0.1')
+    os.environ['GDK_BACKEND'] = 'wayland'
+    from gi.repository import Gtk, Gdk, GtkLayerShell, GLib
+    Gtk.init([])
+    if not GtkLayerShell.is_supported():
+        raise RuntimeError('The desktop does not support area selection')
+    display = Gdk.Display.get_default()
+    monitors = [display.get_monitor(i) for i in range(display.get_n_monitors())]
+    rectangles = [(r.x, r.y, r.width, r.height) for r in
+                  [monitor.get_geometry() for monitor in monitors]]
+    bounds = canvas_bounds(rectangles)
+    dimensions = pixels.get_width(), pixels.get_height()
+    # Validate mapping before displaying any preview (rotation and DPI are
+    # already represented by the composited PNG and GDK logical geometry).
+    pixel_rectangle(bounds, bounds, dimensions)
+    windows, sources, handlers = [], [], []
+    state = {'done': False, 'process': None, 'selection': None, 'error': None}
+    mapped = set()
+
+    def finish(selection=None, error=None):
+        if not state['done']:
+            state.update(done=True, selection=selection, error=error)
+            Gtk.main_quit()
+        return False
+
+    def poll():
+        process = state['process']
+        if state['done']:
+            return False
+        if process is None or process.poll() is None:
+            return True
+        output, error = process.communicate()
+        if process.returncode:
+            # Slurp returns nonzero for Esc/click cancellation. No file exists.
+            return finish()
+        try:
+            return finish(parse_selection(output, bounds, dimensions))
+        except RuntimeError as failure:
+            return finish(error=str(failure))
+
+    def start_selector():
+        if state['done'] or state['process'] is not None:
+            return False
+        try:
+            state['process'] = subprocess.Popen(
+                ['/usr/bin/slurp', '-o', '-d', '-b', '0b111a88', '-c', '54e5cfff',
+                 '-s', '00000000', '-w', '2'], stdin=subprocess.DEVNULL,
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+                env=public_environment(), close_fds=True)
+            sources.append(GLib.timeout_add(50, poll))
+        except OSError as error:
+            finish(error=str(error))
+        return False
+
+    def on_map(window, _event):
+        mapped.add(window)
+        if len(mapped) == len(monitors):
+            display.flush()
+            sources.append(GLib.idle_add(start_selector))
+        return False
+
+    def draw(_widget, context, rectangle):
+        x, y, _, _ = rectangle
+        sx = dimensions[0] / bounds[2]
+        sy = dimensions[1] / bounds[3]
+        context.scale(1 / sx, 1 / sy)
+        context.translate(-(x - bounds[0]) * sx, -(y - bounds[1]) * sy)
+        Gdk.cairo_set_source_pixbuf(context, pixels, 0, 0)
+        context.paint()
+        return False
+
+    try:
+        for monitor, rectangle in zip(monitors, rectangles):
+            window = Gtk.Window(title='GREYWARD Screenshot')
+            windows.append(window)
+            window.set_decorated(False)
+            window.set_accept_focus(False)
+            GtkLayerShell.init_for_window(window)
+            GtkLayerShell.set_namespace(window, 'greyward-screenshot-preview')
+            GtkLayerShell.set_monitor(window, monitor)
+            GtkLayerShell.set_layer(window, GtkLayerShell.Layer.OVERLAY)
+            GtkLayerShell.set_keyboard_mode(window, GtkLayerShell.KeyboardMode.NONE)
+            GtkLayerShell.set_exclusive_zone(window, -1)
+            for edge in (GtkLayerShell.Edge.TOP, GtkLayerShell.Edge.BOTTOM,
+                         GtkLayerShell.Edge.LEFT, GtkLayerShell.Edge.RIGHT):
+                GtkLayerShell.set_anchor(window, edge, True)
+            overlay = Gtk.Overlay()
+            area = Gtk.DrawingArea()
+            area.connect('draw', draw, rectangle)
+            overlay.add(area)
+            label = Gtk.Label(label='Drag to capture an area  ·  Click a screen to capture it  ·  Esc to cancel')
+            label.set_halign(Gtk.Align.CENTER)
+            label.set_valign(Gtk.Align.START)
+            label.set_margin_top(28)
+            css = Gtk.CssProvider()
+            css.load_from_data(b'label { background: #101c27; color: #e5f6f3; border: 1px solid #39736c; border-radius: 10px; padding: 12px 18px; font-size: 13px; }')
+            label.get_style_context().add_provider(css, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+            overlay.add_overlay(label)
+            window.add(overlay)
+            window.connect('map-event', on_map)
+        for name in ('monitor-added', 'monitor-removed'):
+            handlers.append(display.connect(name, lambda *_: finish(error='Display layout changed; take a new screenshot')))
+        for window in windows:
+            window.show_all()
+        sources.append(GLib.timeout_add_seconds(90, finish))
+        Gtk.main()
+    finally:
+        state['done'] = True
+        process = state['process']
+        if process is not None and process.poll() is None:
+            process.terminate()
+            try:
+                process.wait(timeout=1)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait(timeout=1)
+        if process is not None:
+            process.stdout.close()
+            process.stderr.close()
+        for source in sources:
+            active = GLib.MainContext.default().find_source_by_id(source)
+            if active is not None:
+                active.destroy()
+        for handler in handlers:
+            display.disconnect(handler)
+        for window in windows:
+            window.destroy()
+        display.flush()
+    if state['error']:
+        raise RuntimeError(state['error'])
+    if state['selection'] is None:
+        return None
+    if output_signature() != signature:
+        raise RuntimeError('Display layout changed; take a new screenshot')
+    return pixels.new_subpixbuf(*state['selection']).copy()
+
+
+def save_selection(pixels):
+    from gi.repository import GLib
+    pictures = GLib.get_user_special_dir(GLib.UserDirectory.DIRECTORY_PICTURES)
+    directory = Path(pictures or Path.home() / 'Pictures') / 'Screenshots'
+    directory.mkdir(parents=True, exist_ok=True)
+    prefix = 'Screenshot-' + datetime.datetime.now().strftime('%Y-%m-%d-%H%M%S-')
+    descriptor, name = tempfile.mkstemp(prefix=prefix, suffix='.png', dir=directory)
+    try:
+        with os.fdopen(descriptor, 'wb') as saved:
+            def write(data, *_):
+                saved.write(data)
+                return True
+            pixels.save_to_callbackv(write, None, 'png', [], [])
+    except BaseException:
+        Path(name).unlink(missing_ok=True)
+        raise
+    return name
+
+
+@contextmanager
+def selection_lock():
+    import fcntl
+    path = Path('/run/user') / str(os.geteuid()) / 'greyward-screenshot.lock'
+    descriptor = os.open(path, os.O_CREAT | os.O_RDWR | os.O_CLOEXEC | os.O_NOFOLLOW, 0o600)
+    try:
+        metadata = os.fstat(descriptor)
+        if (not stat.S_ISREG(metadata.st_mode) or metadata.st_uid != os.geteuid()
+                or metadata.st_nlink != 1 or metadata.st_mode & 0o077):
+            raise RuntimeError('Invalid screenshot selection lock')
+        try:
+            fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            yield False
+        else:
+            yield True
+    finally:
+        os.close(descriptor)
+
+
+def main():
+    ordinary = b'greyward_guard_u:greyward_guard_r:greyward_guard_t:s0'
+    if (os.geteuid() < 1000 or
+            Path('/proc/self/attr/current').read_bytes().rstrip(b'\0\n') != ordinary):
+        print('The screenshot receiver requires the confined ordinary desktop.', file=sys.stderr)
+        return 1
+    if sys.argv[1:] != ['--capture']:
+        message('Press Print Screen, then drag with the mouse to select an area.\n'
+                'Click a screen to capture that screen, or press Esc to cancel.\n\n'
+                'Only your selection is saved in Pictures / Screenshots. You can '
+                'annotate it in Swappy. Protected authentication and lock screens '
+                'cannot be captured.\n\nClose this window before taking your screenshot.')
+        return 0
+    try:
+        with selection_lock() as acquired:
+            if not acquired:
+                try:
+                    os.close(3)
+                except OSError:
+                    pass
+                os.environ.pop('WAYLAND_SOCKET', None)
+                return 0
+            pixels, signature = capture()
+            selected = select_region(pixels, signature)
+            del pixels
+            if selected is None:
+                return 0
+            name = save_selection(selected)
+            del selected
+    except (OSError, RuntimeError, subprocess.SubprocessError, ValueError, KeyError, StopIteration) as error:
+        os.environ.pop('WAYLAND_SOCKET', None)
+        message(str(error), error=True)
+        return 1
+    # The image remains saved even if the editor is closed or fails to start.
+    result = subprocess.run(['/usr/bin/swappy', '-f', name], close_fds=True)
+    if result.returncode:
+        message('Your screenshot was saved to:\n' + name + '\n\nThe editor could not start.', error=True)
+    return result.returncode
+
+
+if __name__ == '__main__':
+    raise SystemExit(main())

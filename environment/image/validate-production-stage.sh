@@ -36,6 +36,10 @@ for required in \
   require_file "$required"
 done
 
+for required in flatpak/greyward-software flatpak/greyward-bazaar-start; do
+  require_file "$required"
+done
+
 mapfile -t declared < <(
   sed -n -E 's/^[[:space:]]*test[[:space:]]+-r[[:space:]]+"\$stage\/([^"]+)".*$/\1/p' \
     "$provision" | LC_ALL=C sort -u
@@ -44,7 +48,7 @@ for relative in "${declared[@]}"; do
   [[ -n "$relative" ]] && require_file "$relative"
 done
 
-for package in greyward-security-center greyward-security-context greyward-branding greyward-dms greyward-session greyward-files greyward-application-security-experimental greyward-application-enrollment; do
+for package in greyward-security-center greyward-security-context greyward-branding greyward-dms greyward-session greyward-files greyward-application-security-experimental greyward-application-enrollment greyward-writer greyward-sheets greyward-pdf greyward-slides; do
   shopt -s nullglob
   matches=("$stage/rpms/$package-"*.rpm)
   shopt -u nullglob
@@ -52,6 +56,14 @@ for package in greyward-security-center greyward-security-context greyward-brand
     missing+=("rpms/$package-*.rpm (expected exactly one, found ${#matches[@]})")
   fi
 done
+
+require_file office-source/packaging/greyward-office/source.json
+if [[ -r "$stage/office-source/packaging/greyward-office/verify-inputs.py" ]]; then
+  python3 "$stage/office-source/packaging/greyward-office/verify-inputs.py" \
+    --repo "$stage/office-source" --stage "$stage" || missing+=("Office source/RPM validation failed")
+else
+  missing+=("Office payload verifier is missing")
+fi
 
 # Every firmware RPM selected in the production manifest must also be named in
 # the generated offline Anaconda transaction. Firmware is never host-detected

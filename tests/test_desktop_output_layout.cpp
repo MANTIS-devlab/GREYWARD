@@ -20,6 +20,14 @@ int main(int argc, char** argv) {
     const QStringList screens{laptop, left, right};
     Greyward::DesktopOutputLayout layout(file);
     check(layout.owner(QStringLiteral("unassigned"), screens, laptop) == laptop);
+    check(layout.owner(QStringLiteral("unassigned"), screens, right) == laptop);
+    const auto triple = Greyward::DesktopOutputLayout::positionFile(temporary.path(), right, screens);
+    check(triple == Greyward::DesktopOutputLayout::positionFile(temporary.path(), right, {right, laptop, left}));
+    check(triple != Greyward::DesktopOutputLayout::positionFile(temporary.path(), right, {right}));
+    check(triple != Greyward::DesktopOutputLayout::positionFile(temporary.path(), left, screens));
+    check(QFileInfo(Greyward::DesktopOutputLayout::positionFile(temporary.path(), QStringLiteral("../unsafe"), screens)).absolutePath() == temporary.path());
+    check(Greyward::DesktopOutputLayout::positionFile(temporary.path(), right, {QStringLiteral("a:b"), QStringLiteral("c")})
+        != Greyward::DesktopOutputLayout::positionFile(temporary.path(), right, {QStringLiteral("a"), QStringLiteral("b:c")}));
     check(layout.assign({QStringLiteral("alpha.desktop")}, left, screens));
     check(layout.assign({QStringLiteral("beta.txt")}, right, screens));
     check(layout.owner(QStringLiteral("alpha.desktop"), screens, laptop) == left);

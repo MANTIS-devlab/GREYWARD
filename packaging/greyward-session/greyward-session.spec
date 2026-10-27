@@ -1,6 +1,6 @@
 Name: greyward-session
 Version: 0.1.0
-Release: 34%{?dist}
+Release: 38%{?dist}
 Summary: GREYWARD static desktop session policy and factory defaults
 License: GPL-3.0-only
 BuildArch: noarch
@@ -11,6 +11,14 @@ Requires: labwc
 Requires: wlr-randr
 Requires: wlopm
 Requires: python3
+Requires: python3-gobject
+Requires: gvfs
+Requires: gtk3
+Requires: grim
+Requires: swappy
+Requires: slurp
+Requires: gtk-layer-shell
+Requires: python3-cairo
 Requires: pam
 Requires: xdg-desktop-portal-gtk
 Requires: xdg-desktop-portal-wlr
@@ -27,9 +35,12 @@ tar -xzf %{SOURCE0}
 for file in greyward-dms greyward-session-lock greyward-display-power; do
  install -Dm0755 environment/session/$file %{buildroot}/usr/local/bin/$file
 done
-for file in greyward-dms-session-migrate greyward-dms-state-migrate greyward-dms-runtime-check; do
+for file in greyward-dms-session-migrate greyward-dms-state-migrate greyward-dms-runtime-check greyward-screenshot greyward-desktop-defaults; do
  install -Dm0755 environment/session/$file %{buildroot}/usr/local/libexec/$file
 done
+install -Dm0644 environment/session/greyward-desktop-defaults.conf %{buildroot}/usr/lib/systemd/user/greyward-desktop-icons.service.d/10-default-shortcuts.conf
+sed -i 's/\r$//' %{buildroot}/usr/local/libexec/greyward-screenshot
+install -Dm0644 environment/session/greyward-screenshot.desktop %{buildroot}/usr/local/share/applications/org.gnome.Screenshot.desktop
 install -Dm0755 environment/production/greyward-start-labwc %{buildroot}/usr/local/libexec/greyward-start-labwc
 # A Windows-hosted source tree may carry CRLF into the tarball; Linux needs a byte-exact shebang.
 sed -i 's/\r$//' %{buildroot}/usr/local/libexec/greyward-start-labwc
@@ -57,10 +68,12 @@ for backend in gtk wlr; do
 done
 
 %files
+/usr/local/share/applications/org.gnome.Screenshot.desktop
 %config(noreplace) /etc/pam.d/greyward-dms-lock
 /usr/local/bin/greyward-*
 /usr/local/libexec/greyward-*
 /usr/lib/systemd/user/greyward-*.service
+/usr/lib/systemd/user/greyward-desktop-icons.service.d/10-default-shortcuts.conf
 /usr/lib/systemd/user/hyprpolkitagent.service.d/greyward-session-owner.conf
 /usr/lib/systemd/user/xdg-desktop-portal-gnome.service.d/greyward-session-owner.conf
 /usr/lib/systemd/user/xdg-desktop-portal.service.d/greyward-backends.conf
@@ -70,6 +83,19 @@ done
 /usr/share/greyward/dms/greyward-obsidian.json
 
 %changelog
+* Sun Oct 25 2026 MANTIS SYSTEMS - 0.1.0-38
+- Approve only byte-identical factory desktop launchers with native persistent trust.
+
+* Sun Oct 25 2026 MANTIS SYSTEMS - 0.1.0-37
+- Seed the six Office/browser/terminal desktop shortcuts and native Home/Trash once.
+- Pin Software instead of its taskbar widget for fresh DMS sessions.
+
+* Sat Oct 24 2026 MANTIS SYSTEMS - 0.1.0-36
+- Select a region on a frozen ordinary snapshot; close capture authority before mouse interaction and save only the selection.
+
+* Sat Oct 24 2026 MANTIS SYSTEMS - 0.1.0-35
+- Receive a physical, temporary screenshot channel and open saved captures in Swappy without Polkit.
+
 * Fri Oct 23 2026 MANTIS SYSTEMS - 0.1.0-34
 - Pin native Settings in fresh DMS 2.0 taskbars, preserving existing user choices.
 

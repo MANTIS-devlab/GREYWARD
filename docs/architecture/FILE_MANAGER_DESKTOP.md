@@ -1,5 +1,101 @@
 # File manager and desktop integration
 
+## Persistent screen configurations — 27 October 2026
+
+Files **21** separates Wayland icon coordinates by the sorted set of connected
+output names and the icon's output. Enumeration order and primary-screen changes
+do not change this key. A single-screen fallback therefore cannot overwrite the
+three-screen arrangement. Existing `desktop-items-OUTPUT.conf` files seed a new
+configuration once and remain untouched for rollback. New layout filenames use
+length-prefixed names hashed with SHA-256 and an encoded output name.
+
+Output reconciliation previously deleted desktop windows directly, skipping
+the close-event position save. The destructor now saves the layout it actually
+loaded, even after its QScreen disappears. Deliberate placement is also saved
+immediately. Retained windows save their old configuration before loading the
+new one. Application teardown deletes desktop windows while their settings and
+layout owner still exist. Hidden icons no longer reserve cells on another output; temporary
+out-of-bounds placement does not replace the saved coordinate during automatic
+sticky layout. First placement now remembers an output even for icons never
+manually dragged. Existing preferred-output fallback and native drag/menu
+semantics remain; an explicit move to another output changes that preference.
+
+Ownership remains `environment/session/desktop/output-layout.h` and
+`packaging/greyward-files/pcmanfm-multi-output.patch`, pinned by the Files source
+manifest. No new daemon, privileged operation or policy permission is added.
+Strata remains the only file browser. The installed-source manifest gate rejects
+an older desktop patch/header in future image preparation.
+
+Native Qt compilation and the private three-output integration run pass on the
+physical reference: repeated **3 → 1 → 3** cycles preserve exact coordinates and
+one visible copy, including icon-process teardown/recreation in both modes.
+The harness also retains native drag/file-content, folder routing and live
+creation/deletion checks. A second, fresh application process verifies the saved
+output and exact coordinates. This rapid-exit persistence fixture disables
+thumbnails only in its synthetic profile: a separate HEIF thumbnail-worker/plugin
+teardown crash was observed during immediate synthetic exit and is not claimed
+fixed or covered here. The initial single-process cycle run passed with native
+thumbnails enabled; installed user preferences are unchanged.
+These synthetic outputs are separate from physical
+monitor acceptance.
+
+The final Files **1.0.0-21** RPM and source RPM build with all normal checks:
+three kernel-launcher checks, 29 Qt layout checks and three Rust metadata checks.
+The source archive's patch/header/manifest/spec match the canonical checkout;
+the binary RPM's installed source manifest matches too. The RPM SHA-256 is
+`cb1100f0df3780b3b7d3c06d63b031ba07e3ab5e10879a244581be3fa98c72cb`.
+It is installed on the physical reference at the greeter. RPM verification is
+clean; user profile files remain byte-identical across installation, and all
+1,645 protected desktop files plus Administration receipts still verify with
+SELinux Enforcing. The new desktop executable loads on the next normal login.
+Files 20 and the original user profile are retained for rollback. Native build
+tools/caches were added only to the development reference, without upgrading
+existing runtime packages or adding tools to the production manifest. The
+65 focused Python checks pass with nine Windows/native skips; both repository
+gates pass. No ISO was built or published. The reference currently detects only
+the laptop panel; physical external-monitor hotplug acceptance remains pending.
+
+Connector names identify configurations; using different ports/renamed outputs
+creates a new configuration. Resolution changes retain the upstream grid fitting
+behavior, and existing user sorting/sticky settings are preserved.
+
+## Factory desktop applications — 25 October
+
+Session 38 owns `greyward-desktop-defaults`, an ordinary-user `ExecStartPre`
+drop-in for the existing desktop-icon service. It seeds Writer, Sheets, PDF,
+Slides, Brave and Terminal from verified, root-installed desktop entries.
+Native PCManFM Home and Trash are enabled for a new profile; folder opening
+continues through Strata. It never creates a second file manager or grants new
+access. Existing desktop files, settings and per-output positions win.
+The per-user completion receipt prevents later logins from restoring a shortcut
+the user removed. If an application is not installed yet, it is skipped and the
+seed remains incomplete for a later login; no guessed command is installed.
+
+The six factory application shortcuts receive PCManFM/libfm's native string
+`metadata::trust=true` once, after exact comparison with their verified,
+root-installed source entries. This removes their first-login warning badges.
+Customized files, symlinks, unrelated executables and deleted shortcuts are
+excluded. A separate per-user trust receipt preserves later manual untrust
+choices; metadata-service failures leave it incomplete for retry without
+preventing the desktop from opening. General executable prompts remain enabled.
+Home and Trash are native items and need no executable approval. This also
+migrates unchanged factory copies for existing users once; the ordinary dock
+"create shortcut" action keeps its explicit first-use trust review.
+
+Software is a normal factory application pin rather than a taskbar widget.
+Existing pin choices remain user-owned. The reference's explicit layout change
+is applied separately from fresh-user seeding. Branding 17 supplies coordinated
+Software, Loupe and Settings icons; see [branding](../../branding/BRANDING.md).
+The matched set is installed on the reference and the user accepted its desktop
+and shortcuts. No ISO is built by this change. Detailed evidence is recorded in
+[current status](../STATUS.md).
+
+Validation: `python3 -m unittest tests.test_desktop_application_defaults
+tests.test_desktop_defaults tests.test_desktop_shortcuts tests.test_dms20_state`,
+then both repository gates. Complete image staging compares the desktop helper,
+unit drop-in and pin seed with their sources; composition rejects old branding
+assets/launchers, and the existing DMS receipt locks the Settings SVG.
+
 ## Multiple screens — Files 18 candidate, 21 October
 
 The private PCManFM desktop now uses LayerBottom, above DMS wallpaper and below

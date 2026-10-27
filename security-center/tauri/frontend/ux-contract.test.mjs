@@ -474,6 +474,42 @@ test("keeps Network Activity focused on app, destination, and decision", () => {
   assert.doesNotMatch(source, /throughput|active connections|ASN|geolocation|reputation/i);
 });
 
+test("network protocol and port use a clean Unicode separator", () => {
+  const start = source.indexOf("function networkActivityMeta(");
+  const end = source.indexOf("function networkActivityFiltersAreDefault", start);
+  const context = {
+    networkActivityDestination: item => item.destination || {},
+    copy: (key, values = {}) => key === "network.activity.portValue" ? `Port ${values.port}` : "Details unavailable",
+  };
+  vm.runInNewContext(source.slice(start, end), context);
+  assert.equal(context.networkActivityMeta({protocol:"udp", destination:{port:53}}), "UDP \u00b7 Port 53");
+  assert.equal(context.networkActivityMeta({protocol:"TCP", destination:{port:443}}), "TCP \u00b7 Port 443");
+  assert.equal(context.networkActivityMeta({protocol:"UDP"}), "UDP");
+  assert.equal(context.networkActivityMeta({}), "Details unavailable");
+  assert.doesNotMatch(source, /\u00c3\u201a\u00c2\u00b7|\u00c3\u00a2\u00e2\u20ac/);
+});
+
+test("Updates renders package and provider separators without mojibake", () => {
+  const start = source.indexOf("function updatesMarkup(");
+  const end = source.indexOf("function contextNavigation(", start);
+  const context = {
+    UPDATE_PAGE_SIZE: 50, updateListState: {limit: 50}, updatePhase: "",
+    updatePresentation: data => ({available: data.items, driverIssues: [], state: "AVAILABLE", action: "apply"}),
+    copy: key => key, esc: value => String(value),
+    status: () => "", actionButton: () => "", pageHeader: () => "", emptyState: () => "",
+    technicalDisclosure: (_title, _count, markup) => markup, updateHistoryMarkup: () => "",
+    statusRow: item => item.label,
+  };
+  vm.runInNewContext(source.slice(start, end), context);
+  const markup = context.updatesMarkup({
+    items: [{name: "greyward-writer", category: "SYSTEM", provider: "DNF5", current_version: "0.10.0-6", available_version: "0.11.0-7"}],
+    transaction: {provider_results: [{provider: "DNF5", state: "SUCCESS"}]},
+  });
+  assert.ok(markup.includes("SYSTEM \u00b7 DNF5"));
+  assert.ok(markup.includes("DNF5 \u00b7 last operation"));
+  assert.doesNotMatch(markup, /\u00c3|\u00c2|\ufffd/);
+});
+
 test("keeps application and destination identities in aligned columns with a legend", () => {
   assert.match(source, /network-activity-application/);
   assert.match(source, /network-activity-destination/);

@@ -102,7 +102,12 @@ $currentFiles = $markdownFiles | Where-Object { $_.FullName -notmatch '[/\\]docs
 foreach ($file in $currentFiles) {
     $text = Get-Content -Raw -LiteralPath $file.FullName
     foreach ($pattern in $obsoletePatterns) {
-        if ($text.IndexOf($pattern, [StringComparison]::OrdinalIgnoreCase) -ge 0) {
+        # The retired Settings executable remains forbidden. The current SVG
+        # illustration has the same stem and is not an executable reference.
+        $candidateText = if ($pattern -eq 'greyward-settings') {
+            [regex]::Replace($text, 'greyward-settings\.svg\b', '', 'IgnoreCase')
+        } else { $text }
+        if ($candidateText.IndexOf($pattern, [StringComparison]::OrdinalIgnoreCase) -ge 0) {
             Add-RepositoryError "$($file.FullName.Substring($repo.Length + 1)) contains obsolete reference '$pattern'."
         }
     }

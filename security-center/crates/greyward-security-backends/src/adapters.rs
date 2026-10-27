@@ -354,7 +354,12 @@ fn firmware_updates_from_json(value: &serde_json::Value) -> FirmwareUpdateState 
     }
 }
 fn collect_security_updates() -> SecurityUpdatesFacts {
-    match bounded_output("dnf5", &["check-upgrade", "--json", "--security"]) {
+    // This is a read-only query. DNF5 otherwise prompts for its separate
+    // metadata keyring even when the configured RPM key is already trusted.
+    match bounded_output(
+        "dnf5",
+        &["--assumeyes", "check-upgrade", "--json", "--security"],
+    ) {
         Ok(output) => {
             let exit_code = output.status.code();
             let backend_operational = matches!(exit_code, Some(0 | 100));

@@ -100,8 +100,15 @@ libnotify
 
 # User-facing document and media tools. These use the system dark preference
 # configured by the production provisioner.
-gnome-screenshot
-papers
+grim
+swappy
+slurp
+gtk-layer-shell
+python3-cairo
+greyward-writer
+greyward-sheets
+greyward-pdf
+greyward-slides
 loupe
 file-roller
 

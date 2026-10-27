@@ -1,0 +1,30 @@
+name: Office upstream releases
+
+on:
+  workflow_dispatch:
+# Manual source diagnostic only. Six-day scheduling belongs to the separate
+# reviewed Office distribution component, not this development/public OS tree.
+
+permissions:
+  contents: read
+
+concurrency:
+  group: office-upstream-releases
+  cancel-in-progress: false
+
+jobs:
+  stable-releases:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Check the four official stable release feeds
+        run: python3 packaging/greyward-office/check-updates.py --repo . --output office-upstream.json
+      - name: Keep the release report, including incomplete checks
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: office-upstream
+          path: office-upstream.json
+          if-no-files-found: warn
+          retention-days: 14

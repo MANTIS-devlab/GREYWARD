@@ -102,14 +102,19 @@ greeter compositor launcher clears legacy software-rendering environment
 overrides on physical hardware, but keeps the Pixman fallback for known
 virtual GPUs and machines without a DRM render node.
 
-The baseline includes Firefox as an alternate browser, Nautilus,
-`Terminal`, GNOME Screenshot, OBS Studio, Papers, Loupe, File Roller, CUPS
-printer support, and the
- first-class system Flatpak applications Aerion mail, Collabora Office, Haruna,
- Brave, and Proton VPN. `environment/flatpak/default-applications.list` is the canonical
-installed-app list, and `environment/flatpak/mimeapps.list` defines the
+The baseline includes Firefox as an alternate browser, Strata as the desktop
+file manager, `Terminal`, Swappy for manual screenshot editing, the native GREYWARD Office applications, Loupe,
+File Roller, CUPS printer support, and the first-class system Flatpak
+applications Aerion mail, Brave and Proton VPN.
+Physical Print Screen capture uses a temporary compositor-owned channel;
+ordinary capture/sharing remains restricted and protected lock/authentication
+frames are excluded. See [manual screenshots](../../docs/software/SCREENSHOTS.md).
+OBS, QTerminal and Haruna are not default applications.
+`environment/production/packages.txt` and
+`environment/flatpak/default-applications.list` are the canonical native and Flatpak
+installed-app lists, and `environment/flatpak/mimeapps.list` defines the
 reproducible mailto, web, office-document, PDF, image, and local-video defaults.
-PDFs open in Papers and common images in Loupe; neither relies on browser
+PDFs open in GREYWARD PDF and common images in Loupe; neither relies on browser
 registration order to select a local-file handler.
 
 Files includes the native GVfs backends for Windows/NAS (SMB) shares, MTP
@@ -338,3 +343,7 @@ password, passwordless sudo, SSH access, Hyper-V services, or developer tools.
 
 The normal installed path uses encrypted Btrfs root. Boot rollback remains a
 separate prototype and is not part of this directory.
+
+Office packages and their acceptance/update boundaries are defined in
+[GREYWARD Office integration](../../docs/software/OFFICE_INTEGRATION.md). Four
+matched source-verified Office RPMs are required for future complete image stages.

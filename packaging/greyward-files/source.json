@@ -29,11 +29,11 @@
       },
       "patches": {
         "pcmanfm-desktop-only.patch": "1293bca12801ce1dde5717c60e88e66d15e83973245caf3ec3b023cb85abeb4f",
-        "pcmanfm-multi-output.patch": "e944868f458959041f701737a7fe170ae34413d661ddfc45b6514a53fde1c755",
+        "pcmanfm-multi-output.patch": "7ca87f78e93079180cf3d864a00e60ce0fa8c4128470efa827177b115cda03b4",
         "pcmanfm-strata-routing.patch": "4b00ae95b5f2de4aed3be8555c1b6f507d003243a505f0daef582780ac21ccd3"
       },
       "integrationInputs": {
-        "environment/session/desktop/output-layout.h": "b1ccd0a94bddde382ce278145a4b92dc8ee52a099c26cd9f3467fc499aed9f3a"
+        "environment/session/desktop/output-layout.h": "5b8d2df740d29e6a42a87794772c1ff8e1ee5e9cbb976e92da2b950bcda9cd55"
       }
     },
     "source": {

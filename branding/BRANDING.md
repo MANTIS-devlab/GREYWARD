@@ -1,11 +1,40 @@
 # GREYWARD identity system
 
+The desktop application family adds `source/greyward-software.svg`,
+`greyward-image-viewer.svg` and `greyward-settings.svg`: an application bag,
+photograph frame and machined gear, using graphite surfaces, silver edges and
+muted blue details. These are original vector artwork, with no external image
+or font references. Branding 17 renders 24–256px PNGs and installs native theme
+aliases plus dedicated SVG paths. Software and Loupe retain their upstream
+desktop/window IDs and commands; their distribution launchers select the
+dedicated icons. Loupe's D-Bus activation and supported MIME list are retained.
+The DMS Settings asset is a byte-identical generated copy of the canonical SVG,
+bound to the selected shell receipt. Do not edit that copy independently.
+
+The [Office family](../docs/software/OFFICE_INTEGRATION.md) uses original
+`source/greyward-writer.svg`, `greyward-sheets.svg`, `greyward-pdf.svg` and
+`greyward-slides.svg`: coordinated graphite application tiles with blue, green,
+red and copper accents. The corresponding `greyward-*-document.svg` sources
+preserve the previous silver-page artwork byte-for-byte for documents. Office's
+shared builder renders application PNGs, embeds the window icon and packages
+the distinct document vectors through native MIME metadata. Both families are
+locked separately; they never share an application/document icon name.
+
 The symbol, wordmark and lockup in `source/` are canonical identity artwork. `source/greyward-security-status.svg` is the shared Security Center emblem; its package copies are generated without changing the geometry. The wallpaper source is canonical environmental artwork. Everything under `generated/` is derived; DMS and Plymouth consume the generated/installed assets directly. Designated GREYWARD identity assets are reserved branding under `LICENSE`; `PROVENANCE.md` records their repository origins and immutable hashes.
 
 Protected Administration embeds the unchanged `source/greyward-symbol.svg`
 through `security-center/packaging/application-security/administration/embed-logo.py`
 at build time. The verified native binary renders it with librsvg; no runtime
 artwork path, external asset or user font dependency is introduced by the logo.
+
+The protected login-to-desktop backdrop uses the same canonical symbol, copied
+to `security-center/data/greyward-symbol.svg`. The authentication assembler
+compiles its paths and local gradient into synchronous Qt Quick geometry; the
+early and full-shell surfaces share one generated component and receipt. Graphite
+surfaces, platinum typography and a finite waiting animation keep this transition
+consistent with the desktop without adding an image-loading process. Native
+offscreen rendering is distinct from installed login acceptance; see
+[protected startup](../docs/security-center/APPLICATION_SECURITY_ENROLLMENT.md#protected-desktop-startup-transition).
 
 ## File manager application identity
 
@@ -104,6 +133,14 @@ branding rebuild.
 Plymouth deliberately uses a true black background with the centered GREYWARD
 logo. This keeps resolution changes and bootloader letterboxing from exposing
 grey side bands.
+
+The native `Plymouth.GetMode()` selects `Starting GREYWARD` during boot,
+`Shutting down GREYWARD` during shutdown and `Restarting GREYWARD` during reboot.
+The shutdown states retain their lifecycle label instead of replacing it with
+boot status messages. This is presentation only; power management and storage
+unlock remain owned by the existing system services. Branding revision 18 carries
+this distinction. Rebuild the installed initramfs after upgrading the package so
+early boot and the shutdown environment contain the same theme bytes.
 
 During an offline update boot, `greyward-update-status.service` is activated only
 when `/system-update` exists. It switches Plymouth to `updates` mode before DNF5,

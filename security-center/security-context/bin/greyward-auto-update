@@ -102,7 +102,7 @@ def main():
             notify("System restart required", "A previously prepared GREYWARD system update is waiting for restart.")
             return 0
 
-        check = run([DNF, "check-upgrade", "--json"], CHECK_TIMEOUT)
+        check = run([DNF, "--assumeyes", "check-upgrade", "--json"], CHECK_TIMEOUT)
         if check.returncode == 0:
             return 0
         if check.returncode != 100:

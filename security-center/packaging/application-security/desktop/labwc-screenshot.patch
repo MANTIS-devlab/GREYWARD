@@ -1,0 +1,261 @@
+--- a/src/server.c
++++ b/src/server.c
+@@ -5,6 +5,8 @@
+ #include <signal.h>
+ #include <string.h>
+ #include <sys/socket.h>
++#include <spawn.h>
++#include <unistd.h>
+ #include <sys/wait.h>
+ #include <wlr/backend/headless.h>
+ #include <wlr/backend/multi.h>
+@@ -302,6 +304,139 @@
+  * Privileged clients are fixed root-prepared authentication/display subjects.
+  * Ordinary clients may manage outputs, but never input, capture or lock rights.
+  * Security-context clients retain upstream's stricter allowlist above. */
++
++/* A physical Print press creates one private, short-lived screenshot channel.
++ * No ordinary registry gets capture globals, and no app_id/env/IPC is authority.
++ * The child remains ordinary; this exact server-owned wl_client is the grant.
++ * A retained/stolen child FD has only this protocol allowlist and deadline. */
++struct greyward_capture {
++ struct wl_client *client;
++ struct wl_listener destroy;
++ struct wl_event_source *deadline;
++ struct wl_list link;
++};
++static struct wl_list greyward_captures = { &greyward_captures, &greyward_captures };
++
++static struct greyward_capture *
++greyward_capture_client(const struct wl_client *client)
++{
++ struct greyward_capture *capture;
++ wl_list_for_each(capture, &greyward_captures, link) {
++  if (capture->client == client) return capture;
++ }
++ return NULL;
++}
++
++static bool
++greyward_capture_ready(struct server *server)
++{
++ if (!server->session_lock_manager || server->session_lock_manager->locked) return false;
++ bool found=false;
++ struct output *output;
++ wl_list_for_each(output, &server->outputs, link) {
++  if (!output->wlr_output->enabled) continue;
++  found=true;
++  if (!output->screenshot_clean) return false;
++ }
++ return found;
++}
++
++static bool
++greyward_capture_protocol(const struct wl_interface *iface)
++{
++ const char *const names[] = { "wl_shm", "wl_output", "zxdg_output_manager_v1",
++  "zwlr_screencopy_manager_v1" };
++ for (size_t i=0; i<ARRAY_SIZE(names); ++i) {
++  if (!strcmp(iface->name, names[i])) return true;
++ }
++ return false;
++}
++
++static void
++greyward_capture_destroy(struct wl_listener *listener, void *data)
++{
++ (void)data;
++ struct greyward_capture *capture = wl_container_of(listener, capture, destroy);
++ if (capture->deadline) wl_event_source_remove(capture->deadline);
++ wl_list_remove(&capture->destroy.link);
++ wl_list_remove(&capture->link);
++ free(capture);
++}
++
++static int
++greyward_capture_expire(void *data)
++{
++ struct greyward_capture *capture = data;
++ wl_client_destroy(capture->client);
++ return 0;
++}
++
++void
++greyward_screenshot_revoke(struct server *server)
++{
++ /* An unlocked flag is insufficient: old scanout may still contain a lock
++  * image. Require a fresh ordinary BUFFER commit on every enabled output. */
++ struct output *output;
++ wl_list_for_each(output, &server->outputs, link) {
++  output->screenshot_clean=false;
++  if (output->scene_output) {
++   wlr_damage_ring_add_whole(&output->scene_output->damage_ring);
++   wlr_output_schedule_frame(output->wlr_output);
++  }
++ }
++ while (!wl_list_empty(&greyward_captures)) {
++  struct greyward_capture *capture = wl_container_of(greyward_captures.next, capture, link);
++  wl_client_destroy(capture->client);
++ }
++}
++
++void
++greyward_screenshot_start(struct server *server)
++{
++ /* Fail closed during startup, abandoned locks and authentication locks. */
++ if (!greyward_capture_ready(server) || !wl_list_empty(&greyward_captures)) return;
++ int pair[2];
++ if (socketpair(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0, pair) != 0) return;
++ struct greyward_capture *capture = calloc(1, sizeof(*capture));
++ if (!capture) { close(pair[0]); close(pair[1]); return; }
++ capture->client = wl_client_create(server->wl_display, pair[0]);
++ if (!capture->client) { close(pair[0]); close(pair[1]); free(capture); return; }
++ capture->destroy.notify = greyward_capture_destroy;
++ wl_client_add_destroy_listener(capture->client, &capture->destroy);
++ wl_list_insert(&greyward_captures, &capture->link);
++ capture->deadline = wl_event_loop_add_timer(server->wl_event_loop,
++  greyward_capture_expire, capture);
++ if (!capture->deadline || wl_event_source_timer_update(capture->deadline, 3000) < 0) {
++  close(pair[1]); wl_client_destroy(capture->client); return;
++ }
++ extern char **environ;
++ size_t count=0;
++ while (environ[count]) ++count;
++ char **env = calloc(count+2, sizeof(*env));
++ if (!env) { close(pair[1]); wl_client_destroy(capture->client); return; }
++ size_t n=0;
++ for (size_t i=0; i<count; ++i) {
++  if (strncmp(environ[i], "WAYLAND_SOCKET=", 15)) env[n++]=environ[i];
++ }
++ env[n]="WAYLAND_SOCKET=3";
++ posix_spawn_file_actions_t actions;
++ int result=posix_spawn_file_actions_init(&actions);
++ if (!result) {
++  result=posix_spawn_file_actions_adddup2(&actions, pair[1], 3);
++  if (!result) result=posix_spawn_file_actions_addclosefrom_np(&actions, 4);
++  pid_t pid;
++  char *const argv[]={ "/usr/bin/python3", "-I", "/usr/local/libexec/greyward-screenshot", "--capture", NULL };
++  if (!result) result=posix_spawn(&pid, argv[0], &actions, NULL, argv, env);
++  posix_spawn_file_actions_destroy(&actions);
++ }
++ free(env);
++ close(pair[1]);
++ if (result) {
++  wlr_log(WLR_ERROR, "GREYWARD screenshot launch failed: %s", strerror(result));
++  wl_client_destroy(capture->client);
++ }
++}
++
+ static bool
+ greyward_client_domain(const struct wl_client *client, const char *expected)
+ {
+@@ -341,6 +476,11 @@
+ {
+ 	const struct wl_interface *iface = wl_global_get_interface(global);
+ 	struct server *server = (struct server *)data;
++ /* Check the private client BEFORE SO_PEERSEC: this socketpair originates in
++  * the trusted compositor, but the ordinary child must not inherit its globals. */
++ if (greyward_capture_client(client)) {
++  return greyward_capture_ready(server) && greyward_capture_protocol(iface);
++ }
+ 	/* Silence unused var compiler warnings */
+ 	(void)iface; (void)server;
+ 
+--- a/src/input/keyboard.c
++++ b/src/input/keyboard.c
+@@ -514,6 +514,14 @@
+   return LAB_KEY_HANDLED_TRUE;
+  }
+ 
++ /* Reserved physical capture, never a configurable Execute action or IPC. */
++ if (!(keyinfo.modifiers & (WLR_MODIFIER_CTRL | WLR_MODIFIER_ALT | WLR_MODIFIER_SHIFT | WLR_MODIFIER_LOGO))
++     && keyinfo.raw.nr_syms == 1 && keyinfo.raw.syms[0] == XKB_KEY_Print) {
++  greyward_screenshot_start(server);
++  key_state_store_pressed_key_as_bound(event->keycode);
++  return LAB_KEY_HANDLED_TRUE;
++ }
++
+ 	/* Catch C-A-F1 to C-A-F12 to change tty */
+ 	if (handle_change_vt_key(server, keyboard, &keyinfo.translated)) {
+ 		key_state_store_pressed_key_as_bound(event->keycode);
+--- a/src/session-lock.c
++++ b/src/session-lock.c
+@@ -324,6 +324,9 @@
+ 	struct session_lock_manager *manager =
+ 		wl_container_of(listener, manager, new_lock);
+ 	struct wlr_session_lock_v1 *lock = data;
++ /* Revoke cached managers and in-flight frames BEFORE any protected surface
++  * can be mapped/rendered. Registry filtering alone does not revoke bindings. */
++ greyward_screenshot_revoke(manager->server);
+ 
+ 	if (manager->lock) {
+ 		wlr_log(WLR_ERROR, "session already locked");
+--- a/include/session-lock.h
++++ b/include/session-lock.h
+@@ -33,6 +33,8 @@
+ 	struct wl_listener lock_destroy;
+ };
+ 
++void greyward_screenshot_start(struct server *server);
++void greyward_screenshot_revoke(struct server *server);
+ void session_lock_security_attention(struct server *server);
+ void session_lock_init(struct server *server);
+ void session_lock_output_create(struct session_lock_manager *manager, struct output *output);
+--- a/src/output.c
++++ b/src/output.c
+@@ -151,6 +151,18 @@
+ 	wlr_scene_output_send_frame_done(output->scene_output, &now);
+ }
+ 
++/* Only a real post-unlock pixel-buffer commit clears the protected-frame
++ * barrier. Mode/damage-only events and abandoned locks never clear it. */
++static void
++handle_screenshot_commit(struct wl_listener *listener, void *data)
++{
++ struct output *output=wl_container_of(listener,output,screenshot_commit);
++ struct wlr_output_event_commit *event=data;
++ struct session_lock_manager *manager=output->server->session_lock_manager;
++ if (!manager || manager->locked) output->screenshot_clean=false;
++ else if (event->state->committed & WLR_OUTPUT_STATE_BUFFER) output->screenshot_clean=true;
++}
++
+ static void
+ handle_output_destroy(struct wl_listener *listener, void *data)
+ {
+@@ -164,6 +176,7 @@
+ 	}
+ 	wl_list_remove(&output->link);
+ 	wl_list_remove(&output->frame.link);
++ wl_list_remove(&output->screenshot_commit.link);
+ 	wl_list_remove(&output->destroy.link);
+ 	wl_list_remove(&output->request_state.link);
+ 	seat_output_layout_changed(seat);
+@@ -461,6 +474,8 @@
+ 		}
+ 	}
+ 
++ /* A topology change also invalidates already-bound screenshot clients. */
++ greyward_screenshot_revoke(server);
+ 	uint64_t id_bit = get_unused_output_id_bit(server);
+ 	if (!id_bit) {
+ 		wlr_log(WLR_ERROR, "Cannot add more than 64 outputs");
+@@ -526,6 +541,8 @@
+ 	wl_signal_add(&wlr_output->events.destroy, &output->destroy);
+ 	output->frame.notify = handle_output_frame;
+ 	wl_signal_add(&wlr_output->events.frame, &output->frame);
++ output->screenshot_commit.notify=handle_screenshot_commit;
++ wl_signal_add(&wlr_output->events.commit,&output->screenshot_commit);
+ 
+ 	output->request_state.notify = handle_output_request_state;
+ 	wl_signal_add(&wlr_output->events.request_state, &output->request_state);
+--- a/include/output.h
++++ b/include/output.h
+@@ -8,6 +8,8 @@
+ #define LAB_NR_LAYERS (4)
+ 
+ struct output {
++ bool screenshot_clean;
++ struct wl_listener screenshot_commit;
+ 	struct wl_list link; /* server.outputs */
+ 	struct server *server;
+ 	struct wlr_output *wlr_output;

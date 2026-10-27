@@ -162,6 +162,7 @@ class StateMigration(unittest.TestCase):
                 expected=['brave-browser','com.raggesilver.BlackBox','io.github.lgse.Strata']
                 if release=='v2.0.0-7':
                     expected.append('dms_settings')
+                expected.append('io.github.kolunmi.Bazaar')
                 self.assertEqual(json.loads(target.read_text())['barPinnedApps'],expected)
                 self.assertFalse((state/('dms' if name=='DankMaterialShell' else 'DankMaterialShell')).exists())
 

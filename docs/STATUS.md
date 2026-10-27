@@ -1,5 +1,188 @@
 # GREYWARD current status
 
+## Sophon 0.5.3 release — 28 October 2026
+
+The [0.5.3 image](patch-notes/0.5.3-sophon.md) was built on the physical reference
+from frozen source `535652d` with all selected fixes and signed Office generation 9.
+Linux factory, networkless dependency/Flatpak, extracted payload and Windows
+copy checks pass. Its 5,165,809,664 bytes have SHA-256
+`91798630259ff3592001ab89af61fb55d620fa07b8d866c9e0771252af0cac75`.
+Direct Windows ISO validation passes all payload hashes, 40 required paths,
+26 selected-RPM byte comparisons, nine canonical file comparisons and the
+enabled pinned Office channel. The reference desktop stayed open; the protected
+seat remains verified under Enforcing. The existing image and its corresponding sources are published on
+SourceForge. Its GRUB boot menu was observed in the test VM; this does not
+establish full clean-install, recovery or physical acceptance. See the release
+notes and publication record for the current evidence boundary.
+
+## Office six-day GitHub automation — 27 October 2026
+
+**ACTIVE; complete signed generation 9 verified.** The owner-approved
+[six-day chain](software/OFFICE_INTEGRATION.md#six-day-github-automation) runs in
+[the public Office component](https://github.com/MANTIS-devlab/GREYWARD-office-updates).
+The first production run
+[40584792859](https://github.com/MANTIS-devlab/GREYWARD-office-updates/actions/runs/40584792859)
+passes all four credential-free builds, document round trips, packaged offline
+GUI/listener checks, complete-family signing and real public DNF/mirrorlist
+readback. The source lock binds published generation 9. Its inventory and all
+eight RPM signatures are independently verified on the reference. The public
+channel is enabled with both GPG checks and only the four Office package names;
+the fixed generation-7 local feed is disabled. No application upgrade or reboot
+is performed by activation. Physical editing/printing of these new versions
+remains separate from the native CI acceptance.
+
+Cadence is anchored at **2026-10-27 21:08:51 UTC**, every 144 hours, with bounded
+24-hour failure retries. Three complete generations are retained, with 48 hours
+of grace for the withdrawn fourth. No-change checks create no release. Standard
+public runners are used; only a dedicated subkey is in the main-only signing
+environment, while the primary secret stays outside GitHub. Source-validation
+CI is green. Commissioning fixes and upstream input-mirror provenance are
+recorded in the Office document. No image was built by commissioning.
+
+First-use native non-root DNF testing exposed its separate metadata-key prompt:
+without a TTY the fresh signed repository fails even with its RPM key known.
+The fixed read-only queries now accept configured keys noninteractively,
+preserving signatures and apply authorization. The actual isolated check then
+discovers all four generation-7 candidates without installing a package.
+Center **122** / Context **113** are installed on the reference. Their build
+matches the canonical LF source-tree fingerprint. The 215 Rust tests pass
+(22 explicit native opt-ins remain ignored), as do 419 native Python tests,
+Clippy, formatting and 101 frontend UX tests. All **1,646** protected desktop
+files are byte-identical and protected-seat readback remains true under
+Enforcing. The only RPM verification difference is the existing managed
+OpenSnitch configuration; old/new package defaults are identical. Both ordinary
+read services are active after reload, and actual user-bus Update Center
+readback reports the four existing local generation-7 offers. Office remains
+at installed revision 6; channel publication does not force application updates.
+At `2026-10-27T22:33:53Z`, the actual user-bus Update Center reports all four
+generation-9 offers from `greyward-office`, actionable without Office holds.
+The public certificate, all eight RPM signatures and exact binary payloads pass
+independent verification. No offline update is pending; the protected seat
+remains verified under Enforcing.
+The factory tuple also selects the already accepted Session 38 factory-launcher
+trust input, matching its canonical spec and staged RPM; the older Session 37
+entry is retired. This is selection alignment, with no new session deployment.
+
+## Persistent desktop icon layouts — 27 October 2026
+
+Files **1.0.0-21** is installed on the physical reference at the greeter. Named output
+ownership now includes first placement; coordinate files are separate for each
+connected-output configuration. Direct window destruction on unplug saves the
+loaded arrangement, and fallback positions cannot overwrite the three-output
+layout. Existing per-output files are retained as import/rollback sources.
+Native Qt compilation and private-display repeated 3/1/3 cycles, exact positions,
+fresh-process restarts and unique visibility pass. The final RPM's normal checks
+pass (three launcher, 29 layout and three Rust checks), with canonical source
+archive/manifest readback. RPM verification is clean, user profile files are
+unchanged by installation and all 1,645 protected desktop files plus Administration
+receipts still verify. SELinux remains Enforcing. The next login loads the new
+executable; Files 20 and the original profile are saved for rollback. Both
+repository gates and 65 focused Python checks pass (nine Windows/native skips).
+Only the laptop panel is currently connected; physical monitor acceptance remains
+pending. No ISO or public publication was performed. See
+[desktop layouts](architecture/FILE_MANAGER_DESKTOP.md#persistent-screen-configurations--27-october-2026).
+
+## Protected desktop startup appearance — 27 October 2026
+
+Application Security **0.1.0-84** and Enrollment **0.1.0-86** are installed
+on the physical reference with DMS **2.0.0-7.11** after the owner-approved logout.
+The shared early/full-shell backdrop now uses graphite surfaces, the canonical
+OS emblem, platinum typography and a finite waiting animation. The existing
+readiness and protected-input boundaries are unchanged. Native offscreen visual
+rendering, focused source checks, normal RPM build checks and a two-package DNF
+installation simulation pass. The 57 focused Python tests pass with five
+Windows-only skips; three real Qt/Quickshell keyboard, mirror-cancel and layout
+tests pass against the newly assembled profile on a private headless display.
+Both repository gates pass. The packaged assembler and symbol match source.
+The quiescent migration verified all **1,645** protected desktop files and the
+Administration receipt. Both installed startup components match the reviewed
+assembly byte-for-byte and are bound in the authentication receipt. RPM
+verification is clean; the active workflow broker was restarted onto its new
+installed executable while the desktop was closed. Polkit, greetd and USBGuard
+are active and SELinux remains Enforcing. Rollback RPMs and the previous
+protected profiles are retained. Actual login visual acceptance is pending.
+See [protected startup](security-center/APPLICATION_SECURITY_ENROLLMENT.md#protected-desktop-startup-transition)
+and [branding](../branding/BRANDING.md). No ISO or public publication was performed.
+
+## Shutdown splash label — 27 October 2026
+
+Branding **0.1.0-18** is installed on the physical reference. The canonical
+Plymouth script selects `Shutting down GREYWARD` for the native shutdown mode
+and `Restarting GREYWARD` for reboot; boot keeps `Starting GREYWARD`. The installed
+Fedora poweroff/reboot units explicitly start Plymouth in those respective modes.
+The RPM payload differs from revision 17 only in this script. Package verification
+passes, and both normal installed-kernel initramfs images contain byte-identical
+copies of the installed script. Previous RPM/initramfs copies are retained for
+rollback. SELinux remains Enforcing and no graphical session was closed or
+system restarted. Actual shutdown/reboot visual observation remains pending.
+The existing image payload gate compares the script with the canonical source;
+future images must use the matching new branding RPM. No ISO or public
+publication was performed. See [branding](../branding/BRANDING.md).
+
+## Office version updates — 27 October 2026
+
+The four generation-7 builds are ready: Writer **0.11.0**, Sheets **0.12.1**,
+PDF **0.14.0** and Slides **0.11.1**, retaining GREYWARD branding and preferences.
+Canonical RPM/source closure and real-engine round trips pass. The prepared
+production-key-signed repository passes real DNF transaction tests and rejects
+an untrusted Writer signature under valid trusted repository metadata.
+
+The actual ordinary-session Update Center service on the physical reference now
+reports all four actionable upgrades from the installed revision-6 applications,
+without an Office compatibility hold. This uses a restricted local validated
+feed; no host Office upgrade/reboot or public channel activation is claimed.
+The previous disabled acceptance feed was why Office versions never appeared.
+See [Office integration](software/OFFICE_INTEGRATION.md#version-updates-generation-7--27-october-2026)
+for exact versions, acceptance and remaining limits.
+
+Official stable-release discovery is prepared; its old six-hour check is retired
+in source in favor of the separately commissioned GitHub chain above. Future offline preparation/composition
+requires an approved published channel and checks its exact repository/key bytes
+again after extraction, so a new ISO cannot silently omit Office updates.
+The initial local-only owner decision was superseded by approval of the scoped
+GitHub automation above. Its installed channel remains unpublished pending
+commissioning. No ISO was built.
+The 104 Office/image/export tests (six Windows skips), 42 Update Center tests,
+101 frontend UX tests and both repository gates pass. Signed-Fedora repository
+acceptance is distinct from those skips.
+
+## Security Center separator encoding — 27 October 2026
+
+Security Center **0.1.0-121** is installed on the physical reference. Corrupted
+middle-dot literals in Network Activity and shared UI copy, plus the provider
+order arrow, are replaced with explicit JavaScript Unicode escapes. Protocol,
+port and backend data handling are unchanged. The actual metadata renderer has
+a regression test; 107 frontend checks and 215 Rust tests pass (22 Rust tests
+remain explicitly ignored). The source archive's `app.js` hash matches this
+checkout, RPM verification is clean, all 1,646 protected desktop files are
+unchanged and SELinux remains Enforcing. An already-open Security Center window
+needs reopening to load the new executable; physical visual acceptance is not
+claimed. The next-image component pin is 121; no ISO was built or published.
+Continuation: the reference's still-running deleted older executable was closed
+and only Security Center was reopened on Updates. The new process matches the
+installed revision-121 executable. A real Updates markup test covers both the
+package/provider and last-operation separators; no further runtime rebuild was
+needed for that view.
+
+## Accepted Security Center presentation — 27 October 2026
+
+The owner accepted the cache trial (private development evidence).
+Its visual changes are now canonical in `dms-2.0-plugins/greywardSecure` (4.1.3)
+and installed on the physical reference as DMS **2.0.0-7.11**. Normal plugin IDs
+are restored, Preview adapters are removed and the former cache trial is archived
+in the root-only rollback backup. The ordinary shell uses a new QML cache namespace
+bound to the installed receipt; full selector and RPM verification pass.
+
+Only the two visual QML files, plugin version and DMS receipt differ from 7.10.
+All 1,646 protected desktop files, three executables and USBGuard rules remain
+byte-identical; SELinux stays Enforcing and the compositor/authentication processes
+are unchanged. Native compact/state and shared-client tests pass. Installed
+Enrollment **84** remains compatible through the exact verified predecessor
+provide. Future image builds select DMS **7.11** and newly matched Enrollment
+**85** from the source recipe; Enrollment 85 has not been built or installed in
+this task. Existing image source/payload checks reject stale plugins or receipts.
+No new ISO or public publication was performed; 0.5.2 remains the published image.
+
 ## Sophon 0.5.2 publication — 25 October 2026
 
 [0.5.2 Sophon](patch-notes/0.5.2-sophon.md) is the latest public SourceForge
@@ -11,11 +194,358 @@ Clean-install, physical offline and recovery acceptance remain separate; the
 Office public RPM update feed is not operational. Use the release's frozen
 source archive and four Office source RPMs; public main is not that exact tree.
 
-The README's [25 October gallery](assets/screenshots/README.md) contains eleven
-owner-approved original screenshots, grouped by feature, and the unchanged
-overview GIF. [Office integration](software/OFFICE_INTEGRATION.md) credits the
-upstream ArtCraft projects and separates newer reference work from image-composition acceptance.
+## README presentation — 25 October
 
+The README now presents the Office integration with upstream ArtCraft attribution
+and eleven owner-supplied original screenshots grouped by feature. Every older
+static screenshot reference is replaced; the overview GIF is unchanged. The
+[gallery inventory](assets/screenshots/README.md) records provenance and the omitted
+one-pixel/near-duplicate inputs. The public export requires all selected images
+and excludes legacy static captures without deleting their private originals.
+The approved presentation update is published through
+[PR 29](https://github.com/MANTIS-devlab/GREYWARD/pull/29), at public `main`
+`8284628`. All five PR checks and all five
+[merged-main checks](https://github.com/MANTIS-devlab/GREYWARD/actions/runs/40194945223) pass.
+Only this presentation scope and its public link closure were published; the
+remaining engineering work and ISO files are preserved locally.
+
+## 0.5.2 Sophon composition — 25 October
+
+The local **0.5.2 Sophon** ISO is composed and copied to Windows, including the
+complete current change inventory: Office revision 6, Session 38 factory trust,
+coordinated desktop icons/pins and Bazaar Explore startup recovery, alongside
+all retained 0.5.1 fixes. The exact tuple and artifact are recorded in the
+[release record](patch-notes/0.5.2-sophon.md).
+
+SHA-256: `44f76c354a0dc599d06b9086c228331a3b2432b848eacb63002680a7122a24d5`.
+Size: 5,147,983,872 bytes. Frozen source: `93d82fb`; 144 recorded line-ending
+normalizations have no semantic diff, and hash-bound Office sources are preserved.
+The normal factory, 1,147-RPM closure, networkless dependency/Flatpak checks,
+installer/extracted/copy contracts and both repository gates pass. Linux and
+Windows readbacks match all 13 selected RPMs in both locations (26 checks),
+nine canonical files and exactly the four selected Flatpak applications. Windows
+also passes all 40 required media paths and payload hashes. No retired apps,
+build tools, SSH server or personal profiles become defaults. The active
+reference desktop was preserved. No public publication, VM boot or clean-install
+acceptance is claimed.
+
+## Factory shortcut trust — 25 October
+
+Session 38 is installed on the reference. The six unchanged factory application
+shortcuts read back native `metadata::trust=true` in the ordinary user session.
+Only the desktop-default helper changed in the RPM payload; package verification
+passes and SELinux remains Enforcing. The first-login source now performs the
+same bounded approval automatically. Edited files and other executables are
+excluded; later user deletions/untrust choices are preserved. Future-image input
+checks compare the helper bytes and reject the preceding package. No ISO or
+fresh-install visual acceptance is claimed. See the
+[desktop contract](architecture/FILE_MANAGER_DESKTOP.md#factory-desktop-applications--25-october).
+
+## Office application and document icons — 25 October
+
+Revision 6 is installed on the reference for Writer, Sheets, PDF and Slides.
+The application tiles are distinct from the exact revision-5 page artwork,
+now retained for documents. Both families are source-locked; document icons
+use separate native MIME names with Greyward/hicolor aliases. The future-image
+input gate requires these matching sources and packages.
+
+The 25 Office source/payload tests, native MIME/icon fixture and both repository
+gates passed before deployment. Package verification and MIME/icon-cache refresh
+passed; system file associations and USBGuard rules are unchanged. The shell and
+desktop-icon services are active after reload, without ending the desktop session.
+Existing application windows may retain their embedded icon until reopened.
+Installed visual acceptance of this icon revision is not yet claimed. No ISO or
+public publication accompanies this change.
+
+## Desktop application presentation — 25 October
+
+Software is now an application pin rather than a factory bar widget. Branding 17 supplies original Software, Loupe and Settings icons;
+Session 37 supplies six once-seeded application shortcuts with native Home and
+Trash for fresh profiles. DMS 7.10 locks the Settings artwork and Enrollment 84
+matches it for future image builds. Existing desktop files, per-screen positions,
+settings and later shortcut deletions are preserved. Local and native desktop
+tests pass. All four scoped RPMs build; transaction simulation, launcher
+validation, SVG/PNG rendering and closed DMS delta readback pass. Only the
+Settings SVG and release receipt differ in the DMS payload. The matched set is
+installed on the reference after the approved logout; protected authentication
+and session receipts are migrated. The two existing Software widget instances
+were removed and Software was appended once to the existing application pins.
+SELinux remains Enforcing and USBGuard rules are unchanged. The user confirms
+re-login, desktop and shortcut acceptance. Both shell/icon services run; three
+outputs are detected. Ordinary-domain readback verifies all eight shortcuts,
+Software pinned once without its widget and the unchanged Strata/Loupe/Writer
+defaults. In the actual DMS environment, Software resolves to the canonical
+wrapper and new icon; a bare user-manager GIO test has a different directory
+precedence and is not used as evidence for the bar. The protected seat verifies
+and all 947 kernel permission checks pass. The 171-test host suite (31 platform
+skips), 21 native desktop tests (one explicit fixture skip), closed predecessor
+rejection, packaged-session input gates and both repository gates pass. Native
+SVG rendering and all 18 PNG dimensions are checked. Fresh-install image
+acceptance and a new full DMS compiler build are separate, unclaimed checks.
+No ISO or public publication is produced by this change.
+
+## GREYWARD Office integration — 25 October
+
+Writer, Sheets, PDF and Slides are implemented as four native applications with
+pinned upstream sources, original SVG identities, thin dark-theme adaptations,
+retained engines/preferences, locked fonts/Cargo inputs and signed-repository
+preparation. The next-image source requires four matched RPMs and rejects stale
+source/adaptation/receipt/icon inputs. See [Office integration](software/OFFICE_INTEGRATION.md).
+
+Initial release-5 acceptance (historical; icon revision 6 is current above):
+The user accepted the graphical,
+keyboard/paste, document open/save, appearance and slideshow checks. Writer's
+actual Update Center/Polkit/offline/restart path replaced release 1 with 5;
+DNF history transaction 43 is `Ok`, the running binary matches release 5, and
+post-boot Update Center reports `COMPLETE`. No offline marker remains. The
+recovery point is reported valid, but restoring it has not been tested.
+
+After explicit acceptance, Collabora and Papers were removed, retaining user
+data, runtimes and private rollback inputs. Ordinary-session GIO verifies all
+21 supported Office defaults and absence of retired handlers. Strata, browser,
+image and plain-text defaults are unchanged. The temporary signed test feed is
+disabled and its disposable system RPM trust removed; no public Office feed is
+operational.
+
+All four engine round trips and cross-PDF readback pass, as do canonical RPM
+payload/path/mode/capability/signature checks, the native 133-test suite (three
+skips), 42 existing Update Center tests, 947 kernel permission checks and both
+repository gates. SELinux remains Enforcing; no new general policy permission
+was introduced. Printing has no configured destination; current DRM readback
+shows only the laptop panel. Broader document compatibility, simultaneous
+three-monitor automation and clean-install acceptance remain unclaimed. No ISO
+or public publication was produced by this integration.
+
+## Bazaar Explore startup correction — included in 0.5.2
+
+The next-image source now includes a sandbox-local startup helper that clears
+only Bazaar's refresh timestamp when its Explore cache is absent or empty.
+Nonempty caches, user preferences and normal daemon arguments are preserved.
+It uses the existing read-only GREYWARD config exposure; no SELinux, Polkit,
+Flatpak permission, network or TLS change is required. Production installs the
+matched wrapper/helper; canonical byte checks reject old or omitted files at
+source staging and before/after ISO composition. Installed acceptance also
+compares the deployed files with the installer payload. Regression tests are
+registered in source CI. See the [implementation, tests and limits](software/FLATPAK_BAZAAR_INTEGRATION_PLAN.md#prepared-startup-correction-and-inclusion-gates).
+All 12 native regression tests and the real confined Bazaar before/after/warm
+fixture pass: the corrected cold start creates 20 categories; the warm launch
+keeps the same cache hash without syncing. The existing Bazaar process and user
+cache are preserved, and SELinux remains Enforcing. Both repository gates pass.
+The correction is included in the locally verified 0.5.2 ISO above; the earlier
+0.5.1 artifact is retained unchanged.
+
+## Sophon installed Software check — 25 October
+
+The user subsequently installed Sophon on the disposable ISO test system.
+App installation worked, but Bazaar 0.9.7 Explore initially displayed a generic
+Flathub reachability error. A logged normal relaunch and Explore retry completed
+its state synchronization; direct cache decoding found 20 categories and current
+daily/weekly selections, and the user confirmed Explore worked. Clock, TLS and
+confined API probes passed without network or policy changes. The original
+failure was not logged. A subsequent real-binary A/B test in disposable confined
+profiles reproduced a recovery defect: a recent refresh timestamp suppresses
+Explore loading when its cache is absent; changing only that scratch timestamp
+to zero creates a valid 20-category cache. The original cache loss remains
+unresolved; the later scoped source fix is recorded above. This is recovery
+and reproduction evidence, not a packaged fix or full image acceptance. The canonical
+[Software recovery and next-image checks](software/FLATPAK_BAZAAR_INTEGRATION_PLAN.md#explore-recovery-and-next-image-acceptance--25-october-2026)
+record the procedure and remaining cold-start/offline acceptance. No ISO rebuild
+or public push accompanied this documentation.
+
+## 0.5.1 Sophon composed locally — 25 October
+
+The user requested a new image containing the full 24–25 October fix inventory.
+The candidate now selects Center 120 / Context 112 alongside Session 36 and
+Enrollment 83. The production manifest and ISO provenance carry version 0.5.1
+and codename Sophon. Canonical composition, offline dependencies and extracted
+media checks pass. The factory's retired Flathub substring guard was replaced
+with a full canonical-helper comparison and tested against stale/broken helpers.
+The inclusion checklist, exact artifact identity and final Windows-copy status
+are owned by [Sophon notes](patch-notes/0.5.1-sophon.md).
+At composition, no public publication, VM boot or fresh-install acceptance had
+occurred. The later limited installed Software observation is recorded above;
+it does not establish full fresh-install acceptance.
+
+## Bazaar curated banner refreshed — 25 October
+
+The old 1600 x 440 banner has been replaced with a self-contained 1600 x 220
+obsidian composition using the canonical emblem and centered typography.
+The existing row is 220px high; native full-width and 800/600px cover renders
+retain the logo/text. No curated configuration or sandbox policy changed.
+System, user-rendered and sandbox-visible image hashes match the source on
+the physical reference, with prior artwork backed up. The repository's normal
+production provisioner uses the new asset for future builds. The running app
+needs reopening to release its old image; app-window visual acceptance remains
+user review. No ISO or public push was made by that banner-only step; the later
+Sophon composition is recorded above.
+See [Software visual customization](software/FLATPAK_BAZAAR_INTEGRATION_PLAN.md#greyward-visual-customization).
+
+## Mouse-area screenshots: installed and user-validated
+
+Session 36 is installed on the physical reference. Print Screen freezes the
+ordinary desktop through the existing bounded channel, closes that channel,
+then shows per-output GTK previews and Slurp selection. Drag to select an area,
+click an output to select that screen, or use Esc to cancel. Only selected
+pixels are saved; cancellation has no saved pathname. This ordinary receiver
+update required no logout, broker restart, SELinux change or protected-profile
+migration. The original screenshot workflow and login recovery below remain
+the historical prerequisite, not proof of the new interaction.
+
+The RPM changes exactly the receiver and Screenshot launcher from Session 35;
+source/payload checks and installed package verification pass. Protected desktop
+and Administration manifests, USB rules, DMS selector and workflow-broker PID
+stayed unchanged. SELinux is Enforcing. Six native region tests and five real
+headless GTK/Slurp cases pass: cross-output drag, mixed DPI, screen click,
+cancellation and hotplug rejection. On 25 October the user confirmed that the
+mouse-selected zone opens correctly in Swappy without Polkit and that Esc
+cancels. Direct readback found new PNGs with mode 0600, including a 2560 x 1440
+image; installed Session 36 package verification is clean and the workflow
+broker remains active with SELinux Enforcing. The preparation readback detected
+only the laptop output; synthetic multi-output/mixed-DPI results remain distinct
+from explicit physical monitor acceptance. No time-correlated file trace was
+collected during the user's Esc gesture; cancellation also passes the native
+unit and isolated selector tests.
+
+At the user's request, RPM Build, GCC, Meson and Ninja were installed on the
+physical reference for unprivileged, resource-limited builds. The matching
+signed Fedora systemd-rpm-macros RPM avoided upgrading the active systemd
+runtime. These are development tools, absent from production package/account
+defaults. Session 36 was built there. At this step the Enrollment 83 source
+successor below was not yet built; it is now built and embedded in Sophon as
+recorded above. No public push accompanied either step.
+See [manual screenshots](software/SCREENSHOTS.md) and
+[optional physical builds](development/DEVELOPMENT.md#optional-builds-on-a-physical-reference).
+
+## Manual screenshots: first login failed, recovery applied — 24 October
+
+GNOME Screenshot 41 reproduces a missing GNOME Shell interface and a broken
+X11 fallback on the protected Wayland reference. The WLR portal independently
+fails because ordinary capture globals are intentionally withheld.
+The candidate replaces the dead default workflow with physical Print Screen,
+a three-second private compositor channel, saved PNG and ordinary Swappy editor,
+without Polkit. Swappy 1.5.1 and the matched Session 35 / Enrollment 82 /
+AppSec 83 tuple are installed on the physical reference. The protected compositor
+and linked Administration receipt have been migrated and verified.
+
+The native isolated test builds the patched compositor and passes two-output
+capture, ordinary denial, bounded registry, deadline, prebound native-lock
+revocation and the stale-buffer/fresh-buffer unlock barrier. Synthetic input
+and peer adapters exist only in its disposable fixture. The user now confirms
+successful login and physical Print Screen opening Swappy without Polkit.
+Direct readback found the original 5,560 x 1,920 PNG with mode 0600, a subsequent
+edited PNG, and Swappy running in `greyward_guard_t`. Ordinary Grim, launched
+through the actual confined user manager, fails with no PNG and no public
+capture protocol. The user subsequently reports the locked-screen Print test
+and normal unlock. This is user-reported evidence; a time-correlated lock/file
+trace was not collected.
+Session 35 / Enrollment 82 were built with the matched AppSec 83 input.
+Both RPMs built with normal checks; actual payload/patch/compositor receipts
+matched that build's source snapshot and the three-package offline installation
+simulation passed.
+All 43 focused native tests pass, including the headless fixture and actual
+display policy compilation. Windows targeted tests and both repository gates
+pass with explicit native/fixture skips. The source/payload checks also cover
+the reused AppSec 83 authentication and ordinary-role inputs.
+
+The owner authorized the graphical logout and closure of five stale user
+processes in a separate root SSH session. The migration guard initially refused
+that non-quiescent state; it was not weakened. After the approved processes
+closed, logind retained a closing session with no leader or scope. Refreshing
+logind while greetd was stopped cleared that obsolete record, preserving root
+SSH. Activation then completed successfully. Package verification is clean;
+the protected ELF matches Enrollment's receipt; USB rules and the DMS selector
+are unchanged. SELinux is Enforcing and all 947 kernel permission checks pass.
+The active broker executable matched its installed file, but the controller
+mistakenly activated the conflicting experimental read-only service. The real
+login then returned `Guard: Method unavailable`; package/kernel checks had not
+tested the service mode. An earlier startup shell also hit a protected console
+label left behind when the previous guardian was forcibly terminated.
+Recovery restored only the orphaned VT label after checking no protected seat
+or workers remained, then explicitly started the enabled workflow service.
+Its live D-Bus interface exposes `StartDesktop`; the read-only unit is inactive.
+The admitted session remains open with the expected display/authentication
+contexts and a fresh Protected/INFO projection. The extended readback now
+verifies the workflow mode, its actual bus-owner PID and `StartDesktop` before
+the 947 kernel decisions; it passes on the recovered reference. Regression
+tests reject the read-only mode, wrong process/owner, missing method and owner
+change. The activation controller is not evidence of successful acceptance.
+
+Enrollment 83 source now restores only this known orphaned console label during
+a stopped, quiescent screenshot migration. Active account sessions/processes,
+seat receipts, protected workers, unknown labels/devices and unreadable process
+state refuse recovery. Five migration tests pass, including the negative
+conditions. At that step the successor was not built or installed: the build
+host's SSH connection timed out, so no host verification was bypassed or build
+attempted. The later Sophon task built Enrollment 83 with normal checks, without
+deploying it over the active reference session.
+Rollback RPMs and protected-profile/policy backups remain private on the host.
+No ISO or public push was made by that recovery step; native headless checks do not replace physical
+acceptance of a later interaction change.
+See [manual screenshots](software/SCREENSHOTS.md).
+
+## Bazaar startup, catalogue and installation recovery — 24 October
+
+The physical reference reproduced a pre-application Flatpak failure:
+Bubblewrap could not inspect AMD `/dev/kfd` (`hsa_device_t`). A persistent,
+scoped policy-only hotfix now grants `getattr` and `mounton` to the ordinary
+subject; `open`, `read`, `write` and `ioctl` remain denied. Bazaar 0.9.7 daemon
+and GUI run in `greyward_guard_t`, the user confirms opening/reopening from the
+icon, and the session reports Protected with SELinux Enforcing. No protected
+profile files or RPM payloads were changed by that initial repair. Enrollment
+79 / AppSec 82 remained installed at that point; the later screenshot migration
+activated Enrollment 82 / AppSec 83. The correction was prepared as Enrollment
+81 and is retained by the built Enrollment 83 successor described above.
+See [Software integration](software/FLATPAK_BAZAAR_INTEGRATION_PLAN.md#flatpak-installation-compatibility--24-october-2026).
+
+Further real attempts exposed dangling `greyward-offline` origins, a missing
+revokefs socket descriptor, then denied FUSE symlink creation. The missing
+origin was restored as a hidden official Flathub alias with GPG verification;
+existing deployment commits were preserved. Two further persistent scoped
+policy modules permit returned helper-socket read/write and FUSE symlink
+create/rename/unlink. Direct helper connection, process control and installed
+regular-file writes remain denied. The real ordinary-user staging probe fails
+before correction and passes after, including descriptor receipt and symlink
+cleanup, without installing a test app or changing Polkit authorization.
+
+The user's subsequent Bazaar installation of Ksnip completed at 18:12 on
+24 October. Direct system readback confirms `app/org.ksnip.ksnip/x86_64/stable`,
+origin `flathub`, version 1.10.1, commit
+`091fb428c768ee68c9d949bfea85821c071c360f71819cf36cd6d631b787fd1a`,
+matching the actual transaction's resolved commit. Flatpak history records the
+runtime/dependency deployments, then application deployment and triggers.
+The fresh session projection remains Protected/INFO with SELinux Enforcing.
+The user confirms completion, the Open action and successful application launch.
+Bazaar is subsequently running normally without the diagnostic debug environment.
+
+The canonical offline installer now keeps the `flathub` deployment origin and
+restores HTTPS/GPG verification on both success and failure. Real isolated
+native installation tests pass with networking absent. The DMS2 candidate
+initially selected Enrollment 81 and now selects its built Enrollment 83
+successor. Complete staging rejects stale session policy inputs even on
+installed-RPM imports. These changes are included in local Sophon, but remain
+absent from published RC3; no public push accompanied the recovery step.
+
+Validation: all 945 live kernel compatibility checks pass, including every
+requested positive permission and the Administration, public-metadata and
+DMA/KFD/installed-file denials. The 90 focused Windows tests pass with seven
+explicit platform/fixture skips. The same 90 tests pass on Fedora with one
+explicit built-Session-RPM fixture skip; this includes actual policy compilation
+and both isolated offline transaction tests. Both repository gates pass.
+
+The user separately reported slow catalogue refresh and stale-data fallback.
+Large transfers through the reference's personal VPN were truncated with TLS
+errors, while the system route completed them. An approved MTU-1280 test
+completed one 31,441,513-byte transfer in 3.4 seconds; other catalogue objects
+still failed, so this is not proof of a complete VPN repair. The approved
+personal profile now saves MTU 1280, with keys/routes preserved and no reconnect.
+This is a reference-specific setting, not a GREYWARD image default.
+
+A normal root Flathub catalogue refresh succeeded in 9.2 seconds. Bazaar's
+own subsequent sync produced a fresh 2,285,492-byte search index; the user
+confirms that the stale-data warning disappeared. The later Ksnip transaction
+retried some truncated transfers successfully and completed. Broader VPN
+transport reliability remains unresolved; the completed transaction is not a
+general VPN reliability claim.
 
 ## Public source and RC3 publication — 24 October
 

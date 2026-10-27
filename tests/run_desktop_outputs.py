@@ -3,6 +3,9 @@
 
 Requires a completed patched native CMake build, Labwc, wlr-randr and D-Bus.
 Never connects to an existing session, display or application bus.
+The rapid two-process restart fixture disables thumbnails only in its synthetic
+profile: upstream HEIF plugin teardown is outside this coordinate-layout test.
+Installed desktop preferences and thumbnail behavior are never modified.
 """
 import argparse
 import json
@@ -62,6 +65,8 @@ WallpaperMode=color
 BgColor=#101214
 FgColor=#e2e5e7
 WorkAreaMargins=20,20,20,20
+[Thumbnail]
+ShowThumbnails=false
 [Volume]
 MountOnStartup=false
 MountRemovable=false
@@ -82,6 +87,7 @@ AutoRun=false
     launch = work / 'launch.py'
     launch.write_text('import subprocess\nfrom pathlib import Path\n'
         + 'code=subprocess.run(' + repr([str(executable), '--desktop', '--profile=greyward-test']) + ').returncode\n'
+        + 'if code == 0: code=subprocess.run(' + repr([str(executable), '--desktop', '--profile=greyward-test']) + ').returncode\n'
         + 'Path(' + repr(str(result)) + ').write_text(str(code))\n')
     environment = {key: value for key, value in os.environ.items()
                    if key not in ['WAYLAND_DISPLAY', 'DISPLAY', 'DBUS_SESSION_BUS_ADDRESS',
@@ -109,6 +115,8 @@ AutoRun=false
                 raise RuntimeError('Native Qt signal connection failed; reject this build')
             if code:
                 raise RuntimeError('Desktop output integration failed: ' + str(code))
+            if 'PASS fresh application process restores saved output and exact coordinates' not in output:
+                raise RuntimeError('Missing fresh-process persistence evidence')
         finally:
             if process.poll() is None and os.getpgid(process.pid) == process.pid:
                 os.killpg(process.pid, signal.SIGTERM)

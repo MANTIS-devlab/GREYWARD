@@ -70,6 +70,13 @@ prefix+=''.join(f'%global greyward_{name} {value}\n' for name,value in values.it
 prefix+=''.join(f'Requires: {name} = {value}\n' for name,value in sorted(pins.items()))
 if 'rpmRelease' in m['build']:
  prefix+=f'Provides: greyward-dms = {version}-{match[1]}%{{?dist}}\n'
+plugin_update=m['build'].get('pluginUpdate')
+if plugin_update:
+ predecessor=plugin_update.get('basePackage','')
+ if (not re.fullmatch(r'greyward-dms-'+re.escape(version)+'-'+re.escape(match[1])+r'\.[1-9][0-9]*\.fc44\.x86_64',predecessor)
+     or plugin_update.get('requiresProtectedMigration') is not False):
+  raise SystemExit('Invalid ordinary-plugin predecessor compatibility')
+ prefix+='Provides: greyward-dms = '+predecessor.removeprefix('greyward-dms-').removesuffix('.x86_64')+'\n'
 pathlib.Path(sys.argv[3]).write_text(prefix+pathlib.Path(sys.argv[2]).read_text())
 PY
 rpmbuild --define "_topdir $(realpath "$output")" -ba "$output/SPECS/greyward-dms.spec"

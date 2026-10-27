@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+ <title>GREYWARD Settings</title>
+ <defs><linearGradient id="body" x2=".8" y2="1"><stop stop-color="#303C47"/><stop offset="1" stop-color="#0B0D10"/></linearGradient><linearGradient id="silver" x2=".8" y2="1"><stop stop-color="#EDF1F4"/><stop offset="1" stop-color="#8D9EAC"/></linearGradient></defs>
+ <rect x="13" y="13" width="102" height="102" rx="24" fill="url(#body)" stroke="#768A99" stroke-width="1.5"/>
+ <path d="m57 27 14 0 3 11 8 5 11-3 7 12-8 8v9l8 8-7 12-11-3-8 5-3 11H57l-3-11-8-5-11 3-7-12 8-8v-9l-8-8 7-12 11 3 8-5Z" fill="url(#silver)"/>
+ <circle cx="64" cy="64" r="18" fill="#111A22" stroke="#718A9C" stroke-width="2"/>
+ <circle cx="64" cy="64" r="8" fill="#95AFC2"/>
+</svg>

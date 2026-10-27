@@ -158,9 +158,11 @@ argument, and CRLF makes Python reject it before the protected request reaches
 the broker. `.gitattributes` enforces LF on Windows checkouts, and the RPM install
 normalizes both packaged handoff copies as a defense against non-Git archives.
 Session package 8 selects the supported GTK/wlroots portal backends.
-Ordinary screen capture/sharing remains unavailable under the protected
-compositor; do not solve that by exposing protected frames or broadening the
-authentication domain.
+Unsolicited ordinary screen capture/sharing remains unavailable under the
+protected compositor. The [manual Print Screen path](../software/SCREENSHOTS.md)
+uses a specific private client, a three-second deadline, lock-time revocation
+and a fresh post-unlock framebuffer barrier; it does not expose capture globals
+on the ordinary socket or broaden the authentication domain.
 External requests always require review and cannot reuse another terminal's
 authority. No privileged output, input descriptor or timestamp is returned to
 the requesting process. Security Center has open/status actions, not a generic
@@ -177,14 +179,40 @@ Missing readiness refuses administration and never weakens ordinary coverage.
 
 ### Protected desktop startup transition
 
-An earlier `<development-host>` login measured 5.33 seconds from PAM session-open to normal
+The current appearance source is `authentication/assemble.py`'s shared
+`STARTUP_CONTENT`: a graphite background, canonical GREYWARD symbol, platinum
+wordmark, `Preparing your desktop` caption and a restrained waiting rail. The
+symbol is compiled into synchronous Qt Quick geometry from the packaged
+`greyward-symbol.svg`; there is no runtime image loader. Both the minimal early
+backdrop and the full protected shell receive identical `GreywardStartup.qml`
+bytes, bound into the authentication receipt. The animation stops after four
+sweeps so the retained background returns to idle behind the desktop.
+
+Application Security **84** and Enrollment **86** prepare this visual update
+against the installed DMS **2.0.0-7.11**. Native offscreen rendering, package
+builds, installation simulation and three private-display keyboard/cancel/layout
+tests pass. After an owner-approved logout, the matched packages were installed
+and the quiescent migration verified all 1,645 protected desktop files plus the
+Administration receipt. Both installed components match the reviewed assembly
+and their authentication receipt. RPM verification is clean; the workflow broker
+now uses its new installed executable. SELinux remains Enforcing. Rollback RPMs
+and the previous protected profiles are retained; actual login visual acceptance
+is pending. Always use the existing quiescent migration after an approved logout. No
+readiness, Polkit, PAM, admission or input behavior changes: every output keeps
+a background-layer surface, no keyboard focus and an empty input region.
+Future image validation compares both the assembler and canonical symbol with
+the selected RPM. No ISO is produced by this change.
+
+Historical startup timing and earlier implementation acceptance follow; these
+are not measurements of the current visual update. An earlier `<development-host>` login
+measured 5.33 seconds from PAM session-open to normal
 DMS configuration load; 2.21 seconds were spent in protected root admission.
 The readiness gate remains in place because removing it would start the ordinary
 desktop before the private authentication shell has registered Polkit. After
 Application Security 40 and Enrollment 15 were installed, the user observed
 about three seconds of black screen followed by about three seconds of the
 startup message. The broker's protected-session worker took 2.37 seconds, which
-matches the initial black interval. The message is currently drawn by the full
+matches the initial black interval. The message was then drawn by the full
 DMS authentication shell, which is why it appears only after that shell starts.
 
 Application Security 41 adds a separate minimal, noninteractive Wayland

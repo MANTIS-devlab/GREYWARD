@@ -71,9 +71,12 @@ jobs:
         run: >-
           /usr/bin/python3 -m unittest
           tests.test_image_baseline tests.test_image_offline tests.test_image_stage_text
+          tests.test_software_explore_recovery
+          tests.test_office_integration tests.test_office_upstream tests.test_office_channel tests.test_office_automation
           tests.test_firstboot_login_boundary tests.test_installed_rpm_import
           tests.test_component_cache tests.test_file_icon_family
           tests.test_files_launchers
+          tests.test_desktop_application_defaults tests.test_desktop_defaults tests.test_desktop_shortcuts tests.test_dms20_state
           tests.test_application_security_verification
       - name: Protected USB approval and ISO regression contracts
         # Migration fixtures deliberately require real root-owned ancestors.

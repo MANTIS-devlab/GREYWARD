@@ -11,7 +11,7 @@ TIMER_PATH = ROOT / "security-center" / "security-context" / "systemd" / "greywa
 class AutomaticUpdateContractTests(unittest.TestCase):
     def test_script_uses_fixed_check_apply_and_notification_paths(self):
         source = SCRIPT_PATH.read_text(encoding="utf-8")
-        self.assertIn('[DNF, "check-upgrade", "--json"]', source)
+        self.assertIn('[DNF, "--assumeyes", "check-upgrade", "--json"]', source)
         self.assertIn('[UPDATE_HELPER, "apply", "--operation-id", operation_id, "--system"]', source)
         self.assertIn("notify(\"System update ready\"", source)
         self.assertNotIn("pkexec", source)

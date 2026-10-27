@@ -1,6 +1,6 @@
 Name:           greyward-security-center
 Version:        0.1.0
-Release:        120%{?dist}
+Release:        122%{?dist}
 Summary:        GREYWARD local security posture and control application
 License:        GPL-3.0-only AND Apache-2.0 AND OFL-1.1 AND CC0-1.0
 Source0:        %{name}-%{version}.tar.gz
@@ -119,6 +119,12 @@ install -Dm0755 greyward-safe-open.so \
 %postun
 /usr/bin/fc-cache -f >/dev/null 2>&1 || :
 %changelog
+* Tue Oct 27 2026 MANTIS SYSTEMS - 0.1.0-122
+- Keep signed-repository security-update reads noninteractive without disabling signatures.
+
+* Tue Oct 27 2026 MANTIS SYSTEMS - 0.1.0-121
+- Fix incorrectly decoded separators in Network Activity and shared UI copy.
+
 * Fri Oct 23 2026 MANTIS SYSTEMS - 0.1.0-120
 - Add the typed opt-in microphone/camera start notification preference in Privacy.
 

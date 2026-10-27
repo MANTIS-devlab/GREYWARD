@@ -190,7 +190,7 @@ def dnf5_driver_candidates(modalias):
     if shutil.which("dnf5") is None:
         return [], "DNF5 modalias lookup is unavailable"
     text, error = run_text([
-        "dnf5", "repoquery", "--available",
+        "dnf5", "--assumeyes", "repoquery", "--available",
         "--whatprovides", f"modalias({modalias})",
         "--latest-limit=1", "--qf", DRIVER_QUERY_FORMAT,
     ])
@@ -289,13 +289,15 @@ def dnf5():
     try:
         upgrades = dnf5_daemon_upgrades()
     except Exception:
-        payload, error = run_json(["dnf5", "check-upgrade", "--json"], accepted_returncodes=(0, 100))
+        # Only consult metadata. Accept keys from root-configured repositories
+        # noninteractively, as the native provider does; GPG checks remain on.
+        payload, error = run_json(["dnf5", "--assumeyes", "check-upgrade", "--json"], accepted_returncodes=(0, 100))
         if error:
             return provider_state("DEGRADED", error, observed), []
         upgrades = payload.get("upgrades") if isinstance(payload, dict) else None
     if not isinstance(upgrades, list):
         return provider_state("DEGRADED", "DNF5 returned no upgrade list", observed), []
-    advisories_payload, advisories_error = run_json(["dnf5", "updateinfo", "list", "--json"])
+    advisories_payload, advisories_error = run_json(["dnf5", "--assumeyes", "updateinfo", "list", "--json"])
     advisories = advisories_payload if isinstance(advisories_payload, list) else []
     history_payload, history_error = run_json(["dnf5", "history", "list", "--json"])
     transactions = history_payload if isinstance(history_payload, list) else []
