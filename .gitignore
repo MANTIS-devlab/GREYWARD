@@ -87,3 +87,6 @@ known_hosts.old
 .DS_Store
 Thumbs.db
 .codex-remote-attachments/
+
+# Release artifacts belong in external distribution storage, not source Git.
+/iso_releases/
