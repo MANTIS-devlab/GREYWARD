@@ -1,4 +1,17 @@
-# Current published installer — 28 October 2026
+# Current published installer — 2 November 2026
+
+The current download is [0.5.4 Sophon](https://sourceforge.net/projects/greyward/files/v0.5.4-sophon/).
+Use its frozen corresponding-source archive and release notes for the exact
+runtime/build inputs. This README/release-documentation update does not promote
+all implementation paths on public main to that frozen revision.
+
+The frozen 0.5.4 entrypoints require all fifteen selected RPM inputs, including
+`--intelligence-rpm` and the adapted `--swappy-rpm`, plus the normal dependency,
+source, payload and signature guards. Source/manifest hashes and acceptance
+limits are in the release archive and its notes. No ISO was rebuilt for upload.
+The preceding guide below describes the previous public source baseline.
+
+# Previous published installer — 28 October 2026
 
 The current release is **0.5.3 Sophon**. Its exact component tuple, checksums,
 frozen source archive, four Office source RPMs and acceptance limits are in the

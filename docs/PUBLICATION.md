@@ -1,6 +1,27 @@
 # Public source maintenance
 
-## Sophon 0.5.3 release — 28 October 2026
+## Sophon 0.5.4 publication — 2 November 2026
+
+The existing [0.5.4 Sophon ISO](patch-notes/0.5.4-sophon.md) and ten companions
+are published on SourceForge. Full HTTPS readback verifies all 5,267,587,072 ISO
+bytes against SHA-256 `7ddb5a378a26138b8349f3fd5bcd42bc479c144417d07248a2ab572ac2fdd959`,
+plus the frozen corresponding sources, four signed Office source RPMs,
+manifest, verification, release notes and checksums. Strict host-key checking
+remains enabled. The final ISO filename is exposed only after these checks.
+No ISO was rebuilt for publication.
+
+The source archive contains 5,278 files, an input/hash/mode inventory and exact
+validated Security Center build bytes. No non-document source bytes were changed
+by sanitization. The archive SHA-256 is
+`5712a72eea930c9b0bceaf3ec1935e77134abde731144ee5c054f9acfd4802d1`.
+Use that frozen archive for this ISO; public main is not necessarily the same
+runtime source revision. The README gallery and GIF are unchanged.
+
+Bazaar Explore's installed recurrence remains a known issue, not a claimed fix.
+Composition, media readback, full clean-install/recovery and physical hardware
+acceptance are separate; publication does not establish the untested checks.
+
+## Historical Sophon 0.5.3 release — 28 October 2026
 
 [0.5.3 Sophon](patch-notes/0.5.3-sophon.md) supersedes the preceding public
 download. Its ISO, checksums, provenance, frozen corresponding sources and four

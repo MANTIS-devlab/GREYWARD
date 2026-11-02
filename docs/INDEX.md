@@ -1,6 +1,12 @@
 # GREYWARD documentation index
 
-[0.5.3 Sophon](patch-notes/0.5.3-sophon.md) records the current SourceForge release, completed Office
+[0.5.4 Sophon](patch-notes/0.5.4-sophon.md) is the current SourceForge
+installer. Its notes own downloads, checksums, the frozen corresponding-source
+archive, selected package tuple and known Bazaar Explore limitation.
+Publication and composition checks do not establish full installed/recovery
+or broad hardware acceptance.
+
+[0.5.3 Sophon](patch-notes/0.5.3-sophon.md) records the preceding SourceForge release, completed Office
 channel commissioning, frozen sources, Linux/Windows media checks and remaining
 installed/hardware acceptance.
 
@@ -9,7 +15,7 @@ is packaged as DMS 7.11 for future image builds. The
 preceding cache trial (private development evidence) retains
 its visual audit and rollback evidence; its temporary overrides are retired.
 
-[0.5.3 Sophon release notes](patch-notes/0.5.3-sophon.md) own the current
+[0.5.3 Sophon release notes](patch-notes/0.5.3-sophon.md) retain the previous
 SourceForge download, exact package tuple, checksums, corresponding sources and
 publication readback. Composition and installed acceptance remain separate.
 

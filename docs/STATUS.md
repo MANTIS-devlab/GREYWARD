@@ -1,5 +1,17 @@
 # GREYWARD current status
 
+## Sophon 0.5.4 release — 2 November 2026
+
+The [0.5.4 Sophon installer](patch-notes/0.5.4-sophon.md) and its frozen
+corresponding sources are published on SourceForge. The existing media was
+uploaded without rebuilding. Full HTTPS readback matches its 5,267,587,072 bytes
+and SHA-256 `7ddb5a378a26138b8349f3fd5bcd42bc479c144417d07248a2ab572ac2fdd959`.
+Native image tests, offline dependency/Flatpak installation and independent
+Windows media checks pass. Full clean-install, encrypted-root/recovery and broad
+hardware acceptance remain separate. Bazaar Explore can still fail while app
+installation works; no durable correction is claimed. Use the release archive
+for the exact runtime source revision; public main may differ.
+
 ## Sophon 0.5.3 release — 28 October 2026
 
 The [0.5.3 image](patch-notes/0.5.3-sophon.md) was built on the physical reference

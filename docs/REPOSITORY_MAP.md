@@ -1,5 +1,10 @@
 # GREYWARD repository map
 
+[0.5.4 Sophon notes](patch-notes/0.5.4-sophon.md) own the current download,
+corresponding-source archive, selected package tuple, checksums and acceptance
+limits. [Publication](PUBLICATION.md) records the verified upload. This release
+documentation does not imply that public main matches every frozen runtime input.
+
 [0.5.3 Sophon notes](patch-notes/0.5.3-sophon.md) own the public artifact checksum,
 frozen source/archive binding, selected component inputs and Linux/Windows media
 readback. Publication does not establish clean-install or recovery acceptance.
@@ -18,7 +23,7 @@ renderer is exercised in `tauri/frontend/ux-contract.test.mjs`. The display
 contract is in [UX specification](security-center/UX_SPEC.md); no network data
 or policy contract changes with this presentation correction.
 
-[0.5.3 Sophon release notes](patch-notes/0.5.3-sophon.md) own the current
+[0.5.3 Sophon release notes](patch-notes/0.5.3-sophon.md) retain the previous
 SourceForge download, exact package tuple, checksums, corresponding sources and
 publication readback. Composition and installed acceptance remain separate.
 
