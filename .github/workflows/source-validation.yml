@@ -63,7 +63,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install Python system bindings
-        run: sudo apt-get update && sudo apt-get install -y python3-dbus python3-gi
+        run: sudo apt-get update && sudo apt-get install -y python3-dbus python3-gi python3-grpcio python3-protobuf
       - name: Security Context tests
         working-directory: security-center
         env:

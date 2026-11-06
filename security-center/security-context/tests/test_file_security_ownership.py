@@ -68,5 +68,14 @@ class ScanOwnershipTests(unittest.TestCase):
         self.assertEqual(self.manager.prepare_quarantine('det-mine', actor_uid=1000)['state'], 'QUARANTINED')
 
     def test_missing_owner_is_not_inferred_from_current_filesystem(self):
-        with patch.object(Path, 'stat', side_effect=AssertionError('must not infer ownership')):
+        original_stat = Path.stat
+
+        def guarded_stat(path, *args, **kwargs):
+            # Python 3.12's mkdir(exist_ok=True) stats the SQLite directory.
+            # Only consulting the protected scan target would infer ownership.
+            if path == Path('/home/private') or Path('/home/private') in path.parents:
+                raise AssertionError('must not infer ownership')
+            return original_stat(path, *args, **kwargs)
+
+        with patch.object(Path, 'stat', guarded_stat):
             self.assertIsNone(self.manager.status('historical', owner_uid=1000))
