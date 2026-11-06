@@ -2,7 +2,7 @@
 
 ## Sophon 0.5.5 publication — 6 November 2026
 
-The existing [0.5.5 Sophon ISO](patch-notes/0.5.5-sophon.md) and ten companions
+The existing [0.5.5 Sophon ISO](https://github.com/MANTIS-devlab/GREYWARD/blob/main/docs/patch-notes/0.5.5-sophon.md) and ten companions
 are published on SourceForge. Full SFTP readback verifies all 5,388,173,312
 ISO bytes against SHA-256
 `6175a18609bb41bdf3f3c12b7c1aabef38c63ea17ad2dec7ec96331d796d2092`,
