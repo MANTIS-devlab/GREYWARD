@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/bash
 # Validate before dracut packages the theme for a new or rebuilt kernel.
 # Fedora's plymouth module still owns renderer/font/cryptsetup integration.
 check() {
