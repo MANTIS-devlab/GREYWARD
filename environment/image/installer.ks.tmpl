@@ -5,7 +5,10 @@ graphical
 cdrom
 
 lang en_US.UTF-8
-keyboard --vckeymap=fr --xlayouts='fr'
+# Do not pre-answer the keyboard page. Anaconda derives English (US) from
+# the language above and requires the user to confirm or change the layout
+# in its native Keyboard screen, including the typing-test field. A keyboard
+# Kickstart command would mark that choice complete and hide the required hint.
 timezone Europe/Paris --utc
 firstboot --disable
 network --hostname=greyward

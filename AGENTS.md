@@ -1,5 +1,18 @@
 # GREYWARD agent contract
 
+## Local workspace containment
+
+Keep all project checkouts, exports, release files, caches, temporary build/test
+files, credentials and maintenance evidence inside the official project root.
+Do not create sibling exports or external worktrees. The root checkout owns
+current engineering sources; `public/` and `public-office-updates/` are separate,
+audited public repositories, never source trees to merge or copy blindly.
+Use ignored `.local/` for local artifacts and `.secrets/` for credentials.
+Set project-command temporary/cache paths inside `.local/`, without changing
+Windows-wide settings or relocating shared identities used by other projects.
+The local ownership and preservation record is in
+local workspace (private development evidence).
+
 GREYWARD is a Fedora-based desktop distribution and Security Center project.
 Do not redesign product behavior or treat the disposable development VM as a
 release image.

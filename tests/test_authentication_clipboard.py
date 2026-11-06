@@ -68,19 +68,31 @@ class AuthenticationClipboard(unittest.TestCase):
     def test_2_0_profile_is_separate_and_preserves_legacy_rollback_input(self):
         materialize.materialize(1001, 1001)
         before = {p.name: p.read_bytes() for p in self.config.parent.iterdir()}
-        materialize.materialize(1001, 1001, 'v2.0.0-7')
-        auth = self.state / 'auth-1001'
-        environment = materialize.authentication_environment(auth, 'v2.0.0-7')
-        profile = Path(environment['XDG_CONFIG_HOME']) / 'dms'
-        self.assertEqual(json.loads((profile / 'settings.json').read_text())['configVersion'], 42)
-        self.assertEqual(json.loads((profile / 'clsettings.json').read_text()), {'disabled': True})
-        self.assertEqual((profile / 'settings.json').stat().st_mode & 0o777, 0o444)
-        self.assertEqual(profile.stat().st_uid, 0)
-        self.assertEqual(before, {p.name: p.read_bytes() for p in self.config.parent.iterdir()})
-        for key, value in environment.items():
-            self.assertEqual(Path(value).name, 'dms20')
-            self.assertFalse((Path(value) / 'DankMaterialShell').exists())
-        self.assertIn('XDG_DATA_HOME', environment)
+        for release in sorted(materialize.NATIVE_AUTH_RELEASES):
+            materialize.materialize(1001, 1001, release)
+            auth = self.state / 'auth-1001'
+            environment = materialize.authentication_environment(auth, release)
+            profile = Path(environment['XDG_CONFIG_HOME']) / 'dms'
+            self.assertEqual(json.loads((profile / 'settings.json').read_text())['configVersion'], 42)
+            self.assertEqual(json.loads((profile / 'clsettings.json').read_text()), {'disabled': True})
+            self.assertEqual((profile / 'settings.json').stat().st_mode & 0o777, 0o444)
+            self.assertEqual(profile.stat().st_uid, 0)
+            self.assertEqual(before, {p.name: p.read_bytes() for p in self.config.parent.iterdir()})
+            for key, value in environment.items():
+                self.assertEqual(Path(value).name, 'dms20')
+                self.assertFalse((Path(value) / 'DankMaterialShell').exists())
+            self.assertIn('XDG_DATA_HOME', environment)
+
+    def test_assembler_and_live_preparation_share_the_selected_release(self):
+        assembler_path=SOURCE.parent.parent/'authentication/assemble.py'
+        spec=importlib.util.spec_from_file_location('profile_assembly_check',assembler_path)
+        assembler=importlib.util.module_from_spec(spec);spec.loader.exec_module(assembler)
+        root=SOURCE.parents[4]
+        release=json.loads((root/'environment/production/dms-2.0-candidate.json').read_text())['releaseId']
+        self.assertEqual(assembler.CANDIDATE_RELEASES,materialize.NATIVE_AUTH_RELEASES)
+        self.assertEqual(assembler.SUPPORTED_RELEASES,materialize.LEGACY_AUTH_RELEASES)
+        self.assertEqual(materialize.preflight(release,{})['configVersion'],42)
+        self.assertFalse(self.state.exists())
 
     def test_unknown_authentication_generation_refuses_before_writes(self):
         with mock.patch.object(materialize, 'prepare_enforcement') as prepare:

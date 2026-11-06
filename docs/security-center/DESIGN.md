@@ -141,8 +141,9 @@ buttons use one silver finish, with narrowly scoped amber/green/destructive
 treatments for consequential existing workflows. Text controls, form fields,
 disclosure, focus and disabled states share predictable proportions.
 
-Network Activity preserves local application logos, stable identity colors,
-country flags and its live/history instrument panel. Fallback symbols describe
+Network Activity preserves local application/domain logos on white tiles,
+country flags and its live/history instrument panel. The white ground also
+keeps monochrome brand artwork legible; functional fallbacks use dark ink. Fallback symbols describe
 the object (application or destination); a hash never invents a folder/lock
 meaning. At the minimum window, transport metadata and time move below their
 corresponding identities instead of disappearing or squeezing the primary row.

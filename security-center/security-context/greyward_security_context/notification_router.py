@@ -7,6 +7,7 @@ import subprocess
 import time
 from pathlib import Path
 from .clamav import MEDIA_ROOTS
+from .scan_notices import appearance as scan_appearance
 
 APP_ID = 'systems.mantis.greyward.securitycenter'
 APP_NAME = 'GREYWARD Security Center'
@@ -25,6 +26,7 @@ class NotificationRouter:
         self.bus, self.dispatch = bus, dispatch
         self.path = state_path or Path(os.environ.get('XDG_RUNTIME_DIR', '/tmp')) / 'greyward-security-notification-delivery.json'
         self.records, self.owner, self.proxy = {}, '', None
+        self.completed_scans = {}
         self._closing = set()
         self._warning_since = {}
         self.reminder_path = Path(os.environ.get('XDG_STATE_HOME', Path.home() / '.local/state')) / 'greyward/notification-reminders.json' if state_path is None else self.path.with_name('reminders.json')
@@ -35,6 +37,9 @@ class NotificationRouter:
         try:
             value = json.loads(self.path.read_text())
             self.records = value.get('records', {})
+            saved = value.get('completed_scans', {})
+            if isinstance(saved, dict):
+                self.completed_scans = dict(sorted(((k,v) for k,v in saved.items() if isinstance(k,str) and len(k)<128 and isinstance(v,(int,float)) and 0 <= time.time()-v < 86400), key=lambda pair:pair[1])[-128:])
             self.owner = value.get('owner', '')
         except (OSError, ValueError): pass
         bus.add_signal_receiver(self._action, signal_name='ActionInvoked', dbus_interface='org.freedesktop.Notifications', bus_name='org.freedesktop.Notifications')
@@ -43,7 +48,7 @@ class NotificationRouter:
     def _save(self):
         try:
             temporary = self.path.with_suffix('.tmp')
-            temporary.write_text(json.dumps({'owner': self.owner, 'records': self.records}, separators=(',', ':')))
+            temporary.write_text(json.dumps({'owner': self.owner, 'records': self.records, 'completed_scans': self.completed_scans}, separators=(',', ':')))
             temporary.chmod(0o600)
             os.replace(temporary, self.path)
         except OSError: pass
@@ -144,6 +149,8 @@ class NotificationRouter:
             old = record.get('item', {})
             record['item'] = current
             self.records[key] = record
+            if current.get('kind') == 'scan-result' and key in self.completed_scans:
+                continue
             reminder = key in {'updates-security', 'updates-restart'} and current.get('reminder_seconds') == 86400
             delivered = self.reminders.get(key)
             # Persist only two category timestamps, never application activity.
@@ -167,11 +174,26 @@ class NotificationRouter:
                      'category': dbus.String('device' if current['kind'] == 'usb' else 'system'),
                      'suppress-sound': dbus.Boolean(quiet), 'x-greyward-quiet': dbus.Boolean(quiet),
                      'x-greyward-severity': dbus.String(current['severity'])}
+            if current.get('kind') == 'behavioral':
+                hints['x-greyward-threat-score'] = dbus.Int32(current.get('behavioral_score',0))
+                hints['x-greyward-threat-class'] = dbus.String(current.get('behavioral_class','UNKNOWN'))
+                gauge=str(current.get('icon',''))
+                if re.fullmatch(r'greyward-intelligence-(?:[0-9]{1,2}|100)',gauge):
+                    hints['image-path'] = dbus.String('/usr/share/icons/hicolor/scalable/apps/'+gauge+'.svg')
+            styled_scan = scan_appearance(current)
+            body = html.escape(current.get('notification_detail', current['detail']))
+            if styled_scan:
+                body, scan_icon = styled_scan
+                hints['x-greyward-scan-state'] = dbus.String(current['scan_status'])
             try:
-                returned = self.proxy.Notify(APP_NAME, dbus.UInt32(record.get('notification_id', 0)), ICON,
-                    current.get('notification_title', current['title']), html.escape(current.get('notification_detail', current['detail'])), dbus.Array(actions, signature='s'),
+                returned = self.proxy.Notify(APP_NAME, dbus.UInt32(record.get('notification_id', 0)),
+                    scan_icon if styled_scan else ICON,
+                    current.get('notification_title', current['title']), body, dbus.Array(actions, signature='s'),
                     dbus.Dictionary(hints, signature='sv'), dbus.Int32(current.get('timeout_ms', 10000)), timeout=4)
                 record.update(notification_id=int(returned), signature=signature, acknowledged=False)
+                if current.get('kind') == 'scan-result':
+                    self.completed_scans[key] = time.time()
+                    self.completed_scans = dict(sorted(self.completed_scans.items(), key=lambda pair:pair[1])[-128:])
                 if reminder:
                     self.reminders[key] = time.time()
                     self._save_reminders()
@@ -182,9 +204,13 @@ class NotificationRouter:
 
 
 def open_route(route, resource_ref=None):
-    if route not in {'overview', 'devices', 'privacy', 'network', 'threats', 'files', 'updates', 'evidence', 'activity', 'history', 'protected-data'}: return
+    if route == 'intelligence':route='history' # old saved notices remain navigable
+    if route not in {'overview', 'devices', 'privacy', 'network', 'threats', 'files', 'updates', 'evidence', 'activity', 'history', 'protected-data', 'intelligence'}: return
     command = ['/usr/bin/greyward-security-center-route', route]
-    if resource_ref is not None:
+    if route in {'history','activity'} and resource_ref is not None:
+        if not re.fullmatch(r'incident-[a-f0-9]{24}', str(resource_ref)): return
+        command.append(resource_ref)
+    elif resource_ref is not None:
         if route != 'protected-data' or not re.fullmatch(r'resource_[0-9a-f]{64}', str(resource_ref)): return
         command.append(resource_ref)
     subprocess.Popen(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)

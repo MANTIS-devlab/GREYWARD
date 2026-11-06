@@ -157,7 +157,10 @@ def event(
     correlation_value = _safe_value(correlation or {})
     detail_value = _safe_value(details or {})
     if category.upper() == "NETWORK" and isinstance(detail_value, dict):
+        process_key = detail_value.get("process_key")
         detail_value = {key: detail_value.get(key) for key in ("rule_name", "control", "network_event_type") if key in detail_value}
+        if isinstance(process_key, str) and re.fullmatch(r"[0-9a-f]{40}", process_key):
+            detail_value["process_key"] = process_key
     result = {
         "schema": SCHEMA,
         "event_id": _text(event_id or "gw-" + uuid.uuid4().hex, 96),
@@ -496,6 +499,12 @@ class TelemetryStore:
             if name not in columns:
                 connection.execute(f"ALTER TABLE events ADD COLUMN {name} TEXT")
         detection_columns = {row[1] for row in connection.execute("PRAGMA table_info(file_detections)").fetchall()}
+        scan_columns = {row[1] for row in connection.execute("PRAGMA table_info(file_scan_operations)").fetchall()}
+        if "owner_uid" not in scan_columns:
+            # Historical rows stay unattributed. Never infer ownership from a
+            # pathname which may have been replaced or reassigned since a scan.
+            connection.execute("ALTER TABLE file_scan_operations ADD COLUMN owner_uid INTEGER")
+        connection.execute("CREATE INDEX IF NOT EXISTS file_scan_owner_time ON file_scan_operations(owner_uid, started_at DESC)")
         if "restore_staging_path" not in detection_columns:
             connection.execute("ALTER TABLE file_detections ADD COLUMN restore_staging_path TEXT")
         connection.execute("CREATE INDEX IF NOT EXISTS events_session_time ON events(session_id, occurred_at DESC)")
@@ -858,8 +867,8 @@ class TelemetryStore:
                 connection.execute(
                     """INSERT INTO file_scan_operations
                     (operation_id,mode,scope_json,state,phase,started_at,files_inspected,detection_count,
-                     error_count,skipped_count,total_files,total_known,detail,scanner_version,database_version)
-                    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                     error_count,skipped_count,total_files,total_known,detail,scanner_version,database_version,owner_uid)
+                    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                     (_text(value.get("operation_id"), 96), _text(value.get("mode"), 24),
                      json.dumps(_safe_value(value.get("scope") or {}), sort_keys=True, separators=(",", ":")),
                      _text(value.get("state"), 24) or "QUEUED", _text(value.get("phase"), 48) or "QUEUED",
@@ -867,7 +876,8 @@ class TelemetryStore:
                      int(value.get("detection_count", 0) or 0), int(value.get("error_count", 0) or 0),
                      int(value.get("skipped_count", 0) or 0), value.get("total_files"),
                      int(bool(value.get("total_known"))), _text(value.get("detail"), 320) or None,
-                     _text(value.get("scanner_version"), 48) or None, _text(value.get("database_version"), 96) or None),
+                     _text(value.get("scanner_version"), 48) or None, _text(value.get("database_version"), 96) or None,
+                     value.get("owner_uid")),
                 )
             return self.get_file_scan(_text(value.get("operation_id"), 96)) or {}
         finally:
@@ -903,10 +913,12 @@ class TelemetryStore:
         finally:
             connection.close()
 
-    def list_file_scans(self, limit: int = 32) -> list[dict[str, Any]]:
+    def list_file_scans(self, limit: int = 32, *, owner_uid: int | None = None) -> list[dict[str, Any]]:
         connection = self._connect()
         try:
-            rows = connection.execute("SELECT operation_id FROM file_scan_operations ORDER BY started_at DESC LIMIT ?", (max(1, min(128, int(limit))),)).fetchall()
+            where = " WHERE owner_uid = ?" if owner_uid is not None else ""
+            params = (int(owner_uid),) if owner_uid is not None else ()
+            rows = connection.execute("SELECT operation_id FROM file_scan_operations" + where + " ORDER BY started_at DESC LIMIT ?", (*params, max(1, min(128, int(limit))))).fetchall()
             return [value for row in rows if (value := self.get_file_scan(row["operation_id"]))]
         finally:
             connection.close()
@@ -949,18 +961,32 @@ class TelemetryStore:
         finally:
             connection.close()
 
-    def list_file_detections(self, *, state: str | None = None, operation_id: str | None = None, limit: int = 128) -> list[dict[str, Any]]:
+    def list_file_detections(self, *, state: str | None = None, operation_id: str | None = None, limit: int = 128, owner_uid: int | None = None) -> list[dict[str, Any]]:
         connection = self._connect()
         try:
-            if state and operation_id:
-                rows = connection.execute("SELECT detection_id FROM file_detections WHERE state = ? AND operation_id = ? ORDER BY updated_at DESC LIMIT ?", (_text(state, 32), _text(operation_id, 96), max(1, min(256, int(limit))))).fetchall()
-            elif state:
-                rows = connection.execute("SELECT detection_id FROM file_detections WHERE state = ? ORDER BY updated_at DESC LIMIT ?", (_text(state, 32), max(1, min(256, int(limit))))).fetchall()
-            elif operation_id:
-                rows = connection.execute("SELECT detection_id FROM file_detections WHERE operation_id = ? ORDER BY updated_at DESC LIMIT ?", (_text(operation_id, 96), max(1, min(256, int(limit))))).fetchall()
-            else:
-                rows = connection.execute("SELECT detection_id FROM file_detections ORDER BY updated_at DESC LIMIT ?", (max(1, min(256, int(limit))),)).fetchall()
+            clauses, params = [], []
+            if owner_uid is not None:
+                clauses.append("o.owner_uid = ?")
+                params.append(int(owner_uid))
+            for column, value in (("d.state", state), ("d.operation_id", operation_id)):
+                if value:
+                    clauses.append(column + " = ?")
+                    params.append(_text(value, 96))
+            where = " WHERE " + " AND ".join(clauses) if clauses else ""
+            rows = connection.execute("SELECT d.detection_id FROM file_detections d LEFT JOIN file_scan_operations o ON o.operation_id = d.operation_id" + where + " ORDER BY d.updated_at DESC LIMIT ?", (*params, max(1, min(256, int(limit))))).fetchall()
             return [value for row in rows if (value := self.get_file_detection(row["detection_id"]))]
+        finally:
+            connection.close()
+
+    def file_scan_activity(self, owner_uid: int, limit: int = 64) -> list[dict[str, Any]]:
+        connection = self._connect()
+        try:
+            rows = connection.execute("""SELECT e.* FROM events e JOIN file_scan_operations o
+                ON o.operation_id = e.operation_id WHERE e.category = 'FILE_SECURITY'
+                AND o.owner_uid = ? ORDER BY e.occurred_at DESC, e.event_id DESC LIMIT ?""",
+                (int(owner_uid), max(1, min(128, int(limit))))).fetchall()
+            # Do not attach generic cross-operation relations to this projection.
+            return [self._row_value(row) for row in rows]
         finally:
             connection.close()
 

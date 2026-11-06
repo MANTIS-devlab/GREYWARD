@@ -4,6 +4,16 @@ from greyward_security_context.shell_experience import build_experience
 
 
 class ShellExperienceTests(unittest.TestCase):
+    def test_successful_background_scans_stay_silent_but_threats_remain_actionable(self):
+        latest = {'operation_id': 'arrival', 'state': 'COMPLETED',
+                  'ended_at': dt.datetime.now(dt.timezone.utc).isoformat(),
+                  'scope': {'background': True}, 'detection_count': 0}
+        value = self.render(files={'state':'AVAILABLE', 'latest_scan': latest})
+        self.assertFalse(any(item['id'].startswith('scan-result:') for item in value['items']))
+        value = self.render(files={'state':'AVAILABLE', 'latest_scan': latest,
+            'detections':[{'detection_id':'fixture','state':'DETECTED','original_path':'/fixture/test'}]})
+        self.assertTrue(any(item['id']=='detection:fixture' for item in value['items']))
+
     def test_vpn_is_secondary_typed_information_and_never_changes_protection(self):
         for state in ("ACTIVE", "OFF", "UNAVAILABLE", "invented"):
             value = self.render(shell={"posture": {"state": "PROTECTED"}, "vpn": {"state": state}})

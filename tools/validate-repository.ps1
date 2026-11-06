@@ -70,8 +70,9 @@ foreach ($token in ($mapPathTokens | Sort-Object -Unique)) {
     }
 }
 
+$localWorkspacePattern = '^' + [regex]::Escape($repo) + '\\(\.local|public|public-office-updates)\\'
 $markdownFiles = Get-ChildItem $repo -Recurse -File -Filter '*.md' | Where-Object {
-    $_.FullName -notmatch '\\(\.git|build|cache|output|target|packer_cache|node_modules)\\'
+    $_.FullName -notmatch '\\(\.git|build|cache|output|target|packer_cache|node_modules)\\' -and $_.FullName -notmatch $localWorkspacePattern
 }
 foreach ($file in $markdownFiles) {
     $relativeSource = $file.FullName.Substring($repo.Length + 1).Replace('\', '/')

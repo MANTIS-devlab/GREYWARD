@@ -10,18 +10,19 @@ foreach ($required in @(
     if (-not (Test-Path (Join-Path $repo $required))) { throw "Missing $required; run tools\generate-branding.ps1 first." }
 }
 Repair-GreywardSsh | Out-Null
-$remote = '/tmp/greyward-rpmbuild'
-Invoke-GreywardSsh "rm -rf '$remote'; mkdir -p '$remote/SPECS' '$remote/SOURCES' '$remote/RPMS' '$remote/BUILD' '$remote/BUILDROOT' '$remote/SRPMS'"
+$remote = '/var/lib/greyward-package-build/branding-' + [Guid]::NewGuid().ToString('N')
+Invoke-GreywardSsh ('sudo install -d -m 0755 -o "$(id -u)" -g "$(id -g)" ''{0}''' -f $remote)
+Invoke-GreywardSsh "mkdir -p '$remote/SPECS' '$remote/SOURCES' '$remote/RPMS' '$remote/BUILD' '$remote/BUILDROOT' '$remote/SRPMS' '$remote/tmp'"
 Invoke-GreywardScp -Recursive -Source (Join-Path $repo 'packaging\greyward-branding\SPECS\.') -Destination "$($script:SshAlias):$remote/SPECS"
 Invoke-GreywardScp -Recursive -Source (Join-Path $repo 'packaging\greyward-branding\SOURCES\.') -Destination "$($script:SshAlias):$remote/SOURCES"
 Invoke-GreywardScp -Source (Join-Path $repo 'branding\generated\boot\greyward-symbol-256.png') -Destination "$($script:SshAlias):$remote/SOURCES/greyward-symbol-256.png"
 Invoke-GreywardScp -Source (Join-Path $repo 'branding\source\greyward-symbol.svg') -Destination "$($script:SshAlias):$remote/SOURCES/greyward-symbol.svg"
-foreach ($name in 'greyward-software','greyward-image-viewer','greyward-settings') {
+foreach ($name in 'greyward-software','greyward-image-viewer','greyward-settings','greyward-screenshot') {
     Invoke-GreywardScp -Source (Join-Path $repo "branding\source\$name.svg") -Destination "$($script:SshAlias):$remote/SOURCES/$name.svg"
 }
 Invoke-GreywardScp -Source (Join-Path $repo 'environment\production\desktop-entry-overrides\org.gnome.Loupe.desktop') -Destination "$($script:SshAlias):$remote/SOURCES/org.gnome.Loupe.desktop"
 Invoke-GreywardScp -Source (Join-Path $repo 'environment\flatpak\software-runtime.desktop') -Destination "$($script:SshAlias):$remote/SOURCES/software-runtime.desktop"
-Invoke-GreywardSsh "if ! command -v rpmbuild >/dev/null 2>&1; then sudo dnf -y install rpm-build; fi; rpmbuild --define '_topdir $remote' -bb '$remote/SPECS/greyward-branding.spec'"
+Invoke-GreywardSsh "if ! command -v rpmbuild >/dev/null 2>&1; then sudo dnf -y install rpm-build; fi; rpmbuild --define '_topdir $remote' --define '_tmppath $remote/tmp' -bb '$remote/SPECS/greyward-branding.spec'"
 $out = Join-Path $repo 'build\rpm'
 New-Item -ItemType Directory -Force -Path $out | Out-Null
 Invoke-GreywardScp -Recursive -Source "$($script:SshAlias):$remote/RPMS/." -Destination $out

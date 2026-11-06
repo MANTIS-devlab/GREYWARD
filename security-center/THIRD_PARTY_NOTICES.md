@@ -54,3 +54,14 @@ GREYWARD symbols and supplied wallpaper images are project assets, not
 third-party inventory. Their repository origins and immutable hashes are
 recorded in `branding/PROVENANCE.md`; `LICENSING.md` includes them in the
 project's GPL-3.0-only grant.
+
+## Country flag artwork
+
+`tauri/frontend/assets/country-flags/` bundles unmodified 4x3 SVGs from
+[flag-icons](https://github.com/lipis/flag-icons), tag `v7.3.2`, commit
+`fe15c16e7463d0c66d6c5730e9d0e832438d98e1`. The MIT copyright and terms are retained
+as `LICENSE.flag-icons` and installed by the Center RPM. The local provenance
+manifest records the immutable archive digest and every selected file hash.
+All 249 ISO countries/territories and XK are included. Catalog generation and
+safe local SVG references are checked by `tools/verify-country-flags.py`.
+The artwork is not evidence of destination location and makes no remote request.

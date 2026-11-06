@@ -11,7 +11,31 @@ from greyward_security_context.telemetry import TelemetryStore
 CURRENT_UID = getattr(os, "getuid", lambda: None)()
 
 
+def scanner_fixture(factory):
+    def launch(command, **_kwargs):
+        process = factory()
+        aliases = {os.readlink(raw): raw for raw in command if raw.startswith('/proc/self/fd/')}
+        lines = []
+        for line in process.stdout:
+            for path, alias in aliases.items():
+                if line.startswith(path + ': '):
+                    line = alias + line[len(path):]
+                    break
+            lines.append(line)
+        process.stdout = iter(lines)
+        return process
+    return launch
+
+
 class FileSecurityContractTests(unittest.TestCase):
+    def setUp(self):
+        # These unit fixtures live in TemporaryDirectory, outside the deployed
+        # service's private mount namespace. Scope/alias rejection is exercised
+        # separately; keep parser fixtures visible to the descriptor opener.
+        patcher = patch("greyward_security_context.file_security.PRIVATE_TMP_ROOTS", ())
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
     def test_source_existence_is_fresh_and_preserves_detection_history(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -217,12 +241,13 @@ class FileSecurityContractTests(unittest.TestCase):
 
     def test_detected_files_are_counted_once_and_clean_files_are_inspected_once(self):
         with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
+            root = Path(directory) / "selection"
+            root.mkdir()
             clean = root / "clean.txt"
             threat = root / "threat.txt"
             clean.write_text("clean", encoding="utf-8")
             threat.write_text("threat", encoding="utf-8")
-            store = TelemetryStore(root / "events.sqlite3")
+            store = TelemetryStore(Path(directory) / "events.sqlite3")
             store.create_file_scan({"operation_id": "scan-count", "mode": "FOLDER", "scope": {"path": str(root)}, "state": "QUEUED", "phase": "QUEUED", "started_at": "2026-08-31T10:00:00Z"})
             manager = FileSecurityManager(store)
 
@@ -232,13 +257,34 @@ class FileSecurityContractTests(unittest.TestCase):
                 def wait(self, timeout=None): return 1
                 def poll(self): return 0
 
-            with patch("greyward_security_context.file_security.clamav_status", return_value={"status": "CURRENT", "engine_version": "1", "database_version": "2"}), patch("greyward_security_context.file_security.subprocess.Popen", return_value=Process()):
+            with patch("greyward_security_context.file_security.clamav_status", return_value={"status": "CURRENT", "engine_version": "1", "database_version": "2"}), patch("greyward_security_context.file_security.subprocess.Popen", side_effect=scanner_fixture(Process)):
                 manager._run("scan-count", "FOLDER", {"path": str(root)}, threading.Event())
             result = store.get_file_scan("scan-count")
             self.assertEqual(result["state"], "COMPLETED")
             self.assertEqual(result["files_inspected"], 2)
             self.assertEqual(result["detection_count"], 1)
             self.assertEqual(len(store.list_file_detections(operation_id="scan-count")), 1)
+
+    def test_mixed_batch_keeps_successful_file_receipt_without_claiming_batch_clean(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            clean, failed = root/'clean', root/'failed'
+            clean.write_text('clean')
+            failed.write_text('failed')
+            uid = clean.stat().st_uid
+            store = TelemetryStore(root/'records.sqlite3')
+            store.create_file_scan({'operation_id':'mixed', 'owner_uid':uid, 'mode':'FILE', 'state':'QUEUED'})
+            manager = FileSecurityManager(store)
+            class Process:
+                pid = 1
+                stdout = iter([f'{clean}: OK\n', f'{failed}: ERROR\n'])
+                def wait(self, timeout=None): return 2
+                def poll(self): return 0
+            with patch('greyward_security_context.file_security.clamav_status', return_value={'status':'CURRENT','engine_version':'1','database_version':'2'}), patch('greyward_security_context.file_security.subprocess.Popen', side_effect=scanner_fixture(Process)):
+                manager._run('mixed', 'FILE', {'paths':[str(clean),str(failed)],'path':str(clean)}, threading.Event())
+                self.assertEqual(manager.status('mixed')['state'], 'PARTIAL')
+                self.assertEqual(manager.scan_info(str(clean),owner_uid=uid)['validity'], 'VALID')
+                self.assertEqual(manager.scan_info(str(failed),owner_uid=uid)['validity'], 'UNKNOWN')
 
     def test_scanner_detection_exit_without_actionable_path_is_not_clean(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -252,6 +298,7 @@ class FileSecurityContractTests(unittest.TestCase):
                 "phase": "QUEUED",
                 "started_at": "2026-08-31T10:00:00Z",
             })
+            (root / "sample.txt").write_text("fixture")
             manager = FileSecurityManager(store)
 
             class Process:
@@ -264,7 +311,7 @@ class FileSecurityContractTests(unittest.TestCase):
                 def poll(self):
                     return 0
 
-            with patch("greyward_security_context.file_security.clamav_status", return_value={"status": "CURRENT", "engine_version": "1", "database_version": "2"}), patch("greyward_security_context.file_security.subprocess.Popen", return_value=Process()):
+            with patch("greyward_security_context.file_security.clamav_status", return_value={"status": "CURRENT", "engine_version": "1", "database_version": "2"}), patch("greyward_security_context.file_security.subprocess.Popen", side_effect=scanner_fixture(Process)):
                 manager._run("scan-unparsed-detection", "FILE", {"path": str(root / "sample.txt")}, threading.Event())
 
             result = store.get_file_scan("scan-unparsed-detection")

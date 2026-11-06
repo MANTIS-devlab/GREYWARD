@@ -1,6 +1,7 @@
 [Unit]
 Description=GREYWARD Update Center native provider aggregation and orchestration
 After=graphical-session-pre.target
+ConditionUser=!root
 
 [Service]
 Type=dbus
@@ -9,4 +10,4 @@ ExecStart=/usr/libexec/greyward-update-center
 Restart=on-failure
 
 [Install]
-WantedBy=default.target
+WantedBy=graphical-session.target

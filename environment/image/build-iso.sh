@@ -10,7 +10,7 @@ set -euo pipefail
 usage() {
   cat <<'EOF'
 Usage: environment/image/build-iso.sh --base-iso FILE --output FILE \
-  --branding-rpm FILE --dms-rpm FILE --session-rpm FILE --files-rpm FILE --security-rpm FILE --security-rpm FILE \
+  --branding-rpm FILE --dms-rpm FILE --session-rpm FILE --files-rpm FILE --swappy-rpm FILE --intelligence-rpm FILE --security-rpm FILE --security-rpm FILE \
   --security-build-manifest FILE --security-source-root DIRECTORY --production-rpm FILE... \
   --enrollment-rpm FILE --enrollment-rpm FILE \
   --baseline FILE --base-sha256 SHA256 [--dms-candidate]
@@ -37,6 +37,8 @@ branding_rpm=''
 dms_rpm=''
 session_rpm=''
 files_rpm=''
+swappy_rpm=''
+intelligence_rpm=''
 security_build_manifest=''
 security_source_root=''
 baseline=''
@@ -81,6 +83,20 @@ while (($#)); do
       [[ -z "$session_rpm" ]] || { echo 'Provide exactly one GREYWARD session RPM.' >&2; exit 2; }
       session_rpm=$(realpath -e "$2")
       test "$(rpm -qp --qf '%{NAME}' "$session_rpm")" = greyward-session
+      shift 2
+      ;;
+    --intelligence-rpm)
+      (($# >= 2)) || exit 2
+      [[ -z "$intelligence_rpm" ]] || { echo 'Duplicate intelligence RPM' >&2; exit 2; }
+      intelligence_rpm=$(realpath -e "$2")
+      test "$(rpm -qp --qf '%{NAME}' "$intelligence_rpm")" = greyward-intelligence
+      shift 2
+      ;;
+    --swappy-rpm)
+      (($# >= 2)) || exit 2
+      [[ -z "$swappy_rpm" ]] || exit 2
+      swappy_rpm=$(realpath -e "$2")
+      test "$(rpm -qp --qf '%{NAME}' "$swappy_rpm")" = swappy
       shift 2
       ;;
     --files-rpm)
@@ -131,7 +147,7 @@ while (($#)); do
   esac
 done
 
-[[ -n "$session_rpm" && -n "$files_rpm" && -n "$dms_rpm" && -n "$base_iso" && -n "$output" && -n "$branding_rpm" && -n "$security_build_manifest" && -n "$security_source_root" && ${#security_rpms[@]} -eq 2 && ${#production_rpms[@]} -ge 1 ]] || { usage >&2; exit 2; }
+[[ -n "$intelligence_rpm" && -n "$swappy_rpm" && -n "$session_rpm" && -n "$files_rpm" && -n "$dms_rpm" && -n "$base_iso" && -n "$output" && -n "$branding_rpm" && -n "$security_build_manifest" && -n "$security_source_root" && ${#security_rpms[@]} -eq 2 && ${#production_rpms[@]} -ge 1 ]] || { usage >&2; exit 2; }
 [[ "$(basename "$branding_rpm")" == greyward-branding-*.rpm ]] || { echo "Invalid branding RPM." >&2; exit 2; }
 [[ -f "$base_iso" ]] || { echo "Base ISO not found: $base_iso" >&2; exit 1; }
 [[ ! -e "$output" ]] || { echo "Output already exists: $output" >&2; exit 2; }
@@ -210,6 +226,8 @@ staging_args=(
   --dms-rpm "$dms_rpm"
   --session-rpm "$session_rpm"
   --files-rpm "$files_rpm"
+  --swappy-rpm "$swappy_rpm"
+  --intelligence-rpm "$intelligence_rpm"
   --security-rpm "${security_rpms[0]}"
   --security-rpm "${security_rpms[1]}"
   --security-build-manifest "$security_build_manifest"
@@ -244,6 +262,8 @@ branding/generated/boot/greyward-symbol-256.png|usr/share/anaconda/pixmaps/greyw
 packaging/greyward-branding/SOURCES/greyward.script|usr/share/plymouth/themes/greyward/greyward.script
 packaging/greyward-branding/SOURCES/greyward.plymouth|usr/share/plymouth/themes/greyward/greyward.plymouth
 packaging/greyward-branding/SOURCES/greyward-update-status.service|usr/lib/systemd/system/greyward-update-status.service
+packaging/greyward-branding/SOURCES/verify-boot-theme.py|usr/libexec/greyward/verify-boot-theme
+packaging/greyward-branding/SOURCES/greyward-plymouth-module.sh|usr/lib/dracut/modules.d/46greyward-plymouth/module-setup.sh
 branding/source/greyward-software.svg|usr/share/icons/hicolor/scalable/apps/greyward-software.svg
 branding/source/greyward-image-viewer.svg|usr/share/icons/hicolor/scalable/apps/greyward-image-viewer.svg
 branding/source/greyward-settings.svg|usr/share/icons/hicolor/scalable/apps/greyward-settings.svg
@@ -321,7 +341,6 @@ awk -v stage="$stage" '
 # entry conservative; the installed GREYWARD desktop keeps its native mode.
 mkksiso \
   --tmp "$work_root" \
-  --no-md5sum \
   --ks "$iso_tree/installer.ks" \
   --updates "$iso_tree/updates.img" \
   --cmdline 'inst.profile=greyward inst.geoloc=0' \
@@ -334,6 +353,10 @@ mkksiso \
             'linux /images/pxeboot/vmlinuz inst.stage2=hd:LABEL=GREYWARD-INSTALLER-44 nomodeset quiet' \
   --volid GREYWARD-INSTALLER-44 \
   "$base_iso" "$publication/image.iso"
+
+# The embedded Test-media entry uses rd.live.check. Verify the checksum that
+# mkksiso implants by default before giving the image its final filename.
+checkisomd5 --verbose "$publication/image.iso"
 
 # Inspect the embedded payload, not merely mkksiso's exit status. A failed
 # compose/inspection never leaves a plausibly complete final ISO filename.

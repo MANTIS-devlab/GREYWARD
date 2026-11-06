@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+ <title>GREYWARD Screenshot</title>
+ <defs><linearGradient id="body" x2=".8" y2="1"><stop stop-color="#303C47"/><stop offset="1" stop-color="#0B0D10"/></linearGradient><linearGradient id="silver" x2="1" y2="1"><stop stop-color="#EDF1F4"/><stop offset="1" stop-color="#8D9EAC"/></linearGradient></defs>
+ <rect x="13" y="18" width="102" height="92" rx="12" fill="url(#body)" stroke="url(#silver)" stroke-width="2"/>
+ <path d="M31 48V36h12m42 0h12v12M31 78v12h12m42 0h12V78" fill="none" stroke="#DDE5EB" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+ <circle cx="64" cy="63" r="16" fill="#202F3C" stroke="#A9BFCF" stroke-width="2"/>
+ <circle cx="64" cy="63" r="7" fill="#B6C9DA"/>
+ <path d="M78 83 99 62l7 7-21 21-10 3z" fill="#AABCC8" stroke="#E1E8EC" stroke-width="2" stroke-linejoin="round"/>
+</svg>

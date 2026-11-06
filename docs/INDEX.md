@@ -6,9 +6,51 @@ archive, selected package tuple and known Bazaar Explore limitation.
 Publication and composition checks do not establish full installed/recovery
 or broad hardware acceptance.
 
+System logs and runtime follow-up (private development evidence)
+records the late-evening read-only installed audit: current link/storage/portal
+and boot-flag findings, passive CPU/GPU observations, and historical failures
+separated from the running corrected desktop. No runtime fix is implied.
+
+Native ChatGPT sign-in (private development evidence) records the narrow
+callback-port correction. Its current contract belongs to
+[desktop integration](architecture/FILE_MANAGER_DESKTOP.md#native-browser-sign-in-callbacks--30-october-2026).
+
+Runtime stability corrections (private development evidence)
+records the follow-up implementation, bounded scanner/readiness tests and
+measured repeated-probe savings. Installed acceptance is recorded separately.
+
+Custom runtime stability/performance audit (private development evidence)
+records the 30 October installed observations and prioritized follow-up, without
+changing runtime behavior. [Performance evidence](security-center/PERFORMANCE.md)
+remains the entry point for current and historical measurements.
+
+Ordinary desktop startup (private development evidence) records
+the remaining DMS migrator failure, shared verified layout selection and live
+Session 40 recovery without another logout.
+
+Protected login preparation (private development evidence) records
+the generation-8 regression, shared compatibility/preflight correction and
+matched running-broker checks. It supersedes the previous 86/89 package pair.
+
+[Network row clarity](security-center/BEHAVIORAL_INTELLIGENCE.md#log-assessment-labels)
+and the [country-artwork contract](security-center/UX_SPEC.md) own the plain
+assessment labels, offline flags and white application/domain tiles. See the
+local receipt (private development evidence).
+
+[Native scan notifications](security-center/FILE_SECURITY.md#native-scan-notifications)
+own the single publisher, readable result states and quiet background behavior.
+The [contextual scan window](security-center/FILE_SECURITY.md#contextual-scan-window)
+and refined local presentation (private development evidence)
+retain the publisher correction while replacing its initial artwork/layout.
+
+The owner workstation now keeps all project files under one root. See
+local workspace (private development evidence) for the current engineering
+checkout, separate public repositories, private release/evidence directories
+and preserved unmerged work. This local record is excluded from public export.
+
 [0.5.3 Sophon](patch-notes/0.5.3-sophon.md) records the preceding SourceForge release, completed Office
 channel commissioning, frozen sources, Linux/Windows media checks and remaining
-installed/hardware acceptance.
+installed/hardware acceptance. Publication/readback is in [the publication record](PUBLICATION.md).
 
 The [accepted Security Center presentation](STATUS.md#accepted-security-center-presentation--27-october-2026)
 is packaged as DMS 7.11 for future image builds. The
@@ -682,3 +724,18 @@ sources of current architecture.
 - Security plugin stability development receipt (private development evidence) — actual desktop flyout, Context threading, negative-display freshness and retained provider warnings.
 
 - Security plugin and Center state parity (private development evidence) — shared evaluated checks, accepted exceptions and scanner readiness.
+
+
+## Local behavioral intelligence
+
+[Behavioral intelligence](security-center/BEHAVIORAL_INTELLIGENCE.md) owns the observation-only sensor, explainable assessments, native interface, private D-Bus boundary and rollback. This is local development, separate from public and ISO acceptance.
+
+The local behavioral validation receipt (private development evidence) records installed packages, actual kernel workflows, rendered states, resource measurements and untested boundaries.
+
+The integrated log presentation receipt (private development evidence) supersedes the original standalone Intelligence workspace. Current presentation lives in Security History and Network Activity.
+
+[Protected session lifetime](security-center/SESSION_LIFETIME.md) owns the acknowledged guardian startup and scoped profile migration; 29 October recurrence evidence (private development evidence) records regression checks and the subsequently verified fresh physical login.
+
+The behavioral quality correction (private development evidence) records authoritative connection rows, readable scoped scores, current-versus-historical sensor health, and the reviewed desktop FUSE false positive.
+
+[KVM display recovery](architecture/DMS_MONITOR_CONFIGURATION.md#kvm-return-recovery--29-october-2026) records the event-driven Nouveau redetection, installed Session 39, unchanged user layouts and its native test/rollback evidence.

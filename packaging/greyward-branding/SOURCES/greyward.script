@@ -167,7 +167,8 @@ fun show_update(progress_known) {
 }
 
 fun system_update_callback(progress) {
-  update.progress = progress;
+  // Native Plymouth reports an integer percentage (0..100).
+  update.progress = progress / 100;
   show_update(1);
 }
 

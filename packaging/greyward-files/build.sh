@@ -24,6 +24,8 @@ tar -C "$repo" -czf "$output/SOURCES/greyward-files-inputs.tar.gz" \
   environment/session/greyward-desktop-shortcut packaging/greyward-files/source.json \
   packaging/greyward-files/pcmanfm-desktop-only.patch \
   packaging/greyward-files/pcmanfm-multi-output.patch packaging/greyward-files/pcmanfm-strata-routing.patch \
+  packaging/greyward-files/pcmanfm-scan-properties.patch packaging/greyward-files/pcmanfm-lifecycle.patch packaging/greyward-files/strata-scan-properties.patch \
+  packaging/greyward-files/pcmanfm-no-automount.patch \
   tests/test_desktop_output_layout.cpp \
   tests/test_files_launchers.py \
   packaging/greyward-files/strata-preview-mode.patch packaging/greyward-files/strata-native-icons.patch \

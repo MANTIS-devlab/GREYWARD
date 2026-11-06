@@ -1,12 +1,16 @@
 Name:           greyward-branding
 Version:        0.1.0
-Release:        18%{?dist}
+Release:        22%{?dist}
 Summary:        GREYWARD-owned shell, Anaconda, wallpaper, and Plymouth branding assets
 License:        GPL-3.0-only AND LicenseRef-GREYWARD-Branding
 BuildArch:      noarch
 BuildRequires:  librsvg2-tools
+BuildRequires:  python3
+BuildRequires:  plymouth-plugin-script
 Requires:       plymouth-plugin-script
 Requires:       plymouth-plugin-label
+Requires:       python3
+Requires:       dracut
 Source0:        greyward.plymouth
 Source1:        greyward.script
 Source2:        greyward-symbol-256.png
@@ -21,6 +25,9 @@ Source10:       greyward-image-viewer.svg
 Source11:       greyward-settings.svg
 Source12:       org.gnome.Loupe.desktop
 Source13:       software-runtime.desktop
+Source14:       greyward-screenshot.svg
+Source15:       verify-boot-theme.py
+Source16:       greyward-plymouth-module.sh
 
 %description
 Canonical GREYWARD presentation assets. This package does not replace Fedora
@@ -30,8 +37,8 @@ rebuilds initramfs; removal restores the prior theme when one was recorded.
 %prep
 
 %build
-for item in software image-viewer settings; do
-  case "$item" in software) source=%{SOURCE9} ;; image-viewer) source=%{SOURCE10} ;; settings) source=%{SOURCE11} ;; esac
+for item in software image-viewer settings screenshot; do
+  case "$item" in software) source=%{SOURCE9} ;; image-viewer) source=%{SOURCE10} ;; settings) source=%{SOURCE11} ;; screenshot) source=%{SOURCE14} ;; esac
   for size in 24 32 48 64 128 256; do
     rsvg-convert -w "$size" -h "$size" "$source" -o "$item-$size.png"
   done
@@ -49,6 +56,8 @@ install -m 0644 %{SOURCE1} %{buildroot}%{_datadir}/plymouth/themes/greyward/grey
 install -m 0644 %{SOURCE2} %{buildroot}%{_datadir}/plymouth/themes/greyward/greyward-symbol-256.png
 install -m 0644 %{SOURCE2} %{buildroot}%{_datadir}/greyward/branding/greyward-symbol-256.png
 install -m 0644 %{SOURCE3} %{buildroot}%{_unitdir}/greyward-update-status.service
+install -Dm0755 %{SOURCE15} %{buildroot}%{_libexecdir}/greyward/verify-boot-theme
+install -Dm0755 %{SOURCE16} %{buildroot}%{_prefix}/lib/dracut/modules.d/46greyward-plymouth/module-setup.sh
 install -m 0644 %{SOURCE2} %{buildroot}%{_datadir}/anaconda/pixmaps/greyward-anaconda-logo.png
 install -m 0644 %{SOURCE4} %{buildroot}%{_datadir}/anaconda/pixmaps/greyward-anaconda.css
 install -m 0644 %{SOURCE5} %{buildroot}%{_sysconfdir}/anaconda/profile.d/greyward.conf
@@ -57,8 +66,8 @@ install -m 0644 %{SOURCE6} %{buildroot}%{_sysconfdir}/cockpit/branding/greyward-
 install -D -m 0644 %{SOURCE8} %{buildroot}%{_licensedir}/%{name}/GREYWARD-Branding-NOTICE
 install -Dm0644 %{SOURCE12} %{buildroot}/usr/local/share/applications/org.gnome.Loupe.desktop
 install -Dm0644 %{SOURCE13} %{buildroot}/usr/local/share/applications/io.github.kolunmi.Bazaar.desktop
-for item in software image-viewer settings; do
-  case "$item" in software) source=%{SOURCE9}; alias=io.github.kolunmi.Bazaar ;; image-viewer) source=%{SOURCE10}; alias=org.gnome.Loupe ;; settings) source=%{SOURCE11}; alias=dms_settings ;; esac
+for item in software image-viewer settings screenshot; do
+  case "$item" in software) source=%{SOURCE9}; alias=io.github.kolunmi.Bazaar ;; image-viewer) source=%{SOURCE10}; alias=org.gnome.Loupe ;; settings) source=%{SOURCE11}; alias=dms_settings ;; screenshot) source=%{SOURCE14}; alias=me.jtheoof.swappy ;; esac
   install -Dm0644 "$source" %{buildroot}%{_datadir}/icons/hicolor/scalable/apps/greyward-$item.svg
   install -Dm0644 "$source" %{buildroot}%{_datadir}/icons/Greyward/scalable/apps/$alias.svg
   for size in 24 32 48 64 128 256; do
@@ -67,7 +76,21 @@ for item in software image-viewer settings; do
 done
 ln -s ../greyward-update-status.service %{buildroot}%{_unitdir}/system-update.target.wants/greyward-update-status.service
 
+%check
+# Presence/grep checks cannot detect a script rejected by Plymouth (e.g. CRLF).
+python3 -I %{SOURCE15} --script %{buildroot}%{_datadir}/plymouth/themes/greyward/greyward.script
+
+%posttrans
+# Theme-only updates must also reach already-installed kernels. Do not select
+# a theme for administrators, use uname in a target root, or touch rescue images.
+if [ "$(plymouth-set-default-theme 2>/dev/null)" = greyward ] && \
+   ls /boot/initramfs-[0-9]*.img >/dev/null 2>&1; then
+    %{_libexecdir}/greyward/verify-boot-theme && dracut --regenerate-all --force
+fi
+
 %files
+%{_libexecdir}/greyward/verify-boot-theme
+%{_prefix}/lib/dracut/modules.d/46greyward-plymouth
 /usr/local/share/applications/org.gnome.Loupe.desktop
 /usr/local/share/applications/io.github.kolunmi.Bazaar.desktop
 %{_datadir}/icons/hicolor/scalable/apps/greyward-*.svg
@@ -85,6 +108,17 @@ ln -s ../greyward-update-status.service %{buildroot}%{_unitdir}/system-update.ta
 %license %{_licensedir}/%{name}/GREYWARD-Branding-NOTICE
 
 %changelog
+* Fri Nov 06 2026 MANTIS SYSTEMS - 0.1.0-22
+- Reject CRLF and invalid native Plymouth scripts at RPM and initramfs build time.
+- Refresh installed kernel images after a GREYWARD theme update.
+
+* Mon Nov 02 2026 MANTIS SYSTEMS - 0.1.0-21
+- Keep native keyboard selection visible with English defaults and no GeoIP guess.
+- Hide only the empty software-selection page for the fixed offline package set.
+
+* Sat Oct 31 2026 MANTIS SYSTEMS - 0.1.0-19
+- Add the coordinated Screenshot Editor icon and native window/taskbar alias.
+
 * Tue Oct 27 2026 MANTIS SYSTEMS - 0.1.0-18
 - Select shutdown and reboot text from Plymouth's native lifecycle mode.
 

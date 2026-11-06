@@ -208,6 +208,7 @@ class DesktopLifetime(unittest.TestCase):
              mock.patch.object(session, 'authentication_ready', side_effect=not_ready), \
              mock.patch.object(session, 'record_guardian_event') as record, \
              mock.patch.object(session.os, 'setxattr', create=True), \
+             mock.patch.object(session.os, 'close'), \
              mock.patch.object(session.subprocess, 'run') as run:
             session.monitor(1001, 123, 456, '815', [], state, '/dev/tty1', 'original')
         record.assert_called_once_with('815', 'heartbeat-age')
@@ -223,13 +224,112 @@ class DesktopLifetime(unittest.TestCase):
              mock.patch.object(session.select, 'select', return_value=([42], [], [])), \
              mock.patch.object(session, 'record_guardian_event') as record, \
              mock.patch.object(session.os, 'setxattr', create=True), \
+             mock.patch.object(session.os, 'close'), \
              mock.patch.object(session.subprocess, 'run', side_effect=[subprocess.TimeoutExpired('loginctl', 3), mock.Mock()]) as run:
             with self.assertRaises(subprocess.TimeoutExpired):
                 session.monitor(1001, 123, 456, '815', [], state, '/dev/tty1', 'original')
-        state.unlink.assert_called_once_with(missing_ok=True)
+        state.unlink.assert_not_called()
         record.assert_called_once_with('815', 'session-owner-exited')
         self.assertEqual(run.call_args_list[1].args[0],
                          ['/usr/bin/systemctl', 'stop', '--no-block', 'session-815.scope'])
+
+    def test_guardian_cleanup_still_retires_scope_if_console_restore_fails(self):
+        state = mock.Mock()
+        with mock.patch.object(session, 'process', return_value=42), \
+             mock.patch.object(session.select, 'select', return_value=([42], [], [])), \
+             mock.patch.object(session, 'record_guardian_event'), \
+             mock.patch.object(session.os, 'close'), \
+             mock.patch.object(session.os, 'setxattr', create=True, side_effect=PermissionError('label')), \
+             mock.patch.object(session.subprocess, 'run') as run:
+            with self.assertRaises(PermissionError):
+                session.monitor(1001, 123, 456, '815', [], state, '/dev/tty1', 'original')
+        self.assertEqual(run.call_args_list[-1].args[0],
+                         ['/usr/bin/systemctl', 'stop', '--no-block', 'session-815.scope'])
+        state.unlink.assert_not_called()
+
+    def test_monitor_uses_inherited_owner_pidfd_across_exec_and_acknowledges_before_poll(self):
+        state = mock.Mock()
+        with mock.patch.object(session, 'process', side_effect=AssertionError('owner reopened')), \
+             mock.patch.object(session.select, 'select', side_effect=[([], [], []), ([42], [], [])]), \
+             mock.patch.object(session, 'authentication_ready', return_value=True), \
+             mock.patch.object(session, 'record_guardian_event') as record, \
+             mock.patch.object(session.os, 'close'), \
+             mock.patch.object(session.os, 'write') as write, \
+             mock.patch.object(session.os, 'setxattr', create=True), \
+             mock.patch.object(session.subprocess, 'run'):
+            session.monitor(1001, 123, 456, '815', [], state, '/dev/tty1', 'original',
+                            handles=[42], ready_fd=71)
+        write.assert_called_once_with(71, b'G')
+        self.assertEqual(record.call_args_list[0], mock.call('815', 'monitor-ready', event='ready'))
+        self.assertEqual(record.call_args_list[-1], mock.call('815', 'session-owner-exited'))
+        state.unlink.assert_not_called()
+
+    def test_guardian_initialization_failure_cannot_skip_scope_retirement(self):
+        with mock.patch.object(session, 'process', side_effect=ProcessLookupError()), \
+             mock.patch.object(session.os, 'setxattr', create=True), \
+             mock.patch.object(session.subprocess, 'run') as run:
+            with self.assertRaises(ProcessLookupError):
+                session.monitor(1001, 123, 456, '815', [], mock.Mock(), '/dev/tty1', 'original')
+        self.assertEqual(run.call_args_list[-1].args[0],
+                         ['/usr/bin/systemctl', 'stop', '--no-block', 'session-815.scope'])
+
+    def test_admission_waits_for_a_live_scope_attached_guardian(self):
+        import os
+        children = [SimpleNamespace(pid=201), SimpleNamespace(pid=202)]
+        with mock.patch.object(session.os, 'pidfd_open', create=True, side_effect=[61, 62, 99]), \
+             mock.patch.object(session.os, 'pipe2', create=True, return_value=(71, 72)), \
+             mock.patch.object(session.os, 'fork', create=True, return_value=777), \
+             mock.patch.object(session.os, 'read', return_value=b'G'), \
+             mock.patch.object(session.os, 'close'), \
+             mock.patch.object(session.select, 'select', side_effect=[([71], [], []), ([], [], [])]) as poll, \
+             mock.patch.object(session.Path, 'read_text', return_value='0::/user.slice/user-1001.slice/session-815.scope'):
+            session.start_guardian(1001, 123, 456, '815', children, mock.Mock(), '/dev/tty1',
+                                   'original', '/fixed/controller', 42)
+        self.assertEqual(poll.call_args_list[0], mock.call([71, 99], [], [], 3))
+        self.assertEqual(poll.call_args_list[-1], mock.call([99], [], [], 0))
+
+    def test_unacknowledged_guardian_fails_admission_and_closes_its_pidfd(self):
+        with mock.patch.object(session.os, 'pidfd_open', create=True, return_value=99), \
+             mock.patch.object(session.os, 'pipe2', create=True, return_value=(71, 72)), \
+             mock.patch.object(session.os, 'fork', create=True, return_value=777), \
+             mock.patch.object(session.os, 'close') as close, \
+             mock.patch.object(session.select, 'select', return_value=([], [], [])), \
+             mock.patch.object(session.signal, 'pidfd_send_signal', create=True) as kill:
+            with self.assertRaisesRegex(RuntimeError, 'acknowledge'):
+                session.start_guardian(1001, 123, 456, '815', [], mock.Mock(), '/dev/tty1',
+                                       'original', '/fixed/controller', 42)
+        kill.assert_called_once_with(99, session.signal.SIGKILL)
+        self.assertIn(mock.call(99), close.call_args_list)
+
+
+    @unittest.skipUnless(__import__('os').name == 'posix', 'POSIX console rollback')
+    def test_preflight_failure_and_early_materialization_failure_leave_no_console_state(self):
+        import os
+        for failure in ('preflight','materialize'):
+            with self.subTest(failure=failure), tempfile.TemporaryDirectory() as folder:
+                state=Path(folder)
+                with mock.patch.object(session,'STATE',state), \
+                     mock.patch.object(session,'generation',return_value={'source':{'dms':'v2.0.0-8'},'accounts':{'1001':{'gid':1001}}}), \
+                     mock.patch.object(session,'process',return_value=42), \
+                     mock.patch.object(session,'session',return_value=('183','session-183.scope',111,222)), \
+                     mock.patch.object(session.Path,'read_text',return_value='greyward_guard_u:greyward_guard_r:greyward_guard_t:s0'), \
+                     mock.patch.object(session.subprocess,'check_output',return_value='tty1'), \
+                     mock.patch.object(session.os,'getxattr',return_value=b'original'), \
+                     mock.patch.object(session.os,'setxattr') as label, \
+                     mock.patch.object(session.os,'close') as close, \
+                     mock.patch.object(session.subprocess,'Popen') as child, \
+                     mock.patch.object(materialize,'preflight',side_effect=RuntimeError('fixture') if failure=='preflight' else None), \
+                     mock.patch.object(materialize,'materialize',side_effect=RuntimeError('fixture')):
+                    with self.assertRaisesRegex(RuntimeError,'fixture'):
+                        session.start(1001,123,456)
+                child.assert_not_called()
+                close.assert_called_once_with(42)
+                if failure=='preflight':label.assert_not_called()
+                else:
+                    self.assertEqual(label.call_args_list,[
+                        mock.call('/dev/tty1','security.selinux',b'system_u:object_r:greyward_as_seat_tty_t:s0'),
+                        mock.call('/dev/tty1','security.selinux',b'original')])
+                self.assertFalse((state/'seat-1001.json').exists())
 
 
 class DesktopTheme(unittest.TestCase):

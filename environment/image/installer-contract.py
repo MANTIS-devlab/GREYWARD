@@ -19,6 +19,7 @@ BRANDING = (
 )
 BOOT_CONFIGS = ('EFI/BOOT/grub.cfg', 'EFI/BOOT/BOOT.conf', 'boot/grub2/grub.cfg')
 LABEL = 'GREYWARD-INSTALLER-44'
+PACKAGE_SELECTION = 'greyward/production/offline/installer-packages.ks'
 
 
 def archive_files(compressed):
@@ -55,7 +56,7 @@ def archive_files(compressed):
     raise ValueError('Missing archive trailer')
 
 
-def validate(installer, configs, branding, expected):
+def validate(installer, configs, branding, expected, package_selection):
     failures = []
     # The native Anaconda preamble owns the interactive pages. No replacement
     # account or storage implementation is introduced here.
@@ -77,6 +78,21 @@ def validate(installer, configs, branding, expected):
                      ['%include', '/run/install/repo/greyward/production/offline/installer-packages.ks']):
         if commands.count(required) != 1:
             failures.append('Known-good installer command changed: ' + ' '.join(required))
+    if [c for c in commands if c[0] == 'lang'] != [['lang', 'en_US.UTF-8']]:
+        failures.append('Initial installer language must be English (en_US.UTF-8)')
+    if any(c[0] == 'keyboard' for c in commands):
+        failures.append('Keyboard layout must remain interactive, not Kickstart-confirmed')
+    # Hiding software selection is valid only with an explicit nonempty local
+    # package selection. Full dependency closure is verified by build-offline.
+    selection = [line.strip() for line in package_selection.splitlines()
+                 if line.strip() and not line.lstrip().startswith('#')]
+    if (not selection or selection[0] != '%packages --exclude-weakdeps'
+            or selection[-1] != '%end'
+            or selection.count('%end') != 1
+            or not any(re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9+._-]*', p)
+                       for p in selection[1:-1])
+            or any(p.startswith(('%', '@')) for p in selection[1:-1])):
+        failures.append('Hidden software page requires explicit nonempty ISO-local packages')
     for name, config in configs.items():
         kernels = [shlex.split(line) for line in config.splitlines()
                    if re.match(r'^\s*linux(?:efi)?\s', line)]
@@ -85,6 +101,9 @@ def validate(installer, configs, branding, expected):
         if not re.search(r'set\s+default=["\']?0["\']?', config):
             failures.append('Default installer entry changed in ' + name)
         for args in kernels:
+            if any(a.startswith(('inst.keymap=', 'vconsole.keymap=', 'rd.vconsole.keymap='))
+                   for a in args):
+                failures.append('Boot keymap must not bypass native keyboard selection in ' + name)
             for key, value in (
                 ('inst.stage2', 'hd:LABEL=' + LABEL),
                 ('inst.ks', 'hd:LABEL=' + LABEL + ':/installer.ks'),
@@ -108,9 +127,13 @@ def validate(installer, configs, branding, expected):
             failures.append('GREYWARD Anaconda profile missing')
         if profile.get('Profile', 'base_profile', fallback='') != 'fedora':
             failures.append('Native Fedora installer profile changed')
-        for setting in ('hidden_spokes', 'hidden_webui_pages'):
-            if profile.get('User Interface', setting, fallback=None) != '':
-                failures.append('Native interactive pages suppressed: ' + setting)
+        for setting, allowed in (
+                ('hidden_spokes', 'SoftwareSelectionSpoke'),
+                ('hidden_webui_pages', 'anaconda-screen-software-selection')):
+            if profile.get('User Interface', setting, fallback='').split() != [allowed]:
+                failures.append('Unexpected native interactive pages suppressed: ' + setting)
+        if profile.getboolean('Localization', 'use_geolocation', fallback=True):
+            failures.append('Installer language/layout must not be inferred from GeoIP')
     if failures:
         raise ValueError('\n'.join(failures))
     return {
@@ -124,7 +147,7 @@ def validate(installer, configs, branding, expected):
 def inspect_iso(iso, branding_root):
     with tempfile.TemporaryDirectory(prefix='greyward-installer-contract-') as directory:
         root = Path(directory)
-        sources = ('installer.ks', 'updates.img') + BOOT_CONFIGS
+        sources = ('installer.ks', 'updates.img', PACKAGE_SELECTION) + BOOT_CONFIGS
         command = ['xorriso', '-osirrox', 'on', '-indev', str(iso)]
         for source in sources:
             destination = root / source
@@ -155,6 +178,7 @@ def inspect_iso(iso, branding_root):
             configs,
             archive_files((root / 'updates.img').read_bytes()),
             {p: (branding_root / p).read_bytes() for p in BRANDING},
+            (root / PACKAGE_SELECTION).read_text(),
         )
 
 

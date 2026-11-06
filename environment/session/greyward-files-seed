@@ -23,9 +23,10 @@ def seed(destination, content):
 # Only the exact previously packaged factory file can be refreshed. User themes
 # and selections remain authoritative, including symlinked configurations.
 PREVIOUS_OBSIDIAN = '8deb3c6ffe87fad462e846d956f92637ac1657c69407fce70ea7045096d66e23'
+PREVIOUS_SCAN_ACTION = '96c5b77938456cc00f2b861ae4bca1395337775d074a3ea6d7aa647d4fa76a3d'
 
 
-def seed_theme(destination, content, previous=None):
+def seed_managed(destination, content, previous=None, backup_suffix=".pre-dms20"):
     if not destination.exists():
         seed(destination, content)
         return
@@ -35,8 +36,8 @@ def seed_theme(destination, content, previous=None):
     if hashlib.sha256(original).hexdigest() != previous:
         return
     before = destination.stat()
-    seed(destination.with_name(destination.name + '.pre-dms20'), original)
-    descriptor, temporary = tempfile.mkstemp(prefix='.greyward-theme-', dir=destination.parent)
+    seed(destination.with_name(destination.name + backup_suffix), original)
+    descriptor, temporary = tempfile.mkstemp(prefix='.greyward-default-', dir=destination.parent)
     try:
         with os.fdopen(descriptor, 'wb') as stream:
             stream.write(content)
@@ -60,16 +61,18 @@ def main():
     if sys.argv[1] == 'desktop':
         seed(config / 'pcmanfm-qt/greyward/settings.conf', (ASSETS / 'settings.conf').read_bytes())
     else:
-        seed_theme(config / 'strata/themes/greyward-obsidian.toml',
+        seed_managed(config / 'strata/themes/greyward-obsidian.toml',
                    (ASSETS / 'obsidian.toml').read_bytes(), PREVIOUS_OBSIDIAN)
-        seed_theme(config / 'strata/themes/greyward-silver.toml', (ASSETS / 'silver.toml').read_bytes())
+        seed_managed(config / 'strata/themes/greyward-silver.toml', (ASSETS / 'silver.toml').read_bytes())
         seed(config / 'strata/settings.toml',
              b'mode = "theme"\ntheme = "greyward-obsidian"\nelement_glow = false\n')
         # Native literal-argv actions need no Rust fork or polling provider.
         # Existing user edits/disabled choices remain authoritative.
         for identifier in ('greyward-safe-open', 'greyward-scan', 'greyward-security-context'):
-            seed(config / 'strata/actions' / identifier / 'action.toml',
-                 (ASSETS / 'actions' / identifier / 'action.toml').read_bytes())
+            seed_managed(config / 'strata/actions' / identifier / 'action.toml',
+                 (ASSETS / 'actions' / identifier / 'action.toml').read_bytes(),
+                 PREVIOUS_SCAN_ACTION if identifier == 'greyward-scan' else None,
+                 backup_suffix='.pre-clamav-arrivals')
 
 
 if __name__ == '__main__':

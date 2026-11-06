@@ -1,5 +1,13 @@
 title = "GREYWARD public source secret checks"
 
+[[allowlists]]
+description = "Exact public upstream Swappy verification-key filename, not key material"
+targetRules = ["generic-api-key"]
+condition = "AND"
+paths = ['(^|/)packaging/greyward-swappy/source\.json$']
+regexTarget = "secret"
+regexes = ['^6A6B35DBE9442683\.gpg$']
+
 [extend]
 useDefault = true
 

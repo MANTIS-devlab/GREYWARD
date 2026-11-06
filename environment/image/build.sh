@@ -8,14 +8,14 @@ set -euo pipefail
 
 usage() {
   cat <<'EOF'
-Usage: environment/image/build.sh [--output DIRECTORY] [--security-rpm FILE]... [--security-build-manifest FILE] [--security-source-root DIRECTORY] [--dms-rpm FILE] [--files-rpm FILE] [--production-rpm FILE]... [--enrollment-rpm FILE]... --branding-rpm FILE [--baseline FILE] [--dms-candidate] [--require-complete]
+Usage: environment/image/build.sh [--output DIRECTORY] [--security-rpm FILE]... [--security-build-manifest FILE] [--security-source-root DIRECTORY] [--dms-rpm FILE] [--files-rpm FILE] [--swappy-rpm FILE] [--intelligence-rpm FILE] [--production-rpm FILE]... [--enrollment-rpm FILE]... --branding-rpm FILE [--baseline FILE] [--dms-candidate] [--require-complete]
 
 Without --security-rpm this prepares an incomplete development input set and
 marks the missing production RPMs in the manifest. A production image tool
 must supply twelve GREYWARD RPMs: greyward-branding, greyward-session,
 greyward-security-center, greyward-security-context, greyward-dms,
 greyward-application-security-experimental, greyward-application-enrollment,
-greyward-files, and the four --office-rpm inputs, plus every pinned external production RPM listed in
+greyward-files, the customized --swappy-rpm, and the four --office-rpm inputs, plus every pinned external production RPM listed in
 environment/production/external-rpms.txt. Use
   --require-complete to reject an incomplete input set instead of preparing it
   for source inspection. Complete staging also requires the manifest emitted
@@ -36,6 +36,8 @@ branding_rpm=''
 dms_rpm=''
 session_rpm=''
 files_rpm=''
+swappy_rpm=''
+intelligence_rpm=''
 security_build_manifest=''
 security_source_root=''
 baseline=''
@@ -88,6 +90,21 @@ while (($#)); do
       [[ -z "$session_rpm" ]] || { echo 'Provide exactly one GREYWARD session RPM.' >&2; exit 2; }
       session_rpm=$(realpath -e "$2")
       test "$(rpm_query -qp --qf '%{NAME}' "$session_rpm")" = greyward-session
+      shift 2
+      ;;
+    --intelligence-rpm)
+      (($# >= 2)) || exit 2
+      [[ -z "$intelligence_rpm" ]] || { echo 'Duplicate intelligence RPM' >&2; exit 2; }
+      intelligence_rpm=$(realpath -e "$2")
+      test "$(rpm_query -qp --qf '%{NAME}' "$intelligence_rpm")" = greyward-intelligence
+      shift 2
+      ;;
+    --swappy-rpm)
+      (($# >= 2)) || exit 2
+      [[ -z "$swappy_rpm" ]] || { echo 'Duplicate screenshot editor RPM' >&2; exit 2; }
+      swappy_rpm=$(realpath -e "$2")
+      test "$(rpm_query -qp --qf '%{NAME}' "$swappy_rpm")" = swappy
+      rpm_query -qp --provides "$swappy_rpm" | grep -Fxq 'swappy(greyward-window-controls) = 1'
       shift 2
       ;;
     --files-rpm)
@@ -148,6 +165,22 @@ if $require_complete || ((${#office_rpms[@]})); then
   office_args=()
   for rpm in "${office_rpms[@]}"; do office_args+=(--rpm "$rpm"); done
   python3 "$repo_root/packaging/greyward-office/verify-inputs.py" --repo "$repo_root" "${office_args[@]}"
+fi
+
+if $require_complete && [[ -z "$intelligence_rpm" ]]; then
+  echo 'Complete staging requires --intelligence-rpm.' >&2; exit 1
+fi
+if [[ -n "$intelligence_rpm" ]]; then
+  python3 "$repo_root/environment/image/verify-intelligence-inputs.py" --repo "$repo_root" --rpm "$intelligence_rpm"
+fi
+if $require_complete && [[ -z "$swappy_rpm" ]]; then
+  echo 'Complete staging requires --swappy-rpm built from packaging/greyward-swappy.' >&2
+  exit 2
+fi
+if [[ -n "$swappy_rpm" ]]; then
+  rpm2cpio "$swappy_rpm" | cpio -i --quiet --to-stdout './usr/share/greyward/screenshot/source.json' | cmp -s - "$repo_root/packaging/greyward-swappy/source.json" || {
+    echo 'Screenshot editor RPM provenance is stale.' >&2; exit 1;
+  }
 fi
 
 case "$output" in
@@ -537,6 +570,8 @@ if [[ -n "$files_rpm" ]]; then cp -a "$files_rpm" "$output/rpms/"; fi
 if [[ -n "$branding_rpm" ]]; then cp -a "$branding_rpm" "$output/rpms/"; fi
 for rpm in "${security_rpms[@]}"; do cp -a "$rpm" "$output/rpms/"; done
 for rpm in "${production_rpms[@]}"; do cp -a "$rpm" "$output/rpms/"; done
+if [[ -n "$intelligence_rpm" ]]; then cp -a "$intelligence_rpm" "$output/rpms/"; fi
+if [[ -n "$swappy_rpm" ]]; then cp -a "$swappy_rpm" "$output/rpms/"; fi
 for rpm in "${enrollment_rpms[@]}"; do cp -a "$rpm" "$output/rpms/"; done
 for rpm in "${office_rpms[@]}"; do cp -a "$rpm" "$output/rpms/"; done
 mkdir -p "$output/office-source/packaging/greyward-office" "$output/office-source/branding"
@@ -722,6 +757,12 @@ fi
   if [[ -n "$files_rpm" ]]; then
     printf 'rpm\t%s\t%s\tGREYWARD_PACKAGE_INPUT\n' "$(basename "$files_rpm")" "$(basename "$files_rpm")"
   fi
+  if [[ -n "$intelligence_rpm" ]]; then
+    printf 'rpm\t%s\t%s\tGREYWARD_PACKAGE_INPUT\n' "$(basename "$intelligence_rpm")" "$(basename "$intelligence_rpm")"
+  fi
+  if [[ -n "$swappy_rpm" ]]; then
+    printf 'rpm\t%s\t%s\tGREYWARD_PACKAGE_INPUT\n' "$(basename "$swappy_rpm")" "$(basename "$swappy_rpm")"
+  fi
   for rpm in "${enrollment_rpms[@]}"; do
     printf 'rpm\t%s\t%s\tGREYWARD_PACKAGE_INPUT\n' "$(basename "$rpm")" "$(basename "$rpm")"
   done
@@ -783,6 +824,8 @@ cat > "$output/build-manifest.json" <<EOF
   "dms_rpm": "$(basename "${dms_rpm:-MISSING}")",
   "session_rpm": "$(basename "${session_rpm:-MISSING}")",
   "files_rpm": "$(basename "${files_rpm:-MISSING}")",
+  "intelligence_rpm": "$(basename "${intelligence_rpm:-MISSING}")",
+  "swappy_rpm": "$(basename "${swappy_rpm:-MISSING}")",
   "dms_release_manifest_sha256": "$(sha256 "$release_manifest")",
   "dms_candidate_selected": $dms_candidate,
   "security_rpm_count": ${#security_rpms[@]},
@@ -790,7 +833,7 @@ cat > "$output/build-manifest.json" <<EOF
   "production_dependency_rpm_count": ${#production_rpms[@]},
   "enrollment_rpm_count": ${#enrollment_rpms[@]},
   "office_rpm_count": ${#office_rpms[@]},
-  "production_inputs_complete": $([[ -n "$session_rpm" && -n "$files_rpm" && -n "$dms_rpm" && -n "$branding_rpm" && $center_count -eq 1 && $context_count -eq 1 && ${#enrollment_rpms[@]} -eq 2 && ${#office_rpms[@]} -eq 4 && ${#production_rpms[@]} -eq ${#expected_production_rpms[@]} ]] && printf true || printf false),
+  "production_inputs_complete": $([[ -n "$intelligence_rpm" && -n "$swappy_rpm" && -n "$session_rpm" && -n "$files_rpm" && -n "$dms_rpm" && -n "$branding_rpm" && $center_count -eq 1 && $context_count -eq 1 && ${#enrollment_rpms[@]} -eq 2 && ${#office_rpms[@]} -eq 4 && ${#production_rpms[@]} -eq ${#expected_production_rpms[@]} ]] && printf true || printf false),
   "security_rpms": [$security_rpm_json],
   "artifacts": {
     "package_inventory": "artifacts/package-inventory.txt",
@@ -803,8 +846,8 @@ cat > "$output/build-manifest.json" <<EOF
 }
 EOF
 
-if [[ -z "$branding_rpm" || -z "$dms_rpm" || -z "$session_rpm" || -z "$files_rpm" ]] || ((${#security_rpms[@]} != 2 || ${#enrollment_rpms[@]} != 2 || ${#office_rpms[@]} != 4 || ${#production_rpms[@]} != ${#expected_production_rpms[@]})); then
-  echo "WARNING: staged inputs are incomplete; provide all twelve GREYWARD RPMs and every pinned external RPM for production image construction." >&2
+if [[ -z "$intelligence_rpm" || -z "$swappy_rpm" || -z "$branding_rpm" || -z "$dms_rpm" || -z "$session_rpm" || -z "$files_rpm" ]] || ((${#security_rpms[@]} != 2 || ${#enrollment_rpms[@]} != 2 || ${#office_rpms[@]} != 4 || ${#production_rpms[@]} != ${#expected_production_rpms[@]})); then
+  echo "WARNING: staged inputs are incomplete; provide all GREYWARD RPMs, the adapted screenshot editor and every pinned external RPM for production image construction." >&2
 fi
 # cp preserves Windows checkout line endings. Normalize only the staged source
 # after provenance checks, before dependency building and payload hashing.

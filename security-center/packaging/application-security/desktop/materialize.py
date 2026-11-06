@@ -5,6 +5,10 @@ from pathlib import Path
 STATE=Path('/run/greyward-application-security')
 DMS_AUTH_SETTINGS_CONFIG_VERSION=18
 
+# Single reviewed compatibility definition for assembly and live login.
+LEGACY_AUTH_RELEASES = frozenset({"v1.6.2-6", "v1.6.2-8", "v1.6.2-10", "v1.6.2-11", "v1.6.2-12", "v1.6.2-13", "v1.6.2-14", "v1.6.2-15", "v1.6.2-17", "v1.6.2-18", "v1.6.2-19", "v1.6.2-20", "v1.6.2-21", "v1.6.2-22", "v1.6.2-23", "v1.6.2-24", "v1.6.2-25", "v1.6.2-26"})
+NATIVE_AUTH_RELEASES = frozenset({"v2.0.0-7", "v2.0.0-8"})
+
 def authentication_settings(template, config_version=DMS_AUTH_SETTINGS_CONFIG_VERSION):
     """Seed the private agent from current factory defaults, not a v0 profile.
 
@@ -48,9 +52,11 @@ def authentication_settings(template, config_version=DMS_AUTH_SETTINGS_CONFIG_VE
 def authentication_profile(release):
     # The caller supplies the verified root-owned desktop generation, never an
     # environment value or user JSON. Unknown layouts fail before any write.
-    if isinstance(release, str) and re.fullmatch(r'v1\.6\.2-\d+', release):
+    if not isinstance(release, str):
+        raise RuntimeError('Unreviewed authentication runtime release')
+    if release in LEGACY_AUTH_RELEASES:
         return ('DankMaterialShell', None, 18)
-    if release == 'v2.0.0-7':
+    if release in NATIVE_AUTH_RELEASES:
         return ('dms', 'dms20', 42)
     raise RuntimeError('Unreviewed authentication runtime release')
 
@@ -156,3 +162,21 @@ def materialize(uid,gid,release="v1.6.2-26"):
     # The taskbar client sees only availability metadata, never auth state.
     # A dedicated parent preserves its type across atomic file replacement.
     prepare_usb_metadata(auth, uid, gid)
+
+
+def preflight(release, template=None):
+    profile, namespace, schema = authentication_profile(release)
+    if template is None:
+        template = json.loads(Path('/etc/skel/.config/DankMaterialShell/settings.json').read_text())
+    if not isinstance(template, dict):
+        raise RuntimeError('Invalid authentication settings template')
+    authentication_settings(template, schema)
+    return {'release': release, 'profile': profile, 'namespace': namespace, 'configVersion': schema}
+
+
+if __name__ == '__main__':
+    import argparse
+    parser=argparse.ArgumentParser(description='Read-only protected login preparation check')
+    parser.add_argument('--check-release', required=True)
+    args=parser.parse_args()
+    print(json.dumps(preflight(args.check_release),sort_keys=True))

@@ -163,6 +163,211 @@ class CompatibilityTests(unittest.TestCase):
             self.assertIn('src/main.rs',adapt(app,old,new,patchfile))
 
 
+class NoticePolicyTests(unittest.TestCase):
+    HEADER = ('Writer\nCopyright (c) 2026 ArtCraft Team and contributors.\n'
+              'Licensed under MIT OR Apache-2.0.\n'
+              'ArtCraft trademarks are excluded; see docs/brand/LICENSE-brand.txt.\n\n'
+              'Third-party material\n\n')
+
+    def test_updated_credits_and_complete_license_notices_are_retained(self):
+        from notice import review_notice
+        old = (self.HEADER + 'Previous component credits.\n').encode()
+        new = (self.HEADER + 'Updated component credits.\nCopyright 2014 New Contributor\n'
+               'MIT License\nPermission is hereby granted ...\n').encode()
+        result = review_notice(old, new)
+        self.assertTrue(result['changed'])
+        self.assertEqual(result['newSha256'], hashlib.sha256(new).hexdigest())
+        self.assertEqual(result['oldSha256'], hashlib.sha256(old).hexdigest())
+
+    def test_year_formatting_and_line_endings_do_not_require_review(self):
+        from notice import review_notice
+        old = (self.HEADER + 'Credits\n').encode()
+        for text in (self.HEADER.replace('2026', '2026-2027'),
+                     self.HEADER.replace('under MIT', 'under\nMIT'),
+                     self.HEADER.replace('\n', '\r\n')):
+            with self.subTest(text=text):
+                self.assertTrue(review_notice(old, (text + 'Credits\n').encode())['changed'])
+
+    def test_first_party_terms_and_copyright_holders_still_require_review(self):
+        from notice import review_notice
+        old = (self.HEADER + 'Credits\n').encode()
+        for header in (self.HEADER.replace('MIT OR Apache-2.0', 'non-commercial only'),
+                       self.HEADER.replace('ArtCraft Team', 'Different owner'),
+                       self.HEADER.replace('are excluded', 'may not be redistributed'),
+                       self.HEADER.replace('Third-party material', 'New structure')):
+            with self.subTest(header=header), self.assertRaises(ValueError):
+                review_notice(old, (header + 'Credits\n').encode())
+
+    def test_missing_binary_and_unbounded_notices_are_rejected(self):
+        from notice import review_notice
+        old = (self.HEADER + 'Credits\n').encode()
+        for new in (b'', b'\xff', b'\x00NOTICE', b' ' * (256 * 1024 + 1), b'\n\t'):
+            with self.subTest(size=len(new)), self.assertRaises((ValueError, UnicodeError)):
+                review_notice(old, new)
+
+    def test_candidate_lock_pins_new_notice_and_retains_its_audit_diff(self):
+        import candidate
+        from contextlib import ExitStack
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary); old, new = root / 'old', root / 'new'
+            original = CompatibilityTests.ORIGINAL
+            for tree in (old, new):
+                (tree / 'src').mkdir(parents=True)
+                (tree / '.github/workflows').mkdir(parents=True)
+                (tree / 'src/main.rs').write_bytes(original)
+                (tree / 'LICENSE').write_bytes(b'MIT\n')
+                (tree / 'NOTICE').write_text(self.HEADER + 'Old credits\n', encoding='utf-8')
+                (tree / 'Cargo.lock').write_text('lock')
+                (tree / '.github/workflows/release.yml').write_text('fonts: pin\n')
+            new_notice = (self.HEADER + 'New contributor credits\n').encode()
+            (new / 'NOTICE').write_bytes(new_notice)
+            office = root / 'packaging/greyward-office'; office.mkdir(parents=True)
+            (office / 'reviewed.patch').write_bytes(CompatibilityTests.PATCH)
+            app = {'slug': 'writer', 'upstream': 'wordcraft', 'version': '1.0.0',
+                   'commit': 'a' * 40, 'archive': 'old.tar.gz', 'patch': 'reviewed.patch',
+                   'noticeSha256': hashlib.sha256((old / 'NOTICE').read_bytes()).hexdigest(),
+                   'fontsCommit': 'pin', 'adaptedInputs': {'src/main.rs': 'unused'}}
+            manifest = {'applications': [app], 'rpmRelease': 9, 'fonts': [{'commit': 'pin'}]}
+            release = {'application': 'writer', 'tag': 'v1.1.0', 'version': '1.1.0'}
+            with ExitStack() as stack:
+                overrides = {'validate_sources': manifest,
+                             'discover': {'unavailable': False, 'applications': [release]},
+                             'request_json': {}, 'stable_release': release, 'resolve': 'b' * 40,
+                             'pinned_download': ({'archive': 'new.tar.gz', 'sha256': 'c' * 64}, root / 'new.tar.gz'),
+                             'verified_file': root / 'old.tar.gz'}
+                for name, value in overrides.items():
+                    stack.enter_context(patch.object(candidate, name, return_value=value))
+                stack.enter_context(patch.object(candidate, 'refresh_data'))
+                stack.enter_context(patch.object(candidate, 'extract_release', side_effect=[old, new]))
+                decision = candidate.prepare_family(root, root / 'cache', root / 'output')
+            lock = json.loads((root / 'output/source.json').read_text())
+            self.assertEqual(lock['applications'][0]['noticeSha256'], hashlib.sha256(new_notice).hexdigest())
+            self.assertEqual((new / 'NOTICE').read_bytes(), new_notice)
+            self.assertEqual(decision['noticeUpdates'][0]['application'], 'writer')
+            self.assertIn('+New contributor credits', (root / 'output/notice-changes/writer.diff').read_text())
+            self.assertEqual(app['version'], '1.0.0')  # Active source lock stays unchanged.
+
+    def test_missing_recipe_dependency_is_not_silently_omitted(self):
+        from seal import recipe_files
+        self.assertIn(AUTOMATION / 'notice.py', recipe_files(ROOT))
+
+    def test_changed_brand_license_and_untrusted_old_notice_still_block(self):
+        from candidate import adapt
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary); old, new = root / 'old', root / 'new'
+            for tree in (old, new):
+                (tree / 'docs/brand').mkdir(parents=True)
+                (tree / 'docs/brand/LICENSE-brand.txt').write_text('Reviewed brand terms')
+                (tree / 'LICENSE').write_text('MIT')
+                (tree / 'NOTICE').write_text(self.HEADER + 'Credits\n', encoding='utf-8')
+            app = {'noticeSha256': hashlib.sha256((old / 'NOTICE').read_bytes()).hexdigest()}
+            (new / 'docs/brand/LICENSE-brand.txt').write_text('Changed brand terms')
+            with self.assertRaisesRegex(ValueError, 'trademark license changed'):
+                adapt(app, old, new, root / 'unused.patch')
+            app['noticeSha256'] = '0' * 64
+            with self.assertRaisesRegex(ValueError, 'does not match its source lock'):
+                adapt(app, old, new, root / 'unused.patch')
+
+
+class VendorInputTests(unittest.TestCase):
+    def fixture(self, root):
+        revision = 'a' * 40
+        manifest = ('[package]\nname="example"\nversion="1.0.0"\n'
+                    '[patch.crates-io]\nunused_ui = { git = "https://github.com/storytold/egui.git", rev = "' + revision + '" }\n')
+        lock = ('version = 4\n[[package]]\nname="example"\nversion="1.0.0"\n'
+                '[[patch.unused]]\nname="unused_ui"\nversion="0.37.0"\n'
+                'source="git+https://github.com/storytold/egui.git?rev=' + revision + '#' + revision + '"\n')
+        (root / 'Cargo.toml').write_text(manifest)
+        (root / 'Cargo.lock').write_text(lock)
+        return manifest, lock
+
+    def test_pruning_retains_upstream_inputs_and_active_dependency_graph(self):
+        import tomllib
+        from vendor_inputs import prune_unused
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary); manifest, lock = self.fixture(root)
+            before_manifest = (root / 'Cargo.toml').read_bytes()
+            before_lock = (root / 'Cargo.lock').read_bytes()
+            result = prune_unused(root)
+            self.assertEqual([x['name'] for x in result['removed']], ['unused_ui'])
+            self.assertEqual(tomllib.loads((root / 'Cargo.lock').read_text())['package'], tomllib.loads(lock)['package'])
+            self.assertEqual((root / 'greyward-cargo-upstream/Cargo.toml').read_bytes(), before_manifest)
+            self.assertEqual((root / 'greyward-cargo-upstream/Cargo.lock').read_bytes(), before_lock)
+            self.assertEqual(prune_unused(root), {'removed': []})
+
+    def test_active_or_unpinned_patches_cannot_be_removed(self):
+        from vendor_inputs import prune_unused
+        for change in ('active', 'source'):
+            with self.subTest(change=change), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary); self.fixture(root)
+                lock = root / 'Cargo.lock'
+                if change == 'active':
+                    lock.write_text(lock.read_text().replace('[[package]]\nname="example"', '[[package]]\nname="unused_ui"'))
+                else:
+                    lock.write_text(lock.read_text().replace('?rev=' + 'a' * 40, '?rev=main'))
+                before = lock.read_bytes()
+                with self.assertRaises(ValueError): prune_unused(root)
+                self.assertEqual(lock.read_bytes(), before)
+                self.assertFalse((root / 'greyward-cargo-upstream').exists())
+
+
+class ResourceInputTests(unittest.TestCase):
+    def test_only_official_immutable_data_repositories_are_accepted(self):
+        from resource_inputs import validate_record
+        commit = 'a' * 40
+        record = {'commit': commit, 'file': 'craft-fonts-' + commit + '.tar.gz',
+                  'url': 'https://codeload.github.com/storytold/craft-fonts/tar.gz/' + commit,
+                  'sha256': 'b' * 64}
+        validate_record(record, 'craft-fonts')
+        for change in ({'commit': 'main'}, {'url': 'https://other.invalid/fonts'},
+                       {'file': '../fonts.tar.gz'}, {'sha256': 'invalid'}, {'extra': 'field'}):
+            with self.subTest(change=change), self.assertRaises(ValueError):
+                validate_record(dict(record, **change), 'craft-fonts')
+
+    def test_data_refs_are_read_without_running_upstream_workflows(self):
+        from resource_inputs import declared_fonts, declared_language
+        with tempfile.TemporaryDirectory() as temporary:
+            tree = Path(temporary); (tree / '.github/workflows').mkdir(parents=True)
+            workflow = tree / '.github/workflows/release.yml'
+            workflow.write_text('      craft-fonts-ref: ' + 'a' * 40 + '\n')
+            self.assertEqual(declared_fonts(tree), 'a' * 40)
+            self.assertIsNone(declared_language(tree))
+            (tree / 'craft-i18n.rev').write_text('b' * 40 + '\n')
+            self.assertEqual(declared_language(tree), 'b' * 40)
+            workflow.write_text(workflow.read_text() * 2)
+            with self.assertRaises(ValueError): declared_fonts(tree)
+
+    def test_font_contents_license_and_manifest_paths_are_checked(self):
+        from resource_inputs import validate_fonts
+        with tempfile.TemporaryDirectory() as temporary:
+            tree = Path(temporary); (tree / 'fonts').mkdir()
+            (tree / 'fonts/face.ttf').write_bytes(b'font bytes')
+            (tree / 'fonts/OFL.txt').write_text('Copyright Example\nSIL OPEN FONT LICENSE Version 1.1\n')
+            sha = hashlib.sha256(b'font bytes').hexdigest()
+            row = 'Example | Regular | fonts/face.ttf | Latn | OFL-1.1 | fonts/OFL.txt | ' + sha + ' | https://example.invalid\n'
+            manifest = tree / 'fonts/manifest.txt'; manifest.write_text(row)
+            self.assertEqual(validate_fonts(tree), 1)
+            for altered in (row.replace(sha, '0' * 64), row.replace('OFL-1.1', 'proprietary'),
+                            row.replace('fonts/face.ttf', '../face.ttf')):
+                manifest.write_text(altered)
+                with self.assertRaises(ValueError): validate_fonts(tree)
+
+    def test_catalog_branding_preserves_dictionary_and_license_bytes(self):
+        from resource_inputs import brand_catalogs
+        with tempfile.TemporaryDirectory() as temporary:
+            tree = Path(temporary); (tree / 'locales/fr').mkdir(parents=True)
+            catalog = tree / 'locales/fr/wordcraft.tsv'
+            catalog.write_text('About WordCraft\tA propos de WordCraft\n© WordCraft contributors\t© WordCraft contributors\n', encoding='utf-8')
+            (tree / 'language-data').mkdir()
+            dictionary = tree / 'language-data/wordcraft.dic'; dictionary.write_bytes(b'WordCraft\n')
+            license_file = tree / 'LICENSE'; license_file.write_bytes(b'WordCraft copyright\n')
+            brand_catalogs(tree, 'WordCraft', 'Writer')
+            self.assertIn('Writer', catalog.read_text(encoding='utf-8'))
+            self.assertIn('© WordCraft contributors', catalog.read_text(encoding='utf-8'))
+            self.assertEqual(dictionary.read_bytes(), b'WordCraft\n')
+            self.assertEqual(license_file.read_bytes(), b'WordCraft copyright\n')
+
+
 class SealingTests(unittest.TestCase):
     def setUp(self):
         from seal import validate_candidate
@@ -178,9 +383,30 @@ class SealingTests(unittest.TestCase):
         with self.assertRaises(ValueError): self.validate(self.base, candidate)
 
     def test_equal_upstream_version_cannot_change_commit_or_inputs(self):
-        for field in ('commit', 'sha256', 'cargoLockSha256'):
+        for field in ('commit', 'sha256', 'cargoLockSha256', 'noticeSha256'):
             candidate = copy.deepcopy(self.base); candidate['applications'][0][field] = 'b' * len(candidate['applications'][0][field])
             with self.subTest(field=field), self.assertRaises(ValueError): self.validate(self.base, candidate)
+
+    def test_new_version_can_pin_a_new_notice_but_not_an_invalid_hash(self):
+        candidate = copy.deepcopy(self.base)
+        app = candidate['applications'][0]
+        app.update(version='99.0.0', tag='v99.0.0', noticeSha256='a' * 64)
+        if app.get('fontsWorkflowSource'):
+            app['fontsWorkflowSource']['commit'] = app['commit']
+        self.validate(self.base, candidate)
+        app['noticeSha256'] = 'invalid'
+        with self.assertRaises(ValueError): self.validate(self.base, candidate)
+
+    def test_published_resource_bytes_cannot_be_redefined(self):
+        candidate = copy.deepcopy(self.base)
+        candidate['fonts'][0]['sha256'] = '0' * 64
+        with self.assertRaisesRegex(ValueError, 'immutable font'): self.validate(self.base, candidate)
+        candidate = copy.deepcopy(self.base)
+        app = candidate['applications'][0]
+        app.update(version='99.0.0', tag='v99.0.0')
+        app['fontsWorkflowSource']['commit'] = app['commit']
+        app['languageData']['sha256'] = '0' * 64
+        with self.assertRaisesRegex(ValueError, 'immutable language'): self.validate(self.base, candidate)
 
     def test_unknown_or_missing_dependency_license_requires_review(self):
         from seal import check_dependencies

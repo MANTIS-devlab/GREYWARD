@@ -1,6 +1,6 @@
 Name: greyward-files
 Version: 1.0.0
-Release: 21%{?dist}
+Release: 24%{?dist}
 Summary: GREYWARD Strata file manager and transparent desktop integration
 License: MIT AND GPL-3.0-only AND GPL-2.0-or-later AND Apache-2.0 AND OFL-1.1 AND ISC AND LGPL-2.0-or-later AND LicenseRef-UnRAR AND LicenseRef-GREYWARD-Branding
 URL: https://github.com/lgse/strata
@@ -49,7 +49,8 @@ Requires: gvfs-fuse
 Requires: udisks2
 Requires: breeze-icon-theme
 Requires: greyward-session >= 0.1.0-17
-Requires: greyward-security-center >= 0.1.0-116
+Requires: greyward-security-center >= 0.1.0-123
+Requires: greyward-security-context >= 0.1.0-114
 %{!?greyward_cargo_target:%global greyward_cargo_target strata-target}
 %global debug_package %{nil}
 # Keep the checked built ELF intact during packaging.
@@ -58,7 +59,7 @@ Requires: greyward-security-center >= 0.1.0-116
 %global __brp_strip_lto %{nil}
 
 %description
-Pinned-source Strata with two bounded GREYWARD integration patches, app-specific Obsidian defaults and a
+Pinned-source Strata with bounded GREYWARD integration patches, app-specific Obsidian defaults and a
 desktop-only Qt style. PCManFM-Qt supplies transparent icons while DMS owns
 wallpaper. No portal replacements or privileged file manager are installed.
 Candidate package: installed workflow and clean-image validation remain pending.
@@ -100,9 +101,13 @@ PY
 patch --directory=desktop/pcmanfm-qt-2.4.1 -p1 --fuzz=0 < packaging/greyward-files/pcmanfm-desktop-only.patch
 patch --directory=desktop/pcmanfm-qt-2.4.1 -p1 --fuzz=0 < packaging/greyward-files/pcmanfm-multi-output.patch
 patch --directory=desktop/pcmanfm-qt-2.4.1 -p1 --fuzz=0 < packaging/greyward-files/pcmanfm-strata-routing.patch
+patch --directory=desktop/pcmanfm-qt-2.4.1 -p1 --fuzz=0 < packaging/greyward-files/pcmanfm-scan-properties.patch
+patch --directory=desktop/pcmanfm-qt-2.4.1 -p1 --fuzz=0 < packaging/greyward-files/pcmanfm-lifecycle.patch
+patch --directory=desktop/pcmanfm-qt-2.4.1 -p1 --fuzz=0 < packaging/greyward-files/pcmanfm-no-automount.patch
 cp environment/session/desktop/output-layout.h desktop/pcmanfm-qt-2.4.1/pcmanfm/greyward-output-layout.h
 patch --directory=source/lgse-strata-6662d8d -p1 --fuzz=0 < packaging/greyward-files/strata-preview-mode.patch
 patch --directory=source/lgse-strata-6662d8d -p1 --fuzz=0 < packaging/greyward-files/strata-native-icons.patch
+patch --directory=source/lgse-strata-6662d8d -p1 --fuzz=0 < packaging/greyward-files/strata-scan-properties.patch
 
 %build
 export CARGO_HOME="$PWD/cargo-home"
@@ -114,7 +119,7 @@ export PKG_CONFIG=/usr/bin/pkgconf
 export RUSTFLAGS="${RUSTFLAGS:-} -C debuginfo=0"
 export CARGO_PROFILE_RELEASE_LTO=thin
 export STRATA_RELEASE_TAG=v1.0.0
-export STRATA_BUILD_COMMIT=6662d8d4bd4cb3cdec3f10f918f3b4c92b18cdcc+greyward-files15
+export STRATA_BUILD_COMMIT=6662d8d4bd4cb3cdec3f10f918f3b4c92b18cdcc+greyward-files24
 (cd source/lgse-strata-6662d8d && cargo build --release --frozen --offline --jobs 2)
 python3 tools/generate-file-icons.py --catalog branding/source/greyward-icon-family.json --upstream source/lgse-strata-6662d8d --destination icons-build
 cmake -S environment/session/desktop/style -B style-build -DCMAKE_BUILD_TYPE=Release
@@ -178,7 +183,7 @@ export PKG_CONFIG=/usr/bin/pkgconf
 export RUSTFLAGS="${RUSTFLAGS:-} -C debuginfo=0"
 export CARGO_PROFILE_RELEASE_LTO=thin
 export STRATA_RELEASE_TAG=v1.0.0
-export STRATA_BUILD_COMMIT=6662d8d4bd4cb3cdec3f10f918f3b4c92b18cdcc+greyward-files15
+export STRATA_BUILD_COMMIT=6662d8d4bd4cb3cdec3f10f918f3b4c92b18cdcc+greyward-files24
 (cd source/lgse-strata-6662d8d && cargo test --release --frozen --offline --jobs 1 --test greyward_native_icons -- --test-threads=1)
 python3 - <<'PY'
 import pathlib,hashlib,os
@@ -211,6 +216,17 @@ PY
 %license %{_licensedir}/%{name}
 
 %changelog
+* Fri Nov 06 2026 MANTIS SYSTEMS - 1.0.0-24
+- Leave automatic volume management to Strata; prevent hidden mount-error dialogs from blocking desktop icons.
+- Use PCManFM's actual volume setting names for new profiles.
+
+* Fri Oct 30 2026 MANTIS SYSTEMS - 1.0.0-23
+- Retire desktop windows before application cleanup; make independent destruction and repeated teardown safe.
+- Gate icons on the bounded DMS startup contract while preserving stored layouts.
+
+* Thu Oct 29 2026 MANTIS SYSTEMS - 1.0.0-22
+- Extend existing scan action to folders; add native scan receipts to Properties and desktop menus.
+
 * Tue Oct 27 2026 MANTIS SYSTEMS - 1.0.0-21
 - Preserve desktop coordinates across connected-output configurations and icon-process restarts.
 - Save positions before hot-unplug deletion and retain existing per-output layouts for rollback.

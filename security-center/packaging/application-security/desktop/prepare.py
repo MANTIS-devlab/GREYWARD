@@ -129,6 +129,8 @@ def prepare(source, labwc, account_name, materialize_runtime=True):
         meta = parent.lstat()
         if not parent.is_dir() or parent.is_symlink() or meta.st_uid or meta.st_mode & 0o022:
             raise RuntimeError('Root-private source snapshot required')
+    trusted_root_file(source / 'materialize.py')
+    run('/usr/bin/python3', '-I', str(source / 'materialize.py'), '--check-release', dms.name)
     BASE.mkdir(mode=0o755, parents=True)
     (BASE / 'bin').mkdir(mode=0o755)
     for component in ['session.py', 'verify.py', 'authentication.py', 'materialize.py']:

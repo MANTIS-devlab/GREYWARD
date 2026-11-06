@@ -1,8 +1,8 @@
 Name:           greyward-security-center
 Version:        0.1.0
-Release:        122%{?dist}
+Release:        137%{?dist}
 Summary:        GREYWARD local security posture and control application
-License:        GPL-3.0-only AND Apache-2.0 AND OFL-1.1 AND CC0-1.0
+License:        GPL-3.0-only AND Apache-2.0 AND OFL-1.1 AND CC0-1.0 AND MIT
 Source0:        %{name}-%{version}.tar.gz
 %{!?greyward_cargo_target:%global greyward_cargo_target target}
 
@@ -62,6 +62,10 @@ printf 'GREYWARD_TIMING stage=rust-tests seconds=%s\n' "$((SECONDS - test_starte
 %endif
 
 %install
+install -Dm0644 data/scan-notifications/greyward-scan-clean.svg %{buildroot}%{_datadir}/greyward-security-center/scan-notifications/greyward-scan-clean.svg
+install -m0644 data/scan-notifications/greyward-scan-{review,threat,neutral}.svg %{buildroot}%{_datadir}/greyward-security-center/scan-notifications/
+mkdir -p %{buildroot}%{_datadir}/icons/hicolor/scalable/apps
+install -m0644 data/intelligence-icons/*.svg %{buildroot}%{_datadir}/icons/hicolor/scalable/apps/
 install -Dm0755 "%{greyward_cargo_target}/release/greyward-security-center" \
   %{buildroot}%{_bindir}/greyward-security-center
 install -Dm0755 "%{greyward_cargo_target}/release/greyward-security-profile" \
@@ -95,7 +99,10 @@ install -Dm0755 greyward-safe-open.so \
   %{buildroot}%{_libdir}/nautilus/extensions-4/libgreyward-safe-open.so
 
 %files
+%{_datadir}/greyward-security-center/scan-notifications
+%{_datadir}/icons/hicolor/scalable/apps/greyward-intelligence-*.svg
 %license LICENSE
+%license tauri/frontend/assets/country-flags/LICENSE.flag-icons
 %license vendor/tao-0.35.3/LICENSE
 %license data/fonts/Inter-OFL-1.1.txt
 %license data/fonts/Material-Symbols-Apache-2.0.txt
@@ -119,6 +126,48 @@ install -Dm0755 greyward-safe-open.so \
 %postun
 /usr/bin/fc-cache -f >/dev/null 2>&1 || :
 %changelog
+* Fri Nov 06 2026 MANTIS SYSTEMS - 0.1.0-137
+- Keep application/UID pattern evidence across partial process attribution.
+
+* Fri Nov 06 2026 MANTIS SYSTEMS - 0.1.0-136
+- Resume Live polling after route/mode changes; refresh retained scores and preserve row focus.
+
+* Fri Nov 06 2026 MANTIS SYSTEMS - 0.1.0-135
+- Clarify network evidence weights, source coverage and historical loss counters.
+
+* Fri Nov 06 2026 MANTIS SYSTEMS - 0.1.0-134
+- Show six-level network inspection priority and local DB-IP attribution.
+
+* Fri Oct 30 2026 GREYWARD Engineering <engineering@mantis.systems> - 0.1.0-133
+- Clarify log assessments, bundle complete country flags and use white identity tiles.
+
+* Thu Oct 29 2026 GREYWARD Engineering <engineering@mantis.systems> - 0.1.0-132
+- Refine the native file scan composition and coordinated result presentation.
+
+* Thu Oct 29 2026 MANTIS SYSTEMS - 0.1.0-131
+- Consolidate scan notifications with readable status artwork, native styling and replay protection.
+
+* Thu Oct 29 2026 GREYWARD <engineering@mantis.systems> - 0.1.0-130
+- Keep firewall decisions authoritative, explain scoped scores and recover current sensor health.
+
+* Thu Oct 29 2026 MANTIS SYSTEMS <maintainers@mantis.systems> - 0.1.0-129
+- Integrate behavioral scores and case evidence into history and network logs; remove the standalone Intelligence destination.
+
+* Thu Oct 29 2026 MANTIS SYSTEMS - 0.1.0-128
+- Fail unavailable on stale intelligence reads and preserve inspection focus during renewal.
+
+* Thu Oct 29 2026 MANTIS SYSTEMS - 0.1.0-127
+- Ship native intelligence instruments, scoped incident navigation and WebKit-compatible gauges.
+
+* Thu Oct 29 2026 MANTIS SYSTEMS - 0.1.0-125
+- Integrate behavioral intelligence, evidence timelines and severity instruments.
+
+* Thu Oct 29 2026 MANTIS SYSTEMS - 0.1.0-124
+- Keep folder/drive scan receipts visible independently of document-only provenance.
+
+* Thu Oct 29 2026 MANTIS SYSTEMS - 0.1.0-123
+- Show definition publication/freshness and updater health; use asynchronous file and folder scans.
+
 * Tue Oct 27 2026 MANTIS SYSTEMS - 0.1.0-122
 - Keep signed-repository security-update reads noninteractive without disabling signatures.
 

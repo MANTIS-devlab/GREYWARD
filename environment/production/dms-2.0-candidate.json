@@ -1,7 +1,7 @@
 {
   "schema": "greyward.dms-release/v1",
   "status": "physical-migration-test-not-release-accepted",
-  "releaseId": "v2.0.0-7",
+  "releaseId": "v2.0.0-8",
   "dms": {
     "tag": "v2.0.0",
     "commit": "9b413296b16721f7679fb62e624cb1ed2433fa58",
@@ -49,31 +49,16 @@
       "version": "go1.27.3",
       "goVersion": "go version go1.27.3 linux/amd64"
     },
-    "rpmRelease": "7.11",
-    "packageOnlyRuntime": {
-      "binarySha256": "0eb5a9b5bdcd16882b41f8bdf03a37bcbb9f6a8d7723e2b0f0640aada0d0f532",
-      "usbguardApprovalSha256": "0eece46c693dd271b655b3e9596124abdbb7ede28f69b5f66fec97d18751e95a",
-      "usbguardAuthApprovalSha256": "27d8063b1f43ef8003b235cb62b958dbd0a6449d6dd1ab1f17737b439a7dbe8e"
-    },
-    "artworkUpdate": {
-      "baseRpmSha256": "ab1c12a1c961c60354b47f993c70e859479fd53326efde5d60163c54955c512c",
-      "baseShellSha256": "c094da5ec9b2d6df275bb17e4111290d9b278d461b2925e83a236e73e59edfef",
-      "changedShellFiles": [
-        "assets/greyward-settings.svg"
-      ],
-      "requiresProtectedMigration": true
-    },
-    "pluginUpdate": {
-      "baseRpmSha256": "0020354022a7b62f75254098909a99672c3be4623beb1fb28acf4bc9728b41fe",
-      "basePackage": "greyward-dms-2.0.0-7.10.fc44.x86_64",
+    "sparklineRepair": {
+      "baseRpmSha256": "22502a03863176ee96a1e9258be77a0e32db71e570fd00ccab1c785488004d78",
+      "baseReleaseId": "v2.0.0-7",
       "baseShellSha256": "dfd99d5a7effb1ae1f2b584c3c5fde5efc44cd6d6037043365fc7b46ec271852",
-      "baseFirstPartySha256": "22ca884566bbcb169f6d7603fae207263dc779e0fb97a370e52e8560844263e4",
-      "changedFirstPartyFiles": [
-        "greywardSecure/SecureWidget.qml",
-        "greywardSecure/StatusCard.qml",
-        "greywardSecure/plugin.json"
-      ],
-      "requiresProtectedMigration": false
+      "executables": {
+        "binarySha256": "0eb5a9b5bdcd16882b41f8bdf03a37bcbb9f6a8d7723e2b0f0640aada0d0f532",
+        "usbguardApprovalSha256": "0eece46c693dd271b655b3e9596124abdbb7ede28f69b5f66fec97d18751e95a",
+        "usbguardAuthApprovalSha256": "27d8063b1f43ef8003b235cb62b958dbd0a6449d6dd1ab1f17737b439a7dbe8e"
+      },
+      "requiresProtectedMigration": true
     }
   },
   "compatibility": {
@@ -164,11 +149,19 @@
         "Services/AppSearchService.qml": "48a298e7340fa9085e70fbc9c43c7cad55884041054206cb15919d97d02cd7d5",
         "Modules/Plugins/PluginComponent.qml": "537780a0bec198e499490894376ea0c6e485971ca26ff686b2351d1cde9d6f8d"
       }
+    },
+    {
+      "file": "greyward-sparkline-renderer.patch",
+      "sha256": "6e5b7afc87951f154beb2bcd34a9ff3f89f5b554895d18707164fc4441f5ced8",
+      "reason": "Avoid the reproduced Qt 6.11.2 CurveRenderer triangulation crash in sampled history fills; retain GPU rendering and 4x antialiasing only for small sparklines.",
+      "preimages": {
+        "DCommon/Widgets/DSparkline.qml": "ba7452ae3181d298ab59fa695464b354bcfc1a2e00eb3e08e627b4e98f398f18"
+      }
     }
   ],
   "shell": {
-    "sha256": "dfd99d5a7effb1ae1f2b584c3c5fde5efc44cd6d6037043365fc7b46ec271852",
-    "patchedFiles": 11,
+    "sha256": "629f35ee86a8cca227eb8a6b886df320bf2c06ab712983cf56119d251b1d5c8b",
+    "patchedFiles": 12,
     "qmlFiles": 987,
     "commonQmlFiles": 160,
     "commonFiles": 249
@@ -250,13 +243,13 @@
     "greywardSoftware/plugin.json": "b8857ea5ba800b9b21964b0bd0380cd0f1ebc8318cc6d41ce8cfe540fe04fd70"
   },
   "candidatePackages": {
-    "dms": "2.0.0-7.11",
-    "session": "0.1.0-38",
-    "files": "1.0.0-21",
-    "securityCenter": "0.1.0-122",
-    "applicationSecurity": "0.1.0-84",
-    "enrollment": "0.1.0-86",
-    "securityContext": "0.1.0-113"
+    "dms": "2.0.0-8",
+    "session": "0.1.0-45",
+    "files": "1.0.0-24",
+    "securityCenter": "0.1.0-137",
+    "applicationSecurity": "0.1.0-88",
+    "enrollment": "0.1.0-91",
+    "securityContext": "0.1.0-137"
   },
   "acceptance": {
     "releaseAccepted": false,

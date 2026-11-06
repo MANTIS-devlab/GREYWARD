@@ -33,7 +33,10 @@ exact RPM dependency for a new matched build and the image identity-reuse guard
 consume the package pin. Fresh-image staging still requires that newly matched
 Enrollment RPM; runtime compatibility does not waive image checks.
 
-The accepted 27 October plugin presentation is package revision `7.11`.
+The historical 27 October plugin presentation used package revision `7.11`.
+Its plugin/artwork recipes below require their retained generation-7 manifest
+and source revision; the current generation-8 candidate uses the closed
+sparkline repair documented below, or a full source build.
 For an offline build without rebuilding identical executables, run
 `build-artwork-update.py --plugins-only BASE-RPM NEW-OUTPUT` as an unprivileged
 builder. `build.pluginUpdate` locks predecessor NEVRA/RPM/shell/plugin digests
@@ -89,3 +92,13 @@ previous runtime and separately backed-up config, state and caches.
 
 The disposable VM switching and measurement tools are under `tools/greyward-dev/`.
 They are not a production deployment, authentication or release-certification tool.
+
+
+## Closed sparkline crash repair
+
+`build-sparkline-repair.py BASE-RPM NEW-OUTPUT` builds only the manifest-locked
+Qt sparkline renderer repair, as an unprivileged builder. It checks the full
+predecessor inventory, executable digests and exact one-file delta; a different
+protected generation and quiescent migration are mandatory. It does not rebuild
+or alter the Go executables. Normal `build.sh` assembly applies the same patch.
+See cause, native RHI test and limits (private development evidence).

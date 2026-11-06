@@ -16,6 +16,23 @@ loader.exec_module(module)
 
 
 class NativeLockReadinessTests(unittest.TestCase):
+    def test_startup_wait_reuses_selection_and_does_not_relax_readiness(self):
+        with mock.patch.object(module, 'selected_api_version', return_value=38) as selection, \
+             mock.patch.object(module, 'check', side_effect=[ValueError('not ready'), None]) as check, \
+             mock.patch.object(module.time, 'sleep'), \
+             mock.patch.object(module.time, 'monotonic', return_value=1):
+            module.wait_check(True, 30)
+        selection.assert_called_once()
+        self.assertEqual(check.call_count, 2)
+        self.assertTrue(all(c.kwargs == {'desktop_only': True, 'expected_api': 38} for c in check.call_args_list))
+
+    def test_failed_readiness_remains_failure_at_deadline(self):
+        with mock.patch.object(module, 'selected_api_version', return_value=38), \
+             mock.patch.object(module, 'check', side_effect=ValueError('not ready')), \
+             mock.patch.object(module.time, 'monotonic', return_value=1):
+            with self.assertRaisesRegex(ValueError, 'not ready'):
+                module.wait_check(True, 0)
+
     def run_check(self, desktop_only, routing='', subject='greyward_guard_u:greyward_guard_r:greyward_guard_t:s0', api=34, expected=34):
         server = {'apiVersion': api, 'capabilities': ['dgop']}
         unsafe_lock = {'loginctlLocked': False, 'shouldLock': True, 'sessionLockSecure': False}

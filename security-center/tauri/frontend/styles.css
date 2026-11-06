@@ -503,10 +503,10 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   flex: 0 0 22px;
   place-items: center;
   overflow: hidden;
-  border: 1px solid rgba(169, 217, 238, .16);
+  border: 1px solid #d8dfe4;
   border-radius: 7px;
-  background: rgba(169, 217, 238, .07);
-  color: var(--pearl);
+  background: #fff;
+  color: #263640;
 }
 .network-identity-logo img {
   display: block;
@@ -520,11 +520,11 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   height: 29px;
   flex-basis: 29px;
   border-radius: 9px;
-  background: rgba(169, 217, 238, .09);
-  box-shadow: 0 0 18px rgba(169, 217, 238, .08);
+  background: #fff;
+  box-shadow: none;
 }
 .network-identity-logo-application img { width: 18px; height: 18px; }
-.network-identity-fallback { color: var(--subtle); }
+.network-identity-fallback { color: #263640; }
 .network-destination-chip {
   display: inline-flex;
   align-items: center;
@@ -546,7 +546,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   padding: 0;
   border: 0;
   border-radius: 5px;
-  background: transparent;
+  background: #fff;
   box-shadow: none;
 }
 .network-app-destinations > .network-destination-chip .network-identity-logo img { width: 13px; height: 13px; }
@@ -569,8 +569,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   line-height: 1;
   background: rgba(169, 217, 238, .06);
 }
-.network-country-flag-art { display: block; width: 100%; height: 100%; }
-.network-country-flag-code text { letter-spacing: .02em; }
+.network-country-flag-art { display: block; width: 100%; height: 100%; object-fit: contain; }
 .network-country-flag-unknown { color: var(--subtle); }
 .network-country-flag-unknown .ui-icon { width: 13px; height: 13px; }
 .network-activity-destination-detail {
@@ -944,7 +943,7 @@ input::placeholder { color: #9aaab5; }
 .network-activity-legend { display: grid; grid-template-columns: minmax(190px, 1fr) minmax(230px, 1.2fr) minmax(86px, auto) minmax(118px, .6fr) minmax(150px, .75fr) 20px; gap: 14px; align-items: center; margin: 0 0 4px; padding: 0 14px 9px; border-bottom: 1px solid var(--line); color: var(--subtle); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; }
 .network-activity-legend-key { min-width: 0; }
 .network-activity-legend-key .network-activity-identity { gap: 7px; }
-.network-activity-legend-key .network-identity-logo { width: 20px; height: 20px; flex-basis: 20px; border: 0; background: transparent; box-shadow: none; }
+.network-activity-legend-key .network-identity-logo { width: 20px; height: 20px; flex-basis: 20px; border: 0; background: #fff; box-shadow: none; }
 .network-activity-legend-key .network-country-flag { width: 20px; height: 15px; flex-basis: 20px; }
 .network-activity-legend-note { grid-column: 3 / -1; letter-spacing: 0; text-transform: none; }
 .network-activity-expand { display: grid; place-items: center; color: var(--subtle); transition: transform .15s ease; }
@@ -955,12 +954,6 @@ input::placeholder { color: #9aaab5; }
 .network-activity-details .network-activity-actions { grid-column: 1 / -1; }
 .network-activity-window-note { margin: 12px 0 0; color: var(--subtle); font-size: 12px; text-align: center; }
 .network-identity-fallback { font-size: 10px; font-weight: 720; letter-spacing: -.02em; }
-.network-identity-fallback.identity-color-0 { color: #b7d7e8; background: rgba(112, 177, 211, .16); }
-.network-identity-fallback.identity-color-1 { color: #d2c3e8; background: rgba(155, 126, 205, .16); }
-.network-identity-fallback.identity-color-2 { color: #c7dfb4; background: rgba(137, 182, 112, .16); }
-.network-identity-fallback.identity-color-3 { color: #e5c89e; background: rgba(205, 158, 92, .16); }
-.network-identity-fallback.identity-color-4 { color: #e4b8c8; background: rgba(193, 113, 145, .16); }
-.network-identity-fallback.identity-color-5 { color: #b8d9d5; background: rgba(105, 174, 166, .16); }
 .activity-mode { display: inline-flex; align-items: center; gap: 2px; padding: 3px; border: 1px solid var(--line); border-radius: 7px; background: rgba(16, 23, 29, .55); }
 .activity-mode .text-button { min-height: 30px; padding: 0 10px; border-radius: 5px; }
 .activity-mode .text-button.active { background: rgba(184, 221, 236, .12); color: var(--text); }

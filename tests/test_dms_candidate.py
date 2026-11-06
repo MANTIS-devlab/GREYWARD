@@ -67,9 +67,9 @@ class CandidateTests(unittest.TestCase):
 
     def test_explicit_trial_still_requires_the_installed_compatibility_tuple(self):
         with tempfile.TemporaryDirectory() as directory:
-            base = Path(directory); selector = base / 'selector'; selector.write_text('v2.0.0-7')
-            root = base / 'v2.0.0-7'; root.mkdir()
             receipt = json.loads((ROOT / 'environment/production/dms-2.0-candidate.json').read_text())
+            base = Path(directory); selector = base / 'selector'; selector.write_text(receipt['releaseId'])
+            root = base / receipt['releaseId']; root.mkdir()
             (root / 'release.json').write_text(json.dumps(receipt))
             packages = {('dms-greeter' if key == 'greeter' else key): value
                         for key, value in receipt['compatibility'].items() if key != 'validation'}

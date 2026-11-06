@@ -1,0 +1,163 @@
+--- a/res/swappy.glade
++++ b/res/swappy.glade
+@@ -60,7 +60,7 @@
+   <object class="GtkApplicationWindow" id="paint-window">
+     <property name="visible">True</property>
+     <property name="can_focus">False</property>
+-    <property name="resizable">False</property>
++    <property name="resizable">True</property>
+     <property name="window_position">center</property>
+     <property name="show_menubar">False</property>
+     <signal name="delete-event" handler="window_delete_handler" swapped="no"/>
+@@ -654,6 +654,8 @@
+     </child>
+     <child type="titlebar">
+       <object class="GtkHeaderBar">
++        <property name="show_close_button">True</property>
++        <property name="decoration_layout">menu:minimize,maximize,close</property>
+         <property name="visible">True</property>
+         <property name="can_focus">False</property>
+         <property name="spacing">10</property>
+--- a/src/application.c
++++ b/src/application.c
+@@ -740,6 +740,8 @@
+   GtkWindow *window =
+       GTK_WINDOW(gtk_builder_get_object(builder, "paint-window"));
+ 
++  gtk_window_set_icon_name(window, "greyward-screenshot");
++  g_object_set(gtk_settings_get_default(), "gtk-application-prefer-dark-theme", TRUE, NULL);
+   g_signal_connect(window, "destroy", G_CALLBACK(on_destroy), state);
+ 
+   state->ui->panel_toggle_button =
+@@ -802,6 +804,10 @@
+   action_toggle_painting_panel(state, &state->config->show_panel);
+ 
++  GtkRequisition natural;
++  gtk_widget_get_preferred_size(GTK_WIDGET(window), NULL, &natural);
++  gtk_window_resize(window, natural.width, natural.height);
++
+   g_object_unref(G_OBJECT(builder));
+ 
+   return true;
+ }
+--- a/src/main.c
++++ b/src/main.c
+@@ -5,5 +5,10 @@
+ 
+ int main(int argc, char *argv[]) {
++  // Native GTK dark variant, scoped to this editor process only.
++  g_setenv("GTK_THEME", "Adwaita:dark", TRUE);
++  g_setenv("GIO_USE_VFS", "local", TRUE);
++  g_setenv("GIO_USE_VOLUME_MONITOR", "unix", TRUE);
++
+   struct swappy_state state = {0};
+   int status;
+ 
+--- a/src/application.c
++++ b/src/application.c
+@@ -307,9 +307,94 @@
+ }
+ 
+ void save_clicked_handler(GtkWidget *widget, struct swappy_state *state) {
+-  // Commit a potential paint (e.g. text being written)
++  // Keep pending annotations, including the text currently being entered.
+   commit_state(state);
+-  save_state_to_file_or_folder(state, NULL);
++  GtkWindow *window = state->ui->window;
++  GtkWidget *dialog = gtk_file_chooser_dialog_new(
++      "Save Screenshot", window, GTK_FILE_CHOOSER_ACTION_SAVE,
++      "_Cancel", GTK_RESPONSE_CANCEL, "_Save", GTK_RESPONSE_ACCEPT, NULL);
++  GtkFileChooser *chooser = GTK_FILE_CHOOSER(dialog);
++  gtk_file_chooser_set_local_only(chooser, TRUE);
++  gtk_file_chooser_set_do_overwrite_confirmation(chooser, TRUE);
++  GtkFileFilter *filter = gtk_file_filter_new();
++  gtk_file_filter_set_name(filter, "PNG image");
++  gtk_file_filter_add_mime_type(filter, "image/png");
++  gtk_file_chooser_add_filter(chooser, filter);
++
++  const char *last = g_object_get_data(G_OBJECT(window), "greyward-saved-path");
++  if (last) {
++    gtk_file_chooser_set_filename(chooser, last);
++  } else {
++    // Preserve an explicitly configured save directory. Otherwise keep an
++    // edited capture beside its source rather than silently on the Desktop.
++    GKeyFile *preferences = g_key_file_new();
++    gboolean configured = state->config->config_file &&
++        g_key_file_load_from_file(preferences, state->config->config_file,
++                                 G_KEY_FILE_NONE, NULL) &&
++        g_key_file_has_key(preferences, "Default", "save_dir", NULL);
++    gchar *folder = !configured && state->file_str &&
++        g_path_is_absolute(state->file_str)
++        ? g_path_get_dirname(state->file_str)
++        : g_strdup(state->config->save_dir);
++    gtk_file_chooser_set_current_folder(chooser, folder);
++    g_free(folder);
++    g_key_file_unref(preferences);
++    gchar *base = state->file_str && strcmp(state->file_str, "-")
++        ? g_path_get_basename(state->file_str) : g_strdup("Screenshot");
++    gchar *extension = strrchr(base, '.');
++    if (extension && extension != base) *extension = '\0';
++    gchar *name = g_strdup_printf("%s-edited.png", base);
++    gtk_file_chooser_set_current_name(chooser, name);
++    g_free(name);
++    g_free(base);
++  }
++
++  gchar *filename = NULL;
++  if (gtk_dialog_run(GTK_DIALOG(dialog)) == GTK_RESPONSE_ACCEPT)
++    filename = gtk_file_chooser_get_filename(chooser);
++  gtk_widget_destroy(dialog);
++  if (!filename) return;
++
++  GError *error = NULL;
++  GdkPixbuf *pixbuf = pixbuf_get_from_state(state);
++  gchar *png = NULL;
++  gsize length = 0;
++  gboolean saved = pixbuf && gdk_pixbuf_save_to_buffer(
++      pixbuf, &png, &length, "png", &error, NULL);
++  if (saved) {
++    GFile *target = g_file_new_for_path(filename);
++    saved = g_file_replace_contents(target, png, length, NULL, FALSE,
++        G_FILE_CREATE_PRIVATE | G_FILE_CREATE_REPLACE_DESTINATION,
++        NULL, NULL, &error);
++    g_object_unref(target);
++  }
++  g_free(png);
++  if (pixbuf) g_object_unref(pixbuf);
++
++  if (!saved) {
++    GtkWidget *failure = gtk_message_dialog_new(window, GTK_DIALOG_MODAL,
++        GTK_MESSAGE_ERROR, GTK_BUTTONS_CLOSE, "Screenshot could not be saved");
++    gtk_message_dialog_format_secondary_text(GTK_MESSAGE_DIALOG(failure),
++        "%s", error ? error->message : "The image is unavailable. Try saving again.");
++    gtk_dialog_run(GTK_DIALOG(failure));
++    gtk_widget_destroy(failure);
++    g_clear_error(&error);
++  } else {
++    g_object_set_data_full(G_OBJECT(window), "greyward-saved-path",
++                          g_strdup(filename), g_free);
++    gchar *base = g_filename_display_basename(filename);
++    gchar *status = g_strdup_printf("Saved: %s", base);
++    GtkWidget *header = gtk_window_get_titlebar(window);
++    if (GTK_IS_HEADER_BAR(header)) {
++      gtk_header_bar_set_title(GTK_HEADER_BAR(header), "Screenshot Editor");
++      gtk_header_bar_set_subtitle(GTK_HEADER_BAR(header), status);
++    }
++    if (widget) gtk_widget_set_tooltip_text(widget, filename);
++    g_free(status);
++    g_free(base);
++    if (state->config->early_exit) gtk_main_quit();
++  }
++  g_free(filename);
+ }
+ 
+ void clear_clicked_handler(GtkWidget *widget, struct swappy_state *state) {
+@@ -351,7 +436,7 @@
+         clipboard_copy_drawing_area_to_selection(state);
+         break;
+       case GDK_KEY_s:
+-        save_state_to_file_or_folder(state, NULL);
++        save_clicked_handler(NULL, state);
+         break;
+       case GDK_KEY_b:
+         action_toggle_painting_panel(state, NULL);

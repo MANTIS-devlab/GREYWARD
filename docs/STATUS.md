@@ -1,5 +1,175 @@
 # GREYWARD current status
 
+## Network Activity real refresh and mixed attribution — 6 November 2026
+
+**Installed and exercised locally: Center/Context 137.** A real bounded network
+control produced elevated API results while the visible Live view stayed at 1/6.
+The missing poll lifecycle, late-evidence reassessment and focused-row rendering
+are corrected. Partially attributed events no longer split one executable/UID
+service-discovery pattern; app-level evidence is labelled separately from exact
+process identity and is not double-counted.
+
+The newly installed actual Center window was exercised through History →
+Overview → Network Activity → Live. Its automatic reads resumed; a fresh real
+control generated a 3/6 row in the actual window without Refresh. Earlier isolated
+six-level fixtures were insufficient to establish that behavior. The
+real-window receipt (private development evidence)
+separates actual AT-SPI label/bounds evidence from screenshots and synthetic tests.
+The collector UID/flow fields deferred in the earlier receipt are now present
+following the intervening normal boot. No logout/reboot was performed for this
+follow-up, no policy was weakened, and no public/ISO acceptance is claimed.
+
+## Network risk assessment reliability — 6 November 2026
+
+**Installed locally: Center/Context 135; sensor 1.7.1-4 unchanged.** Network
+assessment now evaluates bounded service-discovery patterns, fresh local IP/port
+indicators and independently supported process evidence on the existing 1–6
+scale. Health no longer hides retained normal-process correlations. Identity
+lookups retry safely; explanations recover retained factors. Sensor round trips
+are bounded and diagnosable, with historical losses kept separate from current
+health. No heuristic blocking, external per-connection lookup or new privileged
+interface was introduced.
+
+The read-only provider and session Context are active. Improved root collector
+flow/UID metadata awaits the next normal boot/network maintenance because its
+coupled restart stops OpenSnitch; networking and the active desktop were preserved.
+The local validation receipt (private development evidence)
+records tests, measured resources, a real benign sensor/process round trip,
+current ACTIVE health and the unresolved trigger of the original missing-probe
+state. This is local development, not a public update or ISO acceptance.
+
+## Desktop icon input recovery — 6 November 2026
+
+**Installed and active on `<validation-host>`: Files 1.0.0-24.** The blocked desktop was
+captured in the real process: `initVolumeManager → autoMountVolume(false) →
+Fm::MountOperation::handleFinish → QDialog::exec`. An implicit startup mount
+failure created an unparented application-modal error; it prevented icon launches
+and context menus although the event loop/process were still alive. Closing
+only that known mount error restored the original process's ordinary loop.
+
+The icon-only component now refuses automatic volume management at startup and
+its implicit-mount entry point. Factory defaults use the actual native volume
+keys; inherited user preferences remain untouched and cannot bypass the guard.
+Strata/GVfs/udisks and explicit storage actions retain their existing owners and
+permissions. See [the input contract](architecture/FILE_MANAGER_DESKTOP.md#icon-input-and-automatic-mounts--6-november-2026).
+
+The full offline source/RPM build passes three kernel-launcher tests, 29 native
+layout checks and three Rust metadata tests. Six defaults/preservation tests
+pass on Fedora. The linked private three-output fixture deliberately enables
+old mount preferences: the old executable fails the enumeration regression;
+the corrected source passes, with no automatic hotplug handler, plus retained
+routing, drag/content, live-file, 3/1/3 placement, process-restart and lifetime
+checks. Installed RPM verification, source-manifest equality and SELinux file
+label checks pass. Only icons restarted; the DMS PID/session stayed unchanged.
+All eight previously captured profile files remain byte-identical. After the
+startup delay the installed process has no modal dialog, is in its normal event
+loop and has zero service restarts. SELinux remains Enforcing; rollback RPM and
+private evidence are retained locally. The candidate Files floor is now 24;
+other protected-session package floors/acceptance remain unchanged.
+
+Both repository gates pass. The broader Windows desktop suite has 24 passes,
+five platform skips and one **pre-existing** error: its artwork-migration test
+expects `build.artworkUpdate`, already absent from the parent candidate manifest.
+This task does not alter that unrelated test or promote protected-shell work.
+No physical mouse/KVM/USB-mount acceptance, logout, reboot, ISO or publication
+is claimed.
+
+## Boot/LUKS and offline-update presentation recovery — 6 November 2026
+
+**Installed locally on `<validation-host>`: `greyward-branding` 0.1.0-22.** The regression is
+confirmed: revision 19's installed script has CRLF; the actual Plymouth parser
+rejects line 6. A new kernel image copied that invalid source, whereas the older
+7.2.13 image retained valid LF bytes. The native script plugin reproduces a fully
+black frame with the defective source. LUKS unlocking and offline updates had
+succeeded; neither authentication nor the update transaction was the failure.
+
+The fixed package passes its native parser build check and rebuilds all three
+normal kernel images (7.2.11, 7.2.13, 7.2.15). Installed RPM verification and
+byte/font/renderer/theme checks pass for all three images. Native memory-display
+renders of boot, masked unlock and a 50% update are visible and reviewed; the
+percentage uses Plymouth's actual 0–100 callback units. Seven focused tests pass
+on Fedora. A real dracut build, given the original CRLF source in a private mount
+namespace, fails explicitly and writes no image. The host theme remains valid.
+
+The build-time validator, per-kernel dracut guard, branding RPM post-transaction
+refresh, exact ISO-input closure and production acceptance checks are retained
+for future builds. See [boot update safety](../branding/BRANDING.md#kernel-and-branding-update-safety).
+No daemon, driver, kernel command line or authentication policy was added.
+Backups and native-render/rejection evidence are retained locally. The running
+boot/session is unchanged and SELinux remains Enforcing; no reboot, physical
+boot acceptance, new ISO or public publication is claimed.
+
+Both repository gates pass. The broader 45-test offline-image suite has 41
+passes, three platform skips and one **pre-existing** failure: it demands that
+the source Enrollment revision 91 equal the activated candidate floor 90. Both
+values already differ in the parent commit because Polkit activation remains
+deferred below; this task does not promote that protected-session candidate.
+
+## Network countries, risk priority and protected-input follow-up — 6 November 2026
+
+**Installed locally:** Center 134 / Context 134. The real ordinary-user Context
+API returns country metadata and six-level priorities for the 32 sampled live
+connections, retaining their Allowed decisions. Public countries use the local
+November DB-IP Lite MMDB; local/unknown addresses keep neutral markers. The
+unprivileged updater/timer succeeds, then a second invocation skips downloading
+the already current edition. Attribution is retained in UI/database status.
+See [country data](security-center/UX_SPEC.md#local-country-database) and
+[risk semantics](security-center/BEHAVIORAL_INTELLIGENCE.md#log-assessment-labels).
+Country is not a risk factor; metadata-only assessments explicitly retain low
+confidence and missing process/reputation coverage.
+
+Native validation: 503 Context tests passed before the final metadata-priority
+addition; the 27 affected GeoIP/intelligence tests pass on the final source.
+Frontend suites and both repository gates pass. Isolated WebKit renders at
+850/1250 pixels show 250 country assets without broken images or overlapping
+fields. On the reference, 4,096 resolutions take 772 ms initially and 305 ms
+cached (one reader, bounded cache, no lookup subprocess/network call). These
+are observed timings during development, not a universal performance target.
+
+**Polkit activation deferred:** a confirmed non-owner-output keyboard-focus bug
+is corrected in the assembler and staged Runtime 88 / Enrollment 91. Four native
+private-display tests pass, including an old-fails/new-passes two-output control,
+button focus, submit and cancellation. Live logs are consistent with that defect;
+the exact cause of every intermittent failure is not established. The running
+protected shell remains byte-identical, Runtime 87 / Enrollment 90 stay active,
+and the existing session remains open with SELinux Enforcing. A separately
+authorized logout, matched package installation and protected-profile migration
+are needed to activate this part. No live password challenge, physical KVM
+acceptance, publication or ISO build is claimed. See
+[the protected input contract](security-center/APPLICATION_SECURITY_ENROLLMENT.md#polkit-input-across-outputs--6-november-2026).
+
+## Office upstream recovery — 6 November 2026
+
+**PUBLISHED and detected by the reference Update Center provider:**
+[generation 16](https://github.com/MANTIS-devlab/GREYWARD-office-updates/releases/tag/office-f44-x86_64-g16)
+offers Writer 0.15.2, Sheets 0.16.1, PDF 0.18.2 and Slides 0.15.1, all revision
+16.fc44. The [complete build/sign/DNF run](https://github.com/MANTIS-devlab/GREYWARD-office-updates/actions/runs/42139608446)
+and component CI pass at reviewed source `5028858`. All four native engine round
+trips and private graphical startups pass; signed upgrades are accepted and
+untrusted RPM/metadata signatures rejected. Anonymous download readback, signed
+remote metadata and the stable mirrorlist pass before channel confirmation.
+Both channel state fields select generation 16; generations 9 and 16 are retained.
+The actual installed DNF5 provider on the reference reports all four updates
+available without compatibility holds after Office-only metadata refresh. The
+applications remain installed at generation 9: no forced apply, logout or ISO.
+The [recovery implementation](software/OFFICE_INTEGRATION.md#upstream-resource-and-ui-recovery--6-november-2026)
+follows declared font/language revisions with integrity/license checks, embeds
+required translations and routes all four update commands to Update Center.
+New-version physical input, preferences migration, printing and apply/reboot
+acceptance remain separate from these build/engine/startup/discovery checks.
+
+## Office attribution automation — 6 November 2026 (initial recovery evidence)
+
+**DEPLOYED to the dedicated Office distribution repository:** the [NOTICE policy](software/OFFICE_INTEGRATION.md#notice-attribution-policy--6-november-2026)
+allows third-party credits/notices to evolve without blocking every release,
+retains their exact new bytes and hashes, and keeps first-party/license,
+dependency/resource and patch-compatibility gates. The four current upstream
+notice changes pass; this is not acceptance of complete application upgrades.
+The initial reviewed export reached distribution `main` as `ebcedc7`; its component
+validation passed. That initial non-publishing pilot passed NOTICE and stopped
+on changed font resources while generation 9 was served. The complete recovery
+and generation-16 publication above supersede this intermediate blocking state.
+
 ## Sophon 0.5.4 release — 2 November 2026
 
 The [0.5.4 Sophon installer](patch-notes/0.5.4-sophon.md) and its frozen
@@ -12,7 +182,295 @@ hardware acceptance remain separate. Bazaar Explore can still fail while app
 installation works; no durable correction is claimed. Use the release archive
 for the exact runtime source revision; public main may differ.
 
-## Sophon 0.5.3 release — 28 October 2026
+The [installer investigation](architecture/ISO_CREATION.md#054-installer-failure-investigation)
+reproduces a separate 0.5.4 defect: Test-media requests an embedded checksum that
+the image does not contain; native `checkisomd5` exits 1. The tester's missing
+desktop/first-boot report still needs its exact error and hardware details.
+No media correction or new hardware acceptance is implied by the investigation.
+
+## 0.5.4 Sophon composition — 2 November 2026
+
+**BUILT locally on the physical reference and subsequently published:** 0.5.4 consolidates
+validated runtime fixes, Session 45 taskbar defaults, Branding 21 installer UX,
+the adapted screenshot editor and the explicitly verified Intelligence 6 package.
+The 5,267,587,072-byte ISO passed offline dependency checks, actual offline Flatpak
+installation, extracted-payload verification and independent Windows readback.
+All 15 selected RPMs match in both embedded locations; there are 1,148 runtime
+packages and four default Flatpak applications. Native image tests: 83 passed;
+Rust: 215 passed, 22 explicitly ignored. Both essential repository checks pass.
+
+Local artifact: `.local/releases/0.5.4-Sophon/GREYWARD-0.5.4-Sophon-x86_64.iso`.
+SHA-256: `7ddb5a378a26138b8349f3fd5bcd42bc479c144417d07248a2ab572ac2fdd959`.
+No fresh boot/install, LUKS unlock or recovery acceptance is claimed. The reference
+was not logged out or rebooted. See [composition record](architecture/ISO_CREATION.md#054-sophon--2-november-2026).
+
+## Next-image installer usability — 2 November 2026
+
+**PREPARED:** English/US is the initial installer language/layout; native Keyboard
+confirmation remains required rather than being pre-answered as French. Branding
+21 hides only the empty software-selection page for GREYWARD's explicit offline
+package set. Package/source/media guards and native-method checks cover these
+choices; see the [installer contract and validation limits](architecture/ISO_CREATION.md#prepared-installer-localization-and-fixed-package-selection--2-november-2026).
+This preparation is included in the local 0.5.4 image above; full installer/LUKS
+acceptance remains pending. The reference desktop's preferences are unchanged.
+
+## Next-image taskbar icon size — 1 November 2026
+
+**PREPARED for the next ISO:** the factory AppsDock icon size is now 180%,
+captured from the active reference taskbar (previous factory value: 155%).
+Initially prepared in Session 44, this preference is included in Session 45 and
+the local 0.5.4 image above. Established layouts remain untouched; the reference
+already uses 180% natively. No public update was published.
+
+## Screenshot editor appearance — 31 October 2026
+
+**IMPLEMENTED and installed locally:** Session 43, Branding 19 and the adapted
+Swappy 1.5.1-8.greyward2 add native window controls, native dark GTK and the
+GREYWARD app icon. Save/Ctrl+S now opens a native chooser with success/error
+feedback; real isolated save, cancel and permission-failure tests pass. The actual
+editor was rendered with a synthetic image in an isolated compositor; capture authority is unchanged. Protected verification and
+SELinux remain intact, without logout. See [scope, image input and validation](../packaging/greyward-swappy/README.md).
+No new ISO or public release was produced.
+
+## System logs and runtime follow-up — 30 October 2026
+
+**OBSERVED, no runtime changes:** the late-evening audit (private development evidence)
+confirms a 100-Mb/s Ethernet link, an external exFAT unclean-removal warning,
+failed WLR portal/boot-success marking, and continuing ordinary Context helper
+cost (19% of one core in one passive window). No general saturation is measured;
+Freshclam checks succeed and DMS/icons run without a current restart storm.
+GPU/clocksource concerns and older crash chronology retain their limits; no
+repair, logout, policy change, ISO or publication was performed.
+
+## Native ChatGPT sign-in — 30 October 2026
+
+**IMPLEMENTED and installed locally:** Session 42 adds a dedicated TCP 1455
+callback permission, preserving disabled generic TCP servers and existing
+firewall/VPN behavior. The same bundled Codex helper starts under the real
+ordinary domain on loopback; another unapproved port remains denied. Protected
+verification passes without restarting the app or graphical session. See the
+validation and scope (private development evidence). Browser/account
+authentication remains the user's action; no ISO or publication.
+
+## Runtime stability follow-up — 30 October 2026
+
+**IMPLEMENTED and installed locally:** Files 23, Session 41
+and Context 132 address desktop teardown, bounded startup, asynchronous and
+batched scanner reads, unchanged engine-limit retries, graphical collector
+lifecycle and fair behavioral retention. A real repeated-probe comparison cuts
+96 external commands to three; it is not a whole-system performance claim.
+Real folder scanning, receipt invalidation, unchanged personal settings and
+protected-seat verification pass without closing the graphical session.
+See implementation and acceptance (private development evidence).
+No ISO, publication or protected-profile migration.
+
+## Custom runtime stability/performance audit — 30 October 2026
+
+**OBSERVED, no runtime changes:** the installed audit (private development evidence)
+records repeated status-probe overhead during USB scanning, a current Files 22
+teardown crash, dependent-service restart churn, short behavioral retention and
+headless collector lifecycle issues. CPU/GPU samples are workload observations,
+not controlled idle or release acceptance. The audit itself made no fixes;
+its later implementation is recorded above. Earlier login and Quickshell repairs
+below remain installed.
+
+## Ordinary desktop startup across package generations — 30 October 2026
+
+**IMPLEMENTED and installed:** Session 40 fixes the remaining generation-7-only
+ordinary DMS migration checks. The same real Wayland login is active, DMS
+preparation exits 0, the selected shell/plugins load, and live protected-seat
+verification is true. Settings and session JSON match their pre-migration
+backups exactly. Nine unprivileged/native CLI and pin tests pass; SELinux stays
+Enforcing. See the full startup receipt (private development evidence).
+No logout, protected-profile change, ISO or publication.
+
+## Login preparation compatibility — 30 October 2026
+
+**IMPLEMENTED and activated locally:** Application Security 87 / Enrollment 90
+supersede the preceding 86/89 pair; DMS generation 8 retains the graph repair.
+One reviewed profile definition now serves assembly and live login. Enrollment
+and migration check real preparation compatibility before committing; early
+startup failures restore the console. Migration reloads the broker and verifies
+its actual installed executable. Real installed materialization, all 1,645
+protected hashes and focused regressions pass; SELinux remains Enforcing.
+See cause and validation limits (private development evidence).
+No ISO or publication.
+
+## Quickshell crash and boot-helper assessment — 30 October 2026
+
+**IMPLEMENTED and activated locally:** DMS generation 8, Application Security 86
+and Enrollment 89 repair the reproduced Qt CurveRenderer history-fill crash.
+Context 131 / rules 3 narrowly classify the verified Fedora boot-success helper
+without inherited trust or policy changes.
+The exact crash reproducer, native GPU-path successor and evidence replay pass.
+See the investigation and activation receipt (private development evidence).
+No ISO or publication.
+
+## Network Activity clarity and flags — 30 October 2026
+
+**IMPLEMENTED and installed:** Center 133 / unchanged Context 130. Zero
+assessments read Nothing suspicious, unknown/invalid evidence stays Not assessed,
+and nonzero indices retain visible /100 units and expanded evidence. Actual
+firewall decisions and backend scores are unchanged. App/domain tiles are white.
+The complete offline SVG set covers 249 ISO countries/territories plus XK;
+unknown locations retain a neutral marker. The reference has no local GeoIP
+database, so artwork coverage does not create missing location evidence.
+119 frontend/shared-history contracts, all-asset validation, native WebKit
+rendering at two widths, normal RPM checks and installed executable/license
+readback pass. Security Center is reopened on the updated executable without
+logout. See the receipt (private development evidence).
+No publication, policy change or ISO.
+
+## Refined ClamAV scan presentation — 29 October 2026
+
+**IMPLEMENTED and installed:** Center 132 / Context 130 supersede the initial
+131/129 visual treatment below. The native file-scan window prioritizes the
+selected item and current result, aligned direct counters and persistent actions;
+context and secondary tools remain in a disclosure. Coordinated state artwork,
+readable type and useful captions refine the existing native DMS notification.
+61 focused regressions, six GTK rendering/interaction scenarios, native DMS
+component rendering, normal RPM checks and a real one-card scan readback pass.
+See the refinement receipt (private development evidence)
+for limits and rollback. No logout, protected profile change, publication or ISO.
+
+## Native scan notifications — 29 October 2026
+
+**IMPLEMENTED and installed:** Center 131 / Context 129 supersede Center 130 /
+Context 128 for scan presentation. The companion no longer sends duplicate
+scan toasts; the existing Context publisher owns larger colored native result
+text and original graphite status emblems. Recent manual completions cannot be
+hidden by a newer background job. Delivery deduplication survives service/server
+changes; successful background work stays silent. Real manual and background
+scans, DMS-history readback, native-component rendering and regression tests
+pass. See the notification receipt (private development evidence)
+for exact validation and physical-display limits. No logout, policy weakening,
+publication or ISO.
+
+## KVM display detection — 29 October 2026
+
+**IMPLEMENTED and installed:** Session 39. A missed Nouveau hotplug was
+reproduced on the physical reference while the NVIDIA GPU was suspended.
+A targeted DRM detect restored the two external outputs without logout;
+DMS recovered the existing positions, rotation and refresh rates.
+The new bounded root oneshot uses the KVM USB-hub return event, with no idle
+polling or permanent GPU power override. The native service and package checks
+pass. The automatic physical KVM round trip restored both external connectors
+in about 3.2 seconds after USB return, and the user confirms the fix. See the
+KVM receipt (private development evidence). All prior session
+payloads, protected login files and security policies are preserved. No ISO or
+publication.
+
+## Behavioral quality correction — 29 October 2026, local development
+
+**IMPLEMENTED and installed:** Center 130 / Context 128; sensor 1.7.1-4 unchanged.
+Network Activity keeps actual firewall decisions and adds one aligned, readable
+Intelligence field. Verified process-instance linkage and separately scoped
+current reputation checks supply assessments; raw kernel attempts are no longer
+duplicate connection rows. History defaults to meaningful nonzero observations.
+Current sensor health is ACTIVE after real probes/attachment/catch-up checks;
+two older gaps remain recorded. The existing reputation timer is enabled and
+its feed is READY. The confirmed portal FUSE 40/100 false positive is reviewed
+without a broad whitelist or removal of original evidence. See the
+correction receipt (private development evidence) for
+validation, overhead, rollback and limits. No logout, reboot, policy relaxation,
+publication or ISO. Earlier Network Activity mixing below is superseded.
+
+
+## Protected login lifetime correction — 29 October 2026
+
+**IMPLEMENTED and installed:** Application Security 85 / Enrollment 87. The
+recurrent password-accepted/return-to-greeter failure is an abandoned old seat,
+not an authentication rejection. A parent/guardian startup race is reproduced
+with real PID 1 collection; admission now waits for live, scope-bound guardian
+acknowledgement and reuses the validated owner pidfd. Cleanup covers initialization
+and console restoration failures. The root migrator supports session-only
+refresh and rejects live seats while recognizing verified vanished locators.
+
+Only the verified inactive old scope is retired. The greeter and workflow broker
+are active, all 1,645 protected file digests and Administration linkage pass,
+SELinux is Enforcing and rollback is retained. 108 targeted Python tests pass
+(one opt-in skip); native isolated lifecycle and package checks pass. Fresh
+physical login is now active and independently verifies with its live guardian;
+lock/Administration and another physical logout cycle are not retested. See the
+[current contract](security-center/SESSION_LIFETIME.md) and
+dated evidence (private development evidence). No ISO/publication or
+policy weakening. Earlier behavioral and ClamAV packages below are preserved.
+
+## Historical intermediate log presentation — superseded by the quality correction
+
+**IMPLEMENTED and installed on the physical reference:** Center 129, Context
+127 and unchanged local sensor 1.7.1-4. The standalone Intelligence navigation,
+workspace and Overview add-on are removed. Security History carries system
+observations; Network Activity combines distinct kernel-attempt and OpenSnitch
+policy records. Rows expose scores, classifications, evidence and correlated
+cases in place. DMS receives larger native score images and score/100 titles.
+Review links open the corresponding existing log.
+
+The installed runtime sources and current Center executable match the new
+packages. Ordinary-user SYSTEM/NETWORK reads, caller isolation, destination
+projection and private native notification routing pass. There are 467 passing
+Python tests (one opt-in skip; 468 total), 170 frontend contracts and 215 passing native
+Rust tests (22 existing opt-in ignores); formatting and Clippy pass. Own-WebKit
+rendering was reviewed at 1250 and 850 pixels with clearly isolated design
+fixtures. Existing two current-boot gaps remain explicitly **DEGRADED**, with
+verified execution/attachment probes; no counters were cleared for appearance.
+
+The integrated log receipt (private development evidence)
+owns this change. Earlier sensor/performance evidence remains in the
+original receipt (private development evidence).
+[Architecture and limits](security-center/BEHAVIORAL_INTELLIGENCE.md) remain the
+current authority. No new enforcement, desktop logout, network/VPN change,
+public publication, ISO or production image tuple promotion. Earlier ClamAV
+behavior below is retained by the newer package revisions.
+
+## ClamAV integration — 29 October 2026
+
+**IMPLEMENTED and installed on the physical reference.** Center 124, Context
+119 and Files 22 reuse Strata's existing scan job, add folder/desktop scan
+actions and native Properties receipts, and provide quiet persistent arrival
+scanning for Downloads, Desktop and verified mounted USB storage. Freshclam
+recovery and definition age/updater status are packaged. Cross-user scan
+records, detections, activity and cancellation are now scoped to the trusted
+D-Bus UID, including the fallback store and historical unknown-owner rows.
+No SELinux policy, protected profile or general permission grant was added.
+
+Native package builds and extracted/installed source-byte checks pass. Real
+arrival scans on all three locations, incomplete-download handling, changed-file
+invalidation, completed-download rescan and installed cross-UID refusal pass.
+Interactive Properties/menu acceptance and physical USB unplug/reinsert remain
+separate from these backend checks. The matching production tuple, package
+closure and source patches are prepared for a future image; no ISO or public
+publication was performed. See [File Security](security-center/FILE_SECURITY.md)
+and the validation receipt (private development evidence).
+
+## Physical-reference login recovery — 28 October 2026
+
+The physical reference's login admission rejected an abandoned previous seat:
+its recorded ordinary owner had exited, but protected workers and the seat
+receipt remained. Guarded maintenance retired only that verified inactive
+scope and restored the canonical console label, then reopened the greeter.
+The workflow broker remains active and SELinux Enforcing; no package, policy,
+mapping or protected profile was changed. The owner confirms normal desktop
+login. On 29 October, readback of the now-rebooted reference confirms an active
+Wayland seat, a live guardian in its exact scope and `verified: true` under
+Enforcing. This does not establish a successful retry before that intervening
+reboot; the original guardian/cleanup failure is not yet established.
+This runtime repair does not claim a permanent product or ISO correction.
+See the historical recovery evidence (private development evidence).
+
+## Local workspace consolidation — 28 October 2026
+
+The current engineering checkout is now at the owner-designated project root;
+the reviewed public source and Office automation repositories are separate
+ignored subdirectories. Unique old Git history, unmerged source changes,
+signing/access material, original assets, legal evidence and the verified
+0.5.3 release are retained locally. Obsolete external exports, build caches,
+candidate images and unused test disks are removed after inventory and source
+preservation. The local workspace contract and the Windows-managed Hyper-V
+metadata exception are in local workspace (private development evidence).
+This is not a public publication, ISO rebuild or guest security acceptance.
+
+## Sophon 0.5.3 publication — 28 October 2026
 
 The [0.5.3 image](patch-notes/0.5.3-sophon.md) was built on the physical reference
 from frozen source `535652d` with all selected fixes and signed Office generation 9.
@@ -22,10 +480,12 @@ copy checks pass. Its 5,165,809,664 bytes have SHA-256
 Direct Windows ISO validation passes all payload hashes, 40 required paths,
 26 selected-RPM byte comparisons, nine canonical file comparisons and the
 enabled pinned Office channel. The reference desktop stayed open; the protected
-seat remains verified under Enforcing. The existing image and its corresponding sources are published on
-SourceForge. Its GRUB boot menu was observed in the test VM; this does not
-establish full clean-install, recovery or physical acceptance. See the release
-notes and publication record for the current evidence boundary.
+seat remains verified under Enforcing. The image and ten companions are published on SourceForge after complete
+SFTP hash readback. Public HTTPS and the latest-download redirect select the
+verified 0.5.3 bytes. PR 31 integrates the matching sources and README at public
+main `96b200c`; the five PR checks and all five merged-main checks pass. The actual GRUB boot menu was observed in
+TEST-ISO. This is separate from complete clean-install, recovery or physical
+acceptance. See [publication](PUBLICATION.md) for the evidence boundary.
 
 ## Office six-day GitHub automation — 27 October 2026
 

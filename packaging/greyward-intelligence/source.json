@@ -1,0 +1,23 @@
+{
+  "schema": "greyward.intelligence-source/v1",
+  "status": "local-development-unpublished",
+  "sensor": "cilium/tetragon",
+  "version": "1.7.1",
+  "upstream": "https://github.com/cilium/tetragon",
+  "sources": {
+    "tetragon-v1.7.1-source.tar.gz": {
+      "sha256": "d5d076c4b1e02b8b20270229e86e7305b18063ad52c4fb535fe0359bf25c693d",
+      "url": "https://api.github.com/repos/cilium/tetragon/tarball/refs/tags/v1.7.1"
+    },
+    "tetragon-v1.7.1-amd64.tar.gz": {
+      "sha256": "2f36a7bbb2b3d77a011383a01c8f804fe7761d934a76ff2fdf99ebad6f3e89ae",
+      "url": "https://github.com/cilium/tetragon/releases/download/v1.7.1/tetragon-v1.7.1-amd64.tar.gz"
+    }
+  },
+  "ebpf_dependency": "v0.22.0",
+  "reason": "Upstream Linux 7.1+ BTF layout fix cilium/ebpf#2042; adapt obsolete FlushKernelSpec cleanup calls.",
+  "integrity": "Pinned SHA-256/TLS and Go module checksums; no upstream signature verification claimed.",
+  "go_mod_sha256": "e7954de7ef23e0e98723861e1e8e248aff5c7416070b084b1688e7f67a180029",
+  "go_sum_sha256": "7de8381af282cc93742a9ca8273670741315ed663c15f3a029f36f47cf84abb5",
+  "compat_patch_sha256": "284b18f331b82b234620f136e2281736315ca6aca777b03221944e56fdffec47"
+}

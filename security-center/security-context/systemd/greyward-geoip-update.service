@@ -1,0 +1,25 @@
+[Unit]
+Description=GREYWARD local DB-IP Lite Country database refresh
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/greyward-geoip-update
+User=greyward-geoip
+Group=greyward-geoip
+StateDirectory=greyward/geoip
+StateDirectoryMode=0755
+UMask=0022
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+CapabilityBoundingSet=
+MemoryMax=128M
+CPUQuota=25%
+Nice=15
+TimeoutStartSec=120

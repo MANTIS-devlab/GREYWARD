@@ -2,7 +2,7 @@
   "schema": "greyward.production-system/v1",
   "status": "active-development",
   "release": {
-    "version": "0.5.3",
+    "version": "0.5.5",
     "codename": "Sophon"
   },
   "runtime": {
@@ -28,6 +28,7 @@
     "dmsRuntimePackage": "greyward-dms",
     "sessionPolicyPackage": "greyward-session",
     "officeSourceManifest": "office-source/packaging/greyward-office/source.json",
+    "intelligencePackage": "greyward-intelligence",
     "officePackages": ["greyward-writer", "greyward-sheets", "greyward-pdf", "greyward-slides"]
   },
   "notProduction": [

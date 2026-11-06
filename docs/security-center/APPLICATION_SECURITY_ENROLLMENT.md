@@ -858,3 +858,47 @@ These decisions authorize implementation. They do not establish a passed
 production gate. Existing-account offline migration is deliberately distinct
 from an automatic first-install transaction, and actual recovery/administration
 proof must precede enabling production enrollment.
+
+
+## Protected desktop upgrade and preparation gate
+
+`desktop/materialize.py` owns the reviewed native/legacy release/profile sets;
+authentication assembly reuses those exact sets. Unknown generations refuse.
+Its read-only `--check-release` is required before initial enrollment writes,
+before a protected migration commits, and before live admission mutates tty1.
+Preparation failures restore the console and close the held owner descriptor.
+A successful root/quiescent migration also reloads active fixed admission
+brokers and verifies the live executable identity against the installed file.
+A running predecessor is not a valid upgrade. No check substitutes for the
+separate protected receipt, kernel-state, PAM or normal-login validation.
+See the observed regression and installed correction (private development evidence).
+
+
+## Polkit input across outputs — 6 November 2026
+
+The protected authorization shell keeps exactly one password-bearing form.
+The previous implementation pinned it to the first display while only restoring
+focus when that same window received keyboard-enter. An active mirror window
+could therefore own the keyboard without owning any password field. Calling
+`forceActiveFocus()` in a different window did not transfer Wayland keyboard
+ownership. The installed failure log contains `scopeFocused=true` with
+`windowFocused=false`; the Update Center failure followed USB/KVM input hotplug.
+That evidence is consistent with this defect, not proof that every intermittent
+authentication failure has the same cause.
+
+The assembler now moves the single form to the actual active protected window,
+both on keyboard-enter and when session-lock protection becomes secure. Clicking
+a mirror field requests that same handoff. A handoff clears an unfinished
+response; no secret is copied between windows, clients or ordinary applications.
+Ordinary lock/PAM ownership, secure session-lock gating and Cancel remain intact.
+The existing one-screen button-focus test passes. A real two-output private
+headless compositor reproduces the old failure (synthetic key delivered but not
+accepted), while the corrected shell accepts the same input. These tests use
+synthetic flows, never the live Polkit agent or a real password.
+
+Runtime 88 and its exact Enrollment 91 dependency are prepared for a quiescent
+protected-profile migration. They must not be installed/migrated into an active
+protected desktop. Activation remains deferred to a separately authorized logout
+and the existing `greyward-migrate-protected-dms-shell` workflow; source assembly
+and private tests do not establish real-session or physical KVM acceptance.
+The active authentication runtime and desktop are preserved during this task.

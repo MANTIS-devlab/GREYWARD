@@ -2,6 +2,13 @@
 
 Status: **IMPLEMENTED FOUNDATION / PARTIAL SIGNAL COVERAGE**.
 
+Context 132 starts graphical collectors only for an eligible non-root display
+session. Its user units are enabled through the graphical target rather than
+every SSH user manager; root user-manager activation is excluded. Explicit
+ordinary D-Bus reads remain available without starting background shell/arrival
+observers in a headless session. Scanner-change signals dirty file information
+only; they do not invalidate independent firmware/package/network evidence.
+
 ## Security and privacy notifications
 
 `security_notices.py` adds observations inside the existing session runtime;

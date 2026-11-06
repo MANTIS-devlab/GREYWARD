@@ -3,12 +3,13 @@ param()
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path $PSScriptRoot -Parent
 $errors = [Collections.Generic.List[string]]::new()
-Get-ChildItem $repo -Recurse -Filter *.ps1 | Where-Object { $_.FullName -notmatch '\\(\.git|build|cache|output|target|packer_cache|node_modules)\\' } | ForEach-Object {
+$localWorkspacePattern = '^' + [regex]::Escape($repo) + '\\(\.local|public|public-office-updates)\\'
+Get-ChildItem $repo -Recurse -Filter *.ps1 | Where-Object { $_.FullName -notmatch '\\(\.git|build|cache|output|target|packer_cache|node_modules)\\' -and $_.FullName -notmatch $localWorkspacePattern } | ForEach-Object {
     $tokens = $null; $parseErrors = $null
     [Management.Automation.Language.Parser]::ParseFile($_.FullName,[ref]$tokens,[ref]$parseErrors) | Out-Null
     foreach ($error in $parseErrors) { $errors.Add("$($_.FullName):$($error.Extent.StartLineNumber): $($error.Message)") }
 }
-Get-ChildItem $repo -Recurse -Filter *.json | Where-Object { $_.FullName -notmatch '\\(\.git|build|cache|output|target|packer_cache|node_modules)\\' } | ForEach-Object {
+Get-ChildItem $repo -Recurse -Filter *.json | Where-Object { $_.FullName -notmatch '\\(\.git|build|cache|output|target|packer_cache|node_modules)\\' -and $_.FullName -notmatch $localWorkspacePattern } | ForEach-Object {
     try { $document = [System.Text.Json.JsonDocument]::Parse((Get-Content $_.FullName -Raw)); $document.Dispose() } catch { $errors.Add("Invalid JSON $($_.FullName): $($_.Exception.Message)") }
 }
 Get-ChildItem (Join-Path $repo 'branding') -Recurse -Filter *.svg | ForEach-Object {
@@ -568,13 +569,13 @@ if (Test-Path -LiteralPath $securePluginManifestPath) {
 
 if (Test-Path -LiteralPath $securityCenterRoutePath) {
     $securityCenterRoute = Get-Content -Raw -LiteralPath $securityCenterRoutePath
-    if ($securityCenterRoute -notmatch 'threats\)') {
-        $errors.Add('The Security Center route helper must support the threats destination.')
+    if ($securityCenterRoute -notmatch '(?m)^\s*history\|activity\)') {
+        $errors.Add('The Security Center route helper must support integrated history/activity incident destinations.')
     }
     if ($securityCenterRoute -notmatch '\[\[ -n "\$event_id" && ! "\$event_id"') {
         $errors.Add('The Security Center route helper must allow the general threats page without a focused event id.')
     }
-    if ($securityCenterRoute -notmatch '\[\[ "\$page" == "threats" && -n "\$event_id" \]\]') {
+    if ($securityCenterRoute -notmatch '\[\[ \( "\$page" == "threats" \|\| "\$page" == "history" \|\| "\$page" == "activity" \) && -n "\$event_id" \]\]') {
         $errors.Add('The Security Center route helper must only write a focused event when one is supplied.')
     }
 }
@@ -698,8 +699,9 @@ if (-not (Test-Path -LiteralPath $anacondaCssPath) -or -not (Test-Path -LiteralP
         $anacondaConf -match '(?im)^\s*variant_id\s*=\s*workstation\s*$' -or
         $anacondaConf -match '(?im)^\s*hidden_spokes\s*=.*UserSpoke' -or
         $anacondaConf -match '(?im)^\s*hidden_webui_pages\s*=.*anaconda-screen-accounts' -or
-        $anacondaConf -notmatch '(?m)^hidden_spokes\s*=\s*$' -or
-        $anacondaConf -notmatch '(?m)^hidden_webui_pages\s*=\s*$' -or
+        $anacondaConf -notmatch '(?m)^hidden_spokes\s*=\s*SoftwareSelectionSpoke\s*$' -or
+        $anacondaConf -notmatch '(?m)^hidden_webui_pages\s*=\s*anaconda-screen-software-selection\s*$' -or
+        $anacondaConf -notmatch '(?m)^use_geolocation\s*=\s*False\s*$' -or
         $anacondaConf -notmatch '(?m)^custom_stylesheet\s*=\s*/usr/share/anaconda/pixmaps/greyward-anaconda\.css\s*$') {
         $errors.Add('The Anaconda GREYWARD profile must inherit Fedora, keep account creation visible, and use the supported stylesheet hook.')
     }
@@ -803,7 +805,7 @@ if (Test-Path -LiteralPath $securityCenterSpecPath) {
         }
     }
 }
-foreach ($rpmSpecPath in @($securityCenterSpecPath, $securityContextSpecPath, $brandingSpecPath)) {
+foreach ($rpmSpecPath in @($securityCenterSpecPath, $securityContextSpecPath, $brandingSpecPath, (Join-Path $repo 'packaging/greyward-intelligence/greyward-intelligence.spec'))) {
     if (-not (Test-Path -LiteralPath $rpmSpecPath)) { continue }
     $rpmSpec = Get-Content -Raw -LiteralPath $rpmSpecPath
     $headerVersion = [regex]::Match($rpmSpec, '(?m)^Version:\s+([^\s]+)').Groups[1].Value

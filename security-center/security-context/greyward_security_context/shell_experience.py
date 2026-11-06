@@ -5,6 +5,7 @@ This is a projection, not a second security evaluator or evidence store.
 import datetime as dt
 import hashlib
 from pathlib import Path
+from .scan_notices import results as scan_results, subject as scan_subject
 
 RANK = {"CRITICAL": 0, "ACTION": 1, "WARNING": 2, "INFO": 3}
 
@@ -118,25 +119,15 @@ def build_experience(shell, capsule, devices, usb_error, files, network, operati
     for detection in files.get("detections", [])[:64]:
         if detection.get("state") not in {"DETECTED", "QUARANTINE_FAILED", "QUARANTINE_PENDING"} or detection.get("source_status") == "MISSING": continue
         reference = str(detection.get("detection_id") or detection.get("id") or "")
-        name = Path(str(detection.get("original_path") or detection.get("path") or "A file")).name[:100]
-        pending.append(item("detection:" + reference, "malware", "CRITICAL", "Threat detected", name + " needs review in File Security.", "files"))
+        name = scan_subject(detection.get("original_path") or detection.get("path") or "A file")
+        pending.append(item("detection:" + reference, "malware", "CRITICAL", "Threat detected", name + " needs review in File Security.", "files",
+                            [action("open", "Review finding")], scan_status="THREAT", scan_subject=name, notification_title=name))
     scan = files.get("active_scan") or {}
     if scan:
         activity.append({"id": "scan:" + str(scan.get("operation_id", "active")), "kind": "scan", "icon": "search", "title": "Scanning files", "detail": "View scan progress in Security Center", "route": "files"})
     elif files.get("state") == "UNAVAILABLE":
         pending.append(item("scanner-unavailable", "provider", "WARNING", "File protection unavailable", "Scan status cannot be confirmed.", "files"))
-    latest = files.get("latest_scan") or {}
-    if not scan and latest.get("ended_at") and not latest.get("detection_count"):
-        try:
-            ended = dt.datetime.fromisoformat(str(latest['ended_at']).replace('Z', '+00:00'))
-            recent = 0 <= (dt.datetime.now(dt.timezone.utc) - ended).total_seconds() < 30
-        except (TypeError, ValueError):
-            recent = False
-        if recent:
-            state = latest.get('state')
-            title = 'Scan finished' if state == 'COMPLETED' else 'Scan cancelled' if state == 'CANCELLED' else 'Scan could not finish'
-            pending.append(item('scan-result:' + str(latest.get('operation_id')), 'operation', 'INFO' if state in {'COMPLETED', 'CANCELLED'} else 'WARNING', title,
-                                'No known threats found.' if state == 'COMPLETED' else latest.get('detail') or 'Review the result in File Security.', 'files', timeout_ms=4000))
+    pending.extend(scan_results(files, now_value))
     # File Security owns scanner readiness in both Center and the shell.
     malware = files.get("clamav")
     malware_state = malware.get("status", "UNAVAILABLE") if isinstance(malware, dict) else shell.get("malware", {}).get("state")

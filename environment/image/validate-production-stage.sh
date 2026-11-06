@@ -48,7 +48,7 @@ for relative in "${declared[@]}"; do
   [[ -n "$relative" ]] && require_file "$relative"
 done
 
-for package in greyward-security-center greyward-security-context greyward-branding greyward-dms greyward-session greyward-files greyward-application-security-experimental greyward-application-enrollment greyward-writer greyward-sheets greyward-pdf greyward-slides; do
+for package in greyward-intelligence swappy greyward-security-center greyward-security-context greyward-branding greyward-dms greyward-session greyward-files greyward-application-security-experimental greyward-application-enrollment greyward-writer greyward-sheets greyward-pdf greyward-slides; do
   shopt -s nullglob
   matches=("$stage/rpms/$package-"*.rpm)
   shopt -u nullglob

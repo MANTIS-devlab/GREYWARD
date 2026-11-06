@@ -2,6 +2,7 @@
 Description=GREYWARD Security Context session bus
 PartOf=graphical-session.target
 After=graphical-session.target
+ConditionUser=!root
 
 [Service]
 Type=dbus
@@ -10,4 +11,4 @@ ExecStart=/usr/libexec/greyward-security-context-session10
 Restart=on-failure
 
 [Install]
-WantedBy=default.target graphical-session.target
+WantedBy=graphical-session.target

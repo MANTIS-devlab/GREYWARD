@@ -195,10 +195,12 @@ The daily GREYWARD development VM uses the reversible path below:
 
 The installer selects the `greyward` Plymouth theme and regenerates the target
 initramfs before the first encrypted-root unlock; subsequent production
-provisioning repeats this selection safely. Verification confirms that a normal
-kernel initramfs contains the GREYWARD script theme and logo assets, and that the
-installed status unit and theme retain the update-mode command and progress
-callback. Re-running it is safe.
+provisioning repeats this selection safely. Verification runs the installed native Plymouth parser, rejects CR/CRLF/NUL
+script bytes, and compares the script, theme descriptor and logo in **every
+installed normal kernel's initramfs** against the installed package. It checks
+font/renderer dependencies and the selected theme as well. A good old image
+cannot conceal a broken new one; rescue images remain independent. The status
+unit and update callback are checked separately. Re-running verification is safe.
 `restore-boot-branding.ps1` restores the previously
 recorded Plymouth configuration and rebuilds initramfs, including the case where
 the host had no explicit prior theme configuration.
@@ -206,6 +208,51 @@ the host had no explicit prior theme configuration.
 This proves controllable boot branding on the daily appliance. Encrypted-root unlock
 acceptance remains a separate disposable `GREYWARD-BOOTTEST` gate and must not be
 claimed from the normal initramfs inventory check alone.
+
+### Kernel and branding update safety
+
+`greyward-branding` revision 22 adds one canonical validator,
+`packaging/greyward-branding/SOURCES/verify-boot-theme.py`, installed as
+`/usr/libexec/greyward/verify-boot-theme`. RPM `%check` uses the actual installed
+Plymouth script plugin to parse the packaged source. Git retains Linux line
+endings for the script/descriptor; binary script validation remains mandatory
+because an old RPM or external staging directory can predate those attributes.
+The `46greyward-plymouth` dracut module validates the selected GREYWARD script
+before generating each image, including images built by future kernel updates.
+It aborts an invalid build explicitly (dracut ignores an ordinary `install()`
+return failure). Fedora's original Plymouth module still packages the graphical
+plugins/fonts and owns the native password path. No display-driver, boot
+argument, authentication or cryptsetup customization is added.
+
+A branding-only RPM upgrade regenerates all existing normal kernel images in
+`%posttrans` when GREYWARD is already selected. It neither selects a different
+administrator theme nor uses the build host's running kernel inside a target
+root. Image composition compares both new validator/hook payloads with the
+canonical sources; production acceptance also requires native parser success.
+Installer provisioning still selects the theme and regenerates target images.
+
+The 6 November black-screen regression was reproduced with revision 19's
+installed **CRLF** script: the real Plymouth parser rejected line 6 and the real
+plugin drew zero visible pixels on an isolated memory display. The older
+7.2.13 initramfs retained LF source; a kernel update generated the 7.2.15 image
+from the invalid installed copy. LUKS and offline DNF transactions still worked.
+This is an invalid-theme packaging defect exposed by regeneration, not evidence
+of failed encryption or package installation. Native update progress is an
+integer percentage; the callback converts it to the theme's 0–1 bar scale.
+
+Validation entry points:
+
+```sh
+python3 -m unittest discover -s tests -p 'test_plymouth_theme.py' -v
+/usr/libexec/greyward/verify-boot-theme
+# Repeat --initramfs for each installed normal kernel; root reads /boot images.
+/usr/libexec/greyward/verify-boot-theme --initramfs /boot/initramfs-<kernel>.img
+```
+
+The native-parser tests run on Fedora and explicitly skip on hosts without the
+Plymouth plugin. An isolated real-plugin memory render can validate theme output
+without taking over a desktop VT/DRM device; it does **not** prove a physical
+boot, encrypted-root unlock or offline transaction's onscreen presentation.
 
 ## Encrypted unlock presentation
 
@@ -229,3 +276,30 @@ prompt display/dismissal, prompt reappearance, root progression, and splash
 shutdown. Test correct and incorrect passphrases, repeated attempts, theme
 absence, text-console recovery, available framebuffer resolutions, and layout
 or Caps Lock indicators only when the early-boot stack exposes them reliably.
+
+
+## Behavioral severity instruments
+
+`source/intelligence-gauge.svg.in` is the canonical graphite/silver instrument
+source. `../tools/generate-intelligence-icons.py` emits scores 0–100 into
+`generated/intelligence/` and the Security Center package's icon directory.
+Run it with `--check` to verify both mirrors. The ring uses SVG 1.1 circle
+lengths for QtSvg/WebKit compatibility. Color denotes assessment, never an
+unverified enforcement result; the numerical index is not a probability.
+
+Behavioral score artwork uses `branding/source/intelligence-gauge.svg.in` and `tools/generate-intelligence-icons.py`: 0–100 fixed SVGs with enlarged numerals, installed through the existing Center data mirror. DMS uses them as native notification body images; the title repeats the numerical severity. The GREYWARD app icon remains the sender identity.
+
+## Scan-result instruments
+
+`source/scan-notification.svg.in` owns the coordinated circular scan-result marks.
+`../tools/generate-scan-notification-icons.py` produces the coordinated green,
+amber, red and neutral assets in `generated/scan-notifications/` and
+`security-center/data/scan-notifications/`. Run with `--check` to verify both
+mirrors. The Center RPM installs them in its existing shared-data directory;
+Context selects only these fixed paths as native notification sender icons.
+The text-free mark uses a precise interrupted outline and a large central
+symbol, shared by the GTK scan result and native DMS sender icon. It carries no
+faux metallic tile, miniature document illustration or numerical gauge. Result
+text and symbols convey state together; color alone never certifies protection.
+Native notification URIs carry a fixed artwork revision to invalidate Qt image
+reuse when the design changes; no cache-only artwork is installed.

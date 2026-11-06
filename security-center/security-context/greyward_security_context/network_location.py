@@ -14,11 +14,21 @@ import os
 import re
 import subprocess
 import time
+import threading
 from functools import lru_cache
 from pathlib import Path
 
+try:
+    import maxminddb
+except ImportError:  # Missing optional data must never break activity history.
+    maxminddb = None
+
+_reader_lock = threading.RLock()
+_readers = {}
+
 
 _DATABASE_CANDIDATES = (
+    Path("/var/lib/greyward/geoip/dbip-country-lite.mmdb"),
     Path("/var/lib/GeoIP/GeoLite2-Country.mmdb"),
     Path("/usr/share/GeoIP/GeoLite2-Country.mmdb"),
     Path("/usr/share/GeoIP/GeoIP2-Country.mmdb"),
@@ -80,7 +90,9 @@ def _public_address(value: str) -> str | None:
         address = ipaddress.ip_address(value)
     except ValueError:
         return None
-    return str(address) if address.is_global else None
+    if isinstance(address, ipaddress.IPv6Address) and address.ipv4_mapped:
+        address = address.ipv4_mapped
+    return str(address) if address.is_global and not address.is_multicast and not address.is_reserved else None
 
 
 def _country_code(value: object) -> str:
@@ -115,22 +127,27 @@ def country_hint_for_host(value: str | None) -> str:
 
 
 def _country_from_mmdb(address: str, database: Path | None) -> str:
-    if database is None:
+    if database is None or maxminddb is None:
         return ""
     try:
-        result = subprocess.run(
-            ["mmdblookup", "--file", str(database), "--ip", address, "country", "iso_code"],
-            capture_output=True,
-            text=True,
-            timeout=1,
-            check=False,
-        )
-    except (OSError, subprocess.SubprocessError):
+        info = database.stat()
+        version = (info.st_dev, info.st_ino, info.st_mtime_ns, info.st_size)
+        # Serialize replacement/close with reads; a lookup never spawns a process.
+        with _reader_lock:
+            previous = _readers.get(str(database))
+            if previous is None or previous[0] != version:
+                reader = maxminddb.open_database(str(database))
+                if previous is not None:
+                    previous[1].close()
+                if len(_readers) >= 4 and str(database) not in _readers:
+                    _, old = _readers.popitem()
+                    old[1].close()
+                _readers[str(database)] = (version, reader)
+            record = _readers[str(database)][1].get(address)
+            country = record.get("country") if isinstance(record, dict) else None
+            return _country_code(country.get("iso_code")) if isinstance(country, dict) else ""
+    except (OSError, ValueError, RuntimeError):
         return ""
-    if result.returncode != 0:
-        return ""
-    match = _COUNTRY_RE.search(result.stdout or "")
-    return _country_code(match.group(1) if match else "")
 
 
 def _country_from_legacy_geoip(address: str, database: Path | None) -> str:
@@ -210,9 +227,10 @@ def _resolution_uncached(value: str | None) -> dict[str, object]:
         except OSError:
             age = None
         country = lookup(address, path) if age is not None else ''
+        stale_after = 62 if path and path.name == 'dbip-country-lite.mmdb' else 180
         details.append({'source': name, 'available': bool(country),
                         'age_days': age, 'age_basis': 'FILE_MTIME',
-                        'freshness': ('UNKNOWN' if age is None else 'STALE' if age > 180 else 'RECENT')})
+                        'freshness': ('UNKNOWN' if age is None else 'STALE' if age > stale_after else 'RECENT')})
         if country:
             sources.append((name, country, weight))
     votes = [(name, country, weight) for name, country, weight in sources if country]
@@ -237,23 +255,12 @@ def _resolution_uncached(value: str | None) -> dict[str, object]:
 
 
 def country_resolution_for_destination(ip: str | None, host: str | None) -> dict[str, object]:
-    """Resolve an endpoint locally, using a labelled ccTLD hint only last."""
+    """Resolve the actual IP, never mistake a domain namespace for a country."""
 
     resolution = dict(country_resolution_for_ip(ip))
     if resolution["country_code"]:
         resolution["source"] = "LOCAL"
         return resolution
-    hint = country_hint_for_host(host)
-    if hint:
-        return {
-            "country_code": hint,
-            "confidence": "VERY_LOW",
-            "converged": False,
-            "source_count": 0,
-            "source": "DOMAIN_SUFFIX",
-            "availability": "UNKNOWN",
-            "sources": resolution.get("sources", []),
-        }
     resolution["source"] = "NONE"
     return resolution
 
@@ -266,7 +273,7 @@ def country_resolution_for_ip(value: str | None) -> dict[str, object]:
     for path in paths:
         try:
             info = path.stat() if path else None
-            key.append((str(path), info.st_mtime_ns, info.st_size) if info else None)
+            key.append((str(path), info.st_ino, info.st_mtime_ns, info.st_size) if info else None)
         except OSError:
             key.append(None)
     return dict(_cached_resolution(value, tuple(key), int(time.time() // 60)))

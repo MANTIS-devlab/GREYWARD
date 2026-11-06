@@ -1,6 +1,6 @@
 Name: greyward-application-enrollment
 Version: 0.1.0
-Release: 86%{?dist}
+Release: 91%{?dist}
 Summary: GREYWARD protected-session installation inputs
 License: GPL-2.0-only AND GPL-3.0-only AND MIT
 Source0: %{name}-%{version}.tar.gz
@@ -29,7 +29,7 @@ BuildRequires: pkgconfig(libsfdo-desktop)
 BuildRequires: pkgconfig(libsfdo-icon)
 BuildRequires: gettext
 BuildRequires: pkgconfig(cmocka)
-Requires: greyward-application-security-experimental = 0.1.0-84%{?dist}
+Requires: greyward-application-security-experimental = 0.1.0-88%{?dist}
 %{!?greyward_dms_dependency:%global greyward_dms_dependency 1.6.2-26}
 Requires: greyward-dms = %{greyward_dms_dependency}%{?dist}
 Requires: greyward-session >= 0.1.0-10
@@ -114,6 +114,16 @@ install -Dm0644 security-center/packaging/application-security/greyward-maintena
 %{_unitdir}/greyward-maintenance-console.service
 
 %changelog
+* Fri Nov 06 2026 MANTIS SYSTEMS - 0.1.0-91
+- Require the matching protected authorization handoff runtime.
+
+* Fri Oct 30 2026 MANTIS SYSTEMS - 0.1.0-90
+- Validate live login preparation before migration and reload the installed admission broker.
+* Fri Oct 30 2026 MANTIS SYSTEMS - 0.1.0-89
+- Pin the generation-8 authentication assembler in Application Security 86.
+* Thu Oct 29 2026 MANTIS SYSTEMS <maintainers@mantis.systems> - 0.1.0-87
+- Match protected-seat guardian lifetime correction in Application Security 85.
+
 * Tue Oct 27 2026 MANTIS SYSTEMS - 0.1.0-86
 - Match the shared protected startup visual without changing admission or input policy.
 

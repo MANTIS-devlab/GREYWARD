@@ -1,0 +1,4 @@
+# An authorized USB hub's interfaces appear after USBGuard admission. KVMs
+# commonly reconnect their USB2 and USB3 hubs before the video HPD is usable.
+# Queue one bounded systemd job; never probe hardware inside a udev worker.
+ACTION=="add", SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_interface", ATTR{bInterfaceClass}=="09", TAG+="systemd", ENV{SYSTEMD_WANTS}+="greyward-display-reprobe.service"

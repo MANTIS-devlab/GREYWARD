@@ -1,0 +1,30 @@
+--- a/pkg/bpf/detect_linux.go
++++ b/pkg/bpf/detect_linux.go
+@@ -738,7 +738,7 @@
+ 	// once we have detected all features, flush the BTF spec
+ 	// we cache all values so calling again a Has* function will
+ 	// not load the BTF again
+-	defer ebtf.FlushKernelSpec()
++	// cilium/ebpf >= 0.22 releases mmap-backed BTF through runtime cleanup.
+ 	probeStr := func(p *FeatureProbe) string {
+ 		return p.Name + ": " + strconv.FormatBool(p.Fn())
+ 	}
+--- a/pkg/sensors/load_linux.go
++++ b/pkg/sensors/load_linux.go
+@@ -9,7 +9,6 @@
+ 	"path/filepath"
+ 
+ 	"github.com/cilium/ebpf"
+-	"github.com/cilium/ebpf/btf"
+ 
+ 	cachedbtf "github.com/cilium/tetragon/pkg/btf"
+ 	"github.com/cilium/tetragon/pkg/kernels"
+@@ -189,7 +188,7 @@
+ }
+ 
+ func flushKernelSpec() {
+-	btf.FlushKernelSpec()
++	// BTF 0.22 mmap lifetime uses runtime cleanup.
+ }
+ 
+ func getCachedBTFFile() string {

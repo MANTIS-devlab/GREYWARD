@@ -143,3 +143,22 @@ migration uses Enrollment 62 with Application Security 71 and DMS 2.0.0-2.
 Candidate package construction never enrolls an account or loads a policy.
 Physical activation and recovery acceptance remain pending in the
 [DMS 2.0 migration authority](../../docs/architecture/DMS_2_0_MIGRATION.md).
+
+## Protected guardian lifetime correction — 29 October 2026
+
+Application Security 85 / Enrollment 87 use acknowledged scope-bound guardian
+startup. The parent must not return before the root guardian has migrated out
+of the temporary admission service and initialized its held-pidfd watch.
+`greyward-migrate-protected-dms-shell --refresh-session-only` updates only
+session.py and its linked desktop/Administration receipts while quiescent;
+this mode does not rebuild the shell or load policy. Verified vanished logind
+closing locators do not count as live desktops; real scopes/leaders/workers
+still refuse. See [session lifetime](../../docs/security-center/SESSION_LIFETIME.md)
+and its dated validation boundary before claiming a physical login pass.
+
+
+Protected upgrades now run the shared read-only materializer `--check-release`
+before committing inputs. The coordinator reloads active fixed admission
+brokers after migration and verifies MainPID is using the installed executable.
+Successful assembly/hashes with a stale broker are insufficient. See
+login preparation and failure rollback (private development evidence).

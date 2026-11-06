@@ -1,0 +1,32 @@
+[Unit]
+Description=GREYWARD behavioral kernel sensor (observation only)
+After=local-fs.target
+StartLimitIntervalSec=120
+StartLimitBurst=3
+[Service]
+Type=simple
+User=root
+ExecStart='/usr/libexec/greyward-intelligence/tetragon' '--bpf-lib=/usr/libexec/greyward-intelligence/bpf' '--server-address=' '--health-server-address=' '--metrics-server=' '--enable-k8s-api=false' '--enable-tracing-policy-crd=false' '--export-file-max-size-mb=8' '--export-file-max-backups=2' '--export-file-perm=600' '--process-cache-size=4096' '--execve-map-entries=8192' '--parents-map-size=2M' '--rb-size-total=4M' '--rb-queue-size=4096' '--cgroup-rate=500,1s' '--export-rate-limit=6000' '--field-filters={"fields":"process.arguments,parent.arguments,ancestors.arguments,process.cwd,parent.cwd,ancestors.cwd","action":"EXCLUDE"}' '--log-level=warn' '--bpf-dir=greyward-intelligence' '--export-filename=/var/lib/greyward/intelligence/sensor/events.jsonl' '--tracing-policy-dir=/etc/greyward/intelligence/policies'
+ExecStartPost=/usr/bin/python3 /usr/libexec/greyward-intelligence/attest-sensor $MAINPID
+Restart=on-failure
+RestartSec=15
+Nice=10
+CPUWeight=20
+MemoryHigh=384M
+MemoryMax=512M
+TasksMax=128
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/sys/fs/bpf /var/lib/greyward/intelligence/sensor
+PrivateTmp=yes
+ProtectClock=yes
+ReadOnlyPaths=/proc/sys /proc/sysrq-trigger
+CapabilityBoundingSet=CAP_BPF CAP_PERFMON CAP_SYS_ADMIN CAP_SYS_RESOURCE CAP_SYS_PTRACE CAP_SYSLOG CAP_DAC_READ_SEARCH CAP_DAC_OVERRIDE
+ReadOnlyPaths=/usr/lib/modules
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_UNIX AF_NETLINK
+LockPersonality=yes
+UMask=0077
+[Install]
+WantedBy=multi-user.target

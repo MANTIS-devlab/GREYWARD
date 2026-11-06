@@ -29,6 +29,14 @@ static QString detachedProgram;
 static QStringList detachedArguments;
 static int detachedLaunches = 0;
 static bool detachedSucceeds = true;
+// Isolate the host's storage, and detect the unwanted volume-manager path.
+// The deliberately enabled legacy profile must never enumerate/mount volumes
+// from the icon-only application, including after its delayed startup timer.
+static int volumeEnumerations = 0;
+extern "C" GList* g_volume_monitor_get_volumes(GVolumeMonitor*) {
+    ++volumeEnumerations;
+    return nullptr;
+}
 bool QProcess::startDetached(const QString& program, const QStringList& arguments,
                              const QString&, qint64*) {
     detachedProgram = program;
@@ -102,6 +110,18 @@ int main(int argc, char** argv) {
     QTimer::singleShot(0, &app, [&] {
         try {
             until([&] { return app.desktopOutputNames().size() == 3 && desktops().size() == 3; }, "three mapped outputs unavailable");
+            const int beforeVolumes = volumeEnumerations;
+            require(QMetaObject::invokeMethod(&app, "initVolumeManager", Qt::DirectConnection), "real volume startup slot unavailable");
+            require(volumeEnumerations == beforeVolumes, "icon process entered automatic volume mounting with inherited enabled settings");
+            auto monitor = g_volume_monitor_get();
+            const auto volumeSignal = g_signal_lookup("volume-added", G_TYPE_VOLUME_MONITOR);
+            const auto volumeHandler = g_signal_handler_find(monitor,
+                GSignalMatchType(G_SIGNAL_MATCH_ID | G_SIGNAL_MATCH_DATA), volumeSignal,
+                0, nullptr, nullptr, &app);
+            g_object_unref(monitor);
+            require(volumeHandler == 0, "icon process registered an implicit hotplug mount handler");
+            require(!QApplication::activeModalWidget(), "background startup blocked desktop input with a modal dialog");
+            std::cout << "PASS inherited automount preferences cannot start desktop volume management\n";
             const auto names = app.desktopOutputNames();
             const auto primary = app.primaryScreen()->name();
             const auto external = names.at(1);
@@ -243,6 +263,15 @@ int main(int argc, char** argv) {
             stateFile.write(QJsonDocument(QJsonObject{{QStringLiteral("output"), target},
                 {QStringLiteral("x"), placed.x()}, {QStringLiteral("y"), placed.y()}}).toJson());
             stateFile.close();
+            // Qt/Wayland may retire a surface independently of the output list.
+            // Exercise the production ownership path, not only normal hotplug.
+            delete desktops().value(target);
+            app.desktopManager(false);
+            app.desktopManager(false);
+            require(desktops().isEmpty(), "repeated desktop teardown left surfaces");
+            app.desktopManager(true);
+            until([&] { return desktops().size() == 3; }, "desktop recreation after teardown failed");
+            std::cout << "PASS independent surface destruction and idempotent teardown\n";
             app.exit(0);
         }
         catch(const std::exception& error) {
@@ -251,6 +280,6 @@ int main(int argc, char** argv) {
         }
     });
     const auto code = app.exec();
-    app.desktopManager(false);
+    // Use the real aboutToQuit/destructor path, as the installed executable does.
     return code;
 }

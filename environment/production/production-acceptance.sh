@@ -56,6 +56,15 @@ if [[ "$require_marker" == false ]]; then
   done
 fi
 rpm -q dms-greeter greyward-session greyward-security-center greyward-security-context audit audit-rules policycoreutils wlr-randr wlopm net-tools >/dev/null || fail 'required production package is missing'
+# BEGIN native OAuth callback policy contract
+python3 - <<'PY' || fail 'native OAuth callback policy is not loaded'
+import setools
+policy = setools.SELinuxPolicy('/sys/fs/selinux/policy')
+assert any(str(row.protocol) == 'tcp' and row.ports.low == row.ports.high == 1455
+           and str(row.context.type_) == 'greyward_oauth_callback_port_t'
+           for row in policy.portcons())
+PY
+# END native OAuth callback policy contract
 firmware_manifest=/usr/lib/greyward/installer/production/packages.txt
 test -r "$firmware_manifest" || fail 'immutable production package manifest is missing'
 while IFS= read -r firmware_package || [[ -n "$firmware_package" ]]; do
@@ -81,6 +90,9 @@ test -s /etc/greyward/keyboard.env || fail 'GREYWARD keyboard environment is mis
 is_enabled greetd || fail 'greetd is not enabled'
 is_enabled auditd || fail 'auditd is not enabled'
 is_enabled audit-rules || fail 'audit-rules is not enabled'
+if systemctl is-enabled --quiet clamav-freshclam-once.timer; then
+  fail 'A second Freshclam updater is enabled alongside the continuous daemon'
+fi
 checkpoint 'security provider services'
 for provider_service in opensnitch.service greyward-opensnitch-control-plane.service \
   greyward-opensnitch-policy.service greyward-clamav-scan.service \
@@ -130,6 +142,9 @@ test -L /etc/systemd/system/initial-setup.service || fail 'GNOME Initial Setup s
 test "$(readlink /etc/systemd/system/initial-setup.service)" = /dev/null || fail 'GNOME Initial Setup service is not masked'
 test -e /var/lib/greyward/installer/production-ready || fail 'production finalization is not complete'
 checkpoint 'branding assets'
+
+/usr/libexec/greyward/verify-boot-theme || fail 'native Plymouth theme validation failed'
+test -x /usr/lib/dracut/modules.d/46greyward-plymouth/module-setup.sh || fail 'Plymouth initramfs validation hook is missing'
 test -s /usr/share/greyward/security-center-contract.tsv || fail 'Security Center package contract is missing'
 for branding_path in \
   /usr/share/anaconda/pixmaps/greyward-anaconda-logo.png \

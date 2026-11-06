@@ -235,6 +235,11 @@ if [[ "$target_install" == 1 || "${GREYWARD_LOCAL_FINALIZE:-0}" != 1 ]]; then
   test "${#dms_rpms[@]}" -eq 1
   session_rpms=("$stage/rpms/greyward-session-"*.rpm)
   test "${#session_rpms[@]}" -eq 1
+  intelligence_rpms=("$stage/rpms/greyward-intelligence-"*.rpm)
+  test "${#intelligence_rpms[@]}" -eq 1
+  swappy_rpms=("$stage/rpms/swappy-"*.rpm)
+  test "${#swappy_rpms[@]}" -eq 1
+  rpm -qp --provides "${swappy_rpms[0]}" | grep -Fxq 'swappy(greyward-window-controls) = 1'
   files_rpms=("$stage/rpms/greyward-files-"*.rpm)
   test "${#files_rpms[@]}" -eq 1
   enrollment_rpms=("$stage/rpms/greyward-application-security-experimental-"*.rpm "$stage/rpms/greyward-application-enrollment-"*.rpm)
@@ -247,7 +252,7 @@ if [[ "$target_install" == 1 || "${GREYWARD_LOCAL_FINALIZE:-0}" != 1 ]]; then
   done
   python3 "$stage/office-source/packaging/greyward-office/verify-inputs.py" \
     --repo "$stage/office-source" --stage "$stage"
-  dnf -y install "${branding_rpms[0]}" "${security_rpms[@]}" "${dms_rpms[0]}" "${session_rpms[0]}" "${files_rpms[0]}" "${enrollment_rpms[@]}" "${office_rpms[@]}"
+  dnf -y install "${branding_rpms[0]}" "${security_rpms[@]}" "${dms_rpms[0]}" "${session_rpms[0]}" "${files_rpms[0]}" "${swappy_rpms[0]}" "${intelligence_rpms[0]}" "${enrollment_rpms[@]}" "${office_rpms[@]}"
   rpm -q greyward-branding plymouth-plugin-script
   rpm -q greyward-files nautilus
   test -x /usr/libexec/greyward/files/pcmanfm-qt
@@ -655,7 +660,6 @@ if [[ "$target_install" == 1 ]]; then
   ln -sfn /usr/lib/systemd/user/greyward-dms.service /etc/systemd/user/dms.service
   ln -sfn /usr/lib/systemd/user/greyward-dms.service /etc/systemd/user/graphical-session.target.wants/greyward-dms.service
   ln -sfn /usr/lib/systemd/user/greyward-security-context-user.service /etc/systemd/user/graphical-session.target.wants/greyward-security-context-user.service
-  ln -sfn /usr/lib/systemd/user/greyward-security-context-user.service /etc/systemd/user/default.target.wants/greyward-security-context-user.service
   ln -sfn /usr/lib/systemd/user/greyward-desktop-icons.service /etc/systemd/user/graphical-session.target.wants/greyward-desktop-icons.service
   systemctl --global enable greyward-update-center.service 2>/dev/null || true
 
@@ -739,6 +743,8 @@ else
   # the first production login. Start provider services now and keep greetd
   # enabled-only until the gate is removed below.
   systemctl enable greetd
+  # The continuous daemon owns refreshes; do not race Fedora's optional timer.
+  systemctl disable --now clamav-freshclam-once.timer
   phase 'Starting required production services'
   required_services=(
     NetworkManager
@@ -755,7 +761,7 @@ else
     greyward-secure-dns
     usbguard
     usbguard-dbus
-    greyward-auto-update.timer
+    greyward-feodo-update.timer greyward-geoip-update.timer greyward-auto-update.timer
   )
   for required_service in "${required_services[@]}"; do
     phase "Starting required production service: $required_service"
@@ -784,6 +790,20 @@ else
       exit 1
     fi
   done
+  # Refresh only generated, unedited probes after account creation. A sensor
+  # failure remains visible in Context and must never prevent login/recovery.
+  if /usr/libexec/greyward-intelligence/configure-policies; then
+    systemctl enable greyward-intelligence-sensor.service greyward-intelligence-provider.service
+    if ! timeout --foreground 90s systemctl restart greyward-intelligence-sensor.service; then
+      printf 'Behavioral sensor unavailable; Security Center will report limited coverage.\n' >&2
+    fi
+  else
+    printf 'Behavioral policy generation failed; see Security Center coverage status.\n' >&2
+  fi
+  systemctl enable greyward-intelligence-provider.service
+  if ! timeout --foreground 30s systemctl start greyward-intelligence-provider.service; then
+    printf 'Behavioral evidence provider unavailable; see coverage status.\n' >&2
+  fi
   systemctl daemon-reload
 fi
 

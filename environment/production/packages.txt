@@ -120,3 +120,6 @@ system-config-printer
 avahi
 nss-mdns
 ipp-usb
+
+# Native observation-only behavioral evidence (pinned local RPM input).
+greyward-intelligence

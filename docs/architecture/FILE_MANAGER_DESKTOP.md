@@ -1,5 +1,105 @@
 # File manager and desktop integration
 
+## Native browser sign-in callbacks — 30 October 2026
+
+Session 42 owns `environment/session/greyward_oauth_callback.cil`, installed with
+Fedora's SELinux package macros at priority 200. It assigns TCP 1455 a dedicated
+`greyward_oauth_callback_port_t` and permits the ordinary desktop domain only
+`name_bind` on that type. The general `selinuxuser_tcp_server` boolean is not
+enabled. There is no new listener, proxy, privileged helper or firewall opening.
+ChatGPT/Codex remains an optional independently installed application.
+
+The rule is optional until enrollment defines `greyward_guard_t`; the dedicated
+port type is valid both before and after enrollment. No ordinary role, login
+mapping, authentication profile or Protected Data permission changes. The rule
+applies to the ordinary domain, not exclusively the ChatGPT executable. SELinux
+restricts the port, not the IP address: the supported application must bind its
+callback server to loopback. The real installed Codex helper is checked for
+that behavior; host firewall policy stays unchanged.
+
+The Session RPM ships and installs the module, the image input verifier refuses
+a stale/missing payload, and production acceptance checks the actual kernel's
+port mapping. `tests/test_oauth_callback.py` compiles a minimal policy with and
+without enrollment and checks the exact added permission. This does not claim
+clean-image acceptance. Local validation and rollback are recorded in the
+ChatGPT sign-in receipt (private development evidence).
+
+## Icon input and automatic mounts — 6 November 2026
+
+Files 24 adds the pinned `pcmanfm-no-automount.patch`. The icon-only process
+returns before registering the automatic volume manager, and its implicit
+`autoMountVolume` entry point also refuses desktop mode. Strata remains the file
+manager; explicit user file/drive actions and the existing GVfs/udisks/USB
+permission paths are unchanged. There is no new mount helper or permission.
+
+The live failure on `<validation-host>` was captured before recovery: the main thread was
+inside `QDialog::exec → Fm::MountOperation::handleFinish → autoMountVolume(false)
+→ initVolumeManager`. A background mount failure had created an application-modal
+dialog with no useful desktop parent, preventing icon launches and context menus.
+This was not a stopped process or GPU hang. Closing just that confirmed error
+returned the same process to its ordinary application event loop.
+
+Factory `[Volume]` defaults now use PCManFM's actual `MountOnStartup=false` and
+`MountRemovable=false` keys instead of ignored `AutoMount*` names (whose native
+fallbacks are true). Existing profiles are not rewritten: the code guard also
+protects inherited/enabled preferences and later hotplug. Manual storage actions
+remain available in Strata; the desktop does not independently automount media.
+
+`tests/run_desktop_outputs.py` deliberately enables startup/removable mounting
+and autorun in its synthetic profile. The linked native driver calls the real
+startup slot and detects unwanted volume enumeration, without accessing host
+storage. The old executable fails that regression; the corrected objects pass
+alongside the retained routing, drag/content, live-file, multi-output, restart
+persistence and surface-lifetime cases. This private Qt test is not a physical
+mouse/KVM acceptance claim. Source manifest hashing and no-fuzz RPM patching bind
+the fix to future image inputs. User settings/layout seeding remains
+create-only; no policy or protected shell migration is required.
+
+Installed Files 24 passes RPM/source-manifest and SELinux label verification.
+Only the icon service was restarted, with its original profile files/coordinates
+byte-identical and DMS unchanged. After the startup delay the real installed
+process has no active modal widget or service restart. The six defaults tests,
+three packaged launcher tests, 29 layout checks, three Rust metadata checks and
+private native fixture pass. Physical click/hotplug/media acceptance is not
+claimed from those results. Both repository gates pass; an unrelated older
+artwork-migration assertion in the broader desktop suite remains documented in
+[status](../STATUS.md#desktop-icon-input-recovery--6-november-2026).
+
+## Desktop lifetime and startup bounds — 30 October 2026
+
+Files 23 adds the hash-locked `pcmanfm-lifecycle.patch`: independently destroyed
+surfaces are removed from application ownership, teardown detaches its window
+list before deletion, and about-to-quit retires surfaces while settings/layout
+owners still exist. Cleanup is idempotent. Coordinates and Strata routing remain
+owned by the existing multi-output patch and output-layout helper.
+`tests/run_desktop_outputs.py` exercises real linked Qt objects, independent
+surface destruction, repeated teardown/recreation and normal application exit,
+alongside the existing three/one/three-output persistence cases.
+
+Session 41 waits for the real DMS backend and ordinary shell IPC in
+`ExecStartPost`, with a bounded startup deadline. Icons require that unit's
+successful start and follow its explicit restart. Both services stop retrying
+after three starts within 180 seconds instead of repeatedly retrying a broken
+migration. Failure remains visible in the unit journal; this is not a claim
+that an incompatible generation can run. Protected lock/authentication readiness
+and policy are unchanged. Validate with `tests/test_dms_runtime.py` and the
+opt-in disposable PID 1 fixture `tests/fixtures/session-startup-native.py`.
+
+## Existing scan workflow — 29 October 2026
+
+Files 22 retains Strata's custom-action Jobs workflow and extends its existing
+scan action to files/folders. Two small pinned source patches add authoritative
+scan receipts to native Strata Properties and a GREYWARD Scan tab to the desktop's
+existing Properties dialog, plus its right-click scan action. The desktop uses
+the existing file-context companion for visible progress; neither workflow
+introduces a file manager, raw ClamAV socket or privileged UI.
+
+The system service owns receipt validity, caller isolation and ClamAV execution;
+UI code only renders its typed state. See the canonical
+[File Security contract](../security-center/FILE_SECURITY.md) for freshness,
+automatic-arrival behavior and bounds. Patches are hash-locked in source.json,
+applied without fuzz and included by the production package build.
+
 ## Persistent screen configurations — 27 October 2026
 
 Files **21** separates Wayland icon coordinates by the sorted set of connected

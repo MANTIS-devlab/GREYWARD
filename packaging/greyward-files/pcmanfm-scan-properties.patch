@@ -1,0 +1,93 @@
+--- a/pcmanfm/desktopwindow.cpp
++++ b/pcmanfm/desktopwindow.cpp
+@@ -42,6 +42,17 @@
+ #include <QWindow>
+ #include <QRandomGenerator>
+ #include <QToolTip>
++#include <QLabel>
++#include <QTabWidget>
++#include <QVBoxLayout>
++#include <QPushButton>
++#include <QProcess>
++#include <QDBusConnection>
++#include <QDBusMessage>
++#include <QDBusPendingCallWatcher>
++#include <QDBusPendingReply>
++#include <QJsonDocument>
++#include <QJsonObject>
+ 
+ #include <algorithm>
+ 
+@@ -72,6 +83,43 @@
+ #define MAX_SLIDE_INTERVAL (24*60+55)*60000 // 24 h and 55 min
+ 
+ namespace PCManFM {
++
++// Extend the existing native Properties dialog; never replace its file actions.
++static void greywardProperties(Fm::FileInfoList files) {
++    const auto selected = files.size() == 1 ? files.front() : nullptr;
++    auto dialog = Fm::FilePropsDialog::showForFiles(std::move(files));
++    auto tabs = dialog->findChild<QTabWidget*>();
++    if (!tabs || !selected || !selected->path().isNative()) return;
++    const QString path = QString::fromUtf8(selected->path().toString().get());
++    auto page = new QWidget(dialog);
++    auto layout = new QVBoxLayout(page);
++    auto label = new QLabel(QObject::tr("Loading scan information…"), page);
++    label->setTextFormat(Qt::PlainText);
++    label->setWordWrap(true);
++    layout->addWidget(label);
++    auto scan = new QPushButton(QObject::tr("Scan with GREYWARD"), page);
++    layout->addWidget(scan);
++    layout->addStretch();
++    tabs->addTab(page, QObject::tr("GREYWARD Scan"));
++    QObject::connect(scan, &QPushButton::clicked, page, [path]() {
++        QProcess::startDetached(QStringLiteral("/usr/bin/greyward-file-context"), {QStringLiteral("--scan-window"), path});
++    });
++    auto message = QDBusMessage::createMethodCall(QStringLiteral("systems.mantis.greyward.SecurityContext1"),
++        QStringLiteral("/systems/mantis/greyward/SecurityContext1"),
++        QStringLiteral("systems.mantis.greyward.SecurityContext1"), QStringLiteral("GetFileScanInfo"));
++    message << path;
++    auto watcher = new QDBusPendingCallWatcher(QDBusConnection::sessionBus().asyncCall(message, 4000), page);
++    QObject::connect(watcher, &QDBusPendingCallWatcher::finished, page, [label](QDBusPendingCallWatcher* watcher) {
++        QDBusPendingReply<QString> reply = *watcher;
++        const auto value = QJsonDocument::fromJson(reply.isError() ? QByteArray() : reply.value().toUtf8()).object();
++        label->setText(value.isEmpty() ? QObject::tr("Scan information unavailable") :
++            value.value(QStringLiteral("state")).toString() + QStringLiteral(" · ") +
++            value.value(QStringLiteral("validity")).toString() + QStringLiteral("\n") +
++            value.value(QStringLiteral("detail")).toString() + QStringLiteral("\n") +
++            value.value(QStringLiteral("scanned_at")).toString());
++        watcher->deleteLater();
++    });
++}
+ 
+ DesktopWindow::DesktopWindow(int screenNum, const QString& screenName):
+     View(Fm::FolderView::IconMode),
+@@ -1133,6 +1181,19 @@
+ void DesktopWindow::prepareFileMenu(Fm::FileMenu* menu) {
+     // qDebug("DesktopWindow::prepareFileMenu");
+     PCManFM::View::prepareFileMenu(menu);
++    const auto files = menu->files();
++    auto properties = menu->propertiesAction();
++    QObject::disconnect(properties, nullptr, nullptr, nullptr);
++    connect(properties, &QAction::triggered, menu, [files]() { greywardProperties(files); });
++    if (files.size() == 1 && files.front()->path().isNative()) {
++        const QString path = QString::fromUtf8(files.front()->path().toString().get());
++        auto scan = new QAction(QIcon::fromTheme(QStringLiteral("security-high")), tr("Scan with GREYWARD"), menu);
++        menu->insertAction(properties, scan);
++        connect(scan, &QAction::triggered, menu, [path]() {
++            QProcess::startDetached(QStringLiteral("/usr/bin/greyward-file-context"), {QStringLiteral("--scan-window"), path});
++        });
++    }
++
+     auto app = static_cast<Application*>(qApp);
+     if(app->underWayland() && app->desktopOutputNames().size() > 1) {
+         auto outputs = new QMenu(tr("Move to Screen"), menu);
+@@ -1842,7 +1903,7 @@
+     }
+     auto files = selectedFiles();
+     if(!files.empty()) {
+-        Fm::FilePropsDialog::showForFiles(std::move(files));
++        greywardProperties(std::move(files));
+     }
+ }
+ 

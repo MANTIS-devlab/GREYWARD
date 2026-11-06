@@ -81,7 +81,7 @@ class FileIconFamily(unittest.TestCase):
         self.assertIn('cargo build --release --frozen --offline',spec)
         self.assertIn('--test greyward_native_icons',spec)
         source=json.loads((ROOT/'packaging/greyward-files/source.json').read_text())
-        self.assertEqual(set(source['sourcePatches']),{'strata-preview-mode.patch','strata-native-icons.patch'})
+        self.assertEqual(set(source['sourcePatches']),{'strata-preview-mode.patch','strata-native-icons.patch','strata-scan-properties.patch'})
         for name,digest in source['sourcePatches'].items():
             patch=(ROOT/'packaging/greyward-files'/name).read_bytes().replace(b'\r\n',b'\n')
             self.assertEqual(hashlib.sha256(patch).hexdigest(),digest,name)

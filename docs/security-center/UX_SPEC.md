@@ -300,16 +300,58 @@ clean separator. Native renderer tests cover both views, including actual Update
 markup; reopening a window is required after replacing its installed executable.
 `type` means a connection classification only when it adds information beyond
 the transport `protocol`; redundant fields are omitted. Throughput, active
-connection counts, DNS history, reputation, server-location enrichment, and
-persistent network history are out of scope. Destination identity may include
+connection tracking, packet decryption and DNS-content inspection are out of
+scope. Destination identity may include
 an endpoint-country flag when Security Context resolves the observed public IP
 from local GeoIP and/or geofeed sources. If sources disagree, the deterministic
-best local match is still shown; a last-resort domain suffix hint is rendered
-with the same compact flag geometry and explained only on hover/accessibility
-text. A domain suffix is used only as a clearly weak last-resort hint; reverse
-DNS, provider ownership hints, and remote lookup are not used.
+best local match is still shown and its uncertainty is explained on hover.
+Domain suffixes, reverse DNS, provider ownership hints and remote lookup are
+not location evidence and do not supply flags.
 Generic, private, and unknown IP destinations show a visible neutral world
 marker instead of an invented country.
+
+Country artwork is a pinned, offline SVG set covering all 249 ISO countries and
+territories plus XK. A generated allowlist loaded before the renderer selects
+only bundled paths; unsupported/missing metadata keeps the neutral world mark.
+No emoji font, image CDN or destination lookup request is required. Upstream
+MIT terms and file hashes travel with the assets and Center RPM. Verify with
+`python3 tools/verify-country-flags.py`.
+
+Application and domain marks use white local image tiles with dark functional
+fallbacks. The flag's own colors and country-confidence/source explanations
+remain separate. Network rows use a six-level risk/inspection priority, with
+green 1–2, yellow 3–4 and red 5–6. Missing evidence stays neutral and unassessed.
+It does not relabel a firewall allow or denial. See
+[assessment labels](BEHAVIORAL_INTELLIGENCE.md#log-assessment-labels).
+
+### Local country database
+
+`network_location.py` reads DB-IP Lite Country through Fedora's
+`python3-maxminddb` mmap reader, shared across lookups behind a replacement/read
+lock. At most four readers and 4,096 endpoint results are retained. Inode,
+timestamp/size and a one-minute cache epoch invalidate replaced data; reads
+never spawn a lookup process or contact a remote geolocation service. Both IPv4
+and IPv6 are supported, including mapped IPv4. Non-global, multicast, reserved,
+invalid or unmapped addresses retain the neutral country marker.
+
+The existing resolver can still consume separately configured local MMDB or
+geofeed sources; ambient legacy DAT files are not a production authority.
+Current IP results replace old stored ccTLD guesses. Country is approximate and
+is never a risk-score factor. [DB-IP Lite](https://db-ip.com/db/download/ip-to-country-lite)
+is monthly data under CC BY 4.0. The activity view links to DB-IP, and installed
+database status retains provider/license attribution and SHA-256.
+
+`greyward-geoip-update.timer` runs quiet daily recovery checks with boot catch-up
+and up to 20 minutes of jitter. A validated current monthly edition causes no
+download. The dedicated non-login `greyward-geoip` account downloads only the
+fixed HTTPS DB-IP monthly URL, validates bounded gzip/MMDB size, database type,
+build age and IPv4/IPv6 samples, then atomically replaces the public-readable
+file in `/var/lib/greyward/geoip`. Data older than 62 days is labelled stale.
+An unavailable new month can bootstrap from
+the previous edition; failures retain the last good file and retry on the next
+timer invocation. No privileged read/control API, API key or per-IP query is
+added. Initial offline installations remain unknown until data becomes available.
+HTTPS authenticates the source; no upstream detached database signature is claimed.
 
 Activity polling updates the existing view in place. It preserves scroll,
 focus, filters, expanded rows, and pause state. A pause stops visible movement

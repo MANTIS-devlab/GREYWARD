@@ -1,21 +1,28 @@
 Name: greyward-session
 Version: 0.1.0
-Release: 38%{?dist}
+Release: 45%{?dist}
 Summary: GREYWARD static desktop session policy and factory defaults
 License: GPL-3.0-only
 BuildArch: noarch
 Source0: greyward-session.tar.gz
+BuildRequires: selinux-policy-devel
 Requires: greyward-dms
 Requires: uwsm
 Requires: labwc
 Requires: wlr-randr
 Requires: wlopm
 Requires: python3
+Requires: systemd-udev
+Requires(post): systemd systemd-udev
+Requires(post): policycoreutils libselinux-utils
+Requires(preun): systemd
+Requires(postun): systemd systemd-udev
+Requires(postun): policycoreutils libselinux-utils
 Requires: python3-gobject
 Requires: gvfs
 Requires: gtk3
 Requires: grim
-Requires: swappy
+Requires: swappy(greyward-window-controls) = 1
 Requires: slurp
 Requires: gtk-layer-shell
 Requires: python3-cairo
@@ -32,12 +39,16 @@ defaults. Existing users' mutable preferences are not part of the RPM payload.
 tar -xzf %{SOURCE0}
 
 %install
+install -Dm0644 environment/session/greyward_oauth_callback.cil %{buildroot}/usr/share/selinux/packages/greyward_oauth_callback.cil
 for file in greyward-dms greyward-session-lock greyward-display-power; do
  install -Dm0755 environment/session/$file %{buildroot}/usr/local/bin/$file
 done
-for file in greyward-dms-session-migrate greyward-dms-state-migrate greyward-dms-runtime-check greyward-screenshot greyward-desktop-defaults; do
+for file in greyward-dms-session-migrate greyward-dms-state-migrate greyward-dms-runtime-check greyward-screenshot greyward-desktop-defaults greyward-display-reprobe; do
  install -Dm0755 environment/session/$file %{buildroot}/usr/local/libexec/$file
 done
+install -Dm0644 environment/session/greyward-display-reprobe.service %{buildroot}/usr/lib/systemd/system/greyward-display-reprobe.service
+install -Dm0644 environment/session/70-greyward-display-reprobe.rules %{buildroot}/usr/lib/udev/rules.d/70-greyward-display-reprobe.rules
+sed -i 's/\r$//' %{buildroot}/usr/local/libexec/greyward-display-reprobe
 install -Dm0644 environment/session/greyward-desktop-defaults.conf %{buildroot}/usr/lib/systemd/user/greyward-desktop-icons.service.d/10-default-shortcuts.conf
 sed -i 's/\r$//' %{buildroot}/usr/local/libexec/greyward-screenshot
 install -Dm0644 environment/session/greyward-screenshot.desktop %{buildroot}/usr/local/share/applications/org.gnome.Screenshot.desktop
@@ -67,7 +78,23 @@ for backend in gtk wlr; do
  ln -s /usr/share/xdg-desktop-portal/portals/$backend.portal %{buildroot}/etc/xdg-desktop-portal/greyward/$backend.portal
 done
 
+%post
+%selinux_modules_install -s targeted /usr/share/selinux/packages/greyward_oauth_callback.cil
+%systemd_post greyward-display-reprobe.service
+/usr/bin/udevadm control --reload-rules >/dev/null 2>&1 || :
+
+%preun
+%systemd_preun greyward-display-reprobe.service
+
+%postun
+%selinux_modules_uninstall -s targeted greyward_oauth_callback
+%systemd_postun greyward-display-reprobe.service
+/usr/bin/udevadm control --reload-rules >/dev/null 2>&1 || :
+
 %files
+/usr/share/selinux/packages/greyward_oauth_callback.cil
+/usr/lib/systemd/system/greyward-display-reprobe.service
+/usr/lib/udev/rules.d/70-greyward-display-reprobe.rules
 /usr/local/share/applications/org.gnome.Screenshot.desktop
 %config(noreplace) /etc/pam.d/greyward-dms-lock
 /usr/local/bin/greyward-*
@@ -83,6 +110,26 @@ done
 /usr/share/greyward/dms/greyward-obsidian.json
 
 %changelog
+* Mon Nov 02 2026 MANTIS SYSTEMS - 0.1.0-45
+- Package canonical LF compositor assets with the 180-percent taskbar defaults.
+
+* Sun Nov 01 2026 MANTIS SYSTEMS - 0.1.0-44
+- Seed the accepted 180-percent taskbar application icon size for new profiles.
+
+* Sat Oct 31 2026 MANTIS SYSTEMS - 0.1.0-43
+- Require the native window-controls editor and select the GREYWARD capture icon.
+
+* Fri Oct 30 2026 MANTIS SYSTEMS - 0.1.0-42
+- Permit the dedicated native OAuth callback TCP port without generic server permission.
+
+* Fri Oct 30 2026 MANTIS SYSTEMS - 0.1.0-41
+- Wait for ordinary shell readiness before dependent services; bound failed startup retries.
+
+* Fri Oct 30 2026 MANTIS SYSTEMS - 0.1.0-40
+- Share verified DMS layout selection across package generations; preserve user state.
+* Thu Oct 29 2026 MANTIS SYSTEMS - 0.1.0-39
+- Recover missed Nouveau KVM display hotplug on USB hub return without logout, profile writes or idle polling.
+
 * Sun Oct 25 2026 MANTIS SYSTEMS - 0.1.0-38
 - Approve only byte-identical factory desktop launchers with native persistent trust.
 

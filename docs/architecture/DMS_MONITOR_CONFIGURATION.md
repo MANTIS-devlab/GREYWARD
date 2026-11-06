@@ -1,6 +1,46 @@
 # DMS monitor configuration on protected Labwc
 
-## Resolved diagnosis — 10 October 2026
+## KVM return recovery — 29 October 2026
+
+The physical reference reproduced a missed return event with Nouveau: both
+external outputs stayed disconnected in DRM while the NVIDIA GPU was runtime
+suspended, despite the KVM routing video back to it. The compositor exposed only
+the laptop panel. A literal DRM `detect` request woke the GPU, emitted the native
+hotplug event and restored both monitors in about two seconds without logout.
+DMS automatically recovered the existing three-output profile.
+
+`environment/session/greyward-display-reprobe` is a root-only, input-free helper.
+An authorized USB hub's interface-add event queues its static systemd oneshot
+through `70-greyward-display-reprobe.rules`; the KVM's paired USB2/USB3 hub return
+provides a signal even when video hotplug is lost. There is no resident poller,
+periodic GPU wakeup, new D-Bus method or Polkit prompt. The service coalesces the
+hub pair, retries briefly while routing settles and then exits. It probes only
+root-owned, non-writable external Nouveau connector status files, writing only
+`detect`. Connected outputs, modes, positions, transforms, DPMS, runtime-power
+settings, USB authorization and user profiles are never written by the helper.
+
+Session **39** packages only three additional files; every pre-existing payload
+digest matches Session 38. The root service has no capabilities, networking or
+home access, uses isolated Python, a 15-second timeout and start/resource limits.
+SELinux remains Enforcing without policy changes. The prior payload-equivalent
+38 RPM is retained for rollback. `environment/image/verify-usbguard-inputs.py`
+checks all three inputs under `desktop-session`: 39 passes and stale 38 is
+rejected before future image staging. No ISO is built by this correction.
+
+The native systemd job, real manual wake/reprobe, exact three-output layout
+readback and focused tests are validated. The physical automated KVM round trip restored both external connectors in
+about 3.2 seconds after the USB return; the user confirms the fix. Exact timing
+and remaining limitations are recorded in the dated evidence. This specifically addresses the
+observed Nouveau missed-event path; it is not a replacement display manager or
+a kernel driver repair. Video-only switches with no USB return event and other
+GPU drivers are outside this trigger. Persistent DisplayPort link-training
+failures require separate driver/hardware investigation; this helper does not
+reset a GPU or repeatedly attempt a failing modeset.
+
+See the KVM receipt (private development evidence).
+
+
+## Historical resolved diagnosis — 10 October 2026
 
 The latest screenshot still shows “WLR output management protocol not
 supported.” Read-only inspection of `<development-host>` found SELinux Enforcing, the

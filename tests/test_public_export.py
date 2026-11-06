@@ -50,6 +50,9 @@ class PublicationBoundaryTests(unittest.TestCase):
                      'docs/history/security-center/internal-report.md', '.secrets/id_ed25519',
                      'tests/security/exploit_priv_esc.sh',
                      'tests/security/results.md', 'output/receipt.json',
+                     '.local/releases/current.json', '.local/private/signing-backup.gpg',
+                     'public/.git/config', 'public-office-updates/.git/config',
+                     'docs/development/LOCAL_WORKSPACE.md',
                      '.codex-attachments/request.png', 'desktop-current.png',
                      'id_rsa', 'server.key', 'spikes/dms-v1.5.3/settings.json'):
             with self.subTest(path=path):
@@ -131,6 +134,24 @@ class PublicationBoundaryTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 EXPORT.snapshot(source, target)
             self.assertEqual((target/'existing-work').read_text(), 'preserve')
+
+    def test_ignored_nested_export_is_allowed_without_copying_other_exports(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            source = Path(temporary)/'private'
+            source.mkdir()
+            policy = dict(POLICY, requiredPaths=['tools/publication-policy.json'], publicTemplates={})
+            path = source/'tools/publication-policy.json'
+            path.parent.mkdir()
+            path.write_text(json.dumps(policy))
+            target = source/'.local/public-exports/new-snapshot'
+            inventory = 'tools/publication-policy.json\0.local/public-exports/old/private.txt\0'
+            with patch.object(EXPORT.subprocess, 'check_output', return_value=inventory.encode()), patch.object(EXPORT, 'verify_secret_scan'):
+                EXPORT.snapshot(source, target)
+            self.assertTrue((target/'tools/publication-policy.json').is_file())
+            self.assertFalse((target/'.local').exists())
+            for unsafe in (source/'public', source/'packaging/export', source/'.local/public-exports'):
+                with self.assertRaises(ValueError):
+                    EXPORT.snapshot(source, unsafe)
 
     def test_secret_scanner_failure_refuses_publication(self):
         with patch.dict(EXPORT.os.environ, {'GREYWARD_GITLEAKS_BINARY': 'gitleaks'}), \

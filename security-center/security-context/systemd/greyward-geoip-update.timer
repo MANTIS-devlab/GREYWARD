@@ -1,0 +1,11 @@
+[Unit]
+Description=GREYWARD monthly country data with quiet daily recovery checks
+
+[Timer]
+OnBootSec=2min
+OnCalendar=daily
+RandomizedDelaySec=20min
+Persistent=yes
+
+[Install]
+WantedBy=timers.target

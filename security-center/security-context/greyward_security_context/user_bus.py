@@ -15,6 +15,7 @@ import threading
 import time
 import uuid
 from pathlib import Path
+from greyward_security_context.process_identity import event_time
 try:
  from pwd import getpwuid
 except ImportError:
@@ -36,10 +37,12 @@ from greyward_security_context.privacy_capsule import PrivacyCapsule
 from greyward_security_context.telemetry import QUERY_SCHEMA, TelemetryError, TelemetryStore, derive_device_identity, event as telemetry_event, import_root_spool, record_event, user_store
 from greyward_security_context.aggregation import build_security_digest
 from greyward_security_context.file_security import FileSecurityManager, _open_readonly_nofollow, _unlink_verified_source, file_activity_items
-from greyward_security_context.network_location import country_resolution_for_destination
+from greyward_security_context.network_location import country_resolution_for_destination, _public_address as network_location_public
 from greyward_security_context.application_security import ApplicationSecurityReads, ApplicationReadError, unavailable_read as unavailable_application_read
 from greyward_security_context.application_workflows import ApplicationSecurityWorkflows
-from greyward_security_context import local_activity
+from greyward_security_context import local_activity, intelligence_client
+from greyward_security_context.network_intelligence import decorate as assess_network
+from greyward_security_context.arrival_scanner import ArrivalScanner
 from greyward_security_context.network_applications import installed_catalog
 BUS_NAME="systems.mantis.greyward.SecurityContext1"; OBJECT_PATH="/systems/mantis/greyward/SecurityContext1"; STATE_PATH=Path("/run/greyward-security-context/opensnitch-summary.json"); SCHEMA="greyward.security.context/v1"
 NETWORK_STATE_PATH=Path("/run/greyward-security-context/network-protection.json"); NETWORK_SCHEMA="greyward.security.network/v1"
@@ -83,6 +86,9 @@ def _invalidate_shared_caches():
   _AUTHORITATIVE_POSTURE_CACHE=None
  with _NETWORK_HEALTH_CACHE_LOCK:
   _NETWORK_HEALTH_CACHE=None
+def graphical_session_available():
+ return os.getuid() >= 1000 and bool(os.environ.get('WAYLAND_DISPLAY') or os.environ.get('DISPLAY'))
+
 def now(): return dt.datetime.now(dt.timezone.utc).replace(microsecond=0)
 def stamp(value): return value.isoformat().replace("+00:00","Z")
 def authoritative_posture():
@@ -280,7 +286,13 @@ def _with_network_location(value):
  if not (len(existing_code) == 2 and existing_code.isalpha()):
   existing_code=""
  resolution=country_resolution_for_destination(destination.get("ip"),destination.get("host"))
- country_code=existing_code or str(resolution.get("country_code") or "")
+ if resolution.get("country_code"):
+  for name in ("confidence", "converged", "source_count", "source"):
+   destination["country_"+name]=resolution.get(name)
+ # Prefer the current local IP lookup over old stored hints or ccTLD guesses.
+ if destination.get("country_source") == "DOMAIN_SUFFIX": existing_code=""
+ if not network_location_public(destination.get("ip")): existing_code=""
+ country_code=str(resolution.get("country_code") or "") or existing_code
  if country_code:
   destination["country_code"]=country_code
   confidence=str(destination.get("country_confidence") or resolution.get("confidence") or "MEDIUM").upper()
@@ -313,7 +325,7 @@ def network_activity(since_sequence=0,limit=256):
  oldest=min((event["sequence"] for event in events),default=0)
  reset=since == 0 or bool(oldest and since < oldest - 1)
  selected=ordered[:limit] if reset else [event for event in ordered if event["sequence"] > since][:limit]
- selected=[_with_network_location(event) for event in selected]
+ selected=assess_network([_with_network_location(event) for event in selected],observations=events,context_partial=len(events)>=4096)
  summary=value.get("activity_summary") if isinstance(value.get("activity_summary"),dict) else {"window_seconds":1800,"total":len(events),"allowed":0,"blocked":0,"unknown":0,"buckets":[]}
  opensnitch=value.get("opensnitch") or {}
  return {"schema":"greyward.security.network.activity/v1","state":opensnitch.get("state","UNAVAILABLE"),"detail":opensnitch.get("detail","Application activity is unavailable."),"session_id":value.get("activity_session_id"),"generated_at":value.get("generated_at",stamp(now())),"fresh_until":value.get("fresh_until",stamp(now())),"next_sequence":int(value.get("activity_next_sequence",0) or 0),"reset":reset,"summary":summary,"rule_mutation":(opensnitch.get("capabilities") or {}).get("rule_mutation","UNAVAILABLE"),"events":selected}
@@ -546,9 +558,13 @@ class ClipboardObserver:
   self.process=None
 
 class SecurityContext(dbus.service.Object):
+
  def __init__(self,bus,usb,sensors,persistence=None):
   self._application_bus=bus; self.application_workflows=ApplicationSecurityWorkflows()
-  super().__init__(bus,OBJECT_PATH); self.usb=usb; self.sensors=sensors; self.persistence=persistence or PersistenceMonitor(); self.safe_open_processes={}; self.file_security=FileSecurityManager(); self.privacy_capsule=PrivacyCapsule(); self._capsule_lock=threading.Lock(); self._summary_cache=None; self._summary_cache_at=0.0; self._summary_cache_lock=threading.Lock(); self.clipboard_category=None; self.clipboard_observed_at=None; self._network_notification_seen=set(); self._network_notification_initialized=False; self._network_notification_deadlines={}; self.clipboard_observer=ClipboardObserver(lambda category: GLib.idle_add(self._on_clipboard_category,category)); self.portal=PortalContext(bus,lambda: GLib.idle_add(self._on_privacy_source_changed)); self.sensors.start(lambda: GLib.idle_add(self._on_privacy_source_changed)); self.clipboard_observer.start()
+  super().__init__(bus,OBJECT_PATH); self.usb=usb; self.sensors=sensors; self.persistence=persistence or PersistenceMonitor(); self.safe_open_processes={}; self.file_security=FileSecurityManager(user_store()); self.privacy_capsule=PrivacyCapsule(); self._capsule_lock=threading.Lock(); self._summary_cache=None; self._summary_cache_at=0.0; self._summary_cache_lock=threading.Lock(); self.clipboard_category=None; self.clipboard_observed_at=None; self._network_notification_seen=set(); self._network_notification_initialized=False; self._network_notification_deadlines={}; self.clipboard_observer=ClipboardObserver(lambda category: GLib.idle_add(self._on_clipboard_category,category)); self.portal=PortalContext(bus,lambda: GLib.idle_add(self._on_privacy_source_changed))
+  if graphical_session_available():
+   self.sensors.start(lambda: GLib.idle_add(self._on_privacy_source_changed))
+   self.clipboard_observer.start()
 
  def _invalidate_caches(self):
   if hasattr(self,"usb"): self.usb._device_cache=None
@@ -960,7 +976,9 @@ class SecurityContext(dbus.service.Object):
   return json.dumps(self.shell_runtime.trust(str(connection_ref),str(mode)),separators=(",",":"))
  def start_shell_runtime(self,bus):
   from greyward_security_context.shell_runtime import ShellRuntime
-  self.shell_runtime=ShellRuntime(self,bus)
+  self.arrival_scanner=ArrivalScanner()
+  self.shell_runtime=ShellRuntime(self,bus,active=graphical_session_available())
+  if graphical_session_available(): self.arrival_scanner.start()
  def reconcile_history(self):
   # Background ingestion owns root import and bounded legacy finding migration.
   # Historical projections never create/migrate storage or derive findings.
@@ -1024,6 +1042,20 @@ class SecurityContext(dbus.service.Object):
  @dbus.service.method(BUS_NAME,in_signature="",out_signature="s")
  def GetNetworkProtection(self):
   value=network_summary(); value["secure_dns"]=secure_dns_state(); return json.dumps(value,sort_keys=True,separators=(",",":"))
+ @dbus.service.method(BUS_NAME,in_signature="s",out_signature="s",async_callbacks=("reply","error"))
+ def GetBehavioralIntelligence(self,payload,reply,error):
+  unavailable=json.dumps({"schema":"greyward.intelligence/v1","sensor":{"state":"UNAVAILABLE"},"events":[],"incidents":[]})
+  try:
+   filters=json.loads(payload or '{}')
+   if not isinstance(filters,dict) or len(payload)>4096: raise ValueError()
+  except (ValueError,TypeError): reply(unavailable); return
+  if not hasattr(self,'_intelligence_slots'): self._intelligence_slots=threading.BoundedSemaphore(2)
+  if not self._intelligence_slots.acquire(blocking=False): reply(unavailable); return
+  def collect():
+   try: result=json.dumps(intelligence_client.snapshot(filters),separators=(',',':'))
+   finally: self._intelligence_slots.release()
+   GLib.idle_add(reply,result)
+  threading.Thread(target=collect,daemon=True).start()
  @dbus.service.method(BUS_NAME,in_signature="",out_signature="s")
  def GetThreatProtection(self):
   value=network_summary()
@@ -1051,7 +1083,15 @@ class SecurityContext(dbus.service.Object):
    filters.update({"category":"NETWORK","limit":min(int(filters.get("limit",128)),256)})
    store=user_store()
    result=store.query(filters,read_only=True)
-   result["events"]=[_with_network_location(event) for event in result.get("events",[]) if isinstance(event,dict)]
+   selected=[_with_network_location(event) for event in result.get("events",[]) if isinstance(event,dict)]
+   context=[];partial=False
+   if selected:
+    times=[event_time(event.get("occurred_at")) for event in selected]
+    times=[v for v in times if v is not None]
+    if times:
+     window={"category":"NETWORK","limit":512,"from":dt.datetime.fromtimestamp(min(times)-60,dt.timezone.utc).isoformat().replace('+00:00','Z'),"to":dt.datetime.fromtimestamp(max(times),dt.timezone.utc).isoformat().replace('+00:00','Z')}
+     observed=store.query(window,read_only=True);context=observed.get("events",[]);partial=bool(observed.get("truncated"))
+   result["events"]=assess_network(selected,observations=context,context_partial=partial)
    return json.dumps(result,sort_keys=True,separators=(",",":"))
   except (TelemetryError,TypeError,ValueError,json.JSONDecodeError) as error:
    return json.dumps({"schema":QUERY_SCHEMA,"events":[],"truncated":False,"source_state":{"state":"UNAVAILABLE","reason":str(error)[:160]}},separators=(",",":"))
@@ -1090,12 +1130,19 @@ class SecurityContext(dbus.service.Object):
   except (ValueError,TypeError,json.JSONDecodeError,PermissionError,RuntimeError,dbus.DBusException,TelemetryError) as error:
    return json.dumps({"state":"FAILED","detail":str(error)[:320]},separators=(",",":"))
  @dbus.service.method(BUS_NAME,in_signature="s",out_signature="s")
+ def GetFileScanInfo(self,path):
+  try:
+   proxy=dbus.Interface(dbus.SystemBus().get_object("systems.mantis.greyward.ClamAvScan1","/systems/mantis/greyward/ClamAvScan1"),"systems.mantis.greyward.ClamAvScan1")
+   return proxy.GetFileScanInfo(path,timeout=FILE_SECURITY_DBUS_TIMEOUT)
+  except (dbus.DBusException,OSError,ValueError,TelemetryError):
+   return json.dumps({"state":"UNAVAILABLE","validity":"UNKNOWN","detail":"Scan information is unavailable."},separators=(",",":"))
+ @dbus.service.method(BUS_NAME,in_signature="s",out_signature="s")
  def GetScanStatus(self,operation_id):
   value=None
   try:
    proxy=dbus.Interface(dbus.SystemBus().get_object("systems.mantis.greyward.ClamAvScan1","/systems/mantis/greyward/ClamAvScan1"),"systems.mantis.greyward.ClamAvScan1")
    return proxy.GetScanStatus(operation_id,timeout=FILE_SECURITY_DBUS_TIMEOUT)
-  except dbus.DBusException: value=self.file_security.status(operation_id)
+  except dbus.DBusException: value=self.file_security.status(operation_id,owner_uid=os.getuid())
   return json.dumps(value or {"state":"UNAVAILABLE","detail":"Scan history is unavailable."},sort_keys=True,separators=(",",":"))
  @dbus.service.method(BUS_NAME,in_signature="s",out_signature="s")
  def CancelScan(self,operation_id):
@@ -1103,7 +1150,7 @@ class SecurityContext(dbus.service.Object):
   try:
    proxy=dbus.Interface(dbus.SystemBus().get_object("systems.mantis.greyward.ClamAvScan1","/systems/mantis/greyward/ClamAvScan1"),"systems.mantis.greyward.ClamAvScan1")
    return proxy.CancelScan(operation_id,timeout=FILE_SECURITY_DBUS_TIMEOUT)
-  except dbus.DBusException: value=self.file_security.cancel(operation_id)
+  except dbus.DBusException: value=self.file_security.cancel(operation_id,owner_uid=os.getuid())
   return json.dumps(value or {"state":"UNAVAILABLE","detail":"Scan cancellation is unavailable."},sort_keys=True,separators=(",",":"))
  @dbus.service.method(BUS_NAME,in_signature="s",out_signature="s")
  def ListFileDetections(self,payload):
@@ -1115,7 +1162,7 @@ class SecurityContext(dbus.service.Object):
     return proxy.ListFileDetections(json.dumps(request,separators=(",",":")),timeout=FILE_SECURITY_DBUS_TIMEOUT)
    except dbus.DBusException:
     pass
-   return json.dumps({"schema":"greyward.file-security.detections/v1","state":"AVAILABLE","detections":self.file_security.detections(state=request.get("state"),limit=request.get("limit",128))},sort_keys=True,separators=(",",":"))
+   return json.dumps({"schema":"greyward.file-security.detections/v1","state":"AVAILABLE","detections":self.file_security.detections(state=request.get("state"),limit=request.get("limit",128),owner_uid=os.getuid())},sort_keys=True,separators=(",",":"))
   except (ValueError,TypeError,json.JSONDecodeError,TelemetryError) as error:
    return json.dumps({"schema":"greyward.file-security.detections/v1","state":"UNAVAILABLE","detections":[],"detail":str(error)[:240]},separators=(",",":"))
  @dbus.service.method(BUS_NAME,in_signature="",out_signature="s")
@@ -1124,11 +1171,12 @@ class SecurityContext(dbus.service.Object):
    try:
     proxy=dbus.Interface(dbus.SystemBus().get_object("systems.mantis.greyward.ClamAvScan1","/systems/mantis/greyward/ClamAvScan1"),"systems.mantis.greyward.ClamAvScan1")
     value=json.loads(str(proxy.GetFileSecuritySummary(timeout=FILE_SECURITY_DBUS_TIMEOUT)))
+    value["arrival_scanning"]=self.arrival_scanner.snapshot()
     return json.dumps(self._merge_file_activity(value),sort_keys=True,separators=(",",":"))
    except dbus.DBusException:
     pass
-   scans=self.file_security.reconcile_interrupted_scans(32)
-   detections=self.file_security.detections(limit=128)
+   scans=self.file_security.reconcile_interrupted_scans(32,owner_uid=os.getuid())
+   detections=self.file_security.detections(limit=128,owner_uid=os.getuid())
    active=next((item for item in scans if item.get("state") in {"QUEUED","SCANNING","FINALIZING"}),None)
    return json.dumps(self._merge_file_activity({"schema":"greyward.file-security/v1","state":"UNAVAILABLE","active_scan":None,"latest_scan":scans[0] if scans else None,"detections":detections,"clamav":clamav_status()}),sort_keys=True,separators=(",",":"))
   except (TelemetryError,OSError,TypeError,ValueError,json.JSONDecodeError) as error:

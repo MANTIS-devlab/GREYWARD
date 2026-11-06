@@ -24,12 +24,67 @@ linux /images/pxeboot/vmlinuz inst.stage2=hd:LABEL=GREYWARD-INSTALLER-44 quiet i
             contract.BRANDING[2]: b'known-good-logo',
         }
         self.expected = copy.deepcopy(self.branding)
+        self.packages = '%packages --exclude-weakdeps\nbash\n-openssh-server\n%end\n'
 
     def check(self):
-        return contract.validate(self.installer, self.configs, self.branding, self.expected)
+        return contract.validate(self.installer, self.configs, self.branding,
+                                 self.expected, self.packages)
 
     def test_native_interactive_contract_passes(self):
         self.assertEqual(self.check()['state'], 'PASS')
+
+    def test_non_english_default_rejected(self):
+        self.installer = self.installer.replace('lang en_US.UTF-8', 'lang fr_FR.UTF-8')
+        with self.assertRaisesRegex(ValueError, 'language must be English'):
+            self.check()
+
+    def test_later_language_override_rejected(self):
+        self.installer = self.installer.replace('lang en_US.UTF-8',
+                                                'lang en_US.UTF-8\nlang fr_FR.UTF-8')
+        with self.assertRaisesRegex(ValueError, 'language must be English'):
+            self.check()
+
+    def test_keyboard_preanswer_rejected_even_for_us(self):
+        for layout in ('us', 'fr'):
+            with self.subTest(layout=layout):
+                original = self.installer
+                self.installer = 'keyboard --vckeymap=' + layout + '\n' + original
+                with self.assertRaisesRegex(ValueError, 'Keyboard layout must remain interactive'):
+                    self.check()
+                self.installer = original
+
+    def test_boot_keymap_bypass_rejected(self):
+        self.configs = {p: s.replace(' quiet', ' quiet inst.keymap=fr')
+                        for p, s in self.configs.items()}
+        with self.assertRaisesRegex(ValueError, 'Boot keymap must not bypass'):
+            self.check()
+
+    def test_hidden_software_page_requires_real_explicit_packages(self):
+        for value in ('', '%packages --exclude-weakdeps\n%end\n',
+                      '%packages --exclude-weakdeps\n-openssh-server\n%end\n',
+                      '%packages --exclude-weakdeps\n@^workstation-product-environment\n%end\n'):
+            with self.subTest(value=value):
+                self.packages = value
+                with self.assertRaisesRegex(ValueError, 'explicit nonempty ISO-local packages'):
+                    self.check()
+
+    def test_hiding_keyboard_or_language_page_rejected(self):
+        for setting, extra in ((b'hidden_spokes =', b'KeyboardSpoke'),
+                               (b'hidden_webui_pages =', b'anaconda-screen-language')):
+            with self.subTest(extra=extra):
+                original = self.branding[contract.BRANDING[0]]
+                self.branding[contract.BRANDING[0]] = original.replace(setting, setting + b' ' + extra)
+                self.expected = copy.deepcopy(self.branding)
+                with self.assertRaisesRegex(ValueError, 'pages suppressed'):
+                    self.check()
+                self.branding[contract.BRANDING[0]] = original
+
+    def test_geolocation_cannot_replace_english_default(self):
+        self.branding[contract.BRANDING[0]] = self.branding[contract.BRANDING[0]].replace(
+            b'use_geolocation = False', b'use_geolocation = True')
+        self.expected = copy.deepcopy(self.branding)
+        with self.assertRaisesRegex(ValueError, 'GeoIP'):
+            self.check()
 
     def test_predefined_account_rejected(self):
         self.installer = 'user --name=predefined --password=hash --iscrypted\n' + self.installer

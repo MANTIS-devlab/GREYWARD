@@ -37,6 +37,25 @@ class DmsShellMigrationTests(unittest.TestCase):
                 migration.ensure_quiescent({'fixture-user'})
         scan.assert_not_called()
 
+    def test_session_only_refresh_keeps_every_other_protected_digest(self):
+        desktop={'schema':'greyward.protected-desktop/v1','files':{'verify.py':'a'*64,'session.py':'b'*64,'bin/labwc':'c'*64}}
+        updated=migration.update_verifier_manifest(desktop,b'fixed guardian',session_only=True)
+        self.assertEqual(updated['files']['session.py'],sha(b'fixed guardian'))
+        self.assertEqual(updated['files']['verify.py'],'a'*64)
+        self.assertEqual(updated['files']['bin/labwc'],'c'*64)
+        self.assertEqual(desktop['files']['session.py'],'b'*64)
+
+    def test_only_fully_vanished_closing_session_is_ignored(self):
+        values={'State':'closing','Active':'no','Scope':'session-49.scope','User':'1000','Leader':'123'}
+        with patch.object(migration.Path,'exists',return_value=False), patch.object(migration.subprocess,'run',return_value=SimpleNamespace(stdout='inactive')):
+            self.assertTrue(migration.ended_session_locator(values,'49'))
+            self.assertFalse(migration.ended_session_locator({**values,'Active':'yes'},'49'))
+            self.assertFalse(migration.ended_session_locator({**values,'Scope':'session-50.scope'},'49'))
+        with patch.object(migration.Path,'exists',return_value=True):
+            self.assertFalse(migration.ended_session_locator(values,'49'))
+        with patch.object(migration.Path,'exists',return_value=False), patch.object(migration.subprocess,'run',return_value=SimpleNamespace(stdout='active')):
+            self.assertFalse(migration.ended_session_locator(values,'49'))
+
     def test_protected_login_input_refresh_is_detected_without_a_dms_version_change(self):
         with tempfile.TemporaryDirectory() as directory:
             shell = Path(directory) / 'shell'
@@ -183,6 +202,11 @@ class DmsShellMigrationTests(unittest.TestCase):
                          and Path('/usr/bin/chcon').is_file(),
                          'requires root Linux migration primitives')
     def test_verifier_only_migration_refreshes_linked_receipts_atomically(self):
+        for fixed_input in ('verify.py', 'session.py'):
+            with self.subTest(fixed_input=fixed_input):
+                self.exercise_fixed_input_migration(fixed_input)
+
+    def exercise_fixed_input_migration(self, fixed_input):
         with tempfile.TemporaryDirectory(prefix='greyward-verifier-migration-',
                                           dir='/root') as directory:
             root = Path(directory)
@@ -192,15 +216,15 @@ class DmsShellMigrationTests(unittest.TestCase):
             source.mkdir(mode=0o755)
             old_verifier = b'# old verifier\nVALUE = False\n'
             new_verifier = b'# new verified helper policy\nVALUE = True\n'
-            (base / 'verify.py').write_bytes(old_verifier)
-            (source / 'verify.py').write_bytes(new_verifier)
-            (base / 'verify.py').chmod(0o444)
-            (source / 'verify.py').chmod(0o444)
+            (base / fixed_input).write_bytes(old_verifier)
+            (source / fixed_input).write_bytes(new_verifier)
+            (base / fixed_input).chmod(0o444)
+            (source / fixed_input).chmod(0o444)
             desktop = {
                 'schema': 'greyward.protected-desktop/v1',
                 'source': {'dms': 'v1.6.2-21'},
                 'accounts': {'1000': {'name': 'synthetic-user'}},
-                'files': {'verify.py': sha(old_verifier)},
+                'files': {fixed_input: sha(old_verifier)},
             }
             desktop_bytes = (json.dumps(desktop, indent=2) + '\n').encode()
             (base / 'desktop.json').write_bytes(desktop_bytes)
@@ -232,13 +256,13 @@ class DmsShellMigrationTests(unittest.TestCase):
             with patch.object(migration, 'LOCK', root / 'migration.lock'), \
                     patch.object(migration, 'ensure_quiescent'), \
                     patch.object(migration.subprocess, 'run', side_effect=copy_label):
-                result = migration.migrate_verifier_only(base, admin, source)
+                result = migration.migrate_verifier_only(base, admin, source, session_only=(fixed_input == 'session.py'))
 
             refreshed_desktop = json.loads((base / 'desktop.json').read_bytes())
             refreshed_admin = json.loads((admin / 'manifest.json').read_bytes())
             self.assertIn('refreshed', result)
-            self.assertEqual((base / 'verify.py').read_bytes(), new_verifier)
-            self.assertEqual(refreshed_desktop['files']['verify.py'], sha(new_verifier))
+            self.assertEqual((base / fixed_input).read_bytes(), new_verifier)
+            self.assertEqual(refreshed_desktop['files'][fixed_input], sha(new_verifier))
             self.assertEqual(refreshed_admin['desktop'], sha((base / 'desktop.json').read_bytes()))
             self.assertEqual(len(label_copies), 3)
 
@@ -347,6 +371,22 @@ class DmsShellMigrationTests(unittest.TestCase):
             (metadata / 'readiness.json').symlink_to(target)
             with self.assertRaisesRegex(RuntimeError, 'Unsafe protected authentication runtime endpoint'):
                 migration.label_existing_usbguard_runtime(runtime, os.getuid())
+
+
+    def test_broker_refresh_checks_the_actual_installed_executable(self):
+        for same in (True,False):
+            with self.subTest(same=same), patch.object(migration.subprocess,'run',side_effect=[type('Result',(),{'returncode':0})(),None,type('Result',(),{'returncode':3})()]) as run, \
+                 patch.object(migration.subprocess,'check_output',return_value='123'), \
+                 patch.object(migration.os.path,'samefile',return_value=same):
+                if same:migration.refresh_installed_broker()
+                else:
+                    with self.assertRaisesRegex(RuntimeError,'installed executable'):
+                        migration.refresh_installed_broker()
+                self.assertEqual(run.call_args_list[1].args[0],['/usr/bin/systemctl','restart','greyward-application-security-workflows.service'])
+    def test_migration_does_not_report_success_without_an_active_broker(self):
+        with patch.object(migration.subprocess,'run',return_value=type('Result',(),{'returncode':3})()):
+            with self.assertRaisesRegex(RuntimeError,'not active'):
+                migration.refresh_installed_broker()
 
 
 if __name__ == '__main__':

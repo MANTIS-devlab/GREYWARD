@@ -347,3 +347,10 @@ separate prototype and is not part of this directory.
 Office packages and their acceptance/update boundaries are defined in
 [GREYWARD Office integration](../../docs/software/OFFICE_INTEGRATION.md). Four
 matched source-verified Office RPMs are required for future complete image stages.
+
+
+Session 40 shares verified DMS upstream-layout selection between state migration
+and pin seeding. GREYWARD package generations of v2.0.0 retain the native dms
+layout; a new upstream line needs explicit review. The query is read-only,
+selected-package verification remains mandatory, and existing user preferences
+are retained. See live startup validation (private development evidence).

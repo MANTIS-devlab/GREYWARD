@@ -1,0 +1,12 @@
+{
+  "schema": "greyward.swappy-source/v1",
+  "version": "1.5.1",
+  "fedoraSource": "https://kojipkgs.fedoraproject.org/packages/swappy/1.5.1/8.fc44/src/swappy-1.5.1-8.fc44.src.rpm",
+  "signingKey": "6A6B35DBE9442683.gpg",
+  "inputs": {
+    "swappy-1.5.1.tar.gz": "47886ad52d81980da3fd6cd401d985a8a6fb0a28bfa687d3b40d39d7f9349147",
+    "swappy-1.5.1.tar.gz.sig": "50923e268396263f08209ba4560830402a39a13517141952bb17c35712c87ec3",
+    "6A6B35DBE9442683.gpg": "63f113ff3b99222bf032ba762d08c2bd4ab1cfa50aefc0acb77360536175c2a5"
+  },
+  "patchSha256": "502ac78befd0665d236dcbbc96dc6ff7b0d8ab75641e12621e7658ea1478e120"
+}

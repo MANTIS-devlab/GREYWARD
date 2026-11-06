@@ -2,6 +2,10 @@
   "schema": "greyward.publication-policy/v1",
   "excludedPaths": [
     "iso_releases/*",
+    ".local/*",
+    "public/*",
+    "public-office-updates/*",
+    "docs/development/LOCAL_WORKSPACE.md",
     ".codex-attachments/*",
     "environment/greyward.pkr.hcl",
     "environment/http/greyward-dev-bootstrap.ks.tmpl",

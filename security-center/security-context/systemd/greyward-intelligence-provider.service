@@ -1,0 +1,30 @@
+[Unit]
+Description=GREYWARD behavioral evidence provider
+After=greyward-intelligence-sensor.service
+[Service]
+Type=dbus
+BusName=systems.mantis.greyward.Intelligence1
+ExecStart=/usr/bin/python3 -m greyward_security_context.intelligence_service
+Environment=PYTHONPATH=/usr/lib/greyward-security-context
+Restart=on-failure
+RestartSec=10
+Nice=10
+CPUWeight=20
+MemoryHigh=96M
+MemoryMax=160M
+TasksMax=16
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/var/lib/greyward/intelligence
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_UNIX
+LockPersonality=yes
+UMask=0077
+[Install]
+WantedBy=multi-user.target

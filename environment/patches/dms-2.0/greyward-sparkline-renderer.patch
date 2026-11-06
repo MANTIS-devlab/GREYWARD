@@ -1,0 +1,15 @@
+--- a/quickshell/dms/DCommon/Widgets/DSparkline.qml
++++ b/quickshell/dms/DCommon/Widgets/DSparkline.qml
+@@ -144,7 +144,11 @@
+ 
+     Shape {
+         anchors.fill: parent
+-        preferredRendererType: Shape.CurveRenderer
++        // Qt 6.11.2 CurveRenderer crashes on valid sampled chart fills.
++        // Keep GPU rendering, isolating the fallback to these small graphs.
++        preferredRendererType: Shape.GeometryRenderer
++        layer.enabled: true
++        layer.samples: 4
+ 
+         ShapePath {
+             strokeColor: "transparent"

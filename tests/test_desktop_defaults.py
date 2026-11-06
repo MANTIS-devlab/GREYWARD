@@ -13,6 +13,16 @@ LOADER.exec_module(MODULE)
 
 
 class DesktopDefaultsTests(unittest.TestCase):
+    def test_factory_volume_keys_are_the_native_pcmanfm_keys(self):
+        import configparser
+        config = configparser.ConfigParser()
+        config.read(ROOT / 'environment/session/desktop/settings.conf', encoding='utf-8')
+        self.assertFalse(config.getboolean('Volume', 'MountOnStartup'))
+        self.assertFalse(config.getboolean('Volume', 'MountRemovable'))
+        self.assertFalse(config.getboolean('Volume', 'AutoRun'))
+        self.assertNotIn('AutoMount', config['Volume'])
+        self.assertNotIn('AutoMountOnStartup', config['Volume'])
+
     def test_existing_user_settings_are_preserved_byte_for_byte(self):
         with tempfile.TemporaryDirectory() as directory:
             config = Path(directory) / 'settings.conf'
@@ -36,11 +46,11 @@ class DesktopDefaultsTests(unittest.TestCase):
             original = b'old factory'
             theme.write_bytes(original)
             digest = hashlib.sha256(original).hexdigest()
-            MODULE.seed_theme(theme, b'new factory', digest)
+            MODULE.seed_managed(theme, b'new factory', digest)
             self.assertEqual(theme.read_bytes(), b'new factory')
             self.assertEqual(theme.with_name('theme.toml.pre-dms20').read_bytes(), original)
             theme.write_bytes(b'my custom theme')
-            MODULE.seed_theme(theme, b'newer factory', digest)
+            MODULE.seed_managed(theme, b'newer factory', digest)
             self.assertEqual(theme.read_bytes(), b'my custom theme')
             self.assertEqual(theme.with_name('theme.toml.pre-dms20').read_bytes(), original)
 
@@ -51,9 +61,22 @@ class DesktopDefaultsTests(unittest.TestCase):
             target.write_bytes(b'factory')
             linked = Path(directory) / 'theme.toml'
             linked.symlink_to(target)
-            MODULE.seed_theme(linked, b'new', hashlib.sha256(b'factory').hexdigest())
+            MODULE.seed_managed(linked, b'new', hashlib.sha256(b'factory').hexdigest())
             self.assertTrue(linked.is_symlink())
             self.assertEqual(target.read_bytes(), b'factory')
+
+    def test_unchanged_scan_action_upgrades_and_custom_action_is_preserved(self):
+        with tempfile.TemporaryDirectory() as directory:
+            destination = Path(directory) / 'action.toml'
+            previous = b'factory scan action'
+            destination.write_bytes(previous)
+            digest = hashlib.sha256(previous).hexdigest()
+            MODULE.seed_managed(destination, b'folder-capable action', digest, '.pre-clamav-arrivals')
+            self.assertEqual(destination.read_bytes(), b'folder-capable action')
+            self.assertEqual(destination.with_name('action.toml.pre-clamav-arrivals').read_bytes(), previous)
+            destination.write_bytes(b'user edited')
+            MODULE.seed_managed(destination, b'new action', digest, '.pre-clamav-arrivals')
+            self.assertEqual(destination.read_bytes(), b'user edited')
 
 
 if __name__ == '__main__':

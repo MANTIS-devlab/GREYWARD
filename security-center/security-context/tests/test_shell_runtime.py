@@ -12,6 +12,7 @@ except ModuleNotFoundError:
 class OperationTests(unittest.TestCase):
     def test_signal_burst_coalesces_one_idle_callback_without_losing_dirty_state(self):
         runtime = object.__new__(ShellRuntime)
+        runtime.active = True
         runtime.dirty = False
         runtime.invalidate_pending = False
         runtime.tick = Mock()
@@ -45,6 +46,7 @@ class OperationTests(unittest.TestCase):
 
     def setUp(self):
         self.runtime = object.__new__(ShellRuntime)
+        self.runtime.active = True
         self.runtime.lock = threading.Lock()
         self.runtime.operations = {}
         self.runtime.snapshot = {'revision': 1, 'items': [{'id': 'usb:ref', 'connection_ref': 'ref', 'title': 'Test', 'actions': [{'id': 'trust_once'}]}],
@@ -62,6 +64,25 @@ class OperationTests(unittest.TestCase):
         self.runtime.sensor_starts = Mock()
         self.runtime.sensor_starts.collect.return_value = []
         self.runtime.running = False
+
+    def test_file_change_does_not_invalidate_unrelated_posture(self):
+        runtime = self.runtime
+        runtime.dirty = False
+        runtime.files_dirty = False
+        runtime.invalidate_pending = False
+        with patch('greyward_security_context.shell_runtime.GLib.idle_add') as schedule:
+            runtime.invalidate_files()
+        self.assertTrue(runtime.files_dirty)
+        self.assertFalse(runtime.dirty)
+        runtime.service._invalidate_caches.assert_not_called()
+        schedule.assert_called_once()
+
+    def test_headless_instance_never_schedules_collection(self):
+        runtime = self.runtime
+        runtime.active = False
+        with patch('greyward_security_context.shell_runtime.threading.Thread') as thread:
+            runtime.tick()
+        thread.assert_not_called()
 
     def test_display_lease_renewal_does_not_change_revision_or_notifications(self):
         self.runtime.snapshot.update(fresh_until='expired', display_fresh_until='old')

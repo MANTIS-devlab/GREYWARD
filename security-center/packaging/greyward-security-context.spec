@@ -1,6 +1,6 @@
 Name:           greyward-security-context
 Version:        0.1.0
-Release:        113%{?dist}
+Release:        137%{?dist}
 Summary:        GREYWARD OpenSnitch control plane and Security Context session bus
 License:        GPL-3.0-only
 Source0:        %{name}-%{version}.tar.gz
@@ -13,6 +13,7 @@ Recommends:     libmaxminddb-utils
 Requires:       python3-dbus
 Requires:       python3-gobject-base
 Requires:       python3-systemd
+Requires:       python3-maxminddb
 Requires:       python3-grpcio
 Requires:       python3-protobuf
 Requires:       clamd
@@ -74,11 +75,16 @@ install -Dm0755 security-context/bin/greyward-recovery-point %{buildroot}%{_libe
 install -Dm0755 security-context/bin/greyward-backup %{buildroot}%{_libexecdir}/greyward-backup
 install -Dm0755 security-context/bin/greyward-secure-dns %{buildroot}%{_libexecdir}/greyward-secure-dns
 install -Dm0755 security-context/bin/greyward-feodo-update %{buildroot}%{_libexecdir}/greyward-feodo-update
+install -Dm0755 security-context/bin/greyward-geoip-update %{buildroot}%{_libexecdir}/greyward-geoip-update
+install -Dm0644 security-context/systemd/greyward-geoip-update.service %{buildroot}%{_unitdir}/greyward-geoip-update.service
+install -Dm0644 security-context/systemd/greyward-geoip-update.timer %{buildroot}%{_unitdir}/greyward-geoip-update.timer
+install -Dm0644 security-context/config/greyward-geoip.sysusers %{buildroot}%{_sysusersdir}/greyward-geoip.conf
 install -Dm0600 security-context/config/opensnitch-policy.json %{buildroot}%{_sysconfdir}/greyward/opensnitch-policy.json
 install -Dm0644 security-context/systemd/greyward-opensnitch-control-plane.service %{buildroot}%{_unitdir}/greyward-opensnitch-control-plane.service
 install -Dm0644 security-context/systemd/greyward-secure-dns.service %{buildroot}%{_unitdir}/greyward-secure-dns.service
 install -Dm0644 security-context/systemd/greyward-security-context-user.service %{buildroot}%{_userunitdir}/greyward-security-context-user.service
 install -Dm0644 security-context/systemd/greyward-clamav-scan.service %{buildroot}%{_unitdir}/greyward-clamav-scan.service
+install -Dm0644 security-context/systemd/10-greyward-freshclam-recovery.conf %{buildroot}%{_unitdir}/clamav-freshclam.service.d/10-greyward-freshclam-recovery.conf
 install -Dm0644 security-context/systemd/greyward-opensnitch-policy.service %{buildroot}%{_unitdir}/greyward-opensnitch-policy.service
 install -Dm0644 security-context/systemd/greyward-feodo-update.service %{buildroot}%{_unitdir}/greyward-feodo-update.service
 install -Dm0644 security-context/systemd/greyward-feodo-update.timer %{buildroot}%{_unitdir}/greyward-feodo-update.timer
@@ -105,21 +111,34 @@ install -Dm0644 security-context/tmpfiles.d/greyward-opensnitch.conf %{buildroot
 install -Dm0644 security-context/tmpfiles.d/greyward-secure-dns.conf %{buildroot}%{_tmpfilesdir}/greyward-secure-dns.conf
 
 %post
+%sysusers_create %{_sysusersdir}/greyward-geoip.conf
 %tmpfiles_create %{_tmpfilesdir}/greyward-secure-dns.conf
 %systemd_post greyward-opensnitch-control-plane.service
 %systemd_post greyward-opensnitch-policy.service
 %systemd_post greyward-feodo-update.timer
+%systemd_post greyward-geoip-update.timer
 %systemd_post greyward-auto-update.timer
 %systemd_post greyward-clamav-scan.service
 %systemd_post greyward-secure-dns.service
 %systemd_post greyward-update-worker.socket
 %systemd_user_post greyward-security-context-user.service
 %systemd_user_post greyward-update-center.service
+# Move only the former package-owned default-target enablement. Preserve
+# disabled units and administrator links pointing elsewhere.
+for unit in greyward-security-context-user.service greyward-update-center.service; do
+ link=/etc/systemd/user/default.target.wants/$unit
+ if [ -L "$link" ] && [ "$(readlink "$link")" = "/usr/lib/systemd/user/$unit" ]; then
+  rm -- "$link"
+  mkdir -p /etc/systemd/user/graphical-session.target.wants
+  ln -s /usr/lib/systemd/user/$unit /etc/systemd/user/graphical-session.target.wants/$unit 2>/dev/null || :
+ fi
+done
 
 %preun
 %systemd_preun greyward-opensnitch-control-plane.service
 %systemd_preun greyward-opensnitch-policy.service
 %systemd_preun greyward-feodo-update.timer
+%systemd_preun greyward-geoip-update.timer
 %systemd_preun greyward-auto-update.timer
 %systemd_preun greyward-clamav-scan.service
 %systemd_preun greyward-secure-dns.service
@@ -129,12 +148,15 @@ install -Dm0644 security-context/tmpfiles.d/greyward-secure-dns.conf %{buildroot
 # Restarting this required unit also stops OpenSnitch. Activate engine changes
 # through an explicit maintenance transaction or the normal offline update boot.
 %systemd_postun greyward-opensnitch-control-plane.service
-%systemd_postun_with_restart greyward-opensnitch-policy.service
-%systemd_postun_with_restart greyward-feodo-update.timer
-%systemd_postun_with_restart greyward-auto-update.timer
+%systemd_postun greyward-opensnitch-policy.service
+%systemd_postun greyward-feodo-update.timer
+%systemd_postun greyward-geoip-update.timer
+%systemd_postun greyward-auto-update.timer
 %systemd_postun_with_restart greyward-clamav-scan.service
-%systemd_postun_with_restart greyward-secure-dns.service
-%systemd_postun_with_restart greyward-update-worker.socket
+# An unrelated UI/scanner update must not recycle DNS or an active update
+# handoff. Changed network code activates in coordinated maintenance/offline boot.
+%systemd_postun greyward-secure-dns.service
+%systemd_postun greyward-update-worker.socket
 %systemd_user_postun_with_restart greyward-security-context-user.service
 %systemd_user_postun_with_restart greyward-update-center.service
 
@@ -160,6 +182,10 @@ install -Dm0644 security-context/tmpfiles.d/greyward-secure-dns.conf %{buildroot
 %{_libexecdir}/greyward-backup
 %{_libexecdir}/greyward-secure-dns
 %{_libexecdir}/greyward-feodo-update
+%{_libexecdir}/greyward-geoip-update
+%{_sysusersdir}/greyward-geoip.conf
+%{_unitdir}/greyward-geoip-update.service
+%{_unitdir}/greyward-geoip-update.timer
 %config(noreplace) %attr(0600,root,root) %{_sysconfdir}/greyward/opensnitch-policy.json
 %{_unitdir}/greyward-opensnitch-control-plane.service
 %{_unitdir}/greyward-opensnitch-policy.service
@@ -170,6 +196,7 @@ install -Dm0644 security-context/tmpfiles.d/greyward-secure-dns.conf %{buildroot
 %{_userunitdir}/greyward-security-context-user.service
 %{_userunitdir}/greyward-update-center.service
 %{_unitdir}/greyward-clamav-scan.service
+%{_unitdir}/clamav-freshclam.service.d/10-greyward-freshclam-recovery.conf
 %{_unitdir}/greyward-secure-dns.service
 %config(noreplace) %{_sysconfdir}/dbus-1/system.d/systems.mantis.greyward.ClamAvScan1.conf
 %config(noreplace) %{_sysconfdir}/dbus-1/system.d/systems.mantis.greyward.OpenSnitchPolicy1.conf
@@ -191,6 +218,69 @@ install -Dm0644 security-context/tmpfiles.d/greyward-secure-dns.conf %{buildroot
 
 
 %changelog
+* Fri Nov 06 2026 MANTIS SYSTEMS - 0.1.0-137
+- Keep application/UID pattern evidence across partial process attribution.
+
+* Fri Nov 06 2026 MANTIS SYSTEMS - 0.1.0-136
+- Keep the reviewed component source tuple matched with Security Center 136; no policy changes.
+
+* Fri Nov 06 2026 MANTIS SYSTEMS - 0.1.0-135
+- Evaluate bounded network patterns, fresh IP/port reputation and independent evidence.
+- Recover export probes and retry verified process identities without unsafe PID joins.
+
+* Fri Nov 06 2026 MANTIS SYSTEMS - 0.1.0-134
+- Read local IPv4/IPv6 MMDB data efficiently and refresh monthly DB-IP editions.
+- Attach a six-level evidence-based network priority without changing decisions.
+
+* Fri Oct 30 2026 MANTIS SYSTEMS - 0.1.0-132
+- Share bounded scan status probes, defer D-Bus work and batch UID-scoped receipts.
+- Retain partial-limit results, fair behavioral history and graphical-only collectors.
+
+* Fri Oct 30 2026 MANTIS SYSTEMS - 0.1.0-131
+- Recognize verified Fedora boot-status helpers without descendant privilege trust.
+* Thu Oct 29 2026 GREYWARD Engineering <engineering@mantis.systems> - 0.1.0-130
+- Refine the native file scan composition and coordinated result presentation.
+
+* Thu Oct 29 2026 MANTIS SYSTEMS - 0.1.0-129
+- Consolidate scan notifications with readable status artwork, native styling and replay protection.
+
+* Thu Oct 29 2026 GREYWARD <engineering@mantis.systems> - 0.1.0-128
+- Keep firewall decisions authoritative, explain scoped scores and recover current sensor health.
+
+* Thu Oct 29 2026 MANTIS SYSTEMS <maintainers@mantis.systems> - 0.1.0-127
+- Partition observed system/network events and show larger native notification score images with log deep links.
+
+* Thu Oct 29 2026 MANTIS SYSTEMS - 0.1.0-126
+- Enforce byte-aware evidence retention before the hard database page quota.
+
+* Thu Oct 29 2026 MANTIS SYSTEMS - 0.1.0-125
+- Recover exact retained export cursors across restarts without inventing lost intervals.
+
+* Thu Oct 29 2026 MANTIS SYSTEMS - 0.1.0-124
+- Ship bounded behavioral correlation, isolated D-Bus reads and verified sensor-start receipts.
+
+* Thu Oct 29 2026 MANTIS SYSTEMS - 0.1.0-120
+- Add read-only UID-scoped behavioral evidence and native correlation notices.
+
+* Thu Oct 29 2026 MANTIS SYSTEMS - 0.1.0-119
+- Preserve live events alongside periodic reconciliation.
+
+* Thu Oct 29 2026 MANTIS SYSTEMS - 0.1.0-118
+- Watch arrival roots immediately while resuming persisted scans.
+
+* Thu Oct 29 2026 MANTIS SYSTEMS - 0.1.0-117
+- Prioritize live USB arrivals ahead of bulk volume reconciliation.
+
+* Thu Oct 29 2026 MANTIS SYSTEMS - 0.1.0-116
+- Bind receipts to engine/policy generation and enforce pinned caller access checks.
+- Recover the observer and preserve quiet per-file completion of mixed batches.
+
+* Thu Oct 29 2026 MANTIS SYSTEMS - 0.1.0-115
+- Prioritize home arrivals over USB backlog and retain saturated enumeration cursors.
+
+* Thu Oct 29 2026 MANTIS SYSTEMS - 0.1.0-114
+- Scope scan history by caller; add durable quiet arrival scans, valid receipts and updater recovery.
+
 * Tue Oct 27 2026 MANTIS SYSTEMS - 0.1.0-113
 - Accept configured metadata keys during fixed read-only DNF queries without a TTY.
 

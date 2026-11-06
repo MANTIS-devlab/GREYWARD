@@ -26,6 +26,9 @@ spikes/application-security/portal/*.patch text eol=lf whitespace=-blank-at-eol,
 # Unified diff context columns preserve upstream tabs and empty lines verbatim.
 security-center/packaging/application-security/desktop/*.patch text eol=lf whitespace=-blank-at-eol,-blank-at-eof,-space-before-tab
 packaging/greyward-files/*.patch text eol=lf whitespace=-blank-at-eol,-blank-at-eof
+packaging/greyward-swappy/*.patch text eol=lf whitespace=-blank-at-eol,-blank-at-eof
+packaging/greyward-swappy/*.spec text eol=lf
+packaging/greyward-swappy/*.gpg binary
 packaging/greyward-office/patches/*.patch text eol=lf whitespace=-blank-at-eol,-blank-at-eof,-space-before-tab
 packaging/greyward-office/*.in text eol=lf
 packaging/greyward-office/keys/*.gpg text eol=lf
@@ -58,3 +61,21 @@ security-center/packaging/application-security/greyward-application-security-exp
 packaging/greyward-files/*.spec text eol=lf
 
 security-center/packaging/*.spec text eol=lf
+
+# Preserve the verified upstream Go patch context, including tabs and empty lines.
+packaging/greyward-intelligence/*.patch text eol=lf whitespace=-blank-at-eol,-blank-at-eof,-space-before-tab
+
+# Hash-bound sensor locks and native RPM/vector inputs must survive Windows checkout.
+packaging/greyward-intelligence/go.mod text eol=lf
+packaging/greyward-intelligence/go.sum text eol=lf
+packaging/greyward-intelligence/*.spec text eol=lf
+branding/source/intelligence-gauge.svg.in text eol=lf
+
+# Keep the upstream hash-bound flag license byte-identical on Windows checkout.
+security-center/tauri/frontend/assets/country-flags/LICENSE.flag-icons text eol=lf
+
+# Installer/boot and compositor assets participate in exact RPM payload checks.
+packaging/greyward-branding/SOURCES/greyward.script text eol=lf
+packaging/greyward-branding/SOURCES/greyward.plymouth text eol=lf
+packaging/greyward-branding/SPECS/*.spec text eol=lf
+environment/session/labwc/rc.xml text eol=lf

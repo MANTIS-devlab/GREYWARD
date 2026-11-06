@@ -16,7 +16,7 @@ class ClamAvResultTests(unittest.TestCase):
         import greyward_security_context.clamav as clamav
         from unittest.mock import patch
         with patch('subprocess.run', side_effect=subprocess.TimeoutExpired(['clamdscan'], 1)):
-            with patch.object(clamav, 'permitted', return_value=True):
+            with patch.object(clamav, 'permitted', return_value=True), patch('greyward_security_context.file_security._safe_path', return_value=Path(__file__)), patch.object(clamav, 'status', return_value={'status':'CURRENT','database_version':'fixture'}), patch('greyward_security_context.file_security._open_readonly_nofollow', side_effect=subprocess.TimeoutExpired(['clamscan'], 1)):
                 self.assertEqual(clamav.scan(__file__, timeout=0.001)['state'], 'TIMEOUT')
     def test_explicit_ok_is_clean(self):
         result=subprocess.CompletedProcess(['clamdscan'], 0, '/safe: OK\n', '')
@@ -40,37 +40,84 @@ class ClamAvResultTests(unittest.TestCase):
             value = clamav.status()
         self.assertEqual(value['status'], 'UNAVAILABLE')
 
-    def test_status_metadata_is_on_demand_and_never_realtime(self):
+    def test_status_uses_definition_publication_not_copy_timestamp(self):
         import datetime as dt
         import tempfile
         from unittest.mock import patch
         import greyward_security_context.clamav as clamav
         with tempfile.TemporaryDirectory() as directory:
-            database = Path(directory) / 'daily.cld'
-            database.write_text('synthetic metadata fixture')
-            with patch.object(clamav, '_database_files', return_value=[database]), patch.object(clamav, '_version', return_value='1.4.6'), patch.object(clamav, '_freshclam_service_state', return_value='ACTIVE'), patch.object(clamav, '_update_failure', return_value=None):
+            root = Path(directory)
+            daily, main = root / 'daily.cld', root / 'main.cvd'
+            now = int(dt.datetime.now().timestamp())
+            def header(path, published, version=1):
+                path.write_text(f'ClamAV-VDB:fixture:{version}:10:90:X:X:publisher:{published}'.ljust(512))
+            header(main, now - 86400 * 365)
+            header(daily, now)
+            with patch.object(clamav, '_database_files', return_value=[daily, main]), patch.object(clamav, '_version', return_value='1'), patch.object(clamav, '_updater_failure', return_value=None), patch.object(clamav, '_freshclam_service_state', return_value='ACTIVE'):
                 value = clamav.status()
                 self.assertEqual(value['status'], 'CURRENT')
-                self.assertEqual(value['engine_state'], 'AVAILABLE')
                 self.assertEqual(value['realtime_protection'], 'NOT_PROVIDED')
-                self.assertEqual(value['scan_activity'], 'UNKNOWN')
                 self.assertIsNone(value['last_successful_update'])
-                with patch.object(clamav, '_version', return_value=None):
-                    self.assertEqual(clamav.status()['status'], 'UNAVAILABLE')
-                with patch.object(clamav, '_update_failure', return_value='ERROR'):
-                    self.assertEqual(clamav.status()['status'], 'ERROR')
-                import os
-                old = dt.datetime.now().timestamp() - clamav.MAX_DATABASE_AGE - 60
-                os.utime(database, (old, old))
+                generation = value['database_version']
+                header(daily, now, 2)
+                self.assertNotEqual(clamav.status()['database_version'], generation)
+                with patch.object(clamav, '_updater_failure', return_value='ERROR: offline'):
+                    self.assertEqual(clamav.status()['status'], 'CURRENT')
+                    self.assertTrue(clamav.status()['update_failure_state'])
+                header(daily, now - clamav.MAX_DATABASE_AGE - 60)
                 self.assertEqual(clamav.status()['status'], 'OUTDATED')
-                future = dt.datetime.now().timestamp() + 600
-                os.utime(database, (future, future))
+                header(daily, now + 600)
                 self.assertEqual(clamav.status()['status'], 'ERROR')
+                daily.write_text('malformed')
+                self.assertEqual(clamav.status()['status'], 'UNAVAILABLE')
+
+    def test_cached_status_shares_probes_but_not_replaced_definitions_or_timestamps(self):
+        import tempfile
+        import greyward_security_context.clamav as clamav
+        from unittest.mock import patch
+        with tempfile.TemporaryDirectory() as directory:
+            database = Path(directory) / 'daily.cvd'
+            database.write_text('one')
+            with patch.object(clamav, '_status_cache', None), \
+                 patch.object(clamav, '_database_files', return_value=[database]), \
+                 patch.object(clamav, 'status', side_effect=lambda: {'status': 'CURRENT', 'observed_at': 'original'}) as raw:
+                for _ in range(64):
+                    value = clamav.cached_status()
+                    self.assertEqual(value['observed_at'], 'original')
+                    value['status'] = 'mutated by caller'
+                self.assertEqual(raw.call_count, 1)
+                database.write_text('replacement definitions')
+                self.assertEqual(clamav.cached_status()['status'], 'CURRENT')
+                self.assertEqual(raw.call_count, 2)
+                with patch.object(clamav.time, 'monotonic', return_value=10**12):
+                    clamav.cached_status()
+                self.assertEqual(raw.call_count, 3)
 
     def test_updater_restart_does_not_erase_an_unresolved_failure(self):
         import greyward_security_context.clamav as clamav
         self.assertEqual(clamav._update_failure(['ERROR: update failed', 'freshclam daemon started']), 'ERROR: update failed')
         self.assertIsNone(clamav._update_failure(['ERROR: update failed', 'daily.cvd updated']))
+
+    def test_cached_current_does_not_cross_definition_expiry_after_clock_change(self):
+        import datetime as dt
+        import greyward_security_context.clamav as clamav
+        from unittest.mock import patch
+        actual_datetime = dt.datetime
+        initial = actual_datetime(2026, 10, 30, tzinfo=dt.timezone.utc)
+        class Clock(actual_datetime):
+            current = initial
+            @classmethod
+            def now(cls, tz=None):
+                return cls.current
+        with patch.object(clamav, '_status_cache', None), \
+             patch.object(clamav, '_database_files', return_value=[]), \
+             patch.object(clamav.dt, 'datetime', Clock), \
+             patch.object(clamav, 'status', side_effect=[
+                {'status':'CURRENT', 'database_timestamp':initial.isoformat()}, {'status':'OUTDATED'}]) as raw:
+            self.assertEqual(clamav.cached_status()['status'], 'CURRENT')
+            Clock.current = initial + dt.timedelta(seconds=clamav.MAX_DATABASE_AGE+1)
+            self.assertEqual(clamav.cached_status()['status'], 'OUTDATED')
+            self.assertEqual(raw.call_count, 2)
 
     def test_permission_denied_is_not_initialization(self):
         from unittest.mock import patch

@@ -27,9 +27,11 @@ CANDIDATE_PREIMAGES["Services/PluginService.qml"] = "61a3ffe25dbc5445eab1aaf76af
 CANDIDATE_PREIMAGES["Common/SettingsData.qml"] = "8bd76e548070c8cb3565d7215fe3f5126331d8949d0ad04e04b574fe59ab3d99"
 CANDIDATE_PREIMAGES["Common/Theme.qml"] = "bbec1714abc78e5f077d5a489d4f404593dcd1be6389b25883af8a401e05f15d"
 CANDIDATE_PREIMAGES["Modules/Lock/LockScreenBackground.qml"] = "5ea87d5d72d2ee4a42bef09ab00106624ed9c431b020dc50c9cf488f5e4a9049"
-CANDIDATE_RELEASES = frozenset({"v2.0.0-7"})
+import runpy
+_RUNTIME_PROFILES = runpy.run_path(str(Path(__file__).resolve().parents[1] / 'desktop/materialize.py'), run_name='greyward_authentication_profiles')
+CANDIDATE_RELEASES = _RUNTIME_PROFILES['NATIVE_AUTH_RELEASES']
 
-SUPPORTED_RELEASES = frozenset({"v1.6.2-6", "v1.6.2-8", "v1.6.2-10", "v1.6.2-11", "v1.6.2-12", "v1.6.2-13", "v1.6.2-14", "v1.6.2-15", "v1.6.2-17", "v1.6.2-18", "v1.6.2-19", "v1.6.2-20", "v1.6.2-21", "v1.6.2-22", "v1.6.2-23", "v1.6.2-24", "v1.6.2-25", "v1.6.2-26"})
+SUPPORTED_RELEASES = _RUNTIME_PROFILES['LEGACY_AUTH_RELEASES']
 
 SHELL = '''//@ pragma UseQApplication
 //@ pragma AppId com.danklinux.dms
@@ -634,7 +636,10 @@ Rectangle {
         anchors.fill: parent
         cursorShape: Qt.IBeamCursor
         enabled: !(root.authorizationController?.isLoading ?? false)
-        onClicked: root.authorizationController?.focusPasswordField()
+        onClicked: {
+            root.activateAuthorizationScreen(lockSurface.screen?.name);
+            Qt.callLater(() => root.authorizationController?.focusPasswordField());
+        }
     }
 }
 
@@ -884,6 +889,20 @@ def protected_authorization(text, native=False):
     property string authorizationScreenName: ""
     property int authorizationPasswordLength: 0
     property var authorizationController: null
+
+    function activateAuthorizationScreen(name) {
+        if (!authorizationActive || !sessionLock.secure || !name ||
+                !(Quickshell.screens ?? []).some(screen => screen.name === name))
+            return;
+        if (authorizationScreenName !== name) {
+            // Transfer the single form to the window that actually owns the
+            // keyboard. Never forward secrets between windows or ordinary apps.
+            // A display handoff intentionally clears an unfinished response.
+            authorizationController = null;
+            authorizationPasswordLength = 0;
+            authorizationScreenName = name;
+        }
+    }
 
     function reconcileAuthorizationScreen() {
         const screens = Quickshell.screens ?? [];
@@ -1191,8 +1210,12 @@ def protected_authorization(text, native=False):
             Connections {
                 target: sessionLock
                 function onSecureChanged() {
-                    if (sessionLock.secure && root.authorizationActive && authorizationContent.active)
-                        authorizationContent.focusAuthorization("secured");
+                    if (sessionLock.secure && root.authorizationActive) {
+                        if (authorizationContent.Window.window?.active === true)
+                            root.activateAuthorizationScreen(lockSurface.screen?.name);
+                        if (authorizationContent.active)
+                            authorizationContent.focusAuthorization("secured");
+                    }
                 }
             }
 
@@ -1201,8 +1224,10 @@ def protected_authorization(text, native=False):
                 function onActiveChanged() {
                     // Wayland keyboard-enter can arrive after locked/loaded.
                     // Focus only on window entry; retain normal button/Tab use.
-                    if (authorizationContent.active && authorizationContent.Window.window?.active === true)
+                    if (root.authorizationActive && sessionLock.secure && authorizationContent.Window.window?.active === true) {
+                        root.activateAuthorizationScreen(lockSurface.screen?.name);
                         authorizationContent.focusAuthorization("keyboard-enter");
+                    }
                 }
             }
 

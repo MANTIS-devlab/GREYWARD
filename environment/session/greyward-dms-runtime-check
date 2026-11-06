@@ -45,8 +45,9 @@ def selected_api_version():
     return api
 
 
-def check(desktop_only=False):
-    expected_api = selected_api_version()
+def check(desktop_only=False, expected_api=None):
+    if expected_api is None:
+        expected_api = selected_api_version()
     runtime = Path(os.environ.get('XDG_RUNTIME_DIR', f'/run/user/{os.getuid()}'))
     explicit = os.environ.get('DMS_SOCKET')
     candidates = [Path(explicit)] if explicit else [*runtime.glob('danklinux-*.sock'), *runtime.glob('dms-*.sock')]
@@ -101,14 +102,29 @@ def check(desktop_only=False):
                       'nativeLockSecure': lock.get('sessionLockSecure') is True}))
 
 
+def wait_check(desktop_only=False, seconds=0):
+    # Verify the immutable selection once, not once per retry (RPM lock/probes).
+    expected_api = selected_api_version()
+    deadline = time.monotonic() + seconds
+    while True:
+        try:
+            return check(desktop_only=desktop_only, expected_api=expected_api)
+        except (OSError, ValueError, KeyError, subprocess.CalledProcessError):
+            if time.monotonic() >= deadline:
+                raise
+            time.sleep(min(1, max(0, deadline - time.monotonic())))
+
+
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--desktop-only', action='store_true',
                         help='Check ordinary shell startup only; does not verify lock or security coverage')
+    parser.add_argument('--wait', type=int, choices=range(0, 31), default=0,
+                        metavar='SECONDS', help='Bounded startup retries; no change to readiness criteria')
     arguments = parser.parse_args()
     try:
-        check(desktop_only=arguments.desktop_only)
+        wait_check(desktop_only=arguments.desktop_only, seconds=arguments.wait)
     except (OSError, ValueError, KeyError, subprocess.CalledProcessError) as error:
         print(json.dumps({'state': 'DEGRADED', 'reason': str(error)}))
         raise SystemExit(1)

@@ -2,7 +2,7 @@
 
 ## Sophon 0.5.4 publication — 2 November 2026
 
-The existing [0.5.4 Sophon ISO](patch-notes/0.5.4-sophon.md) and ten companions
+The existing [0.5.4 Sophon ISO](https://github.com/MANTIS-devlab/GREYWARD/blob/main/docs/patch-notes/0.5.4-sophon.md) and ten companions
 are published on SourceForge. Full HTTPS readback verifies all 5,267,587,072 ISO
 bytes against SHA-256 `7ddb5a378a26138b8349f3fd5bcd42bc479c144417d07248a2ab572ac2fdd959`,
 plus the frozen corresponding sources, four signed Office source RPMs,
@@ -23,7 +23,7 @@ acceptance are separate; publication does not establish the untested checks.
 
 ## Historical Sophon 0.5.3 release — 28 October 2026
 
-[0.5.3 Sophon](patch-notes/0.5.3-sophon.md) supersedes the preceding public
+[0.5.3 Sophon](https://github.com/MANTIS-devlab/GREYWARD/blob/main/docs/patch-notes/0.5.3-sophon.md) supersedes the preceding public
 download. Its ISO, checksums, provenance, frozen corresponding sources and four
 signed Office source RPMs are published together. The existing ISO is reused;
 its exact SHA-256 and composition limits remain in the release notes. The
@@ -33,7 +33,7 @@ Clean-install, recovery and physical acceptance remain separate from publication
 
 ## Historical Sophon 0.5.2 publication — 25 October 2026
 
-[0.5.2 Sophon](patch-notes/0.5.2-sophon.md) was the public SourceForge
+[0.5.2 Sophon](https://github.com/MANTIS-devlab/GREYWARD/blob/main/docs/patch-notes/0.5.2-sophon.md) was the public SourceForge
 installer at that publication. The export also excludes historical machine-specific prototype settings,
 while preserving the private original. Full SFTP readback verifies all
 5,147,983,872 ISO bytes and SHA-256,
@@ -70,7 +70,7 @@ completed feature. See `AGENTS.md` for permanent maintenance obligations.
 ## Approved README gallery — 25 October 2026
 
 The owner approved publication of the supplied screenshots, explicitly allowing
-the visible Swiss VPN addresses. The [inventory](assets/screenshots/README.md)
+the visible Swiss VPN addresses. The [inventory](https://github.com/MANTIS-devlab/GREYWARD/blob/main/docs/assets/screenshots/README.md)
 records the eleven selected original PNGs and omitted one-pixel/near-duplicate
 inputs. The existing overview GIF is unchanged. Legacy static images are
 removed from this public tree; the engineering originals are preserved.

@@ -506,6 +506,15 @@ fn set_threat_protection_enabled(enabled: bool) -> Result<Value, String> {
     )
 }
 #[tauri::command(async)]
+fn get_behavioral_intelligence(filters: Value) -> Result<Value, String> {
+    let encoded = serde_json::to_string(&filters)
+        .map_err(|_| "The intelligence query could not be encoded.".to_string())?;
+    security_context_payload_method(
+        "systems.mantis.greyward.SecurityContext1.GetBehavioralIntelligence",
+        &encoded,
+    )
+}
+#[tauri::command(async)]
 fn get_network_activity(since_sequence: u64, limit: u32) -> Result<Value, String> {
     security_context_activity_method(
         "systems.mantis.greyward.SecurityContext1.GetNetworkActivity",
@@ -1781,6 +1790,16 @@ fn consume_navigation_request(app: tauri::AppHandle) -> Result<Option<String>, S
     {
         return Ok(None);
     }
+    if matches!(value.as_str(), "history" | "activity")
+        && !event_id.is_empty()
+        && (event_id.len() != 33
+            || !event_id.starts_with("incident-")
+            || !event_id[9..]
+                .bytes()
+                .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b)))
+    {
+        return Ok(None);
+    }
     // A shell deep-link can arrive while the existing Security Center window
     // is minimized. Restore and focus that same window before the frontend
     // switches pages; this preserves the single-instance taskbar identity.
@@ -1790,12 +1809,15 @@ fn consume_navigation_request(app: tauri::AppHandle) -> Result<Option<String>, S
         let _ = window.set_focus();
     }
     if SECURITY_CENTER_ROUTES.contains(&value.as_str()) {
-        let value =
-            if matches!(value.as_str(), "threats" | "protected-data") && !event_id.is_empty() {
-                format!("{value}|{event_id}")
-            } else {
-                value
-            };
+        let value = if matches!(
+            value.as_str(),
+            "threats" | "protected-data" | "history" | "activity"
+        ) && !event_id.is_empty()
+        {
+            format!("{value}|{event_id}")
+        } else {
+            value
+        };
         use tauri::Emitter;
         let _ = app.emit("security-navigation", &value);
         return Ok(Some(value));
@@ -2596,6 +2618,7 @@ pub fn run() {
             get_threat_protection,
             set_threat_protection_enabled,
             get_network_activity,
+            get_behavioral_intelligence,
             get_security_center_digest,
             get_network_history,
             get_device_overview,

@@ -187,7 +187,7 @@ def main():
             shutil.copytree(REPO/'packaging/greyward-branding/SOURCES', build/'SOURCES', dirs_exist_ok=True)
             for source in ('branding/generated/boot/greyward-symbol-256.png','branding/source/greyward-symbol.svg',
                            'branding/source/greyward-software.svg', 'branding/source/greyward-image-viewer.svg',
-                           'branding/source/greyward-settings.svg',
+                           'branding/source/greyward-settings.svg', 'branding/source/greyward-screenshot.svg',
                            'environment/production/desktop-entry-overrides/org.gnome.Loupe.desktop',
                            'environment/flatpak/software-runtime.desktop'):
                 shutil.copyfile(REPO/source, build/'SOURCES'/Path(source).name)

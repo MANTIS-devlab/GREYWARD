@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128" fill="none">
+  <title>GREYWARD file scan result</title>
+  <circle cx="64" cy="64" r="54" fill="#A7D8B7" fill-opacity=".055"/>
+  <circle cx="64" cy="64" r="48" stroke="#b8c3c9" stroke-opacity=".22" stroke-width="1.5"/>
+  <path d="M21 42a48 48 0 0 1 65-21M107 86a48 48 0 0 1-65 21" stroke="#A7D8B7" stroke-width="3" stroke-linecap="round"/>
+  <g stroke="#A7D8B7" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"><path d="m43 65 14 14 29-31"/></g>
+</svg>

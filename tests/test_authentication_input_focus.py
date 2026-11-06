@@ -57,7 +57,7 @@ ShellRoot {
   Timer { interval:300; running:true; onTriggered:lockSurface.contentItem.Window.window.requestActivate() }
   Timer { interval:650; running:true; onTriggered: {
    const delivered=events.keyClickChar("s",Qt.NoModifier,0);
-   const accepted=authorizationContent.item.passwordInput==="s";
+   const accepted=authorizationContent.item?.passwordInput==="s";
    console.info("LATE_ENTRY_PROOF", "acceptedSyntheticInput="+accepted, "delivered="+delivered);
    Qt.exit(accepted?0:3);
   } }
@@ -70,7 +70,7 @@ ShellRoot {
 @unittest.skipUnless(os.name == 'posix' and os.environ.get('GREYWARD_AUTH_FOCUS_SHELL'),
                      'explicit Fedora assembled-shell focus gate')
 class AuthenticationInputFocus(unittest.TestCase):
-    def run_shell(self, source, harness_source=None, settings=None, stalled_discovery=False):
+    def run_shell(self, source, harness_source=None, settings=None, stalled_discovery=False, outputs=1):
         self.assertEqual(os.geteuid(), 0, 'child-only network isolation requires root')
         with tempfile.TemporaryDirectory(prefix='greyward-focus-') as temporary:
             base = Path(temporary)
@@ -91,6 +91,15 @@ class AuthenticationInputFocus(unittest.TestCase):
                 generated = lock[start:end].replace('sourceComponent: PolkitAuthContent {',
                                                    'sourceComponent: PolkitAuthContent {\n currentFlow: fakeFlow')
                 template = HARNESS.replace('qs.DankCommon.Common', 'qs.DCommon.Common').replace('import qs.Common\n', 'import qs.Common\nimport qs.DCommon.Widgets\n') if (tree / 'DCommon').is_dir() else HARNESS
+                marker = '    function activateAuthorizationScreen(name) {'
+                if marker in lock:
+                    helper = lock[lock.index(marker):lock.index('    function reconcileAuthorizationScreen()', lock.index(marker))]
+                    template = template.replace(' QtObject { id: sessionLock;', helper + '\n QtObject { id: sessionLock;')
+                if outputs == 2:
+                    # Keyboard enters the first surface, while the persistent
+                    # form still belongs to the other (KVM/hotplug regression).
+                    template = template.replace('authorizationScreenName: Quickshell.screens[0]',
+                                                'authorizationScreenName: Quickshell.screens[1]')
                 if (tree / 'DCommon').is_dir():
                     # Wayland ignores arbitrary requestActivate() calls. Closing
                     # the temporary child produces a real keyboard-enter handoff.
@@ -99,6 +108,11 @@ class AuthenticationInputFocus(unittest.TestCase):
                 template = template.replace('@@GENERATED_AUTHORIZATION@@', generated)
             else:
                 template = harness_source
+                lock = (tree / 'Modules/Lock/Lock.qml').read_text()
+                marker = '    function activateAuthorizationScreen(name) {'
+                if marker in lock and 'function activateAuthorizationScreen' not in template:
+                    helper = lock[lock.index(marker):lock.index('    function reconcileAuthorizationScreen()', lock.index(marker))]
+                    template = template.replace(' QtObject { id: sessionLock;', helper + '\n QtObject { id: sessionLock;')
             harness.write_text(template, encoding='utf-8')
             for name in ('home', 'runtime'):
                 (base / name).mkdir(mode=0o700)
@@ -122,7 +136,7 @@ class AuthenticationInputFocus(unittest.TestCase):
             (config / 'rc.xml').write_text('<labwc_config/>')
             (config / 'autostart').write_text('')
             env.update(QT_QPA_PLATFORM='wayland', WAYLAND_DISPLAY='wayland-0',
-                       WLR_BACKENDS='headless', WLR_HEADLESS_OUTPUTS='1', WLR_RENDERER='pixman',
+                       WLR_BACKENDS='headless', WLR_HEADLESS_OUTPUTS=str(outputs), WLR_RENDERER='pixman',
                        LIBGL_ALWAYS_SOFTWARE='1', XDG_CURRENT_DESKTOP='GREYWARD:labwc',
                        DBUS_SYSTEM_BUS_ADDRESS='unix:path=/nonexistent')
             with (base / 'compositor.log').open('w+') as log:
@@ -156,6 +170,16 @@ class AuthenticationInputFocus(unittest.TestCase):
         result = self.run_shell(os.environ['GREYWARD_AUTH_FOCUS_SHELL'])
         self.assertEqual(result.returncode, 0, result.stdout)
         self.assertIn('BUTTON_FOCUS_PRESERVED true', result.stdout)
+        self.assertIn('acceptedSyntheticInput=true delivered=true', result.stdout)
+
+    def test_keyboard_entry_on_nonowner_output_moves_the_single_form(self):
+        baseline = os.environ.get('GREYWARD_AUTH_HANDOFF_BASELINE')
+        if baseline:
+            old = self.run_shell(baseline, outputs=2)
+            self.assertEqual(old.returncode, 3, old.stdout)
+            self.assertIn('acceptedSyntheticInput=false delivered=true', old.stdout)
+        result = self.run_shell(os.environ['GREYWARD_AUTH_FOCUS_SHELL'], outputs=2)
+        self.assertEqual(result.returncode, 0, result.stdout)
         self.assertIn('acceptedSyntheticInput=true delivered=true', result.stdout)
 
 

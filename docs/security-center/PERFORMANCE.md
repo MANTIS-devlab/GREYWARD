@@ -1,6 +1,30 @@
 # Security Center performance evidence
 
-## Current development pass — 8 October 2026
+The late-evening 30 October follow-up (private development evidence)
+adds a 45-second ordinary-process window and an independent 30-second cgroup/GPU
+window. Ordinary Context and children consume 19.01% of one core; most of its
+roughly 918 MiB cgroup charge is file/kernel cache, not Python heap. These are
+passive observations with apps and observers present, not a controlled idle or
+matched before/after benchmark. Link/storage/portal/boot-clock findings and old
+versus current failures are documented separately from any later repair.
+
+The 30 October corrections (private development evidence)
+record the implemented follow-up and a real repeated-probe comparison: 32 status
+reads use three external commands instead of 96 (29.25 versus 926.17 ms in that
+sample). Whole-system observations have different workload limits and must not
+be presented as the same benchmark. The detached follow-up has AMD GPU busy
+averaging 1.38% (maximum 8%) with the discrete GPU suspended. Ordinary Context
+and children still consume 22% of one CPU; the full posture cost remains a
+profiling/consolidation priority.
+
+The 30 October custom runtime audit (private development evidence)
+records installed workstation CPU/GPU observations, repeated probe costs,
+desktop teardown/startup failures and retention limits. It is an observational
+audit with an active USB backlog, not a controlled idle benchmark or an
+implemented optimization. Its findings and follow-up acceptance are separate
+from the historical comparisons below.
+
+## Historical development pass — 8 October 2026
 
 Installed comparison on the normal enrolled `<development-host>` desktop: Center 80 → 84,
 Context 72 and Application Security runtime 27 unchanged. This is measured

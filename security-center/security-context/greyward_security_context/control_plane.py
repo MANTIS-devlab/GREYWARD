@@ -26,6 +26,7 @@ from greyward_security_context.telemetry import event as telemetry_event
 from greyward_security_context.telemetry import record_event
 from greyward_security_context.network_location import country_resolution_for_destination
 from greyward_security_context.feodo import matching_indicator, threat_status
+from greyward_security_context.process_identity import instance_key, event_time
 from greyward_security_context.network_rules import PolicyStore, PolicyError, matches as rule_matches, rule_id, lifecycle
 
 try:
@@ -294,6 +295,10 @@ class NetworkState:
             and (left.get("destination") or {}).get("ip") == (right.get("destination") or {}).get("ip")
             and (left.get("destination") or {}).get("port") == (right.get("destination") or {}).get("port")
             and left.get("decision") == right.get("decision")
+            and left.get("protocol") == right.get("protocol")
+            and left.get("pid") == right.get("pid")
+            and left.get("actor_uid") == right.get("actor_uid")
+            and left.get("connection_key") == right.get("connection_key")
         )
 
     @staticmethod
@@ -301,7 +306,7 @@ class NetworkState:
         try:
             left_time = dt.datetime.fromisoformat(str(left).replace("Z", "+00:00"))
             right_time = dt.datetime.fromisoformat(str(right).replace("Z", "+00:00"))
-            return abs((left_time - right_time).total_seconds()) <= seconds
+            return abs(event_time(left) - event_time(right)) <= seconds
         except (TypeError, ValueError):
             return False
 
@@ -310,21 +315,33 @@ class NetworkState:
         destination = _destination(connection)
         decision = _decision(action)
         timestamp = occurred_at or iso(now())
-        identity = "|".join((process_path, destination["host"] or "", destination["ip"] or "", str(destination["port"]), decision, timestamp))
+        parsed_time=event_time(timestamp)
+        if parsed_time is not None: timestamp=dt.datetime.fromtimestamp(parsed_time,dt.timezone.utc).isoformat().replace('+00:00','Z')
+        process_id=int(getattr(connection,'process_id',0) or 0)
+        process_key=instance_key(process_id,occurred_at=timestamp,expected_uid=getattr(connection,'user_id',None))
+        actor_uid=int(getattr(connection,"user_id",0))
+        protocol=_clean(getattr(connection,"protocol",""),24).lower() or None
+        flow="|".join((str(actor_uid),str(process_id),str(protocol),_clean(getattr(connection,"src_ip",""),64),str(getattr(connection,"src_port",0)),destination["ip"] or "",str(destination["port"])))
+        connection_key=hashlib.sha256(flow.encode()).hexdigest()[:40]
+        identity = "|".join((connection_key,str(actor_uid),str(process_id),str(protocol),process_path, destination["host"] or "", destination["ip"] or "", str(destination["port"]), decision, timestamp))
         event_id = "network-" + hashlib.sha256(identity.encode("utf-8")).hexdigest()[:24]
         inherited_threat = next((existing.get("threat") for existing in self.activity if self._same_connection(existing, {
             "executable": process_path,
             "destination": destination,
-            "decision": decision,
-        }) and existing.get("threat")), None)
+            "decision": decision,"protocol":protocol,"pid":process_id or None,"actor_uid":actor_uid,"connection_key":connection_key,
+        }) and self._within_coalesce_window(timestamp,existing.get("occurred_at")) and existing.get("threat")), None)
         threat = threat or inherited_threat
         event = {
             "event_id": event_id,
+            "process_key": process_key,
+            "pid": process_id or None,
+            "actor_uid": actor_uid,
+            "connection_key": connection_key,
             "occurred_at": timestamp,
             "application": _application_name(process_path),
             "executable": process_path or None,
             "destination": destination,
-            "protocol": _clean(getattr(connection, "protocol", ""), 24).lower() or None,
+            "protocol": protocol,
             "decision": decision,
             "rule_name": _clean(rule_name, 160) or None,
             "source": source,
@@ -349,7 +366,9 @@ class NetworkState:
             ):
                 return
             if source == "opensnitch-statistics":
-                self.activity = [existing for existing in self.activity if not (self._same_connection(existing, event) and existing.get("source") == "greyward-policy")]
+                # Never transfer an old key to an unverified/exited PID.
+                # Matching flow metadata is not proof against PID reuse.
+                self.activity = [existing for existing in self.activity if not (self._same_connection(existing, event) and existing.get("source") == "greyward-policy" and self._within_coalesce_window(timestamp,existing.get("occurred_at")))]
         for existing in reversed(self.activity):
             if existing["event_id"] == event_id:
                 return
@@ -385,7 +404,7 @@ class NetworkState:
             port=destination["port"],
             decision=decision,
             correlation={"session_id": self.activity_session_id},
-            details={"rule_name": event["rule_name"], "network_event_type": "CONNECTION_ATTEMPT"},
+            details={"rule_name": event["rule_name"], "network_event_type": "CONNECTION_ATTEMPT", "process_key": process_key, "pid": process_id or None},
             quality={"source_state": "AVAILABLE", "attribution": "EXACT" if process_path else "UNKNOWN", "confidence": "EXACT" if process_path else "UNKNOWN"},
             relations=[],
             retention_class="investigation",

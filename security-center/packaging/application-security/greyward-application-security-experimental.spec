@@ -1,6 +1,6 @@
 Name:           greyward-application-security-experimental
 Version:        0.1.0
-Release:        84%{?dist}
+Release:        88%{?dist}
 Summary:        Experimental GREYWARD application-security runtime and Guard CLI
 License:        GPL-3.0-only AND MIT
 Source0:        %{name}-%{version}.tar.gz
@@ -163,6 +163,16 @@ install -Dm0644 packaging/application-security/systems.mantis.greyward.Applicati
 %{_datadir}/dbus-1/system.d/systems.mantis.greyward.ApplicationSecurityDevelopment1.conf
 
 %changelog
+* Fri Nov 06 2026 MANTIS SYSTEMS - 0.1.0-88
+- Hand protected authorization input to the output receiving the keyboard.
+
+* Fri Oct 30 2026 MANTIS SYSTEMS - 0.1.0-87
+- Share reviewed login compatibility, preflight preparation and roll back early console failures.
+* Fri Oct 30 2026 MANTIS SYSTEMS - 0.1.0-86
+- Admit the explicitly reviewed DMS generation 8 with unchanged authentication preimages.
+* Thu Oct 29 2026 MANTIS SYSTEMS <maintainers@mantis.systems> - 0.1.0-85
+- Require live scope-attached guardian acknowledgement before protected admission; retain validated owner pidfds across exec.
+
 * Tue Oct 27 2026 MANTIS SYSTEMS - 0.1.0-84
 - Share a noninteractive graphite/platinum startup visual with the canonical OS emblem.
 

@@ -10,16 +10,19 @@ import dbus
 from gi.repository import GLib
 
 from .notification_router import NotificationRouter, open_route
+from .intelligence_client import snapshot as intelligence_snapshot
+from .intelligence_notices import incident_notices
 from .shell_experience import build_experience, RANK
 from .usbguard import USB_SERVICE, DEVICES_INTERFACE
 from .security_notices import NoticePreferences, SensorStarts, update_notices
 
 
 class ShellRuntime:
-    def __init__(self, service, bus):
+    def __init__(self, service, bus, *, active=True):
         self.service = service
         self.lock = threading.Lock()
         self.bus = bus
+        self.active = active
         self.operations = {}
         self.snapshot = {"schema": "greyward.security.experience/v1", "revision": 0, "posture": "UNAVAILABLE", "label": "Connecting", "reason": "Reading security status", "severity": "INFO", "items": [], "activity": [], "details": []}
         self.running = False
@@ -35,16 +38,30 @@ class ShellRuntime:
         self.next_update_check = 0
         self.update_check_deadline = 0
         self.boot_id = Path('/proc/sys/kernel/random/boot_id').read_text().strip()
+        if not active:
+            self.snapshot['reason'] = 'No eligible graphical session; background collectors are inactive.'
+            self.timer = None
+            return
         for member in ('DevicePresenceChanged', 'DevicePolicyChanged', 'DevicePolicyApplied'):
             system.add_signal_receiver(self.invalidate, signal_name=member, dbus_interface=DEVICES_INTERFACE, bus_name=USB_SERVICE)
         system.add_signal_receiver(self.invalidate, signal_name='NameOwnerChanged', dbus_interface='org.freedesktop.DBus', arg0=USB_SERVICE)
-        system.add_signal_receiver(self.invalidate, signal_name='FileSecurityChanged', dbus_interface='systems.mantis.greyward.ClamAvScan1', bus_name='systems.mantis.greyward.ClamAvScan1')
+        system.add_signal_receiver(self.invalidate_files, signal_name='FileSecurityChanged', dbus_interface='systems.mantis.greyward.ClamAvScan1', bus_name='systems.mantis.greyward.ClamAvScan1')
+        self.files_dirty = True
         self.timer = GLib.timeout_add_seconds(2, self.tick)
         self.tick()
 
     def invalidate(self, *args):
+        if not self.active:
+            return
         self.dirty = True
         if not getattr(self, 'invalidate_pending', False):
+            self.invalidate_pending = True
+            GLib.idle_add(self._tick_once)
+
+    def invalidate_files(self, *args):
+        # Scan completion never invalidates firmware, package or network evidence.
+        self.files_dirty = True
+        if self.active and not self.invalidate_pending:
             self.invalidate_pending = True
             GLib.idle_add(self._tick_once)
 
@@ -57,6 +74,8 @@ class ShellRuntime:
         with self.lock: return copy.deepcopy(self.snapshot)
 
     def tick(self):
+        if not self.active:
+            return True
         if not self.running:
             self.running = True
             threading.Thread(target=self._collect, daemon=True).start()
@@ -77,11 +96,13 @@ class ShellRuntime:
                     workflows.reconcile_access_events()
                 self.service.reconcile_history()
                 self.shell = json.loads(self.service.GetShellSummary())
-                self.files = json.loads(self.service.GetFileSecuritySummary())
                 from .user_bus import network_summary
                 self.network = network_summary()
                 self._read_updates()
                 self.last_full = time.monotonic()
+            if full or getattr(self, 'files_dirty', True):
+                self.files_dirty = False
+                self.files = json.loads(self.service.GetFileSecuritySummary())
             capsule = json.loads(self.service.GetPrivacyCapsule())
             devices, error = self.service.usb.devices()
             connected = {x.get('connection_ref') for x in devices} if not error else None
@@ -99,6 +120,7 @@ class ShellRuntime:
             blocks = workflows.recent_access_blocks() if workflows is not None else []
             value = build_experience(self.shell, capsule, devices, error, self.files, self.network, self.operations, previous, blocks)
             notices = update_notices(self.update_snapshot, time.time(), self.boot_id)
+            notices.extend(incident_notices(intelligence_snapshot({'limit':1})))
             notices.extend(self.sensor_starts.collect(capsule, self.notice_preferences.read()['sensor_start'], time.monotonic()))
             # Informational starts/updates do not change protection posture.
             value['notices'] = notices
@@ -168,4 +190,4 @@ class ShellRuntime:
             self.service.ClearClipboard(current['id'])
             self.invalidate()
         elif selected == 'open':
-            open_route(current.get('route', 'overview'), current.get('resource_ref'))
+            open_route(current.get('route', 'overview'), current.get('incident_ref') or current.get('resource_ref'))

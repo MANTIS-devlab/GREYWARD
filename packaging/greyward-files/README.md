@@ -1,5 +1,21 @@
 # GREYWARD file integration candidate
 
+Revision 24 prevents icon-only startup/hotplug from mounting volumes and trapping
+the desktop behind a hidden libfm modal error. `pcmanfm-no-automount.patch` is
+hash-locked and applied without fuzz; factory volume keys now use the actual
+upstream settings names. The native output fixture uses inherited **enabled**
+mount preferences, with an old-fails/new-passes enumeration check. Existing
+profiles and explicit Strata storage workflows remain authoritative. See the
+[input contract](../../docs/architecture/FILE_MANAGER_DESKTOP.md#icon-input-and-automatic-mounts--6-november-2026).
+
+Revision 23 fixes desktop-surface lifetime with the separately hash-locked
+`pcmanfm-lifecycle.patch`. Native tests now include independently destroyed
+surfaces, repeated teardown and the real about-to-quit/destructor path; the
+layout and Strata routing cases remain. See
+[desktop lifetime](../../docs/architecture/FILE_MANAGER_DESKTOP.md#desktop-lifetime-and-startup-bounds--30-october-2026)
+for the paired Session 41 readiness/retry contract. Installed/physical and
+future-image acceptance remain separate from the private native fixture.
+
 Revision 21 preserves icon coordinates independently for each connected-output
 set. It saves before hot-unplug destruction, remembers first placement and
 imports existing per-output positions without rewriting their files. The native

@@ -6,6 +6,20 @@ ROOT = Path(__file__).parents[1]
 
 
 class ServiceHardeningTests(unittest.TestCase):
+    def test_scanner_upgrade_does_not_schedule_network_restarts(self):
+        spec = (ROOT.parent / 'packaging' / 'greyward-security-context.spec').read_text()
+        for unit in ('greyward-secure-dns.service', 'greyward-opensnitch-policy.service',
+                     'greyward-update-worker.socket'):
+            self.assertIn('%systemd_postun ' + unit, spec)
+            self.assertNotIn('%systemd_postun_with_restart ' + unit, spec)
+
+    def test_graphical_collectors_do_not_autostart_for_root_ssh(self):
+        for unit in ('greyward-security-context-user.service', 'greyward-update-center.service'):
+            text = (ROOT / 'systemd' / unit).read_text()
+            self.assertIn('ConditionUser=!root', text)
+            self.assertIn('WantedBy=graphical-session.target', text)
+            self.assertNotIn('WantedBy=default.target', text)
+
     def test_root_services_keep_only_operation_specific_capabilities(self):
         expected = {
             "greyward-opensnitch-control-plane.service": "CapabilityBoundingSet=CAP_CHOWN",

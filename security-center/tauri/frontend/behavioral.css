@@ -1,0 +1,48 @@
+.intel-badge{display:inline-flex;align-items:center;gap:7px;font-size:11px;white-space:nowrap;color:#9aa7b0}.intel-badge i{flex-shrink:0;width:5px;height:5px;border-radius:50%;background:currentColor}.intel-badge strong{font-variant-numeric:tabular-nums;font-weight:650;font-size:13px}.intel-badge[data-grade=NORMAL]{color:#90bfa6}.intel-badge[data-grade=POLICY_BLOCKED]{color:#d7ba78}.intel-badge[data-grade=SUSPICIOUS]{color:#e5a274}.intel-badge[data-grade=HIGH_THREAT]{color:#e48383}.behavioral-status{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;padding:12px 14px;border:1px solid #ffffff15;border-radius:10px;background:#192025;color:#a7b4bd;font-size:11px;margin:14px 0}.behavioral-status>span:nth-child(2){flex:1;min-width:220px}.behavioral-status strong{font-weight:600;color:#d5bd8a}.behavioral-status[data-observation-state=ACTIVE] strong{color:#90bfa6}.behavioral-pagination{display:flex;justify-content:flex-end;gap:14px;margin:10px 0}.behavioral-evidence{padding:15px 0;color:#b2c0ca;font-size:12px;overflow-wrap:anywhere}.behavioral-evidence-heading{display:flex;gap:20px;align-items:center;justify-content:space-between}.behavioral-evidence h4{font-size:11px;letter-spacing:.08em;color:#b8c6cf;margin:22px 0 10px}.behavioral-limit{font-size:11px;color:#95a5b0;line-height:1.6}.behavioral-facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}.behavioral-facts dt{font-size:10px;color:#91a3af}.behavioral-facts dd{margin:3px 0 0;font-size:12px;color:#c7d1d8}.behavioral-factors{list-style:none;padding:0;display:grid;gap:12px}.behavioral-factors li{padding:12px;border-left:2px solid #d49c75;background:linear-gradient(100deg,#b37c4e10,transparent);border-radius:0 7px 7px 0}.behavioral-factors strong{font-size:11px;color:#ded7cd}.behavioral-factors p{line-height:1.65;margin:6px 0}.behavioral-factors small{font-size:10px;color:#93a4b1}.behavioral-chain{list-style:none;padding:0 0 0 12px;border-left:1px solid #70818b55;display:grid;gap:14px}.behavioral-chain li{display:grid;gap:4px}.behavioral-chain strong{font-size:12px;color:#d9e2e8}.behavioral-chain span{font-size:10px;color:#94a6b4}.behavioral-timeline{list-style:none;padding:0;display:grid;gap:10px}.behavioral-timeline li{display:grid;grid-template-columns:65px 1fr 34px;gap:10px;align-items:start}.behavioral-timeline time{font-size:10px;color:#91a6b4}.behavioral-timeline strong{font-size:11px;text-align:right}.behavioral-event .history-decision{font-size:10px}.behavioral-event .history-event-copy{min-width:0}.behavioral-event .history-actor strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.network-activity-details>[data-behavioral-evidence]{grid-column:1/-1}.network-activity-row-main .intel-badge span{display:none}.behavioral-filters{display:flex;align-items:center;gap:12px;flex-wrap:wrap}.behavioral-filters label{display:flex;align-items:center;gap:7px;font-size:11px}.behavioral-evidence button:focus-visible,.behavioral-pagination button:focus-visible{outline:2px solid #c3d0d9;outline-offset:3px}@media(max-width:800px){.behavioral-facts{grid-template-columns:1fr}.behavioral-timeline li{grid-template-columns:58px 1fr 24px}}@media(prefers-reduced-motion:reduce){.behavioral-evidence *{transition:none!important;animation:none!important}}
+
+/* Fit the assessment into existing log columns rather than adding a workspace. */
+.history-toolbar{flex-wrap:wrap}.history-event .behavioral-facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px}.history-event .behavioral-facts>div{display:block}.history-event .behavioral-facts dd{margin-top:4px}.history-event .behavioral-limit{margin:10px 0;font-size:11px}.history-event .behavioral-factors p{margin:6px 0;font-size:12px}.history-event-end{max-width:210px}.history-event-end time{font-variant-numeric:tabular-nums}.behavioral-filters select{background:#20282d;color:#d1dbe2;border:1px solid #65778255;border-radius:6px;padding:7px;min-width:150px}
+/* A single column contract keeps the legend and connection fields aligned. */
+.network-activity-workspace{--activity-columns:minmax(120px,1fr) minmax(135px,1.15fr) 90px 140px minmax(90px,.6fr) 137px 16px}
+.network-activity-workspace .network-activity-row-main,.network-activity-workspace .network-activity-legend{grid-template-columns:var(--activity-columns);gap:12px;padding-left:12px;padding-right:12px}
+.network-activity-workspace .network-activity-row-main{min-height:54px}
+.network-activity-legend{margin-top:6px;font-size:10px}
+.network-intelligence-sort{border:0;background:none;color:inherit;font:inherit;text-transform:inherit;letter-spacing:inherit;text-align:left;cursor:pointer;padding:0}
+.network-intelligence-sort:focus-visible{outline:2px solid var(--text);outline-offset:4px}
+.network-activity-row-main .intel-badge{gap:5px}
+.network-activity-row-main .intel-badge span{display:inline;font-size:12px;letter-spacing:0;text-transform:none}
+.network-activity-row-main .intel-badge strong{font-size:13px}
+.network-activity-row-main .intel-badge[data-grade=UNKNOWN]{font-size:10px}
+.network-decision.blocked{color:#d7ba78;background:#d7ba780f;border-color:#d7ba7833}
+.network-activity-details .intel-badge{display:inline-flex}
+.network-activity-details .intel-badge strong,.network-activity-details .intel-badge span{display:inline;color:inherit;margin:0;letter-spacing:0;text-transform:none}
+.network-activity-details .behavioral-chain span{letter-spacing:0;text-transform:none}
+@media(max-width:1100px){
+.network-activity-workspace{--activity-columns:minmax(95px,1fr) minmax(100px,1fr) 77px 140px 16px}
+.network-activity-workspace .network-activity-row-main,.network-activity-workspace .network-activity-legend{gap:8px}
+.network-activity-row-main>.network-activity-meta,.network-activity-row-main>time,.network-activity-legend>span:nth-child(5),.network-activity-legend>span:nth-child(6){display:none}
+.network-activity-workspace .network-activity-row-main>*{grid-row:auto;grid-column:auto}
+.network-activity-workspace .network-activity-row-main>.network-activity-expand{grid-column:5}
+}
+@media(max-width:720px){
+.network-activity-workspace{--activity-columns:minmax(80px,1fr) minmax(90px,1fr) 75px 16px}
+.network-activity-legend{display:none}
+.network-activity-workspace .network-activity-row-main>.network-activity-application{grid-column:1;grid-row:1}
+.network-activity-workspace .network-activity-row-main>.network-activity-destination{grid-column:2;grid-row:1}
+.network-activity-workspace .network-activity-row-main>.network-decision{grid-column:3;grid-row:1}
+.network-activity-workspace .network-activity-row-main>.intel-badge{grid-column:1 / span 3;grid-row:2}
+.network-activity-workspace .network-activity-row-main>.network-activity-expand{grid-column:4;grid-row:1 / span 2}
+}
+
+/* Long localized timestamps must never overlap the disclosure control. */
+.network-activity-row-main>time{min-width:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;font-size:11px}
+
+/* Plain zero/unknown assessments; only meaningful nonzero indices compete for attention. */
+.intel-badge[data-assessment=clear] i,.intel-badge[data-assessment=unknown] i{width:10px;height:auto;border-radius:0;background:none;font-style:normal;line-height:1}
+.intel-badge[data-assessment=unknown]{color:#9aa7b0}
+
+.intel-badge strong small{font-size:8px;font-weight:500;margin-left:1px}
+
+/* Six-level network inspection priority, independent of Allowed / Blocked. */
+.network-risk{gap:7px}.network-risk strong{font-size:16px}.network-risk strong small{font-size:11px}.network-risk[data-risk=low]{color:#90bfa6}.network-risk[data-risk=medium]{color:#d7ba78}.network-risk[data-risk=high]{color:#e48383}.network-risk[data-risk=unknown]{color:#9aa7b0}.network-location-credit{font-size:11px;color:var(--text-muted,#9aa7b0);line-height:1.6}.network-location-credit a{color:inherit;text-underline-offset:3px}
+.network-activity-row-main .intel-badge.network-risk strong{color:inherit;font-size:15px}

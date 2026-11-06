@@ -113,7 +113,11 @@ class DesktopApplicationDefaults(unittest.TestCase):
         self.assertEqual(asset.read_bytes(), (ROOT / 'environment/session/dms-2.0/assets/greyward-settings.svg').read_bytes())
         pin = json.loads((ROOT / 'environment/production/dms-2.0-candidate.json').read_text())
         self.assertEqual(hashlib.sha256(asset.read_bytes()).hexdigest(), pin['shellAdditions']['files']['assets/greyward-settings.svg'])
-        self.assertTrue(pin['build']['artworkUpdate']['requiresProtectedMigration'])
+        # Current generations enforce this in the protected receipt migrator,
+        # rather than the retired, per-artwork-update release annotation.
+        migration = (ROOT / 'packaging/greyward-enrollment/migrate-dms-shell.py').read_text()
+        self.assertIn('ensure_quiescent(accounts)', migration)
+        self.assertIn('protected desktop files are unchanged', migration)
 
 
 if __name__ == '__main__':

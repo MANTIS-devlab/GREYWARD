@@ -107,13 +107,13 @@ def update_admin_manifest(manifest, new_desktop):
     return updated
 
 
-def update_verifier_manifest(manifest, verifier):
+def update_verifier_manifest(manifest, verifier, *, session_only=False):
     """Bind a refreshed seat verifier into the immutable desktop receipt."""
     updated = json.loads(json.dumps(manifest))
     if (updated.get('schema') != 'greyward.protected-desktop/v1'
             or not isinstance(updated.get('files'), dict)):
         raise RuntimeError('Protected desktop receipt is invalid')
-    updated['files']['verify.py'] = digest(verifier)
+    updated['files']['session.py' if session_only else 'verify.py'] = digest(verifier)
     return updated
 
 
@@ -244,6 +244,29 @@ def activate_usbguard_approval_policy(accounts):
         label_existing_usbguard_runtime(runtime, owner_uid)
 
 
+def ended_session_locator(values, sid):
+    """Ignore a logind tombstone only when both kernel owners are absent."""
+    if (values.get('State') != 'closing' or values.get('Active') != 'no'
+            or not re.fullmatch(r'[0-9]+', values.get('User', ''))
+            or not re.fullmatch(r'[1-9][0-9]*', values.get('Leader', ''))
+            or not re.fullmatch(r'[A-Za-z0-9]+', sid)
+            or values.get('Scope') != f'session-{sid}.scope'):
+        return False
+    uid, leader = int(values['User']), int(values['Leader'])
+    if uid < 1000:
+        return False
+    try:
+        if (Path(f'/proc/{leader}').exists()
+                or Path(f'/sys/fs/cgroup/user.slice/user-{uid}.slice/session-{sid}.scope').exists()):
+            return False
+        result = subprocess.run(['/usr/bin/systemctl', 'show', values['Scope'],
+                                 '-p', 'ActiveState', '--value'],
+                                check=True, capture_output=True, text=True, timeout=3)
+        return result.stdout.strip() == 'inactive'
+    except (OSError, subprocess.SubprocessError):
+        return False
+
+
 def ensure_quiescent(accounts):
     sessions = subprocess.run(['/usr/bin/loginctl', 'list-sessions', '--no-legend', '--no-pager'],
                               check=True, capture_output=True, text=True, timeout=5)
@@ -252,11 +275,13 @@ def ensure_quiescent(accounts):
         if not fields:
             continue
         result = subprocess.run(['/usr/bin/loginctl', 'show-session', fields[0],
-                                 '-p', 'Name', '-p', 'Class', '-p', 'Seat', '-p', 'Remote'],
+                                 '-p', 'Name', '-p', 'Class', '-p', 'Seat', '-p', 'Remote',
+                                 '-p', 'User', '-p', 'State', '-p', 'Active', '-p', 'Scope', '-p', 'Leader'],
                                 check=True, capture_output=True, text=True, timeout=3)
         values = dict(item.split('=', 1) for item in result.stdout.splitlines() if '=' in item)
         if (values.get('Name') in accounts and values.get('Class') in {'user', 'user-early'}
-                and values.get('Seat') == 'seat0' and values.get('Remote') == 'no'):
+                and values.get('Seat') == 'seat0' and values.get('Remote') == 'no'
+                and not ended_session_locator(values, fields[0])):
             raise RuntimeError('Log out of the protected desktop first; protected desktop files are unchanged')
 
     for entry in Path('/proc').iterdir():
@@ -298,9 +323,11 @@ def copy_metadata(source, target):
 
 
 def migrate_verifier_only(base=BASE, admin=ADMIN,
-                          desktop_source=DESKTOP_SOURCE):
+                          desktop_source=DESKTOP_SOURCE, *, session_only=False):
     """Refresh only verify.py and its two receipts, with a quiescent rollback."""
     import fcntl
+    fixed_input = 'session.py' if session_only else 'verify.py'
+    label = 'session guardian' if session_only else 'seat verifier'
     base, admin, desktop_source = map(Path, (base, admin, desktop_source))
     lock_fd = os.open(LOCK, os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600)
     work = None
@@ -318,7 +345,7 @@ def migrate_verifier_only(base=BASE, admin=ADMIN,
         if desktop.get('schema') != 'greyward.protected-desktop/v1':
             raise RuntimeError('Existing protected desktop receipt is unsupported')
         trusted_tree(base, desktop)
-        if 'verify.py' not in desktop['files']:
+        if fixed_input not in desktop['files']:
             raise RuntimeError('Protected verifier is missing from its receipt')
         accounts = {item.get('name') for item in desktop.get('accounts', {}).values()
                     if isinstance(item, dict) and isinstance(item.get('name'), str)}
@@ -329,14 +356,14 @@ def migrate_verifier_only(base=BASE, admin=ADMIN,
         admin_bytes = trusted_file(admin_path, 1024 * 1024)
         admin_manifest = json.loads(admin_bytes)
         verify_admin_tree(admin_manifest, admin)
-        verifier_source = desktop_source / 'verify.py'
+        verifier_source = desktop_source / fixed_input
         verifier_bytes = trusted_file(verifier_source, 128 * 1024)
         compile(verifier_bytes, str(verifier_source), 'exec')
-        previous_verifier = trusted_file(base / 'verify.py', 128 * 1024)
+        previous_verifier = trusted_file(base / fixed_input, 128 * 1024)
         if digest(verifier_bytes) == digest(previous_verifier):
-            return 'Protected seat verifier already matches the verified source.'
+            return f'Protected {label} already matches the verified source.'
 
-        new_desktop = update_verifier_manifest(desktop, verifier_bytes)
+        new_desktop = update_verifier_manifest(desktop, verifier_bytes, session_only=session_only)
         new_desktop_bytes = (json.dumps(new_desktop, indent=2) + '\n').encode()
         new_admin = update_admin_manifest(admin_manifest, new_desktop_bytes)
         new_admin_bytes = (json.dumps(new_admin, indent=2) + '\n').encode()
@@ -346,7 +373,7 @@ def migrate_verifier_only(base=BASE, admin=ADMIN,
         ensure_quiescent(accounts)
 
         commit_started = True
-        atomic_write(base / 'verify.py', verifier_bytes, 0o444, base / 'verify.py')
+        atomic_write(base / fixed_input, verifier_bytes, 0o444, base / fixed_input)
         atomic_write(desktop_path, new_desktop_bytes, 0o444, desktop_path)
         atomic_write(admin_path, new_admin_bytes, 0o444, admin_path)
 
@@ -356,10 +383,10 @@ def migrate_verifier_only(base=BASE, admin=ADMIN,
         verify_admin_tree(refreshed_admin, admin)
         if refreshed_admin.get('desktop') != digest(trusted_file(desktop_path, 1024 * 1024)):
             raise RuntimeError('Administration receipt did not refresh')
-        return 'Protected seat verifier and dependent receipts refreshed. Log in again to use the update.'
+        return f'Protected {label} and dependent receipts refreshed. Log in again to use the update.'
     except Exception:
         if commit_started:
-            atomic_write(base / 'verify.py', previous_verifier, 0o444, base / 'verify.py')
+            atomic_write(base / fixed_input, previous_verifier, 0o444, base / fixed_input)
             atomic_write(base / 'desktop.json', desktop_bytes, 0o444, base / 'desktop.json')
             atomic_write(admin / 'manifest.json', admin_bytes, 0o444,
                          admin / 'manifest.json')
@@ -406,6 +433,8 @@ def migrate(assembler=ASSEMBLER, base=BASE, admin=ADMIN,
         trusted_file(assembler, 1024 * 1024)
         materialize_source = desktop_source / 'materialize.py'
         materialize_bytes = trusted_file(materialize_source, 128 * 1024)
+        subprocess.run(['/usr/bin/python3', '-I', str(materialize_source),
+                        '--check-release', dms.name], check=True, capture_output=True, timeout=5)
         authentication_source = desktop_source / 'authentication.py'
         authentication_worker_bytes = trusted_file(authentication_source, 128 * 1024)
         session_source = desktop_source / 'session.py'
@@ -580,20 +609,49 @@ def migrate(assembler=ASSEMBLER, base=BASE, admin=ADMIN,
         os.close(lock_fd)
 
 
+def refresh_installed_broker():
+    """An upgrade must not leave a deleted predecessor executable serving admission.
+
+    Called only after a successful root/quiescent migration. Fixed service names
+    and executable; no caller-controlled unit or command dispatch.
+    """
+    found=False
+    for unit in ('greyward-application-security-workflows.service',
+                 'greyward-application-security.service'):
+        active=subprocess.run(['/usr/bin/systemctl','is-active','--quiet',unit],check=False)
+        if active.returncode!=0:
+            continue
+        found=True
+        subprocess.run(['/usr/bin/systemctl','restart',unit],check=True,timeout=40)
+        pid=subprocess.check_output(['/usr/bin/systemctl','show',unit,'-p','MainPID','--value'],text=True,timeout=5).strip()
+        if not pid.isdecimal() or int(pid)<=1 or not os.path.samefile('/proc/'+pid+'/exe','/usr/libexec/greyward-application-security'):
+            raise RuntimeError('Admission broker is not running the installed executable')
+    if not found:
+        raise RuntimeError('Application Security broker is not active after migration')
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--assembler', type=Path, default=ASSEMBLER,
                         help='installed trusted assembler; development migration only')
+    parser.add_argument('--refresh-session-only', action='store_true',
+                        help='refresh only the protected session guardian and its receipts')
     parser.add_argument('--refresh-verifier-only', action='store_true',
                         help='refresh only the protected-seat verifier and its receipts')
     parser.add_argument('--desktop-source', type=Path, default=DESKTOP_SOURCE,
                         help='trusted root-owned desktop input directory')
     options = parser.parse_args()
+    if options.refresh_session_only and options.refresh_verifier_only:
+        parser.error('Choose exactly one protected input to refresh')
     try:
-        if options.refresh_verifier_only:
-            print(migrate_verifier_only(desktop_source=options.desktop_source))
+        if options.refresh_session_only:
+            result=migrate_verifier_only(desktop_source=options.desktop_source, session_only=True)
+        elif options.refresh_verifier_only:
+            result=migrate_verifier_only(desktop_source=options.desktop_source)
         else:
-            print(migrate(options.assembler))
+            result=migrate(options.assembler, desktop_source=options.desktop_source)
+        refresh_installed_broker()
+        print(result)
     except (OSError, RuntimeError, subprocess.SubprocessError, ValueError) as error:
         parser.exit(2, f'Protected DMS migration refused: {error}\n')
 

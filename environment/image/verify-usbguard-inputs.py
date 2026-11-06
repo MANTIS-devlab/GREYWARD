@@ -9,7 +9,11 @@ import subprocess
 
 SOURCES = {
     'desktop-session': {
+        'environment/session/greyward_oauth_callback.cil': '/usr/share/selinux/packages/greyward_oauth_callback.cil',
         'environment/session/greyward-desktop-defaults': '/usr/local/libexec/greyward-desktop-defaults',
+        'environment/session/greyward-display-reprobe': '/usr/local/libexec/greyward-display-reprobe',
+        'environment/session/greyward-display-reprobe.service': '/usr/lib/systemd/system/greyward-display-reprobe.service',
+        'environment/session/70-greyward-display-reprobe.rules': '/usr/lib/udev/rules.d/70-greyward-display-reprobe.rules',
         'environment/session/greyward-desktop-defaults.conf': '/usr/lib/systemd/user/greyward-desktop-icons.service.d/10-default-shortcuts.conf',
         'environment/session/greyward-dms-session-migrate': '/usr/local/libexec/greyward-dms-session-migrate',
     },
@@ -42,6 +46,15 @@ SOURCES = {
     },
     'dms': {'packaging/greyward-dms/verify.py': '/usr/libexec/greyward-dms-verify'},
     'context': {
+        **{'security-center/security-context/greyward_security_context/' + name:
+           '/usr/lib/greyward-security-context/greyward_security_context/' + name
+           for name in ('network_location.py', 'geoip_update.py', 'user_bus.py', 'intelligence.py',
+                        'network_patterns.py', 'network_intelligence.py', 'sensor_health.py',
+                        'intelligence_service.py', 'process_identity.py')},
+        'security-center/security-context/bin/greyward-geoip-update': '/usr/libexec/greyward-geoip-update',
+        **{'security-center/security-context/systemd/greyward-geoip-update.' + suffix:
+           '/usr/lib/systemd/system/greyward-geoip-update.' + suffix for suffix in ('service', 'timer')},
+        'security-center/security-context/config/greyward-geoip.sysusers': '/usr/lib/sysusers.d/greyward-geoip.conf',
         'security-center/security-context/greyward_security_context/usbguard.py':
             '/usr/lib/greyward-security-context/greyward_security_context/usbguard.py',
         'security-center/security-context/greyward_security_context/usbguard_session.py':
@@ -90,6 +103,11 @@ def verify(repo, package, kind, read=rpm_file, manifest=None):
     for source, installed in SOURCES[kind].items():
         expected = (repo / source).read_bytes()
         actual = read(package, installed)
+        # Fedora's brp-mangle-shebangs resolves /bin/sh to /usr/bin/sh.
+        # Permit exactly that native packaging transformation, not body drift.
+        if installed == '/usr/libexec/greyward-geoip-update':
+            expected = normalized(expected).replace(b'#!/bin/sh\n', b'#!/usr/bin/sh\n', 1)
+            actual = normalized(actual).replace(b'#!/bin/sh\n', b'#!/usr/bin/sh\n', 1)
         if not actual or normalized(actual) != normalized(expected):
             raise ValueError('Stale or missing USB approval payload; rebuild ' + kind + ': ' + installed)
     if kind == 'screenshot-enrollment':

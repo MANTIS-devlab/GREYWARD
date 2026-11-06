@@ -30,7 +30,10 @@
       "patches": {
         "pcmanfm-desktop-only.patch": "1293bca12801ce1dde5717c60e88e66d15e83973245caf3ec3b023cb85abeb4f",
         "pcmanfm-multi-output.patch": "7ca87f78e93079180cf3d864a00e60ce0fa8c4128470efa827177b115cda03b4",
-        "pcmanfm-strata-routing.patch": "4b00ae95b5f2de4aed3be8555c1b6f507d003243a505f0daef582780ac21ccd3"
+        "pcmanfm-strata-routing.patch": "4b00ae95b5f2de4aed3be8555c1b6f507d003243a505f0daef582780ac21ccd3",
+        "pcmanfm-scan-properties.patch": "f0259ef83f78af175a31faa20b6362163aa3993fba1d5f4cac0a9cf9b2ba0614",
+        "pcmanfm-lifecycle.patch": "271f62d1cff3509b37cf3b61029348c7cc9193d6da225dd0eee8d5c7a35887a1",
+        "pcmanfm-no-automount.patch": "e16fb1617249ba849206bd6909c01c8165f017476f491ad67ace8effcdd93173"
       },
       "integrationInputs": {
         "environment/session/desktop/output-layout.h": "5b8d2df740d29e6a42a87794772c1ff8e1ee5e9cbb976e92da2b950bcda9cd55"
@@ -51,7 +54,8 @@
   "cargoLockSha256": "33d6ffddcd5a4be037ff5b0856cf1ad8f8e13229c9d4d339451ec5939e9b6f55",
   "sourcePatches": {
     "strata-preview-mode.patch": "b8a2a5fa4444ed8135480c13211ec3364f0894522ecd8b09465a6e486ace4952",
-    "strata-native-icons.patch": "a6eeb530b072da846c46b885c6792d399a30bd905f48c593d246fa5b7b70197f"
+    "strata-native-icons.patch": "a6eeb530b072da846c46b885c6792d399a30bd905f48c593d246fa5b7b70197f",
+    "strata-scan-properties.patch": "c6d03317ede70ace2b0926ae6186ea44729d4bb5398b210bc8115143c07e47a3"
   },
   "executableProvenance": "Derived source build with the listed patches. The upstream Actions attestation applies only to inputs.binary, retained as a verified baseline, not to the derived executable."
 }

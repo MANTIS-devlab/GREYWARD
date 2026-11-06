@@ -199,7 +199,7 @@ class OfficeInputTests(unittest.TestCase):
 
     def test_missing_ocr_resource_is_refused(self):
         key = str(self.rpms[2])
-        missing = next(name for name in self.receipts[key]['payloadFiles'] if name.endswith('.rten'))
+        missing = next(name for name in self.receipts[key]['payloadFiles'] if name.endswith(('.rten', '.onnx')))
         del self.receipts[key]['payloadFiles'][missing]
         with self.assertRaisesRegex(ValueError, 'Incomplete Office payload'):
             self.verify()

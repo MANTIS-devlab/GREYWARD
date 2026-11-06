@@ -1,13 +1,116 @@
 # GREYWARD repository map
 
+Network country data and risk priority: Context's `network_location.py` and
+`geoip_update.py`, its fixed updater/timer/sysuser and Context RPM own local
+DB-IP MMDB reads and monthly-data recovery. Production enables the timer; the
+existing context RPM input gate rejects stale lookup/updater/score payloads.
+It also binds pattern analysis, reputation, sensor health and process correlation
+modules to the selected source; matching RPM version numbers alone do not pass.
+`network_patterns.py` owns bounded event-time network-pattern evidence;
+`intelligence.network_assessment` owns the six-level evidence mapping and capped
+independent corroboration; `sensor_health.py` owns export round-trip tracking;
+`behavioral.js`/CSS and existing activity rows own its presentation.
+`app.js` owns the Live poll lifecycle, bounded reassessment and focus-safe row
+refresh; `performance-contract.test.mjs` covers those lifecycle regressions. Contracts:
+[network UX](security-center/UX_SPEC.md#local-country-database) and
+[assessment labels](security-center/BEHAVIORAL_INTELLIGENCE.md#log-assessment-labels).
+Tests: Context `test_network_location`, `test_geoip_update` (explicit native MMDB),
+`test_intelligence_quality`, `test_network_assessment`, frontend behavioral/UX tests and image-input tests.
+
+Polkit keyboard handoff belongs to the existing authentication `assemble.py`.
+Runtime 88/Enrollment 91 are selected for the 0.5.5 fresh-install image;
+the physical reference remains on 87/90 until a quiescent protected migration.
+See [the input contract](security-center/APPLICATION_SECURITY_ENROLLMENT.md#polkit-input-across-outputs--6-november-2026)
+and `tests/test_authentication_input_focus.py` for old/new two-output validation;
+no live agent restart or security-policy relaxation is implied.
+
 [0.5.4 Sophon notes](patch-notes/0.5.4-sophon.md) own the current download,
 corresponding-source archive, selected package tuple, checksums and acceptance
 limits. [Publication](PUBLICATION.md) records the verified upload. This release
 documentation does not imply that public main matches every frozen runtime input.
 
+The 0.5.5 local composition retains native media-checksum implantation and
+requires `checkisomd5` success. Its source baseline and selected tuple belong to
+[image composition](architecture/ISO_CREATION.md#055-sophon-preparation--6-november-2026).
+
+Installer failure triage belongs to
+[the image runbook](architecture/ISO_CREATION.md#054-installer-failure-investigation).
+`environment/image/build-iso.sh` owns checksum implantation; embedded GRUB entries
+own the Test-media request. Native `checkisomd5 --verbose <ISO>` reproduces the
+missing-checksum defect on 0.5.4. Installed login gating remains owned by
+`installer.ks.tmpl`, `provision.sh` and `provision-firstboot.sh`; a referenced
+drop-in is not an established hardware diagnosis. No runtime correction is
+claimed by this investigation.
+
+Installer language/layout and fixed package selection belong to
+`environment/image/installer.ks.tmpl`, the native profile in
+`packaging/greyward-branding/SOURCES/greyward-anaconda.conf` and the composed-media
+`environment/image/installer-contract.py` gate. Only Software Selection is hidden;
+Keyboard remains mandatory, with English/US initial defaults. Authority:
+[installer runbook](architecture/ISO_CREATION.md#prepared-installer-localization-and-fixed-package-selection--2-november-2026).
+Run `python -m unittest tests.test_image_installer_contract tests.test_protected_keyboard_layout`.
+
+
+The late-evening installed log/runtime follow-up (private development evidence)
+is observational evidence owned by `docs/security-center/PERFORMANCE.md` and
+this history record. It introduces no collector, runtime behavior or package.
+Raw journals and disposable observers remain in ignored private audit storage;
+the public-facing record retains sanitized facts and workload limits only.
+
+Native OAuth callback compatibility belongs to Session's
+`environment/session/greyward_oauth_callback.cil`, packaged by
+`packaging/greyward-session/greyward-session.spec`. The image input verifier and
+production acceptance enforce payload/kernel closure; `tests/test_oauth_callback.py`
+owns native pre/post-enrollment CIL checks. See the
+[desktop contract](architecture/FILE_MANAGER_DESKTOP.md#native-browser-sign-in-callbacks--30-october-2026).
+
+The runtime stability follow-up (private development evidence)
+belongs to existing Context scanner/arrival/shell/intelligence modules, Session
+startup units and Files' `pcmanfm-lifecycle.patch`. `tests/fixtures/clamav-dbus-native.py`
+owns private-bus concurrency validation; `tests/fixtures/session-startup-native.py`
+owns disposable PID 1 ordering/retry validation. Desktop lifecycle/output tests
+remain in `tests/run_desktop_outputs.py`; no parallel runtime is introduced.
+
+Custom runtime performance evidence remains owned by
+`docs/security-center/PERFORMANCE.md`; the
+30 October observational audit (private development evidence)
+links installed measurements to scanner, collector, desktop and session sources.
+No new runtime component or validation command is introduced by that report;
+validate its documentation with the two essential repository gates.
+
+KVM/Nouveau missed display hotplug recovery belongs to
+`environment/session/greyward-display-reprobe`, its system oneshot and
+`70-greyward-display-reprobe.rules`. `packaging/greyward-session/greyward-session.spec`
+ships the fixed helper without replacing protected session/authentication code;
+`environment/image/verify-usbguard-inputs.py` verifies its future-image closure.
+`tests/test_display_reprobe.py` owns bounded retry, path/driver selection and
+preservation contracts. See [monitor configuration](architecture/DMS_MONITOR_CONFIGURATION.md)
+and the installed KVM receipt (private development evidence).
+
+Protected login admission and guardian lifetime belong to
+`security-center/packaging/application-security/desktop/session.py`. The
+[current lifetime contract](security-center/SESSION_LIFETIME.md) owns held-pidfd
+supervision, parent/guardian acknowledgement and exact-scope retirement.
+`packaging/greyward-enrollment/migrate-dms-shell.py` owns the three-file
+session-only receipt migration and quiescence checks. Coverage is in
+`tests/test_application_desktop.py` / `tests/test_dms_shell_migration.py`; the
+29 October recovery and native regression (private development evidence)
+records installed 85/87 and remaining physical login acceptance. The
+28 October record (private development evidence) remains historical
+manual cleanup evidence, not a persistent source correction. No authentication
+or policy boundary is relaxed.
+
+Local workspace containment: local workspace (private development evidence)
+owns machine-local directory ownership and the consolidation evidence. `.gitignore`
+and `tools/publication-policy.json` exclude `.local/`, `public/` and
+`public-office-updates/`; the two repository gates scan the canonical source,
+not these independent repositories or historical local artifacts. Export
+regression coverage remains in `tests/test_public_export.py`.
+
 [0.5.3 Sophon notes](patch-notes/0.5.3-sophon.md) own the public artifact checksum,
 frozen source/archive binding, selected component inputs and Linux/Windows media
-readback. Publication does not establish clean-install or recovery acceptance.
+readback. [Publication](PUBLICATION.md) owns the SourceForge transfer and GitHub
+integration evidence; clean-install/recovery acceptance remains separate.
 
 Plymouth lifecycle copy: `packaging/greyward-branding/SOURCES/greyward.script`
 selects boot/shutdown/reboot labels through `Plymouth.GetMode()`; the Branding
@@ -65,6 +168,12 @@ unpublished six-hour schedule is retired in source.
 The [six-day GitHub chain](software/OFFICE_INTEGRATION.md#six-day-github-automation)
 is owned by `packaging/greyward-office/automation/`: `model.py` owns cadence,
 retention and exact-hunk compatibility; `candidate.py` locks official sources;
+`notice.py` accepts evolving third-party attribution while retaining the full
+notice, pinned hashes and audit diff, with independent first-party/license gates;
+`packaging/greyward-office/resource_inputs.py` owns upstream-declared immutable
+fonts/language data, font manifest integrity and UI-only catalog branding;
+`vendor_inputs.py` prepares closed Cargo vendoring without changing the resolved
+dependency graph, retaining upstream manifests and the precise transformation;
 `seal.py` verifies candidate/RPM closure; `transfer.py` limits artifact storage;
 `release.py` signs, switches immutable metadata and expires only owned objects;
 `github.py` scopes API credentials and redirects. `bootstrap.py` exports the
@@ -142,6 +251,10 @@ frame barrier. `environment/session/greyward-screenshot` owns the ordinary PNG
 receiver, frozen per-output previews, Slurp selection, crop/save and editor;
 Session owns its launcher and dependencies. Enrollment owns
 the compositor/policy and `packaging/greyward-enrollment/migrate-screenshot.py`.
+`packaging/greyward-swappy/` owns the signed-source editor RPM (native window
+controls, dark GTK and explicit private PNG saving).
+`branding/source/greyward-screenshot.svg` is its single visual source. Session requires its window-controls capability; complete image
+staging requires `--swappy-rpm` and checks packaged source provenance.
 The authority is [Manual screenshots](software/SCREENSHOTS.md); tests are
 `test_screenshot_boundary.py`, `test_screenshot_migration.py` and compiled display
 policy in `test_flatpak_session_compatibility.py`. `verify-usbguard-inputs.py`
@@ -327,7 +440,8 @@ state/session migration scripts own four-root backup/readback, previous-copy
 reconciliation and preference preservation. `test_dms20_plugins.py` and
 `test_dms20_state.py` cover isolated native views and the real unprivileged CLI.
 `experience.json` also owns the portable physical appearance preset, applied
-only to new accounts. `greyward-native-plugin-appearance.patch` forwards the
+only to new accounts. Its taskbar AppsDock icon size is 180% (accepted 1 November
+2026), prepared for Session 44; established user layouts remain user-owned. `greyward-native-plugin-appearance.patch` forwards the
 native widget Background option into both PluginComponent pills and selects
 the standalone gear in `environment/session/dms-2.0/assets/` for Settings.
 The native plugin fixture exercises both background states and retention of
@@ -551,6 +665,14 @@ Authority: [file manager desktop integration](architecture/FILE_MANAGER_DESKTOP.
 Revision 11 corrects native theme selection and GIO folder naming. Overall
 session/lock stability remains unresolved after the later 00:15 closure.
 
+Desktop input/automount ownership: `packaging/greyward-files/pcmanfm-no-automount.patch`
+and `environment/session/desktop/settings.conf`; the Files 24 manifest/spec/build
+bind the desktop-mode guard and correct native volume keys. Existing profiles
+are preserved. Authority: [icon input and automatic mounts](architecture/FILE_MANAGER_DESKTOP.md#icon-input-and-automatic-mounts--6-november-2026).
+Validation: `tests/test_desktop_defaults.py` and the real linked
+`tests/run_desktop_outputs.py` / `tests/test_desktop_outputs.cpp` fixture with
+inherited enabled mount settings (old-fails/new-passes), plus RPM checks.
+
 File manager/desktop migration ownership: `environment/session/desktop/`,
 `environment/session/greyward-desktop-shortcut`, `greyward-files-seed`,
 `greyward-desktop-icons.service` and `packaging/greyward-files/`;
@@ -698,7 +820,7 @@ pinned signing-key digest before staging the descriptor.
 | Security Center UI/domain and integrated window chrome | `security-center/tauri/`, `security-center/crates/`, `security-center/security-context/greyward_security_context/network_location.py` | `docs/security-center/ARCHITECTURE.md`, `docs/security-center/UX_SPEC.md`, `docs/security-center/DATA_MODEL.md`, `docs/security-center/BACKENDS.md`, `docs/security-center/FILE_SECURITY.md`, `docs/security-center/PERFORMANCE.md`, `docs/security-center/remediation/` | `security-center/tauri/frontend/` (including bundled `startup.js`/`request-adapter.js`/`application-security.js`/`security-history.js` (shared contextual actor/action/resource/decision rows and evidence disclosures), `environment/session/labwc/rc.xml` exact main-window decoration exception, persistent `window-chrome.js`/`window-chrome.css` and `src-tauri/src/window_chrome.rs` native actions, canonical Labwc control artwork copied by `tools/generate-security-center-window-controls.ps1`, persistent route shell/navigation and optional Overview activity/Recovery read scheduling in `app.js`/`src-tauri/src/lib.rs`, canonical `workspace.css` shell/navigation with centered shared Security Center emblem and enlarged menu text, canonical `materials.css` neutral graphite grain/silver materials, intentional shared `app.js` glyphs and native WebKit EN/FR handoff, self-origin script CSP, stale-route read protection, semantic EN/FR catalog, silver frosted-glass surfaces, shared keyboard-accessible confirmations, refresh continuity, asynchronous page-read and privacy dispatch, direct System checks navigation, explained privacy profiles, action-first recovery and file workflows, and progressive activity/update history), optional age-aware local endpoint-country resolver via MMDB/geofeed data, `GREYWARD_GEOIP_DB`, optional `GREYWARD_GEOIP_DB_SECONDARY`, and optional `GREYWARD_GEOFEED_DB`, `security-center/crates/greyward-security-backends/src/presentation.rs` (typed evidence presentation), `security-center/data/` | `security-center/crates/greyward-security-domain/tests/`, `security-center/tauri/frontend/ux-contract.test.mjs`, `security-center/tauri/frontend/security-history.test.mjs`, `security-center/tauri/frontend/window-chrome.test.mjs`, `security-center/tauri/frontend/interaction.test.mjs`, `security-center/tauri/frontend/performance.test.mjs`, `security-center/tauri/frontend/performance-contract.test.mjs`, `tools/greyward-dev/security-center-benchmark.py` (read-only actual native desktop measurements), `security-center/tauri/frontend/startup.test.mjs`, `security-center/security-context/tests/test_network_protection.py`, `security-center/security-context/tests/test_network_location.py`, `tests/country-metadata.test.mjs`, `security-center/security-context/tests/test_file_security.py`, `security-center/security-context/tests/test_user_bus.py` | `cargo test --workspace --locked`, `node --test tauri/frontend/ux-contract.test.mjs`, `node --test tauri/frontend/interaction.test.mjs`, `node --test tauri/frontend/performance.test.mjs` and `node --test tauri/frontend/startup.test.mjs` in GREYWARD-DEV, `python3 -m unittest discover -s security-context/tests -p 'test_*.py'` | `security-center/security-context/`, `environment/session/dankmaterialshell/plugins/greywardSecure/` |
 | GREYWARD Update Center workflow | `security-center/crates/greyward-security-backends/src/adapters.rs`, `security-center/security-context/greyward_security_context/update_center.py`, `update_center_bus.py`, `security-center/security-context/bin/greyward-update-action`, `security-center/security-context/systemd/greyward-update-worker.socket`, `greyward-update-worker@.service`, `packaging/greyward-enrollment/enroll.py`, `environment/production/selinux/greyward-application-session.te`, `.fc`, `security-center/tauri/frontend/app.js` | `docs/architecture/UPDATE_CENTER_ARCHITECTURE.md`, `docs/security-center/remediation/2026-09-01-updates-workflow.md`, `docs/security-center/remediation/2026-09-02-essential-pci-driver-support.md` | `security-center/security-context/dbus/`, `security-center/security-context/systemd/`, `security-center/security-context/polkit/`, `security-center/tauri/src-tauri/src/lib.rs` | `security-center/security-context/tests/test_update_center.py`, `test_update_center_bus.py`, `test_recovery.py`, `tests/test_installer_enrollment.py`, `security-center/tauri/frontend/ux-contract.test.mjs`, `interaction.test.mjs` | `PYTHONPATH=security-center/security-context python3 -m unittest test_update_center.py test_update_center_bus.py`, `python -m unittest tests.test_installer_enrollment`, `node --test security-center/tauri/frontend/ux-contract.test.mjs`, `tools/greyward-dev/run-security-center-interaction.ps1` | `security-center/packaging/`, `environment/production/` |
 | GREYWARD Privacy workflow | `security-center/crates/greyward-security-backends/src/profiles.rs`, `src/bin/greyward-security-profile.rs`, `security-center/security-context/greyward_security_context/user_bus.py`, `security-center/tauri/src-tauri/src/lib.rs`, `security-center/tauri/frontend/app.js`, `environment/session/dankmaterialshell/plugins/greywardSecure/SecureWidget.qml` | `docs/security-center/PRIVACY.md`, `docs/security-center/remediation/2026-09-01-privacy-workflow.md` | `security-center/tauri/frontend/i18n.js`, `security-center/tauri/frontend/ux-contract.test.mjs`, `security-center/tauri/frontend/security-history.test.mjs`, `security-center/tauri/frontend/window-chrome.test.mjs`, `security-center/tauri/frontend/interaction.test.mjs` | `security-center/security-context/tests/test_shell_summary.py`, `security-center/crates/greyward-security-backends/src/profiles.rs` tests | `PYTHONPATH=security-center/security-context python3 -m unittest discover -s security-center/security-context/tests -p 'test_*.py'`, `node --test security-center/tauri/frontend/ux-contract.test.mjs`, `tools/greyward-dev/run-security-center-interaction.ps1` | `security-center/packaging/`, `environment/production/` |
-| GREYWARD File Security core workflow (trusted system scanner metadata; active review versus handled history; fresh source availability) | `security-center/security-context/greyward_security_context/clamav.py`, `file_security.py`, `safe_open.py`, `user_bus.py`, `clamav_service.py`, `session10_bus.py`, `security-center/tauri/frontend/app.js` | `docs/security-center/FILE_SECURITY.md`, `docs/security-center/BACKENDS.md`, `docs/security-center/PRIVILEGE_MODEL.md`, `docs/security-center/remediation/2026-08-31-file-security-core.md` | `security-center/security-context/systemd/greyward-clamav-scan.service`, `security-center/security-context/dbus/`, `environment/production/` | `security-center/security-context/tests/test_file_security.py`, `test_clamav.py`, `test_safe_open.py`, `security-center/tauri/frontend/ux-contract.test.mjs` | `PYTHONPATH=security-center/security-context python3 -m unittest discover -s security-center/security-context/tests -p 'test_*.py'`, `node --test security-center/tauri/frontend/ux-contract.test.mjs`, Fedora GREYWARD-DEV D-Bus E2E | `security-center/security-context/`, `security-center/tauri/frontend/`, `environment/production/` |
+| GREYWARD File Security core workflow (trusted system scanner metadata; active review versus handled history; fresh source availability) | `security-center/security-context/greyward_security_context/clamav.py`, `file_security.py`, `scan_cache.py`, `arrival_scanner.py`, `safe_open.py`, `user_bus.py`, `clamav_service.py`, `session10_bus.py`, `security-center/tauri/frontend/app.js` | `docs/security-center/FILE_SECURITY.md`, `docs/security-center/BACKENDS.md`, `docs/security-center/PRIVILEGE_MODEL.md`, `docs/security-center/remediation/2026-08-31-file-security-core.md` | `security-center/security-context/systemd/greyward-clamav-scan.service`, `security-center/security-context/dbus/`, `environment/production/` | `security-center/security-context/tests/test_file_security.py`, `test_clamav.py`, `test_scan_arrivals.py`, `test_file_security_ownership.py`, `test_safe_open.py`, `security-center/tauri/frontend/ux-contract.test.mjs` | `PYTHONPATH=security-center/security-context python3 -m unittest discover -s security-center/security-context/tests -p 'test_*.py'`, `node --test security-center/tauri/frontend/ux-contract.test.mjs`, Fedora GREYWARD-DEV D-Bus E2E | `security-center/security-context/`, `security-center/tauri/frontend/`, `environment/production/` |
 | Security Center validation backlog | `security-center/tests/session10-gate.sh` | `docs/security-center/ACCEPTANCE.md`, `TESTING.md`, `docs/security-center/SESSION_10_REPORT.md` | Fedora/VM evidence and runtime command hooks | `security-center/tests/session10-gate.sh` | `bash security-center/tests/session10-gate.sh --report /path/to/session-10-run.md` | `tests/static.ps1` |
 | Security Center packaging | `security-center/packaging/`, `environment/development/build-security-center.sh`, `tools/greyward-dev/deploy-security-center.ps1` | `docs/security-center/README.md`, `docs/development/DEVELOPMENT.md`, `docs/security-center/remediation/` | `security-center/packaging/`, `security-center/data/` | `security-center/` package checks | `cargo test --workspace --locked`, `cargo build --workspace --release --locked`, `desktop-file-validate`, packaged RPM checks | `environment/production/` |
 | Security Context | `security-center/security-context/` | `docs/security-context/README.md`, `docs/security-context/ARCHITECTURE.md`, `docs/security-context/LIVE_PRIVACY_CAPSULE.md`, `docs/architecture/UPDATE_CENTER_ARCHITECTURE.md`, `docs/security/privilege-model.md` | `security-center/security-context/systemd/`, `security-center/security-context/dbus/`, `security-center/security-context/polkit/`, `environment/production/packages.txt` | `security-center/security-context/tests/` | `python3 -m unittest discover -s security-context/tests -p 'test_*.py'` | `docs/security/`, `docs/recovery/`, `environment/session/dankmaterialshell/plugins/greywardSecure/` |
@@ -709,7 +831,7 @@ pinned signing-key digest before staging the descriptor.
 | Recovery V1 | `security-center/security-context/greyward_security_context/recovery.py`, `restic_backup.py` | `docs/recovery/RECOVERY_V1.md` | `security-center/security-context/bin/`, `systemd/` | `security-center/security-context/tests/test_recovery.py` | Python unit tests and Security Center package validation | `docs/recovery/BOOT_ROLLBACK_PROTOTYPE.md` |
 | Secure DNS/network protection and Feodo threat blocking | `security-center/security-context/greyward_security_context/secure_dns_reconciler.py`, `security-center/security-context/greyward_security_context/secure_dns_split.py`, `security-center/security-context/greyward_security_context/network_policy_service.py`, `security-center/security-context/greyward_security_context/control_plane.py`, `security-center/security-context/greyward_security_context/feodo.py`, `security-center/security-context/greyward_security_context/user_bus.py`, `security-center/security-context/greyward_security_context/notification_router.py` | `docs/security/SECURE_DNS_IMPLEMENTATION_PLAN.md`, `docs/security-context/OPENSNITCH.md` | `security-center/security-context/bin/greyward-feodo-update`, `security-center/security-context/systemd/greyward-feodo-update.service`, `security-center/security-context/systemd/greyward-feodo-update.timer`, `security-center/security-context/dbus/`, `security-center/security-context/config/`, `security-center/data/`, `security-center/tauri/frontend/` | `security-center/security-context/tests/test_secure_dns.py`, `security-center/security-context/tests/test_secure_dns_split.py`, `tests/fedora-secure-dns-split.py`, `tests/fedora-secure-dns-service.py`, `test_network_protection.py`, `test_feodo_threat_intel.py`, `security-center/tauri/frontend/ux-contract.test.mjs` | Python unit tests, frontend contract tests, Fedora systemd/D-Bus checks, Rust workspace tests | `docs/security-context/PORTMASTER.md` |
 | Software and default file handlers | `environment/flatpak/`, including `seed-system-permissions.py`, native viewers, GVfs file backends and terminal compatibility migration in `environment/production/` | `docs/software/FLATPAK_BAZAAR_INTEGRATION_PLAN.md`, `environment/production/README.md` | `environment/flatpak/default-applications.list`, `environment/flatpak/mimeapps.list`, `environment/production/packages.txt`, `environment/production/desktop-entry-overrides/`, `branding/` | `tests/static.ps1`, `tests/test_flatpak_default_policy.py` | `tests/static.ps1`, Python default-policy tests, isolated Flatpak provider checks, guest acceptance, live file opening, archive browsing, SMB backend recognition and launcher search | `tools/greyward-dev/deploy.ps1` |
-| Branding and boot visuals | `branding/`, `packaging/greyward-branding/` | `branding/BRANDING.md`, `branding/LICENSE`, `branding/PROVENANCE.md`, `LICENSING.md` | `branding/source/`, `branding/generated/`, `branding/wallpaper/`, `packaging/greyward-branding/SOURCES/` | `tests/static.ps1` | `tools/validate-branding.ps1`, `tools/build-branding-rpm.ps1` | `environment/session/` |
+| Branding and boot visuals | `branding/`, `packaging/greyward-branding/` | `branding/BRANDING.md`, `branding/LICENSE`, `branding/PROVENANCE.md`, `LICENSING.md` | `branding/source/`, `branding/generated/`, `branding/wallpaper/`, `packaging/greyward-branding/SOURCES/` | `tests/static.ps1`, `tests/test_plymouth_theme.py` | `tools/validate-branding.ps1`, `tools/build-branding-rpm.ps1`; native RPM parser check, dracut build guard and `tools/greyward-dev/verify-boot-branding.ps1` for every installed normal kernel | `environment/session/` |
 | Prototypes and upstream research | `spikes/` | `docs/security-context/README.md`, `docs/security-center/RESEARCH.md` | `spikes/dms-v1.5.3/`, `spikes/opensnitch-control-plane/` | prototype-local README/test instructions | read-only research; never production provisioning | `docs/history/` |
 | Repository validation | `tools/validate-repository.ps1`, `tests/static.ps1` | `docs/DOCUMENTATION_POLICY.md` | `docs/INDEX.md`, `docs/REPOSITORY_MAP.md` | `tests/static.ps1` | `pwsh -NoProfile -File .\\tools\\validate-repository.ps1` | `AGENTS.md` |
 | Pre-release architecture and build audit with approved execution backlog | `environment/production/`, `environment/image/`, `packaging/`, `security-center/` | `docs/architecture/FINAL_ARCHITECTURE_AUDIT.md`, `docs/architecture/BUILD_ISO_AUDIT.md`, `docs/plans/PRE_RELEASE_IMPROVEMENTS.md` | `environment/production/dms-release.json`, `versions.json` | `tests/static.ps1` | `tests/static.ps1`, `tools/validate-repository.ps1`; read-only Fedora runtime/package inspection | `docs/STATUS.md`, `docs/architecture/ISO_CREATION.md` |
@@ -751,3 +873,105 @@ Generated directories (`build/`, `cache/`, `output/`, `environment/packer_cache/
 `.secrets/` contains credentials. None is source of truth. `.vmtest/` is
 different: it contains Hyper-V VM disks and checkpoints and must be managed by
 the VM lifecycle tools, not routine repository cleanup.
+
+
+## Behavioral intelligence ownership — local development
+
+`security-center/security-context/greyward_security_context/intelligence.py` owns bounded scoring/correlation; `intelligence_service.py` owns the UID-scoped read-only provider and ingestion; `intelligence_client.py` owns its fixed caller read; `process_identity.py` owns live kernel process-instance matching and `network_intelligence.py` decorates existing firewall decisions with bounded UID-scoped assessments; `intelligence_notices.py` reuses the existing publisher. `packaging/greyward-intelligence/` owns pinned Tetragon sources, compatibility and package recipes. `tauri/frontend/behavioral.js` / `.css` own shared score/evidence presentation in existing `security-history.js` and `app.js` logs; no Intelligence page exists; native IPC stays in `tauri/src-tauri/src/lib.rs`. `branding/source/intelligence-gauge.svg.in` and `tools/generate-intelligence-icons.py` own generated gauge icons. See [architecture and limits](security-center/BEHAVIORAL_INTELLIGENCE.md).
+
+Behavioral validation: `PYTHONPATH=security-context python3 -m unittest discover -s security-context/tests -p test_intelligence.py -v` from `security-center/`, native Cargo gates, frontend `behavioral.test.mjs`, and the two essential repository checks. Installed/performance evidence belongs to the dated receipt, not source contracts.
+
+## Native scan notification ownership — 29 October 2026
+
+`security-center/security-context/greyward_security_context/scan_notices.py`
+owns manual result projection and fixed presentation; `notification_router.py`
+owns native delivery/deduplication. `clamav_service.py` supplies the existing
+UID-scoped summary with a bounded recent-operation window. The file-context
+companion retains local progress and Strata Jobs, without another scan publisher.
+`branding/source/scan-notification.svg.in` and
+`tools/generate-scan-notification-icons.py` own the four generated assets mirrored
+in Center data. Center/Context specs own installation; no protected DMS payload
+changes. See [File Security](security-center/FILE_SECURITY.md#native-scan-notifications)
+and the installed receipt (private development evidence).
+Regression coverage: `test_scan_notices.py`, `test_notification_router.py`,
+`test_shell_experience.py`, `tests/test_strata_file_actions.py`, generator
+`--check`, native Center RPM checks and both repository gates.
+
+The [refined scan window](security-center/FILE_SECURITY.md#contextual-scan-window)
+is composed in `security-center/file-context/greyward-file-context.py`: native
+GTK layout/CSS, progressive context disclosure, direct counters and cancellation
+presentation. `test_strata_file_actions.py` checks stale/empty/incomplete receipt
+presentation alongside the unchanged action boundary. Native GTK/Qt renders and
+installation are recorded in the refinement receipt (private development evidence).
+
+## Network row clarity and country artwork — 30 October 2026
+
+`security-center/tauri/frontend/behavioral.js` / `.css` own the plain-language
+assessment badge and shared aligned column geometry. `app.js` owns the existing
+country metadata/flag projection and application/domain mark; `styles.css` owns
+the white image tiles. The [UX contract](security-center/UX_SPEC.md) and
+[assessment labels](security-center/BEHAVIORAL_INTELLIGENCE.md#log-assessment-labels)
+are authoritative. `assets/country-flags/provenance.json`, its original MIT
+license and generated catalog own the 250 passive SVGs; the Center spec embeds
+this frontend and installs the distinct license file. Ownership never moves to
+a remote lookup, emoji font or another geolocation evaluator.
+
+Validate with `tools/verify-country-flags.py`, `tests/country-metadata.test.mjs`,
+frontend `behavioral.test.mjs` / `ux-contract.test.mjs`, native WebKit rendering,
+the normal Center RPM checks and both repository gates. The
+installed receipt (private development evidence)
+separates available metadata from artwork coverage and hardware acceptance.
+
+
+## Quickshell sparkline repair and expected boot-helper classification
+
+`environment/patches/dms-2.0/greyward-sparkline-renderer.patch` and the candidate
+manifest own the narrow Qt renderer workaround. `packaging/greyward-dms/build-sparkline-repair.py`
+owns the closed predecessor RPM path; normal assembly uses the same patch.
+Authentication `assemble.py` explicitly admits the new protected generation;
+Enrollment pins the matched Application Security package. `tests/test_dms_sparkline.py`
+and its numeric fixture own static/native RHI regressions. Behavioral
+`intelligence.py` owns the separately scoped expected boot-helper assessment;
+`test_intelligence_quality.py` prevents descendant or writable-helper exemptions.
+See the investigation and validation receipt (private development evidence).
+
+
+Protected login preparation and upgrade admission: `security-center/packaging/application-security/desktop/materialize.py`
+owns shared release/profile compatibility and read-only preflight; authentication
+`assemble.py` consumes it. `desktop/prepare.py`, `desktop/session.py` and
+`packaging/greyward-enrollment/migrate-dms-shell.py` own enrollment, transactional
+admission rollback and quiescent migration/broker refresh. Regression owners are
+`test_authentication_clipboard.py`, `test_application_desktop.py` and
+`test_dms_shell_migration.py`; see the live receipt (private development evidence).
+
+
+Ordinary DMS upstream-layout selection is owned by
+`environment/session/greyward-dms-state-migrate`; its verified read-only
+`--print-directory` query is reused by `greyward-dms-session-migrate` for pin
+seeding. `packaging/greyward-session/` delivers both; `tests/test_dms20_state.py`
+covers the actual CLI, current/future package generations and retained user
+choices. This does not replace protected admission's explicit release review.
+See the installed startup correction (private development evidence).
+
+
+## 0.5.4 image behavioral closure
+
+`environment/image/verify-intelligence-inputs.py` owns sensor RPM/source closure;
+`tests/test_image_intelligence.py` covers stale helper rejection and account-policy
+refresh without overwriting administrator edits. `build.sh` / `build-iso.sh` require
+`--intelligence-rpm` for complete media. The production package list/provisioner
+own installation and non-login-blocking startup. The generator and its private
+receipt remain in `packaging/greyward-intelligence/`; no new privileged API exists.
+See [0.5.4 composition](architecture/ISO_CREATION.md#054-sophon--2-november-2026).
+
+
+0.5.4 media verification is recorded in the [composition receipt](architecture/ISO_CREATION.md#completed-local-media-checks).
+`.gitattributes` owns exact LF treatment of the pinned Plymouth/Labwc assets;
+the quickstart owns complete editor, sensor and four-application Office inputs.
+Local image verification does not replace fresh-install or hardware acceptance.
+
+
+Bazaar's 2 November installed recurrence and bounded recovery are recorded in
+[Software integration](software/FLATPAK_BAZAAR_INTEGRATION_PLAN.md#054-installed-recurrence--2-november-2026).
+This is not a permanent-fix or clean-install acceptance claim; the canonical
+startup helper and media inclusion gates remain unchanged.

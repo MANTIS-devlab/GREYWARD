@@ -15,6 +15,7 @@ import subprocess
 import tarfile
 
 from prepare import prepare, digest
+from vendor_inputs import prune_unused
 
 
 from artwork import MIMES
@@ -33,6 +34,7 @@ def build(args):
         if actual != lock['toolchain']['version']:
             raise ValueError('Toolchain drift: ' + program + ' ' + actual)
     tree, app, manifest = prepare(repo, args.cache.resolve(), output / 'prepared', args.application)
+    cargo_preparation = prune_unused(tree)
     env = os.environ.copy()
     env['CARGO_BUILD_JOBS'] = '2'
     env['CARGO_PROFILE_RELEASE_DEBUG'] = '0'
@@ -50,10 +52,10 @@ def build(args):
     notices = tree / 'greyward-licenses'
     notices.mkdir()
     # Preserve bundled dependency/font notices alongside the application license.
-    for folder in (tree / 'greyward-vendor', tree / 'greyward-fonts', tree / 'assets', tree / 'crates'):
+    for folder in (tree / 'greyward-vendor', tree / 'greyward-fonts', tree / 'greyward-language', tree / 'assets', tree / 'crates'):
         for source in folder.rglob('*'):
             name = source.name.lower()
-            license_name = re.search(r'(^|[-_])(unlicense|license|licence|copying|copyright|notice|ofl)([._-]|$)', name)
+            license_name = re.search(r'(^|[-_])(unlicense|license|licence|copying|copyright|notice|ofl|attribution)([._-]|$)', name)
             if source.is_file() and license_name and source.suffix.lower() not in {'.rs', '.c', '.h', '.cpp', '.py', '.js', '.toml', '.json'}:
                 target = notices / source.relative_to(tree)
                 target.parent.mkdir(parents=True, exist_ok=True)
@@ -65,6 +67,7 @@ def build(args):
         {k: p.get(k) for k in ('name', 'version', 'source', 'license', 'license_file', 'repository')}
         for p in packages], indent=2) + '\n')
     provenance = json.loads((tree / 'greyward-provenance.json').read_text())
+    provenance['cargoPreparation'] = cargo_preparation
     provenance['vendoredInputs'] = {p.relative_to(tree / 'greyward-vendor').as_posix(): digest(p)
                                   for p in sorted((tree / 'greyward-vendor').rglob('.cargo-checksum.json'))}
     (tree / 'greyward-provenance.json').write_text(json.dumps(provenance, indent=2) + '\n')

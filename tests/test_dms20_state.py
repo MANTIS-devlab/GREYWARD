@@ -23,7 +23,7 @@ class StateMigration(unittest.TestCase):
         bar = appearance['barConfigs'][0]
         self.assertTrue(bar['noBackground'])
         self.assertEqual(bar['screenPreferences'], ['all'])
-        self.assertEqual(bar['leftWidgets'][4]['appsDockIconSizePercentage'], 155)
+        self.assertEqual(bar['leftWidgets'][4]['appsDockIconSizePercentage'], 180)
         backgrounds = {item['id']: item.get('background') for section in ('leftWidgets','centerWidgets','rightWidgets')
                        for item in bar[section] if isinstance(item, dict) and 'background' in item}
         self.assertEqual({key for key, value in backgrounds.items() if value}, {'greywardSecure','clock','powerMenuButton'})
@@ -133,24 +133,27 @@ class StateMigration(unittest.TestCase):
             env={'HOME':str(base/'home'),'XDG_RUNTIME_DIR':str(base/'runtime'),
                  'DBUS_SESSION_BUS_ADDRESS':'unix:path=/nonexistent','DBUS_SYSTEM_BUS_ADDRESS':'unix:path=/nonexistent'}
             with patch.dict(os.environ,env):
-                backup=migration.directory_migration(roots,'v2.0.0-7',Path(os.environ['GREYWARD_DMS20_BINARY']))
+                backup=migration.directory_migration(roots,'v2.0.0-8',Path(os.environ['GREYWARD_DMS20_BINARY']))
                 for name,path in roots.items():
                     self.assertTrue((path/'DankMaterialShell').is_symlink())
                     self.assertEqual((path/'dms/fixture').read_bytes(),(name+'-original').encode())
                 (roots['config']/'dms/fixture').write_bytes(b'user changed after migration')
-                self.assertEqual(migration.directory_migration(roots,'v2.0.0-7',Path(os.environ['GREYWARD_DMS20_BINARY'])),backup)
+                self.assertEqual(migration.directory_migration(roots,'v2.0.0-8',Path(os.environ['GREYWARD_DMS20_BINARY'])),backup)
             self.assertEqual((backup/'config/DankMaterialShell/fixture').read_bytes(),b'config-original')
             self.assertEqual((roots['config']/'dms/fixture').read_bytes(),b'user changed after migration')
 
     @unittest.skipUnless(os.name == 'posix' and __import__('shutil').which('jq'), 'native Bash/jq pin fixture')
     def test_session_pin_seed_uses_selected_generation_and_preserves_choices(self):
         import shlex
-        for release, name in (('v1.6.2-26','DankMaterialShell'),('v2.0.0-7','dms')):
+        for release, name in (('v1.6.2-26','DankMaterialShell'),('v2.0.0-7','dms'),('v2.0.0-8','dms'),('v2.0.0-19','dms')):
             with self.subTest(release=release), tempfile.TemporaryDirectory() as directory:
                 base=Path(directory); state=base/'state';(state/name).mkdir(parents=True)
                 selected=base/'selector';selected.write_text(release+'\n')
                 source=(ROOT/'environment/session/greyward-dms-session-migrate').read_text()
-                source=source.replace('/usr/local/libexec/greyward-dms-state-migrate', 'true')
+                helper=base/'layout-query.sh'
+                helper.write_text('#!/bin/bash\nif [[ "${1:-}" == --print-directory ]]; then echo '+name+'; fi\n')
+                helper.chmod(0o755)
+                source=source.replace('/usr/local/libexec/greyward-dms-state-migrate',shlex.quote(str(helper)))
                 source=source.replace('/etc/greyward/dms-release', shlex.quote(str(selected)))
                 script=base/'migrate.sh';script.write_text(source)
                 target=state/name/'session.json';target.write_text('{"barPinnedApps":[]}')
@@ -160,11 +163,19 @@ class StateMigration(unittest.TestCase):
                 target.write_text('{}')
                 subprocess.run(['bash',str(script)],env=env,check=True)
                 expected=['brave-browser','com.raggesilver.BlackBox','io.github.lgse.Strata']
-                if release=='v2.0.0-7':
+                if migration.release_line(release)=='2.0':
                     expected.append('dms_settings')
                 expected.append('io.github.kolunmi.Bazaar')
                 self.assertEqual(json.loads(target.read_text())['barPinnedApps'],expected)
                 self.assertFalse((state/('dms' if name=='DankMaterialShell' else 'DankMaterialShell')).exists())
+
+
+    def test_upstream_layout_survives_package_generation_changes(self):
+        for version in ('v2.0.0-7','v2.0.0-8','v2.0.0-19'):
+            self.assertEqual(migration.release_line(version),'2.0')
+        self.assertEqual(migration.release_line('v1.6.2-26'),'1.6')
+        for version in ('v2.1.0-1','v2.0.0-0','v2.0.0-08','../v2.0.0-8',None):
+            with self.assertRaises(ValueError):migration.release_line(version)
 
 
 if __name__ == '__main__':

@@ -16,6 +16,7 @@ except ImportError:  # Windows-only syntax/unit-test environments
 import re
 import signal
 import stat
+import struct
 import subprocess
 import tempfile
 import threading
@@ -23,7 +24,8 @@ import uuid
 from pathlib import Path
 from typing import Any, Mapping
 
-from .clamav import DATABASE_DIRS, _version, status as clamav_status
+from .clamav import DATABASE_DIRS, _version, cached_status as clamav_status
+from . import scan_cache
 from .telemetry import TelemetryError, TelemetryStore, event, record_event, stamp
 
 SCAN_STATES = {"QUEUED", "SCANNING", "FINALIZING", "COMPLETED", "PARTIAL", "CANCELLED", "INTERRUPTED", "FAILED"}
@@ -84,9 +86,80 @@ def _hash_file(path: Path) -> tuple[int | None, str | None]:
                 pass
 
 
+def _hash_descriptor(descriptor: int) -> tuple[int, str]:
+    """Hash the exact scanned inode, without reopening its mutable pathname."""
+    digest, offset = hashlib.sha256(), 0
+    while True:
+        chunk = os.pread(descriptor, 1024 * 1024, offset)
+        if not chunk:
+            return offset, digest.hexdigest()
+        digest.update(chunk)
+        offset += len(chunk)
+
+
+def _scan_xattr(source, name):
+    if not hasattr(os, 'getxattr'):
+        return None  # Non-Linux unit-test hosts; Fedora has xattr support.
+    import errno
+    try:
+        return os.getxattr(source, name)
+    except OSError as error:
+        if error.errno in {errno.ENODATA, errno.ENOTSUP, errno.EOPNOTSUPP}:
+            return None
+        raise PermissionError('The source access metadata could not be verified.') from error
+
+
+def _reject_protected_scan(source):
+    context = _scan_xattr(source, 'security.selinux')
+    fields = context.split(b':') if context else []
+    if len(fields) > 2 and (fields[2].startswith(b'greyward_as_resource_')
+            or fields[2] in {b'greyward_as_auth_runtime_t', b'greyward_as_auth_shm_t'}):
+        raise PermissionError('Ordinary scanning does not read Protected Data resources.')
+
+
+def _caller_can_search(path, metadata, uid):
+    """Apply caller DAC/ACL traversal before root opens a selected inode.
+
+    Ownership of the leaf is insufficient when an ancestor is private to a
+    different account. Named POSIX ACL entries must retain their normal effect.
+    """
+    if uid in (None, 0):
+        return True
+    acl = _scan_xattr(path, 'system.posix_acl_access')
+    if acl:
+        if len(acl) < 4 or (len(acl) - 4) % 8 or struct.unpack('<I', acl[:4])[0] != 2:
+            return False
+        entries = list(struct.iter_unpack('<HHI', acl[4:]))
+        mask = next((perm for tag, perm, _ in entries if tag == 16), 7)
+        if metadata.st_uid == uid:
+            return bool(next((perm for tag, perm, _ in entries if tag == 1), 0) & 1)
+        named = next((perm for tag, perm, identity in entries if tag == 2 and identity == uid), None)
+        if named is not None:
+            return bool(named & mask & 1)
+    else:
+        if metadata.st_uid == uid:
+            return bool(metadata.st_mode & stat.S_IXUSR)
+        entries = [(4, (metadata.st_mode >> 3) & 7, 0), (32, metadata.st_mode & 7, 0)]
+        mask = 7
+    try:
+        account = pwd.getpwuid(uid)
+        groups = set(os.getgrouplist(account.pw_name, account.pw_gid))
+    except (KeyError, OSError, AttributeError):
+        groups = set()
+    matched = [perm for tag, perm, identity in entries
+               if (tag == 4 and metadata.st_gid in groups) or (tag == 8 and identity in groups)]
+    if matched:
+        return bool(mask & 1 and any(perm & 1 for perm in matched))
+    return bool(next((perm for tag, perm, _ in entries if tag == 32), 0) & 1)
+
+
 def _safe_path(raw: str, *, owner_uid: int | None = None, directory: bool = False) -> Path:
-    if not isinstance(raw, str) or not raw.strip():
+    if not isinstance(raw, str) or not raw.strip() or len(raw) > 4096 or "\0" in raw:
         raise ValueError("Symlinks and empty paths are not valid scan sources.")
+    try:
+        raw.encode('utf-8', errors='strict')
+    except UnicodeError as error:
+        raise ValueError('The selected filename cannot be represented by the desktop scan interface.') from error
     candidate = Path(raw)
     if not candidate.is_absolute():
         raise ValueError("The selected source must be an absolute path.")
@@ -106,8 +179,12 @@ def _safe_path(raw: str, *, owner_uid: int | None = None, directory: bool = Fals
     current = Path(candidate.anchor)
     for part in candidate.parts[1:]:
         current /= part
-        if current.is_symlink():
+        metadata = current.lstat()
+        if stat.S_ISLNK(metadata.st_mode):
             raise ValueError("Symlinks and empty paths are not valid scan sources.")
+        _reject_protected_scan(current)
+        if stat.S_ISDIR(metadata.st_mode) and not _caller_can_search(current, metadata, owner_uid):
+            raise PermissionError('The selected source is not accessible to the requesting user.')
     try:
         resolved = candidate.resolve(strict=True)
     except (FileNotFoundError, OSError, RuntimeError) as error:
@@ -122,7 +199,7 @@ def _safe_path(raw: str, *, owner_uid: int | None = None, directory: bool = Fals
         metadata = resolved.stat()
         if metadata.st_uid != owner_uid:
             raise PermissionError("The selected source is not owned by the requesting user.")
-        required = stat.S_IRUSR | (stat.S_IXUSR if directory else 0)
+        required = stat.S_IRUSR | (stat.S_IXUSR if stat.S_ISDIR(metadata.st_mode) else 0)
         if metadata.st_mode & required != required:
             raise PermissionError("The selected source is not readable by the requesting user.")
     return resolved
@@ -135,7 +212,7 @@ def _safe_detected_file(raw: str) -> Path:
     be checked again at that boundary instead of trusting a path emitted by a
     scanner or a persisted record.
     """
-    if not isinstance(raw, str) or not raw.strip():
+    if not isinstance(raw, str) or not raw.strip() or len(raw) > 4096 or "\0" in raw:
         raise ValueError("The detected source is unavailable.")
     candidate = Path(raw)
     if not candidate.is_absolute():
@@ -154,17 +231,25 @@ def _safe_detected_file(raw: str) -> Path:
     return resolved
 
 
-def _open_readonly_nofollow(path: Path) -> int:
+def _open_readonly_nofollow(path: Path, *, scan_uid=None, scan_access=False) -> int:
     """Open a regular-file source without allowing a raced path alias."""
-    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0)
     if os.open in getattr(os, "supports_dir_fd", set()):
         directory_fd = os.open(path.anchor, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0))
         try:
             parts = path.parts[1:]
             for part in parts[:-1]:
+                if scan_access:
+                    _reject_protected_scan(directory_fd)
+                    if not _caller_can_search(directory_fd, os.fstat(directory_fd), scan_uid):
+                        raise PermissionError('The selected source is not accessible to the requesting user.')
                 next_fd = os.open(part, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0), dir_fd=directory_fd)
                 os.close(directory_fd)
                 directory_fd = next_fd
+            if scan_access:
+                _reject_protected_scan(directory_fd)
+                if not _caller_can_search(directory_fd, os.fstat(directory_fd), scan_uid):
+                    raise PermissionError('The selected source is not accessible to the requesting user.')
             return os.open(parts[-1], flags, dir_fd=directory_fd)
         finally:
             try:
@@ -261,28 +346,124 @@ class FileSecurityManager:
         self._pending_quarantines: dict[str, dict[str, Any]] = {}
         self._pending_restores: dict[str, dict[str, Any]] = {}
 
-    def record_legacy_result(self, path: str, result: dict) -> None:
+    def _owned_scan(self, operation_id: str, owner_uid: int | None) -> dict | None:
+        value = self.store.get_file_scan(operation_id)
+        if value and (owner_uid is None or value.get("owner_uid") == owner_uid):
+            return value
+        return None
+
+    def scan_info(self, raw: str, *, owner_uid: int) -> dict:
+        # Authorize before touching a receipt or probing a foreign pathname.
+        path = _safe_path(raw, owner_uid=owner_uid)
+        info = clamav_status()
+        key = scan_cache.generation(info)
+        value = scan_cache.lookup(self.store, owner_uid, path, key, info.get("status") == "CURRENT" and bool(key))
+        if 'database_version' in value:
+            value['scan_generation'] = value.pop('database_version')
+        value['database_version'] = info.get('database_version')
+        value['scanner_version'] = info.get('engine_version')
+        return value
+
+    def scan_infos(self, paths, *, owner_uid: int) -> list:
+        if not isinstance(paths, list) or not 1 <= len(paths) <= 32 or any(
+                not isinstance(p, str) or len(p) > 4096 for p in paths):
+            raise ValueError('Select up to 32 file paths.')
+        values = []
+        for raw in paths:
+            try:
+                value = self.scan_info(raw, owner_uid=owner_uid)
+            except (OSError, ValueError, PermissionError):
+                value = {'state': 'UNAVAILABLE', 'validity': 'UNKNOWN'}
+            values.append({'path': raw, 'info': value})
+        return values
+
+    def _owned_detection(self, detection_id: str, actor_uid: int) -> dict:
+        value = self.store.get_file_detection(detection_id)
+        if not value or (actor_uid != 0 and not self._owned_scan(value.get("operation_id", ""), actor_uid)):
+            raise ValueError("The detection is no longer available.")
+        return value
+
+    @staticmethod
+    def _scan_handles(sources, owner_uid, folder):
+        """Pin caller-owned regular files; never hand mutable paths to root's scanner.
+
+        The descriptor paths are explicit scan arguments, not links discovered
+        during a recursive walk. Child aliases and foreign entries are skipped.
+        A bounded selection which cannot be covered is reported as partial.
+        """
+        handles, aliases, before, pending, skipped = [], {}, {}, list(sources), 0
+        visited = 0
+        try:
+            while pending:
+                source = pending.pop()
+                visited += 1
+                if visited > 8192 or len(handles) >= 4096:
+                    skipped += len(pending) + 1
+                    break
+                try:
+                    metadata = source.lstat()
+                    _safe_path(str(source), owner_uid=owner_uid, directory=stat.S_ISDIR(metadata.st_mode))
+                    if stat.S_ISDIR(metadata.st_mode) and folder:
+                        with os.scandir(source) as children:
+                            for child in children:
+                                if len(pending) + visited > 8192:
+                                    skipped += 1
+                                    break
+                                pending.append(Path(child.path))
+                        continue
+                    if not stat.S_ISREG(metadata.st_mode):
+                        skipped += 1
+                        continue
+                    descriptor = _open_readonly_nofollow(source, scan_uid=owner_uid, scan_access=True)
+                    metadata = os.fstat(descriptor)
+                    try:
+                        _reject_protected_scan(descriptor)
+                    except PermissionError:
+                        os.close(descriptor)
+                        raise
+                    if not stat.S_ISREG(metadata.st_mode) or (owner_uid is not None and metadata.st_uid != owner_uid):
+                        os.close(descriptor)
+                        skipped += 1
+                        continue
+                    handles.append(descriptor)
+                    aliases[f'/proc/self/fd/{descriptor}'] = str(source)
+                    before[str(source)] = scan_cache.fingerprint(source)
+                except (OSError, ValueError):
+                    skipped += 1
+            return handles, aliases, before, skipped
+        except BaseException:
+            for descriptor in handles:
+                os.close(descriptor)
+            raise
+
+    def record_legacy_result(self, path: str, result: dict, *, owner_uid: int | None = None) -> None:
         """Put the synchronous scan entry point in the existing scan/detection store."""
         operation_id = "scan-" + uuid.uuid4().hex
         state = result.get("state")
         current = stamp()
         self.store.create_file_scan({
-            "operation_id": operation_id, "mode": "FILE", "scope": {"label": Path(path).name},
+            "operation_id": operation_id, "owner_uid": owner_uid, "mode": "FILE", "scope": {"label": Path(path).name},
             "state": "COMPLETED" if state in {"CLEAN", "THREAT"} else "FAILED",
             "phase": "COMPLETED" if state in {"CLEAN", "THREAT"} else "FAILED",
             "started_at": current, "ended_at": current, "files_inspected": int(state in {"CLEAN", "THREAT"}),
             "detection_count": int(state == "THREAT"), "detail": result.get("detail", "Scan finished."),
         })
         self.store.update_file_scan(operation_id, ended_at=current)
+        receipt = result.get('_receipt') or {}
+        if receipt:
+            scan_cache.save(self.store, owner_uid, Path(path), receipt.get('fingerprint'),
+                scan_cache.fingerprint(Path(path)), receipt.get('generation'),
+                str(state) if state in {'CLEAN', 'THREAT'} else 'PARTIAL', operation_id, current)
+
         if self.on_change:
             self.on_change()
         if state != "THREAT":
             return
         original = str(Path(path).absolute())
-        size, file_hash = _hash_file(Path(original))
+        size, file_hash = (receipt.get("file_size"), receipt.get("file_hash")) if receipt else _hash_file(Path(original))
         # Repeated entry-point requests must not create duplicate unresolved alerts.
         if any(x.get("file_ref") == _file_ref(original) and x.get("file_hash") == file_hash
-               and x.get("state") in {"DETECTED", "QUARANTINE_FAILED"} for x in self.detections()):
+               and x.get("state") in {"DETECTED", "QUARANTINE_FAILED"} for x in self.detections(owner_uid=owner_uid)):
             return
         self.store.upsert_file_detection({
             "detection_id": "det-" + uuid.uuid4().hex, "operation_id": operation_id,
@@ -326,38 +507,53 @@ class FileSecurityManager:
         )
         return True
 
-    def reconcile_interrupted_scans(self, limit: int = 64) -> list[dict[str, Any]]:
+    def reconcile_interrupted_scans(self, limit: int = 64, *, owner_uid: int | None = None) -> list[dict[str, Any]]:
         """Return recent scans after durably reconciling orphaned workers."""
-        for item in self.store.list_file_scans(limit):
+        for item in self.store.list_file_scans(limit, owner_uid=owner_uid):
             if item.get("state") in {"QUEUED", "SCANNING", "FINALIZING"}:
                 self._mark_interrupted_if_orphaned(str(item.get("operation_id")))
-        return self.store.list_file_scans(limit)
+        return self.store.list_file_scans(limit, owner_uid=owner_uid)
 
-    def start(self, mode: str, paths: list[str] | None = None, *, owner_uid: int | None = None, authorized_system: bool = False) -> dict[str, Any]:
+    def start(self, mode: str, paths: list[str] | None = None, *, owner_uid: int | None = None, authorized_system: bool = False, background: bool = False) -> dict[str, Any]:
+        # Async compatibility callers and D-Bus actions share one scan owner.
+        with self._lock:
+            return self._start(mode, paths, owner_uid=owner_uid,
+                authorized_system=authorized_system, background=background)
+
+    def _start(self, mode, paths, *, owner_uid, authorized_system, background):
         mode = str(mode or "").upper()
         paths = paths or []
         if mode not in MODES:
             raise ValueError("Unsupported scan mode.")
-        if self._active():
+        active = self._active()
+        if active:
+            previous = self._owned_scan(active, owner_uid)
+            if not background and previous and previous.get('scope', {}).get('background'):
+                self.cancel(active, owner_uid=owner_uid)
             raise RuntimeError("A file security scan is already running.")
         if mode == "SYSTEM":
             if not authorized_system:
                 raise PermissionError("System scanning requires authorization.")
             scope = {"label": "Local system files", "roots": ["/"]}
         else:
-            if len(paths) != 1:
-                raise ValueError("Select exactly one file or folder.")
+            if not isinstance(paths, list) or not 1 <= len(paths) <= (64 if mode == "FILE" else 1):
+                raise ValueError("Select one folder or up to 64 files.")
             selected = _safe_path(paths[0], owner_uid=owner_uid, directory=mode == "FOLDER")
             if mode == "FILE" and not selected.is_file():
                 raise ValueError("The selected source is not a regular file.")
-            scope = {"label": selected.name or str(selected), "path": str(selected), "kind": mode.lower()}
+            selected_paths = [str(_safe_path(raw, owner_uid=owner_uid)) for raw in paths] if mode == "FILE" else [str(selected)]
+            if mode == "FILE" and any(not Path(raw).is_file() for raw in selected_paths):
+                raise ValueError("Select regular files only.")
+            scope = {"label": selected.name if len(selected_paths) == 1 else f"{len(selected_paths)} files",
+                     "path": str(selected), "paths": selected_paths, "kind": mode.lower()}
+        scope['background'] = bool(background)
         info = clamav_status()
         if info.get("status") != "CURRENT" or not info.get("engine_version"):
             raise RuntimeError("ClamAV scanning is unavailable until its engine and current security database are available.")
         operation_id = "scan-" + uuid.uuid4().hex
         current = stamp()
         self.store.create_file_scan({
-            "operation_id": operation_id, "mode": mode, "scope": scope, "state": "QUEUED", "phase": "QUEUED",
+            "operation_id": operation_id, "owner_uid": owner_uid, "mode": mode, "scope": scope, "state": "QUEUED", "phase": "QUEUED",
             "started_at": current, "scanner_version": info.get("engine_version"), "database_version": info.get("database_version"),
             "detail": "Waiting for the scanner.",
         })
@@ -367,7 +563,9 @@ class FileSecurityManager:
         threading.Thread(target=self._run, args=(operation_id, mode, scope, cancel), name="greyward-file-scan", daemon=True).start()
         return self.store.get_file_scan(operation_id) or {"operation_id": operation_id, "state": "QUEUED"}
 
-    def cancel(self, operation_id: str) -> dict[str, Any] | None:
+    def cancel(self, operation_id: str, *, owner_uid: int | None = None) -> dict[str, Any] | None:
+        if not self._owned_scan(operation_id, owner_uid):
+            return None
         with self._lock:
             token = self._cancel.get(operation_id)
             process = self._process.get(operation_id)
@@ -381,15 +579,17 @@ class FileSecurityManager:
                     pass
         return self.store.get_file_scan(operation_id)
 
-    def status(self, operation_id: str) -> dict[str, Any] | None:
+    def status(self, operation_id: str, *, owner_uid: int | None = None) -> dict[str, Any] | None:
+        if not self._owned_scan(operation_id, owner_uid):
+            return None
         self._mark_interrupted_if_orphaned(operation_id)
         value = self.store.get_file_scan(operation_id)
         if value:
-            value["detections"] = self.store.list_file_detections(operation_id=operation_id) if hasattr(self.store, "list_file_detections") else []
+            value["detections"] = self.store.list_file_detections(operation_id=operation_id, owner_uid=owner_uid) if hasattr(self.store, "list_file_detections") else []
         return value
 
-    def detections(self, *, state: str | None = None, limit: int = 128) -> list[dict[str, Any]]:
-        records = self.store.list_file_detections(state=state, limit=limit)
+    def detections(self, *, state: str | None = None, limit: int = 128, owner_uid: int | None = None) -> list[dict[str, Any]]:
+        records = self.store.list_file_detections(state=state, limit=limit, owner_uid=owner_uid)
         for record in records:
             if record.get("state") != "DETECTED":
                 continue
@@ -416,8 +616,10 @@ class FileSecurityManager:
                 pass
         return records
 
-    def activity(self, limit: int = 64) -> list[dict[str, Any]]:
+    def activity(self, limit: int = 64, *, owner_uid: int | None = None) -> list[dict[str, Any]]:
         try:
+            if owner_uid is not None:
+                return file_activity_items(self.store.file_scan_activity(owner_uid, limit), limit)
             values = self.store.query({"category": "FILE_SECURITY", "limit": max(1, min(128, int(limit)))})
             return file_activity_items(values.get("events", []), limit)
         except (OSError, TelemetryError, TypeError, ValueError):
@@ -502,7 +704,7 @@ class FileSecurityManager:
 
     def prepare_quarantine(self, detection_id: str, *, actor_uid: int = 0) -> dict[str, Any]:
         """Copy and publish a quarantine object, leaving home mutation to the user bus."""
-        detection = self.store.get_file_detection(detection_id)
+        detection = self._owned_detection(detection_id, actor_uid)
         if not detection:
             raise ValueError("The detection is no longer available.")
         if detection.get("state") == "QUARANTINED":
@@ -537,7 +739,7 @@ class FileSecurityManager:
             raise
 
     def complete_quarantine(self, detection_id: str, *, actor_uid: int = 0) -> dict[str, Any]:
-        detection = self.store.get_file_detection(detection_id)
+        detection = self._owned_detection(detection_id, actor_uid)
         if not detection:
             raise ValueError("The detection is no longer available.")
         if detection.get("state") == "QUARANTINED":
@@ -586,7 +788,7 @@ class FileSecurityManager:
         return None
 
     def fail_quarantine(self, detection_id: str, detail: str, *, actor_uid: int = 0) -> dict[str, Any]:
-        detection = self.store.get_file_detection(detection_id)
+        detection = self._owned_detection(detection_id, actor_uid)
         if not detection:
             raise ValueError("The detection is no longer available.")
         pending = self._find_pending_quarantine(detection_id) or {}
@@ -627,7 +829,7 @@ class FileSecurityManager:
 
     def prepare_restore(self, detection_id: str, destination: str | None = None, *, actor_uid: int = 0) -> dict[str, Any]:
         """Stage a verified object in /run; the user session creates the home file."""
-        detection = self.store.get_file_detection(detection_id)
+        detection = self._owned_detection(detection_id, actor_uid)
         if not detection or detection.get("state") not in {"QUARANTINED", "QUARANTINE_FAILED"}:
             raise ValueError("Only a quarantined detection can be restored.")
         quarantine_id = str(detection.get("quarantine_id") or "")
@@ -659,7 +861,7 @@ class FileSecurityManager:
             raise
 
     def complete_restore(self, detection_id: str, destination: str, *, actor_uid: int = 0) -> dict[str, Any]:
-        detection = self.store.get_file_detection(detection_id)
+        detection = self._owned_detection(detection_id, actor_uid)
         with self._lock:
             pending = dict(self._pending_restores.get(detection_id) or {})
         if not detection or not pending:
@@ -687,7 +889,7 @@ class FileSecurityManager:
         return result
 
     def fail_restore(self, detection_id: str, detail: str, *, actor_uid: int = 0) -> dict[str, Any]:
-        detection = self.store.get_file_detection(detection_id)
+        detection = self._owned_detection(detection_id, actor_uid)
         if not detection:
             raise ValueError("The detection is no longer available.")
         result = self.store.upsert_file_detection({**detection, "state": "RESTORE_FAILED", "last_error": str(detail)[:320]})
@@ -710,7 +912,7 @@ class FileSecurityManager:
             raise
 
     def restore_detection(self, detection_id: str, destination: str | None = None, *, actor_uid: int = 0) -> dict[str, Any]:
-        detection = self.store.get_file_detection(detection_id)
+        detection = self._owned_detection(detection_id, actor_uid)
         if not detection or detection.get("state") not in {"QUARANTINED", "QUARANTINE_FAILED"}:
             raise ValueError("Only a quarantined detection can be restored.")
         quarantine_id = detection.get("quarantine_id")
@@ -765,7 +967,7 @@ class FileSecurityManager:
             raise
 
     def delete_detection(self, detection_id: str, *, actor_uid: int = 0) -> dict[str, Any]:
-        detection = self.store.get_file_detection(detection_id)
+        detection = self._owned_detection(detection_id, actor_uid)
         if not detection or not detection.get("quarantine_id"):
             raise ValueError("Move the detection to quarantine before deleting it.")
         quarantine_id = str(detection["quarantine_id"])
@@ -801,7 +1003,11 @@ class FileSecurityManager:
         # Keep OK lines so the inspected-file counter reflects real scanner
         # progress. The frontend still receives only bounded counters and
         # detections, never the raw stream.
-        command = ["clamscan", "--no-summary", "--verbose"]
+        sources = [Path(raw) for raw in scope.get("paths", [str(path)])]
+        before = {str(source): scan_cache.fingerprint(source) for source in sources} if mode != "SYSTEM" else {}
+        operation = self.store.get_file_scan(operation_id) or {}
+        command = ["clamscan", "--no-summary", "--verbose", "--follow-file-symlinks=0",
+                   "--follow-dir-symlinks=0", "--alert-exceeds-max=yes", "--max-filesize=256M", "--max-scansize=512M"]
         if mode in {"FOLDER", "SYSTEM"}:
             command.extend(["--recursive"])
         if mode == "SYSTEM":
@@ -809,18 +1015,35 @@ class FileSecurityManager:
             # scan from walking into network, removable, container, or other
             # separately mounted filesystems.
             command.extend(["--cross-fs=no", *_system_exclude_args()])
-        command.extend(["--", str(path)])
+        command.extend(["--", *(str(source) for source in sources)])
         self.store.update_file_scan(operation_id, state="SCANNING", phase="SCANNING", detail="Scanning selected files.", scanner_version=info.get("engine_version"), database_version=info.get("database_version"))
         self._emit(operation_id, "FILE_SCAN_STARTED", "IN_PROGRESS", "File scan started.", "INFO")
         inspected = errors = skipped = detections = 0
         inspected_paths: set[str] = set()
+        results: dict[str, str] = {}
+        incomplete_reasons: dict[str, str] = {}
         detection_paths: set[str] = set()
         error_paths: set[str] = set()
         process = None
+        handles, aliases, file_before = [], {}, {}
         watchdog_stop = threading.Event()
         timeout_expired = threading.Event()
         try:
-            process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, errors="replace", bufsize=1, start_new_session=True, env={**os.environ, "LC_ALL": "C", "LANG": "C"})
+            if mode != "SYSTEM" and os.name == "posix":
+                handles, aliases, file_before, skipped = self._scan_handles(sources, operation.get("owner_uid"), mode == "FOLDER")
+                command = command[:command.index("--")]
+                command = [arg for arg in command if arg != "--recursive"]
+                command[command.index("--follow-file-symlinks=0")] = "--follow-file-symlinks=2"
+                if not handles:
+                    if skipped:
+                        raise OSError("The selection contains no readable, caller-owned regular files.")
+                    # An empty directory is a valid zero-file observation.
+                    self.store.update_file_scan(operation_id, state="COMPLETED", phase="COMPLETED", ended_at=stamp(), files_inspected=0, detail="The selected folder contains no regular files.")
+                    for source in sources:
+                        scan_cache.save(self.store, operation.get("owner_uid"), source, before.get(str(source)), scan_cache.fingerprint(source), scan_cache.generation(info), "CLEAN", operation_id, stamp())
+                    return
+                command.extend(["--", *aliases])
+            process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, errors="replace", bufsize=1, start_new_session=True, pass_fds=tuple(handles), env={**os.environ, "LC_ALL": "C", "LANG": "C"})
             with self._lock:
                 self._process[operation_id] = process
 
@@ -849,13 +1072,33 @@ class FileSecurityManager:
                 found = _parse_found(line)
                 if found:
                     original, detection_name = found
+                    descriptor_path = original
+                    if aliases:
+                        if original not in aliases:
+                            continue
+                        original = aliases[original]
+                    if detection_name.startswith("Heuristics.Limits.Exceeded"):
+                        skipped += 1
+                        results[original] = "PARTIAL"
+                        incomplete_reasons[original] = 'ENGINE_LIMIT'
+                        continue
+                    results[original] = "THREAT"
                     if original not in inspected_paths:
                         inspected_paths.add(original)
                         inspected += 1
                     if original in detection_paths:
                         continue
                     detection_paths.add(original)
-                    size, file_hash = _hash_file(Path(original))
+                    size, file_hash = (_hash_descriptor(int(descriptor_path.rsplit('/', 1)[1]))
+                        if aliases else _hash_file(Path(original)))
+                    existing = next((item for item in self.store.list_file_detections(
+                        owner_uid=operation.get('owner_uid'), limit=256)
+                        if file_hash and item.get('file_ref') == _file_ref(original)
+                        and item.get('file_hash') == file_hash
+                        and item.get('state') in {'DETECTED', 'QUARANTINE_FAILED'}), None)
+                    if existing:
+                        detections += 1
+                        continue
                     detection_id = "det-" + uuid.uuid4().hex
                     self.store.upsert_file_detection({
                         "detection_id": detection_id, "operation_id": operation_id, "original_path": original,
@@ -865,8 +1108,14 @@ class FileSecurityManager:
                     })
                     detections += 1
                     self._emit(operation_id, "FILE_DETECTION", "DETECTED", detection_name, "WARNING", details={"detection_id": detection_id, "file_ref": _file_ref(original)})
-                elif line.strip().endswith(": OK"):
-                    original = line.strip()[:-3].rstrip()
+                elif line.strip().endswith((": OK", ": Empty file")):
+                    suffix = ": OK" if line.strip().endswith(": OK") else ": Empty file"
+                    original = line.strip()[:-len(suffix)]
+                    if aliases:
+                        if original not in aliases:
+                            continue
+                        original = aliases[original]
+                    results.setdefault(original, "CLEAN")
                     if original and original not in inspected_paths:
                         inspected_paths.add(original)
                         inspected += 1
@@ -885,13 +1134,32 @@ class FileSecurityManager:
                 state = "PARTIAL" if inspected or detections else "FAILED"
                 phase, detail = state, "ClamAV did not complete the scan within the allowed time."
             elif return_code == 0:
-                state, phase, detail = "COMPLETED", "COMPLETED", "No known threats were found." if not detections else "Scan completed with detections."
-            elif return_code == 1:
-                state = "PARTIAL" if errors or not detections else "COMPLETED"
+                state = "PARTIAL" if errors or skipped else "COMPLETED"
                 phase = state
-                detail = "Scan completed with detections." if detections and not errors else "ClamAV reported a detection, but no actionable detection record could be created." if not errors else "Scan completed with errors."
+                detail = "Some files could not be fully inspected." if errors or skipped else "No known threats were found." if not detections else "Scan completed with detections."
+            elif return_code == 1:
+                state = "PARTIAL" if errors or skipped or not detections else "COMPLETED"
+                phase = state
+                detail = "Some sources exceeded scanner or scope limits and were not fully inspected." if skipped else "Scan completed with detections." if detections and not errors else "ClamAV reported a detection, but no actionable detection record could be created." if not errors else "Scan completed with errors."
             else:
                 state, phase, detail = "PARTIAL" if inspected or detections else "FAILED", "FAILED", "ClamAV could not complete the scan."
+            if mode != "SYSTEM":
+                generation = scan_cache.generation(clamav_status())
+                for raw, original_fingerprint in file_before.items():
+                    scan_cache.save(self.store, operation.get("owner_uid"), Path(raw), original_fingerprint,
+                        scan_cache.fingerprint(Path(raw)), scan_cache.generation(info),
+                        results.get(raw, "PARTIAL") if generation == scan_cache.generation(info) else "PARTIAL", operation_id, stamp(),
+                        reason=incomplete_reasons.get(raw) if generation == scan_cache.generation(info) else None)
+                for source in sources:
+                    after = scan_cache.fingerprint(source)
+                    receipt_state = (results.get(str(source), "PARTIAL") if mode == "FILE"
+                        else ("THREAT" if detections else "CLEAN") if state == "COMPLETED" else "PARTIAL")
+                    if before.get(str(source)) != after or generation != scan_cache.generation(info):
+                        state, phase, detail = "PARTIAL", "PARTIAL", "The selection or definitions changed during scanning; scan again."
+                        receipt_state = "PARTIAL"
+                    scan_cache.save(self.store, operation.get("owner_uid"), source, before.get(str(source)),
+                        after, scan_cache.generation(info), receipt_state, operation_id, stamp(),
+                        reason=incomplete_reasons.get(str(source)) if generation == scan_cache.generation(info) else None)
             self.store.update_file_scan(operation_id, state=state, phase=phase, ended_at=stamp(), files_inspected=inspected, detection_count=detections, error_count=errors, skipped_count=skipped, detail=detail)
             event_type = {"COMPLETED": "FILE_SCAN_COMPLETED", "CANCELLED": "FILE_SCAN_CANCELLED", "PARTIAL": "FILE_SCAN_PARTIAL"}.get(state, "FILE_SCAN_FAILED")
             outcome = "SUCCESS" if state == "COMPLETED" else state
@@ -906,6 +1174,8 @@ class FileSecurityManager:
             self._emit(operation_id, "FILE_SCAN_FAILED", "FAILURE", type(error).__name__, "ERROR")
         finally:
             watchdog_stop.set()
+            for descriptor in handles:
+                os.close(descriptor)
             self._finish(operation_id)
 
     def _finish(self, operation_id: str) -> None:

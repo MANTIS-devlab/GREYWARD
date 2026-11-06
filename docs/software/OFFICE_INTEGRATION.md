@@ -1,10 +1,12 @@
 # GREYWARD Office integration
 
-Status: the initial integration was accepted on 25 October 2026. Generation 9
-completed the real GitHub build/sign/public DNF pipeline on 27 October. The
-signed remote channel is active on the reference; installed Office applications
-remain at revision 6 until the user applies an update. See the separate
-acceptance records below; this is not a full Office-format compatibility claim.
+Status: the initial integration was accepted on 25 October 2026. Generation 16
+completed the real GitHub build/sign/public DNF pipeline on 6 November. The
+signed remote channel is active on the reference, whose installed Update Center
+provider detects all four new versions without compatibility holds. Installed
+applications remain at generation 9; no forced apply/reboot was performed.
+See the separate acceptance records below; this is not a full Office-format
+compatibility claim or new-version physical desktop acceptance.
 
 ## Ownership and identity
 
@@ -15,14 +17,14 @@ The four independent applications have no suite launcher:
 
 | Upstream stable release | GREYWARD | Package | Desktop / Wayland identity |
 |---|---|---|---|
-| WordCraft 0.11.0 | Writer, blue | greyward-writer | systems.mantis.greyward.Writer |
-| GridCraft 0.12.1 | Sheets, green | greyward-sheets | systems.mantis.greyward.Sheets |
-| PdfCraft 0.14.0 | PDF, red | greyward-pdf | systems.mantis.greyward.PDF |
-| DeckCraft 0.11.1 | Slides, copper | greyward-slides | systems.mantis.greyward.Slides |
+| WordCraft 0.15.2 | Writer, blue | greyward-writer | systems.mantis.greyward.Writer |
+| GridCraft 0.16.1 | Sheets, green | greyward-sheets | systems.mantis.greyward.Sheets |
+| PdfCraft 0.18.2 | PDF, red | greyward-pdf | systems.mantis.greyward.PDF |
+| DeckCraft 0.15.1 | Slides, copper | greyward-slides | systems.mantis.greyward.Slides |
 
-This table describes the published generation-9 source lock from 27 October, not
-the historical revision-6 packages included in 0.5.2. Installed and channel
-acceptance is recorded below; updating a source pin alone is not deployment.
+This table describes the signed generation-16 channel and canonical source lock
+from 6 November, not the installed generation 9 or revision-6 packages in 0.5.2.
+Installed and channel acceptance is recorded separately below.
 
 The application SVG family is `branding/source/greyward-{writer,sheets,pdf,slides}.svg`:
 coordinated graphite tiles with independent blue, green, red and copper marks.
@@ -318,11 +320,13 @@ no desktop interruption or ISO build is part of this commissioning step.
    `candidate.py` permits offset-only changes outside a reviewed adaptation hunk
    only when every original hunk occurs verbatim exactly once. It compares the
    real `git apply` output with those exact transformations, then pins the new
-   immutable source and input hashes. Ambiguous/changed hunks, changed licenses,
-   NOTICE, fonts, MIME definitions or runtime resources block publication.
+   immutable source and input hashes. Ambiguous/changed hunks, changed primary
+   or trademark licenses, fonts, MIME definitions or runtime resources block
+   publication. NOTICE attribution changes follow the policy below.
    New hashes alone are not approval. No fuzzy patching, AI rebasing or automatic
    edits to trusted patches/tests/security policy are allowed. Upstream-native
    theming hooks remain the longer-term way to reduce compatibility exceptions.
+
 4. Build each app in a fresh pinned Fedora 44 container on standard public Linux
    runners; one app job at a time, two compiler jobs and an 8 GiB memory limit.
    Keep toolchains and build caches out of RPMs/ISOs. Benchmark the heaviest app
@@ -348,6 +352,111 @@ no desktop interruption or ISO build is part of this commissioning step.
    repository. Use a dedicated signing subkey kept outside source, short-lived
    runner key material and an explicit rotation/expiry procedure. Initial key
    provisioning is a one-time operator step, not per-version work.
+
+### NOTICE attribution policy — 6 November 2026
+
+**DEPLOYED to the dedicated Office GitHub repository.** `automation/notice.py`
+replaces the blanket NOTICE hash-equality gate. The complete third-party section
+may evolve automatically, including new contributors, credits, resource locations
+and reproduced license notices. The candidate retains the new NOTICE verbatim,
+pins its SHA-256 in `source.json`, records old/new hashes in `decision.json` and
+includes a readable `notice-changes/<application>.diff` in the candidate artifact.
+The existing build and RPM verifier still require that exact notice in the
+installed license directory. Existing published versions remain immutable;
+only a newer upstream version can introduce a new notice hash.
+
+The first-party licensing/trademark statement before the reviewed `Third-party
+material` heading must remain equivalent, allowing whitespace, line endings,
+UTF-8 BOM and leading copyright-year updates. Changed holders, first-party
+conditions, missing/ambiguous section boundaries, empty, binary or oversized
+notices require review. Root LICENSE files and `docs/brand/LICENSE-brand.txt`
+remain separately unchanged; dependency-license and font/runtime-resource gates
+are retained. This deliberately accepts evolution of third-party notices and
+does not attempt to infer legal compatibility from arbitrary prose. It is not
+a guarantee that every third-party licensing change is harmless.
+
+The four official NOTICE changes from generation 9 to WordCraft 0.15.2,
+GridCraft 0.16.1, PdfCraft 0.18.2 and DeckCraft 0.15.1 pass this policy. This
+does not establish that their patches, fonts, dependencies, builds or GUI tests
+are compatible, nor does it publish updated applications. Source preparation
+under the engineering checkout also isolates `git apply` from the parent Git
+repository so it cannot silently skip patches because of a nested path prefix.
+
+Validation: `python3 -m unittest tests.test_office_automation
+tests.test_office_upstream tests.test_office_channel`, the essential repository
+checks, real upstream notice comparisons and component export closure. No
+installation, signing-key change, release publication or ISO is involved.
+
+The preliminary four-file component correction was published as
+`ebcedc770b783b85f6e1e7029a37f88a1bc552bb` on distribution `main`.
+[Component validation](https://github.com/MANTIS-devlab/GREYWARD-office-updates/actions/runs/42127997745)
+passed, including 56 component tests, source closure, workflow lint and source/history
+secret checks. A forced, non-publishing
+[pilot](https://github.com/MANTIS-devlab/GREYWARD-office-updates/actions/runs/42127997607)
+passed NOTICE evaluation and stopped at `Font resource changed; review required`.
+That preliminary pilot did not advance delivery state or publish new applications.
+The subsequent resource/UI recovery below supersedes that blocking source state.
+
+### Upstream resource and UI recovery — 6 November 2026
+
+**PUBLISHED as signed generation 16; offered by Update Center.** The reviewed source lock
+tracks the four versions in the identity table. Their UI/host patches were
+rebased against captured immutable archives, preserving engines, file formats,
+saved preferences and MIME assignments. Dark GREYWARD surfaces and identities
+remain; all four native update commands route to Update Center, with upstream
+startup self-updaters disabled. Writer's interface-theme migration test retains
+saved System/Light/Dark cases and expects Dark only for fresh/unknown preferences.
+
+`resource_inputs.py` owns fixed-origin immutable data records. The candidate
+follows the single `craft-fonts-ref` declared in the selected app release and the
+optional `craft-i18n.rev`, rather than refusing every resource revision. It checks
+unchanged resource root licenses, font manifest paths, every font hash and declared
+OFL notices, refusing unknown font license expressions. New data-source families
+still require initial review. The OCR model selection remains a separate gate;
+unrelated `ATTRIBUTION.toml` changes can update its digest when selected models
+stay identical. Current PdfCraft requires reviewed ONNX models instead of RTEN.
+
+Preparation embeds pinned language catalogs/data with required-input flags;
+only UI catalog keys/values receive the application-name adaptations. Dictionaries
+and license text remain untouched. Fonts/language/dependency notices accompany
+the complete source RPM. Both 128px About/update and 256px window icons are
+generated from canonical GREYWARD vectors. Resource pins, notice hashes and
+candidate provenance remain checked before signing. These data checks do not
+waive patch, engine, GUI, listener, dependency-license or signed-DNF acceptance.
+A new source lock alone does not make updates available.
+
+The first real recovery build exposed Cargo's treatment of unused Git patches:
+`cargo vendor` omits packages in `[[patch.unused]]`, but offline resolution still
+checks their manifest declarations. `vendor_inputs.py` removes only declarations
+proven unused by the pinned lock and absent from the active package graph, with
+matching immutable Git revisions. It preserves both upstream Cargo files in the
+source RPM and records original/prepared hashes. The resolved package graph must
+remain identical; `--locked --offline` and all native tests remain required.
+
+The [production run](https://github.com/MANTIS-devlab/GREYWARD-office-updates/actions/runs/42139608446)
+at reviewed component `5028858` succeeded for the complete family. Writer passes
+DOCX formatting/table save/reopen and PDF rendering; Sheets passes XLSX formulas,
+two sheets, save/reopen and CSV; PDF passes search, annotation, form and page-edit
+save/reopen/render; Slides passes PPTX edit/save/reopen and PDF rendering. All four
+packaged applications start in private X11 containers without TCP/UDP listeners.
+Writer's four saved-theme tests pass. These checks do not exercise physical input,
+printers or new-version preference migration on the reference desktop.
+
+Signed DNF upgrade tests pass from generation 9; packages signed by an untrusted
+key and invalid metadata signatures are rejected in disposable databases, without
+changing the build host's installed packages. Anonymous public asset hash readback,
+signed remote metadata and the stable mirrorlist pass. Both `current` and
+`channelVerified` select `office-f44-x86_64-g16`; only generations 9 and 16 are
+retained. The signed inventory SHA-256 is
+`a4158c35d8ac1dcaa63e3ec9052b6eb3404b9c840d75af7c86338e06c2e61cda`.
+
+At 02:07 UTC on 6 November, the actual installed `update_center.dnf5()` provider
+on the reference reports all four revision-16 updates from `greyward-office`,
+with `update_available=true` and no Office compatibility hold. Only Office
+metadata was refreshed, including the separate daemon cache; the one-shot refresh
+used `greyward-office.metadata_expire=0` and did not change repository configuration.
+The installed applications remain generation 9 and SELinux remains Enforcing.
+No update apply/reboot, physical new-version GUI acceptance or ISO is claimed.
 
 ### GitHub delivery to the existing DNF5 provider
 

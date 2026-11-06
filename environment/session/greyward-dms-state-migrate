@@ -10,6 +10,20 @@ import subprocess
 import tempfile
 
 
+
+def release_line(release):
+    """GREYWARD package generations do not change the pinned upstream layout.
+
+    Actual CLI entrypoints still verify the selected root-owned RPM receipt.
+    A new upstream version needs its own explicit layout review.
+    """
+    if isinstance(release,str) and re.fullmatch(r'v2\.0\.0-[1-9][0-9]*',release):
+        return '2.0'
+    if isinstance(release,str) and re.fullmatch(r'v1\.6\.2-[1-9][0-9]*',release):
+        return '1.6'
+    raise ValueError('Unsupported migration release')
+
+
 def file_map(path):
     return {p.relative_to(path).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest()
             for p in path.rglob('*') if p.is_file() and not p.is_symlink()}
@@ -43,7 +57,7 @@ def directory_migration(roots, release, binary):
     destinations are refused before the upstream merge can move any entries.
     Existing aliases are accepted only when they identify the same tree.
     """
-    if release != 'v2.0.0-7' or set(roots) != {'config', 'state', 'cache', 'data'}:
+    if release_line(release) != '2.0' or set(roots) != {'config', 'state', 'cache', 'data'}:
         raise ValueError('Unreviewed directory migration')
     for base in roots.values():
         old, new = base / 'DankMaterialShell', base / 'dms'
@@ -97,7 +111,7 @@ def directory_migration(roots, release, binary):
 
 def migrate(config, state, cache, system_plugins, release, default_monitors=None,
             protected_authentication=False, previous_plugins=None, experience=None):
-    line = '2.0' if release == 'v2.0.0-7' else '1.6'
+    line = release_line(release)
     marker = config / ('.changelog-' + line)
     first_session = not marker.exists() and not (line == '2.0' and (config / '.changelog-1.6').exists())
     backup = state.parent / 'greyward/dms-migration' / release
@@ -240,6 +254,10 @@ def migrate(config, state, cache, system_plugins, release, default_monitors=None
 
 
 if __name__ == '__main__':
+    import argparse
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--print-directory', action='store_true', help='Read-only verified state-layout query')
+    args = parser.parse_args()
     home = Path.home()
     roots = {name: Path(os.environ.get('XDG_' + name.upper() + '_HOME', default))
              for name, default in [('config', home / '.config'), ('state', home / '.local/state'),
@@ -247,11 +265,15 @@ if __name__ == '__main__':
     release = Path('/etc/greyward/dms-release').read_text().strip()
     selected = subprocess.check_output(['/usr/libexec/greyward-dms-verify', '--selection-only'],
                                        text=True, timeout=30).strip()
-    if not re.fullmatch(r'v1\.6\.2-[1-9][0-9]*', release) and release != 'v2.0.0-7':
-        raise SystemExit('Unsupported migration release')
-    directory = 'DankMaterialShell'
+    line = release_line(release)
+    if Path(selected).name != release:
+        raise SystemExit('Selected DMS changed during migration')
+    directory = 'dms' if line == '2.0' else 'DankMaterialShell'
+    if args.print_directory:
+        print(directory)
+        raise SystemExit(0)
     previous_plugins, experience = None, None
-    if release == 'v2.0.0-7':
+    if line == '2.0':
         import fcntl
         import stat
         lock_parent = roots['state'] / 'greyward/dms-migration'

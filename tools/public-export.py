@@ -70,8 +70,12 @@ def verify_secret_scan(destination):
 
 def snapshot(source, destination):
     source, destination = source.resolve(), destination.resolve()
-    if destination == source or source in destination.parents:
-        raise ValueError('Destination must be outside the private source repository')
+    # Project-owned exports must stay in the ignored local workspace. Never
+    # target sources or the separate, possibly dirty public Git checkout.
+    nested = destination.is_relative_to(source)
+    safe_local = destination.is_relative_to(source / '.local/public-exports') and destination != source / '.local/public-exports'
+    if destination == source or (nested and not safe_local):
+        raise ValueError('Destination must be outside sources or inside .local/public-exports/<new-export>')
     if destination.exists() and any(destination.iterdir()):
         raise ValueError('Destination must be absent or empty')
     policy = json.loads((source / 'tools/publication-policy.json').read_text())

@@ -13,6 +13,8 @@ repository = ModuleType('gi.repository')
 repository.Gtk = SimpleNamespace(Application=object)
 repository.GLib = SimpleNamespace()
 repository.Gdk = SimpleNamespace()
+repository.Gio = SimpleNamespace()
+repository.Pango = SimpleNamespace()
 spec = importlib.util.spec_from_file_location('strata_file_context', ROOT / 'security-center/file-context/greyward-file-context.py')
 companion = importlib.util.module_from_spec(spec)
 with patch.dict(sys.modules, {'gi': gi, 'gi.repository': repository}):
@@ -21,6 +23,9 @@ with patch.dict(sys.modules, {'gi': gi, 'gi.repository': repository}):
 
 class FileActionTests(unittest.TestCase):
     def invoke(self, args, result=None, error=None):
+        if args and args[0] == '--scan' and isinstance(result, dict) and result.get('state') in {'CLEAN', 'THREAT'}:
+            final = {'state': 'COMPLETED', 'detection_count': int(result['state'] == 'THREAT')}
+            result, error = None, [{'operation_id': 'fixture'}, final]
         with patch.object(sys, 'argv', ['greyward-file-context', *args]), \
                 patch.object(companion, 'dbus_call', return_value=result, side_effect=error) as call, \
                 patch.object(companion.subprocess, 'run') as notify:
@@ -60,12 +65,64 @@ class FileActionTests(unittest.TestCase):
     def test_unknown_scan_state_is_not_completed(self):
         code, call, notify = self.invoke(['--scan', '/tmp/a'], {'state': 'UNAVAILABLE'})
         self.assertEqual(code, 1)
-        call.assert_called_once_with('ScanHighRiskPath', '/tmp/a')
+        self.assertEqual(call.call_args.args[0], 'StartScan')
+        self.assertEqual(__import__('json').loads(call.call_args.args[1])['paths'], ['/tmp/a'])
         self.assertEqual(companion.scan_message({}), 'Scan result unavailable')
 
     def test_completed_clean_or_threat_scan_returns_real_outcome(self):
         for state in ['CLEAN', 'THREAT']:
             self.assertEqual(self.invoke(['--scan', '/tmp/a'], {'state': state})[0], 0)
+
+    def test_scan_completion_has_only_the_canonical_publisher(self):
+        for state in ['CLEAN','THREAT']:
+            code, _call, notify = self.invoke(['--scan','/tmp/a'],{'state':state})
+            self.assertEqual(code,0);notify.assert_not_called()
+
+    def test_folder_scan_information_does_not_require_document_provenance(self):
+        from unittest.mock import Mock
+        window = object.__new__(companion.FileContext)
+        window.path = '/folder'
+        for name in ('file_title','path_label','status','security_status','provenance_box','checks_box','safe_box','sharing_box'):
+            setattr(window, name, Mock())
+        window._present_receipt = Mock()
+        window._clear = lambda _box: None
+        window._row = lambda label, value: (label, value)
+        def request(method, *_args):
+            if method == 'GetSummary': return {'state':'PROTECTED'}
+            if method == 'GetFileScanInfo': return {'state':'CLEAN','validity':'VALID','detail':'Current folder scan'}
+            raise AssertionError('Document-only provenance must not be requested for a folder')
+        with patch.object(companion, 'dbus_call', side_effect=request), patch.object(Path, 'is_dir', return_value=True):
+            window._load_context()
+        window.status.set_label.assert_called_with('Current folder scan')
+
+    def test_scan_result_never_promotes_a_stale_receipt(self):
+        from unittest.mock import Mock
+        window = object.__new__(companion.FileContext)
+        window.scanning = False
+        window._last_result = None
+        window._set_result = Mock()
+        for current in ('CLEAN', 'THREAT'):
+            window._present_receipt({'state': current, 'validity': 'STALE'})
+            self.assertEqual(window._set_result.call_args.args[0], 'neutral')
+        window._present_receipt({'state': 'CLEAN', 'validity': 'VALID'})
+        self.assertEqual(window._set_result.call_args.args[:2], ('clean', 'No threats detected'))
+
+    def test_scan_window_never_marks_empty_or_incomplete_counters_clean(self):
+        from unittest.mock import Mock
+        window = object.__new__(companion.FileContext)
+        window._pulse_source = None
+        for attr in ('cancel_button', 'progress', 'scan_button', 'status', '_load_context', '_set_result'):
+            setattr(window, attr, Mock())
+        for inspected, errors, expected in [(0, 0, 'neutral'), (None, 0, 'review'), (2, 1, 'review'), (2, 0, 'clean')]:
+            window._scan_finished({'state': 'CLEAN', 'files_inspected': inspected, 'detection_count': 0, 'skipped_count': 0, 'error_count': errors}, None)
+            self.assertEqual(window._set_result.call_args.args[0], expected)
+
+    def test_cancellation_reaches_the_owning_operation(self):
+        cancellation = __import__('threading').Event()
+        cancellation.set()
+        with patch.object(companion, 'dbus_call', side_effect=[{'operation_id':'fixture'}, {'state':'CANCELLED'}]) as call:
+            self.assertEqual(companion.scan_selection('/tmp/a', cancellation=cancellation)['state'], 'CANCELLED')
+        self.assertEqual(call.call_args.args, ('CancelScan', 'fixture'))
 
 
 if __name__ == '__main__':

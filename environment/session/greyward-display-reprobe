@@ -1,0 +1,79 @@
+#!/usr/bin/python3
+"""Bounded Nouveau connector detection after an authorized USB hub appears.
+
+No user input, display-mode writes, power policy, profile files, or IPC endpoint.
+"""
+from pathlib import Path
+import os
+import re
+import time
+
+SYSFS = Path('/sys')
+EXTERNAL = re.compile(r'card[0-9]+-(?:DP|HDMI-A|DVI-D|DVI-I)-[0-9]+$')
+
+
+def connectors(sysfs=SYSFS):
+    root = sysfs.resolve()
+    result = []
+    for card in sorted((root / 'class/drm').glob('card[0-9]*')):
+        if not re.fullmatch(r'card[0-9]+', card.name):
+            continue
+        try:
+            if (card / 'device/driver').resolve(strict=True).name != 'nouveau':
+                continue
+            if (card / 'device/vendor').read_text().strip() != '0x10de':
+                continue
+            for connector in sorted(card.parent.glob(card.name + '-*')):
+                if not EXTERNAL.fullmatch(connector.name):
+                    continue
+                status = (connector / 'status').resolve(strict=True)
+                if not status.is_relative_to(root) or status.parent.name != connector.name:
+                    continue
+                info = status.stat()
+                if info.st_uid != 0 or info.st_mode & 0o022:
+                    continue
+                result.append(status)
+                if len(result) >= 32:
+                    return result
+        except (OSError, ValueError):
+            continue
+    return result
+
+
+def detect(status):
+    # 'detect' clears no user layout: it asks DRM to re-read connector presence.
+    # Never write 'on', a mode, DPMS, runtime PM, or an authorization attribute.
+    if status.read_text().strip() != 'disconnected':
+        return False
+    status.write_text('detect\n')
+    return True
+
+
+def recover(sysfs=SYSFS, pause=time.sleep, probe=detect):
+    targets = connectors(sysfs)
+    if not targets:
+        return 0
+    pause(1.0)  # Coalesce the USB2/USB3 hub pair and let KVM video routing settle.
+    count = 0
+    for delay in (0, 1.0, 2.0):
+        if delay:
+            pause(delay)
+        for status in targets:
+            try:
+                if probe(status):
+                    count += 1
+            except OSError as error:
+                print(f'Display detection: {status.parent.name}: {error.strerror}', flush=True)
+    return count
+
+
+def main():
+    if os.geteuid() != 0:
+        raise SystemExit('Display detection requires the fixed system service.')
+    count = recover()
+    if count:
+        print(f'Display detection: {count} bounded connector probes; existing display profiles retained.', flush=True)
+
+
+if __name__ == '__main__':
+    main()

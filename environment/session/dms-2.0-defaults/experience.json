@@ -185,7 +185,7 @@
             "size": 42
           },
           {
-            "appsDockIconSizePercentage": 155,
+            "appsDockIconSizePercentage": 180,
             "id": "appsDock",
             "runningAppsCurrentWorkspace": false,
             "appsDockHideIndicators": false,

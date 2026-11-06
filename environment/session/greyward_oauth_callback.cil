@@ -1,0 +1,13 @@
+; Native browser sign-in callback (Codex/ChatGPT); not a generic TCP server grant.
+; Keep selinuxuser_tcp_server disabled. Existing firewall policy is unchanged.
+; SELinux limits the port, not the bind address: the application must bind to
+; loopback. The supported Codex helper is validated on 127.0.0.1:1455.
+(type greyward_oauth_callback_port_t)
+(roletype object_r greyward_oauth_callback_port_t)
+(typeattributeset port_type (greyward_oauth_callback_port_t))
+(typeattributeset unreserved_port_type (greyward_oauth_callback_port_t))
+(portcon tcp 1455 (system_u object_r greyward_oauth_callback_port_t ((s0) (s0))))
+; Session RPMs are installed before protected enrollment creates this domain.
+; Relinking during enrollment activates the rule without changing login mappings.
+(optional greyward_oauth_callback_ordinary
+    (allow greyward_guard_t greyward_oauth_callback_port_t (tcp_socket (name_bind))))

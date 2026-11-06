@@ -459,3 +459,23 @@ inside the logged-in GREYWARD-DEV Fedora session with guest-local
 reports launch phases, startup, route readiness, command activity, revisit
 behavior, and idle CPU/RSS. Harness-only timings are not runtime evidence; the
 measured before/after record is [PERFORMANCE.md](../docs/security-center/PERFORMANCE.md).
+
+
+## Behavioral intelligence — local development
+
+See [behavioral intelligence](../docs/security-center/BEHAVIORAL_INTELLIGENCE.md) for the pinned sensor build, UID-scoped provider, bounded correlation, shared assessments inside Security History/Network Activity, readable native notifications and explicit limits. Test with `PYTHONPATH=security-context python3 -m unittest discover -s security-context/tests -v` and the frontend source contract suites, alongside the existing native Cargo gates. The real WebDriver interaction suite needs its configured native driver; source contracts do not substitute for it.
+
+Network assessment revision 135 adds bounded service-discovery patterns, fresh
+local IP/port reputation validation, safer flow coalescence and verified identity retries and
+separate risk/coverage explanations. See the canonical behavioral intelligence
+contract above. No new updater, privileged interface or enforcement owner is added.
+
+Revision 136 repairs the Network Activity Live poll lifecycle after opening the
+route in History and switching back. A 15-second bounded reassessment refresh
+updates retained scores; row-button focus no longer freezes all list updates.
+This was reproduced against actual ordinary-user traffic and the running window's
+accessibility tree, rather than inferred from synthetic score fixtures.
+
+Revision 137 evaluates exact-instance and explicit application/UID pattern scopes
+in parallel. Partial process attribution must not split one application sweep;
+overlapping scopes contribute once and application evidence is labelled honestly.

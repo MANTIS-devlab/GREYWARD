@@ -1,4 +1,9 @@
 cache/
+# Owner-workstation state and independently audited public repositories.
+/.local/
+/public/
+/public-office-updates/
+/.codex-attachments/
 build/
 output/
 .packer.d/

@@ -3,8 +3,11 @@ Description=GREYWARD transparent desktop icons
 # A wanted service is otherwise ordered before the graphical target, while
 # DMS is ordered after it. Keep the desktop surface after both without a cycle.
 DefaultDependencies=no
-PartOf=graphical-session.target
+PartOf=graphical-session.target greyward-dms.service
 After=graphical-session.target greyward-dms.service
+Requisite=greyward-dms.service
+StartLimitIntervalSec=180
+StartLimitBurst=3
 ConditionEnvironment=WAYLAND_DISPLAY
 ConditionEnvironment=XDG_SESSION_DESKTOP=greyward-labwc
 
@@ -15,7 +18,7 @@ Type=exec
 ExecStartPre=/usr/local/libexec/greyward-dms-runtime-check --desktop-only
 ExecStart=/usr/local/libexec/greyward-desktop-icons
 Restart=on-failure
-RestartSec=3
+RestartSec=5
 
 [Install]
 WantedBy=graphical-session.target

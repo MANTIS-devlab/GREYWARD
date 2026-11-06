@@ -40,6 +40,30 @@ class NotificationTests(unittest.TestCase):
         self.router = NotificationRouter(self.bus, self.dispatch, self.path)
         self.item = {'id': 'usb:one', 'kind': 'usb', 'severity': 'ACTION', 'title': 'Device', 'detail': 'Blocked', 'actions': [{'id': 'trust_once', 'label': 'Trust once'}]}
 
+    def test_behavioral_notice_gauge_deduplicates_and_escalates_without_a_second_publisher(self):
+        from greyward_security_context.intelligence_notices import incident_notices
+        incident = {'id': 'incident-' + 'a' * 24, 'state': 'ACTIVE', 'classification': 'SUSPICIOUS',
+                    'score': 45, 'confidence': 'MEDIUM', 'application': 'Validation', 'timeline': [], 'factors': []}
+        snapshot = {'sensor': {'state': 'ACTIVE'}, 'incidents': [incident]}
+        notice = incident_notices(snapshot)[0]
+        self.router.reconcile([notice]); self.router.reconcile([notice])
+        self.assertEqual(len(self.bus.sent), 1)
+        self.assertNotEqual(self.bus.sent[-1][2], 'greyward-intelligence-45')
+        self.assertEqual(self.bus.sent[-1][6]['image-path'], '/usr/share/icons/hicolor/scalable/apps/greyward-intelligence-45.svg')
+        self.assertIn('45/100', self.bus.sent[-1][3])
+        self.assertEqual(notice['route'], 'history')
+        self.assertEqual(self.bus.sent[-1][6]['x-greyward-threat-score'], 45)
+        self.assertIn('No behavioral block', self.bus.sent[-1][4])
+        self.router._closed(1, 2)
+        self.router.reconcile([notice]); self.assertEqual(len(self.bus.sent), 1)
+        incident.update(classification='HIGH_THREAT', score=80)
+        self.router.reconcile(incident_notices(snapshot))
+        self.assertEqual(len(self.bus.sent), 2)
+        self.assertEqual(self.bus.sent[-1][6]['urgency'], 2)
+        self.router._action(2, 'open')
+        self.assertEqual(self.dispatch.call_args.args[0]['incident_ref'], incident['id'])
+        self.assertEqual(incident_notices({'sensor': {'state': 'ACTIVE'}, 'incidents': []}), [])
+
     def test_review_uses_existing_typed_check_route_and_rejects_unknown_routes(self):
         from greyward_security_context.notification_router import open_route
         with patch('greyward_security_context.notification_router.subprocess.Popen') as launch:
@@ -208,3 +232,22 @@ class NotificationTests(unittest.TestCase):
         self.assertEqual(second, [urgent])
         self.assertEqual(third, [warning, urgent])
         self.assertEqual(len(self.bus.sent), 2)
+
+
+class ScanDeliveryTests(unittest.TestCase):
+    setUp = NotificationTests.setUp
+    def test_completed_scan_does_not_replay_after_missing_read_restart_or_server_change(self):
+        item={'id':'scan-result:fixture','kind':'scan-result','severity':'INFO','title':'Scan complete','detail':'No threats','scan_status':'CLEAN','scan_subject':'A file','route':'files'}
+        self.router.reconcile([item]);self.router.reconcile([item]);self.assertEqual(len(self.bus.sent),1)
+        self.router.reconcile([]);self.router.reconcile([item]);self.assertEqual(len(self.bus.sent),1)
+        self.router=NotificationRouter(self.bus,self.dispatch,self.path);self.bus.owner=':1.99'
+        self.router.reconcile([item]);self.assertEqual(len(self.bus.sent),1)
+        self.router.reconcile([{**item,'id':'scan-result:other'}]);self.assertEqual(len(self.bus.sent),2)
+        hints=self.bus.sent[0][6];self.assertTrue(self.bus.sent[0][2].endswith('greyward-scan-clean.svg?design=2'));self.assertNotIn('image-path',hints);self.assertEqual(hints['x-greyward-scan-state'],'CLEAN')
+        self.assertIn('size="5"',self.bus.sent[0][4])
+    def test_scan_filename_is_escaped_but_other_notification_bodies_stay_plain(self):
+        item={'id':'scan-result:fixture','kind':'scan-result','severity':'INFO','title':'Scan complete','detail':'Text','scan_status':'CLEAN','scan_subject':'<font color=red>fake</font>'}
+        self.router.reconcile([item]);body=self.bus.sent[-1][4]
+        self.assertNotIn('<font color=red>',body)
+        self.router.reconcile([{**self.item,'detail':'<b>not markup</b>'}])
+        self.assertIn('&lt;b&gt;',self.bus.sent[-1][4]);self.assertNotIn('image-path',self.bus.sent[-1][6])

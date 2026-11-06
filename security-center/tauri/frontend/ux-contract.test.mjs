@@ -401,7 +401,7 @@ test("uses only backend country metadata and never treats a domain suffix as loc
     i18n: {locale: "en"},
   };
   context.globalThis = context;
-  vm.runInNewContext(`${source.slice(start, end)}; globalThis.countrySignal = networkCountrySignal; globalThis.countryFlag = networkCountryFlag;`, context);
+  vm.runInNewContext(`${readFileSync(new URL("./assets/country-flags/catalog.js", import.meta.url),"utf8")}; ${source.slice(start, end)}; globalThis.countrySignal = networkCountrySignal; globalThis.countryFlag = networkCountryFlag;`, context);
   assert.equal(context.countrySignal({host: "updates.example.fr", country_code: "FR"}).code, "FR");
   assert.equal(context.countrySignal({host: "updates.example.fr"}).code, "");
   assert.equal(context.countrySignal({host: "cdn.example.co.uk", country_code: "GB"}).code, "GB");
@@ -424,7 +424,8 @@ test("renders the country marker on every network observation row", () => {
   const start = source.indexOf("function networkActivityDestination");
   const end = source.indexOf("function networkActivityRowsMarkup");
   assert.ok(start >= 0 && end > start, "network activity row block is present");
-  const context = {
+  const intel = {}; vm.runInNewContext(readFileSync(new URL("./behavioral.js", import.meta.url),"utf8"),intel);
+  const context = {behavioral: intel.GREYWARD_BEHAVIORAL.create({request:async()=>({})}),
     app: {},
     copy: (key, values = {}) => key === "network.activity.country.inferred" ? `Domain country: ${values.country}` : key,
     esc: (value) => String(value),
@@ -434,7 +435,7 @@ test("renders the country marker on every network observation row", () => {
     networkIdentityMark: () => "<span data-identity></span>",
   };
   context.globalThis = context;
-  vm.runInNewContext(`${source.slice(start, end)}; globalThis.renderRow = networkActivityRowMarkup;`, context);
+  vm.runInNewContext(`${readFileSync(new URL("./assets/country-flags/catalog.js", import.meta.url),"utf8")}; ${source.slice(start, end)}; globalThis.renderRow = networkActivityRowMarkup;`, context);
   const inferred = context.renderRow({
     event_id: "fr-event",
     application: "curl",
@@ -471,7 +472,7 @@ test("keeps Network Activity focused on app, destination, and decision", () => {
   assert.match(source, /network-decision/);
   assert.match(source, /networkActivityMeta/);
   assert.match(source, /protocol/);
-  assert.doesNotMatch(source, /throughput|active connections|ASN|geolocation|reputation/i);
+  assert.doesNotMatch(source, /throughput|active connections|ASN/i);
 });
 
 test("network protocol and port use a clean Unicode separator", () => {
@@ -634,10 +635,10 @@ test("uses typed D-Bus values for Security Context JSON instead of gdbus display
 test("packages deliberate Security Center deep-link destinations", () => {
   const route = readFileSync(new URL("../../data/greyward-security-center-route", import.meta.url), "utf8");
   const rust = readFileSync(new URL("../src-tauri/src/lib.rs", import.meta.url), "utf8");
-  assert.match(route, /overview\|system\|network\|privacy\|updates\|files\|applications\|protected-data\|devices\|evidence\|activity/);
-  assert.match(route, /threats\)/);
+  assert.match(route, /overview\|system\|network\|privacy\|updates\|files\|applications\|protected-data\|devices\|evidence\|recovery/);
+  assert.match(route, /history\|activity\)/);
   assert.match(route, /\[\[ -n "\$event_id" && ! "\$event_id"/);
-  assert.match(route, /\[\[ "\$page" == "threats" && -n "\$event_id" \]\]/);
+  assert.match(route, /"\$page" == "intelligence"/);
   assert.match(route, /exit 64/);
   assert.match(rust, /const SECURITY_CENTER_ROUTES: &\[&str\]/);
   assert.match(rust, /SECURITY_CENTER_ROUTES\.contains\(&value\.as_str\(\)\)/);

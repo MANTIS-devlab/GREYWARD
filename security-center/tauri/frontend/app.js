@@ -16,6 +16,10 @@ const copy = (key, values) => t(key, values);
 const applicationSecurity = window.GREYWARD_APPLICATION_SECURITY.create({request: invokeBounded});
 const guardQueries = {applications: "", resources: ""};
 
+const behavioral = window.GREYWARD_BEHAVIORAL.create({request: invokeBounded, onChange: channel => {
+  loadPage(currentPage,{force:true});
+}});
+let networkSeveritySort = false;
 const pages = ["overview", "system", "network", "privacy", "updates", "files", "applications", "protected-data", "devices", "evidence", "activity", "threats", "history", "recovery", "network-rules"];
 const pageAliases = Object.freeze({protection: "evidence", system: "evidence"});
 const pageParents = Object.freeze({devices: "system", evidence: "system", threats: "network", "network-rules": "network"});
@@ -103,6 +107,7 @@ const networkActivityState = {
   paused: false,
   pending: 0,
   requestBusy: false,
+  assessmentRefreshAt: 0,
   mode: "live",
   historyEvents: [],
   historyCursor: null,
@@ -233,8 +238,7 @@ function localNetworkIcon(kind, values) {
 function networkIdentityMark(kind, values) {
   const candidate = Array.isArray(values) ? values.find(Boolean) : values;
   const className = "network-identity-logo network-identity-logo-" + kind;
-  // Colour gives stable recognition; the symbol describes the kind of object.
-  // Hashing must never turn an IP address into a folder or a process into a lock.
+  // Recognized artwork identifies a brand; fallback symbols describe function.
   const basename = String(candidate || "").split("/").pop();
   const serviceGlyph = {"systemd-resolved": "resolver", "chronyd": "clock"}[basename];
   const glyph = kind === "application" ? serviceGlyph || "applications" : "globe";
@@ -242,7 +246,7 @@ function networkIdentityMark(kind, values) {
   const visual = localIcon
     ? `<img src="./assets/network-icons/${localIcon}.svg" alt="" draggable="false">`
     : icon(glyph);
-  return `<span class="${className}${localIcon ? " has-local-icon" : " network-identity-fallback"} identity-color-${identityColor(candidate)}" aria-hidden="true" title="${esc(identityInitial(candidate))}">${visual}</span>`;
+  return `<span class="${className}${localIcon ? " has-local-icon" : " network-identity-fallback"}" aria-hidden="true" title="${esc(identityInitial(candidate))}">${visual}</span>`;
 }
 
 function stateLabel(value) {
@@ -539,7 +543,8 @@ function networkActivityDestination(item) {
 function networkCountrySignal(destination) {
   const object = destination && typeof destination === "object" ? destination : {};
   const value = object.country_code;
-  const code = /^[a-z]{2}$/i.test(String(value || "")) ? String(value).toUpperCase() : "";
+  const candidate = String(value || "").toUpperCase();
+  const code = /^[A-Z]{2}$/.test(candidate) && Object.hasOwn(globalThis.GREYWARD_COUNTRY_FLAGS || {}, candidate) ? candidate : "";
   const confidenceValue = String(object.country_confidence || "NONE").toUpperCase();
   const confidence = ["HIGH", "MEDIUM", "LOW", "VERY_LOW"].includes(confidenceValue) ? confidenceValue : code ? "MEDIUM" : "NONE";
   const source = String(object.country_source || (code ? "LOCAL" : "NONE")).toUpperCase();
@@ -551,29 +556,11 @@ function networkCountrySignal(destination) {
   return {code, label, confidence, source, converged: object.country_converged !== false};
 }
 function networkCountryFlagSvg(code) {
-  const flags = {
-    UN: '<svg class="network-country-flag-art" data-country="UN" viewBox="0 0 30 20" aria-hidden="true"><rect width="30" height="20" rx="2" fill="#164E63"/><circle cx="15" cy="10" r="6" fill="none" stroke="#BAE6FD" stroke-width="1.2"/><path d="M9 10h12M15 4c2 2 3 4 3 6s-1 4-3 6c-2-2-3-4-3-6s1-4 3-6zM10.2 6.2c2 1 7 1 9.6 0M10.2 13.8c2-1 7-1 9.6 0" fill="none" stroke="#BAE6FD" stroke-width=".7"/></svg>',
-    FR: '<svg class="network-country-flag-art" data-country="FR" viewBox="0 0 30 20" aria-hidden="true"><rect width="10" height="20" fill="#0055A4"/><rect x="10" width="10" height="20" fill="#FFF"/><rect x="20" width="10" height="20" fill="#EF4135"/></svg>',
-    DE: '<svg class="network-country-flag-art" data-country="DE" viewBox="0 0 30 20" aria-hidden="true"><rect width="30" height="6.67" fill="#000"/><rect y="6.67" width="30" height="6.66" fill="#DD0000"/><rect y="13.33" width="30" height="6.67" fill="#FFCE00"/></svg>',
-    GB: '<svg class="network-country-flag-art" data-country="GB" viewBox="0 0 30 20" aria-hidden="true"><rect width="30" height="20" fill="#012169"/><path d="M0 0 30 20M30 0 0 20" stroke="#FFF" stroke-width="4"/><path d="M0 0 30 20M30 0 0 20" stroke="#C8102E" stroke-width="1.8"/><path d="M15 0v20M0 10h30" stroke="#FFF" stroke-width="6"/><path d="M15 0v20M0 10h30" stroke="#C8102E" stroke-width="3"/></svg>',
-    US: '<svg class="network-country-flag-art" data-country="US" viewBox="0 0 30 20" aria-hidden="true"><rect width="30" height="20" fill="#FFF"/><path d="M0 0h30v2H0zm0 4h30v2H0zm0 4h30v2H0zm0 4h30v2H0zm0 4h30v2H0z" fill="#B22234"/><rect width="13" height="11" fill="#3C3B6E"/></svg>',
-    CA: '<svg class="network-country-flag-art" data-country="CA" viewBox="0 0 30 20" aria-hidden="true"><rect width="30" height="20" fill="#FFF"/><rect width="7.5" height="20" fill="#D80621"/><rect x="22.5" width="7.5" height="20" fill="#D80621"/><path d="m15 3 1.2 4 3-.8-1.3 2.7 2.5 1.6-3.1.4.2 3.1-2.5-2-2.5 2 .2-3.1-3.1-.4 2.5-1.6-1.3-2.7 3 .8z" fill="#D80621"/></svg>',
-    IT: '<svg class="network-country-flag-art" data-country="IT" viewBox="0 0 30 20" aria-hidden="true"><rect width="10" height="20" fill="#009246"/><rect x="10" width="10" height="20" fill="#FFF"/><rect x="20" width="10" height="20" fill="#CE2B37"/></svg>',
-    ES: '<svg class="network-country-flag-art" data-country="ES" viewBox="0 0 30 20" aria-hidden="true"><rect width="30" height="20" fill="#AA151B"/><rect y="5" width="30" height="10" fill="#F1BF00"/></svg>',
-    BE: '<svg class="network-country-flag-art" data-country="BE" viewBox="0 0 30 20" aria-hidden="true"><rect width="10" height="20" fill="#000"/><rect x="10" width="10" height="20" fill="#FFD90C"/><rect x="20" width="10" height="20" fill="#EF3340"/></svg>',
-    NL: '<svg class="network-country-flag-art" data-country="NL" viewBox="0 0 30 20" aria-hidden="true"><rect width="30" height="6.67" fill="#AE1C28"/><rect y="6.67" width="30" height="6.66" fill="#FFF"/><rect y="13.33" width="30" height="6.67" fill="#21468B"/></svg>',
-    CH: '<svg class="network-country-flag-art" data-country="CH" viewBox="0 0 30 20" aria-hidden="true"><rect width="30" height="20" rx="2" fill="#D52B1E"/><path d="M12 4h6v5h5v5h-5v5h-6v-5H7V9h5z" fill="#FFF"/></svg>',
-    RU: '<svg class="network-country-flag-art" data-country="RU" viewBox="0 0 30 20" aria-hidden="true"><rect width="30" height="6.67" fill="#FFF"/><rect y="6.67" width="30" height="6.66" fill="#0039A6"/><rect y="13.33" width="30" height="6.67" fill="#D52B1E"/></svg>',
-    JP: '<svg class="network-country-flag-art" data-country="JP" viewBox="0 0 30 20" aria-hidden="true"><rect width="30" height="20" fill="#FFF"/><circle cx="15" cy="10" r="6" fill="#BC002D"/></svg>',
-    CN: '<svg class="network-country-flag-art" data-country="CN" viewBox="0 0 30 20" aria-hidden="true"><rect width="30" height="20" fill="#DE2910"/><path d="m6 3 1 2.1 2.3.2-1.7 1.5.5 2.2L6 7.8 3.9 9l.5-2.2-1.7-1.5L5 5.1z" fill="#FFDE00"/></svg>',
-    IN: '<svg class="network-country-flag-art" data-country="IN" viewBox="0 0 30 20" aria-hidden="true"><rect width="30" height="6.67" fill="#FF9933"/><rect y="6.67" width="30" height="6.66" fill="#FFF"/><rect y="13.33" width="30" height="6.67" fill="#138808"/><circle cx="15" cy="10" r="2.1" fill="none" stroke="#000080" stroke-width=".7"/></svg>',
-    BR: '<svg class="network-country-flag-art" data-country="BR" viewBox="0 0 30 20" aria-hidden="true"><rect width="30" height="20" fill="#009B3A"/><path d="m15 2 12 8-12 8L3 10z" fill="#FFDF00"/><circle cx="15" cy="10" r="4.5" fill="#002776"/></svg>',
-    MX: '<svg class="network-country-flag-art" data-country="MX" viewBox="0 0 30 20" aria-hidden="true"><rect width="10" height="20" fill="#006847"/><rect x="10" width="10" height="20" fill="#FFF"/><rect x="20" width="10" height="20" fill="#CE1126"/><circle cx="15" cy="10" r="1.6" fill="#8B5A2B"/></svg>',
-    PL: '<svg class="network-country-flag-art" data-country="PL" viewBox="0 0 30 20" aria-hidden="true"><rect width="30" height="10" fill="#FFF"/><rect y="10" width="30" height="10" fill="#DC143C"/></svg>',
-    KR: '<svg class="network-country-flag-art" data-country="KR" viewBox="0 0 30 20" aria-hidden="true"><rect width="30" height="20" fill="#FFF"/><circle cx="15" cy="10" r="4.6" fill="#CD2E3A"/><path d="M15 10a4.6 4.6 0 0 1 0-9.2 2.3 2.3 0 0 0 0 4.6 2.3 2.3 0 0 1 0 4.6z" fill="#0047A0"/></svg>',
-    IL: '<svg class="network-country-flag-art" data-country="IL" viewBox="0 0 30 20" aria-hidden="true"><rect width="30" height="20" fill="#FFF"/><path d="M0 3h30v3H0zM0 14h30v3H0z" fill="#0038B8"/><path d="m15 6 3.5 6h-7zM15 14 11.5 8h7z" fill="none" stroke="#0038B8" stroke-width=".8"/></svg>',
-  };
-  return flags[code] || `<svg class="network-country-flag-art network-country-flag-code" data-country="${esc(code)}" viewBox="0 0 30 20" aria-hidden="true"><rect width="30" height="20" fill="#334155"/><text x="15" y="13" text-anchor="middle" fill="#FFF" font-size="8" font-family="sans-serif" font-weight="700">${esc(code)}</text></svg>`;
+  const catalog = globalThis.GREYWARD_COUNTRY_FLAGS || {};
+  if (/^[A-Z]{2}$/.test(code) && Object.hasOwn(catalog, code)) {
+    return `<img class="network-country-flag-art" data-country="${code}" src="./assets/country-flags/${catalog[code]}.svg" alt="" draggable="false">`;
+  }
+  return '<svg class="network-country-flag-art" data-country="UN" viewBox="0 0 30 20" aria-hidden="true"><rect width="30" height="20" rx="2" fill="#25333d"/><circle cx="15" cy="10" r="6" fill="none" stroke="#b7c6d0" stroke-width="1.2"/><path d="M9 10h12M15 4c2 2 3 4 3 6s-1 4-3 6c-2-2-3-4-3-6s1-4 3-6zM10.2 6.2c2 1 7 1 9.6 0M10.2 13.8c2-1 7-1 9.6 0" fill="none" stroke="#b7c6d0" stroke-width=".7"/></svg>';
 }
 function networkCountryFlag(destination) {
   const signal = networkCountrySignal(destination);
@@ -622,6 +609,9 @@ function networkActivityFiltersAreDefault() {
 }
 function networkActivitySource() {
   return networkActivityState.mode === "history" ? networkActivityState.historyEvents : networkActivityState.events;
+}
+async function readNetworkActivity(sinceSequence=0) {
+  return invokeBounded("get_network_activity", {sinceSequence: sinceSequence, limit:256},12000).catch(()=>({state:"UNAVAILABLE",reset:true,session_id:null,events:[],summary:{}}));
 }
 function networkActivityProtocols() {
   const protocols = new Set(networkActivitySource().map((item) => String(item.protocol || "").toUpperCase()).filter(Boolean));
@@ -690,6 +680,10 @@ function syncNetworkActivityControls() {
   if (statusElement) statusElement.textContent = networkActivityStatusText();
 }
 function networkActivityMatches(item) {
+  if(item.observed_attempt && !behavioral.focus()) {
+    const seconds=networkActivityState.mode!=="history"?1800:({"30m":1800,"6h":21600,"24h":86400,"7d":604800}[networkActivityState.filters.window]||1800);
+    if(Date.parse(item.occurred_at)<Date.now()-seconds*1000)return false;
+  }
   const destination = networkActivityDestination(item);
   const search = networkActivityState.filters.search.trim().toLowerCase();
   const haystack = [item.application, item.executable, destination.host, destination.ip, item.protocol, item.rule_name, item.source].join(" ").toLowerCase();
@@ -708,21 +702,22 @@ function networkActivityDecisionLabel(value) {
 }
 function networkActivityRowMarkup(item) {
   const eventId = String(item.event_id || `event-${item.sequence || "unknown"}`);
-  const expanded = networkActivityState.expanded.has(eventId);
+  const expanded = networkActivityState.expanded.has(eventId) || Boolean(behavioral.focus() && item.behavioral?.incident_id===behavioral.focus());
   const destination = networkActivityDestination(item);
   const decision = String(item.decision || "UNKNOWN").toUpperCase();
-  const mutationAvailable = networkActivityState.mutationAvailable && Boolean(item.executable);
+  const mutationAvailable = !item.observed_attempt && networkActivityState.mutationAvailable && Boolean(item.executable);
   const dnsBypass = mutationAvailable && [53, 853].includes(Number(destination.port));
   const actions = mutationAvailable && (destination.host || destination.ip) ? `<div class="network-activity-actions"><button class="text-button" data-network-set data-application="${esc(item.executable)}" data-network-host="${esc(destination.host || "")}" data-network-ip="${esc(destination.ip || "")}" data-network-port="${esc(destination.port || "")}" data-network-protocol="${esc(item.protocol || "")}" data-network-action="allow">${esc(copy("network.protection.alwaysAllow"))} ${icon("arrow")}</button>${dnsBypass ? `<button class="text-button" data-network-set data-network-dns-bypass="true" data-application="${esc(item.executable)}" data-network-port="${esc(destination.port || "")}" data-network-protocol="${esc(item.protocol || "")}" data-network-action="allow">${esc(copy("network.protection.allowDnsBypass"))} ${icon("arrow")}</button>` : ""}<button class="text-button" data-network-set data-application="${esc(item.executable)}" data-network-host="${esc(destination.host || "")}" data-network-ip="${esc(destination.ip || "")}" data-network-port="${esc(destination.port || "")}" data-network-protocol="${esc(item.protocol || "")}" data-network-action="deny">${esc(copy("network.protection.alwaysBlock"))} ${icon("arrow")}</button></div>` : "";
   const occurredAt = localizedTime(item.occurred_at, copy("network.activity.unknownTime"));
   const destinationDetail = `<span class="network-activity-destination-detail">${networkCountryFlag(destination)}<span>${esc(destination.host)}${destination.ip && destination.host !== destination.ip ? ` \u00b7 ${esc(destination.ip)}` : ""}</span></span>`;
-  const details = `<div class="network-activity-details"${expanded ? "" : " hidden"}><div><span>${esc(copy("network.activity.detail.destination"))}</span><strong>${destinationDetail}</strong></div><div><span>${esc(copy("network.activity.detail.protocol"))}</span><strong>${esc(String(item.protocol || copy("network.activity.unknown")).toUpperCase())}</strong></div><div><span>${esc(copy("network.activity.detail.port"))}</span><strong>${esc(destination.port || copy("network.activity.unknown"))}</strong></div><div><span>${esc(copy("network.activity.detail.rule"))}</span><strong>${esc(item.rule_name || copy("network.activity.noMatchedRule"))}</strong></div><div><span>${esc(copy("network.activity.detail.source"))}</span><strong>${esc(item.source || copy("network.activity.unknown"))}</strong></div><div><span>${esc(copy("network.activity.detail.observed"))}</span><strong>${esc(occurredAt)}</strong></div>${actions}</div>`;
-  return `<article class="network-activity-row${expanded ? " is-expanded" : ""}" data-activity-event="${esc(eventId)}"><button class="network-activity-row-main" type="button" data-activity-toggle="${esc(eventId)}" aria-expanded="${expanded ? "true" : "false"}"><span class="network-activity-identity network-activity-application">${networkIdentityMark("application", [item.application, item.executable])}<strong>${esc(item.application || copy("network.protection.unknownApplication"))}</strong></span><span class="network-activity-identity network-activity-destination">${networkDestinationIdentity(destination)}<strong>${esc(destination.host)}</strong></span><span class="network-decision ${activityDecisionClass(decision)}">${esc(networkActivityDecisionLabel(decision))}</span><span class="network-activity-meta">${esc(networkActivityMeta(item))}</span><time>${esc(occurredAt)}</time><span class="network-activity-expand" aria-hidden="true">${icon("chevron")}</span></button>${details}</article>`;
+  const details = `<div class="network-activity-details"${expanded ? "" : " hidden"}><div><span>${esc(copy("network.activity.detail.destination"))}</span><strong>${destinationDetail}</strong></div><div><span>${esc(copy("network.activity.detail.protocol"))}</span><strong>${esc(String(item.protocol || copy("network.activity.unknown")).toUpperCase())}</strong></div><div><span>${esc(copy("network.activity.detail.port"))}</span><strong>${esc(destination.port || copy("network.activity.unknown"))}</strong></div><div><span>${esc(copy("network.activity.detail.rule"))}</span><strong>${esc(item.rule_name || copy("network.activity.noMatchedRule"))}</strong></div><div><span>${esc(copy("network.activity.detail.source"))}</span><strong>${esc(item.source || copy("network.activity.unknown"))}</strong></div><div><span>${esc(copy("network.activity.detail.observed"))}</span><strong>${esc(occurredAt)}</strong></div>${item.behavioral ? behavioral.inspection(item.behavioral,item.behavioral_case) : ""}${actions}</div>`;
+  return `<article class="network-activity-row${expanded ? " is-expanded" : ""}" data-activity-event="${esc(eventId)}"><button class="network-activity-row-main" type="button" data-activity-toggle="${esc(eventId)}" aria-expanded="${expanded ? "true" : "false"}"><span class="network-activity-identity network-activity-application">${networkIdentityMark("application", [item.application, item.executable])}<strong>${esc(item.application || copy("network.protection.unknownApplication"))}</strong></span><span class="network-activity-identity network-activity-destination">${networkDestinationIdentity(destination)}<strong>${esc(destination.host)}</strong></span><span class="network-decision ${activityDecisionClass(decision)}">${esc(networkActivityDecisionLabel(decision))}</span>${behavioral.networkBadge(item.behavioral)}<span class="network-activity-meta">${esc(networkActivityMeta(item))}</span><time>${esc(occurredAt)}</time><span class="network-activity-expand" aria-hidden="true">${icon("chevron")}</span></button>${details}</article>`;
 }
 function networkActivityRowsMarkup() {
   const source = networkActivitySource();
   const events = source.filter(networkActivityMatches);
-  if (networkActivityState.mode === "history" && networkActivityState.historyState !== "AVAILABLE") return emptyState(copy("network.activity.historyUnavailable"), copy("network.activity.historyUnavailableCopy"), "activity");
+  events.sort((a,b)=>networkSeveritySort?(b.behavioral?.score??-1)-(a.behavioral?.score??-1):Date.parse(b.occurred_at||0)-Date.parse(a.occurred_at||0));
+  if (networkActivityState.mode === "history" && networkActivityState.historyState !== "AVAILABLE" && !events.length) return emptyState(copy("network.activity.historyUnavailable"), copy("network.activity.historyUnavailableCopy"), "activity");
   if (!events.length) return emptyState(source.length ? copy("network.activity.noMatch") : networkActivityState.mode === "history" ? copy("network.activity.noHistory") : copy("network.activity.noRecent"), source.length ? copy("network.activity.noMatchCopy") : copy("network.activity.noRecentCopy"), "activity");
   const visible = networkActivityState.mode === "history" ? events : events.slice(0, 120);
   const note = networkActivityState.mode === "live" && events.length > visible.length ? `<p class="network-activity-window-note">${esc(copy("network.activity.newestCount", {shown: visible.length, total: events.length}))}</p>` : "";
@@ -742,7 +737,7 @@ function networkActivitySummaryMarkup() {
   return `<section class="network-activity-summary" data-state="${esc(state)}"><article class="network-activity-health"><div class="eyebrow">${esc(copy("network.activity.observation"))}</div><h2>${esc(headline)}</h2><p>${esc(detail)}</p>${status(headline, state === "OPERATING" ? "positive" : state === "DEGRADED" ? "review" : "unknown")}</article><article class="network-summary-card"><span>${esc(copy("network.activity.observed"))}</span><strong>${esc(summary.total || 0)}</strong><small>${esc(copy("network.activity.lastThirtyMinutes"))}</small></article><article class="network-summary-card is-allowed"><span>${esc(copy("network.activity.decision.allowed"))}</span><strong>${esc(summary.allowed || 0)}</strong><small>${esc(copy("network.activity.observedDecisions"))}</small></article><article class="network-summary-card${Number(summary.blocked) > 0 ? " is-blocked" : ""}"><span>${esc(copy("network.activity.decision.blocked"))}</span><strong>${esc(summary.blocked || 0)}</strong><small>${esc(copy("network.activity.observedDecisions"))}</small></article><article class="network-activity-chart"><div><span>${esc(copy("network.activity.rhythm"))}</span><small>${esc(copy("network.activity.boundedWindow"))}</small></div><div class="network-activity-sparkline" aria-label="${esc(copy("network.activity.chartLabel"))}">${bars || "<span style=\"height:8%\"></span>"}</div></article></section>`;
 }
 function networkActivityLegendMarkup() {
-  return `<div class="network-activity-legend" aria-label="${esc(copy("network.activity.legend"))}"><span class="network-activity-legend-key"><span class="network-activity-identity">${networkIdentityMark("application", "Application")}<span>${esc(copy("network.activity.legend.application"))}</span></span></span><span class="network-activity-legend-key"><span class="network-activity-identity">${networkDestinationIdentity({host: copy("network.activity.legend.destination"), country_code: ""})}<span>${esc(copy("network.activity.legend.destination"))}</span></span></span><span class="network-activity-legend-note">${esc(copy("network.activity.locationNote"))}</span></div>`;
+  return `<div class="network-activity-legend" aria-label="${esc(copy("network.activity.legend"))}"><span>Application</span><span>Destination</span><span>Decision</span><button class="network-intelligence-sort" data-network-severity-sort aria-pressed="${networkSeveritySort}" title="Sort by risk; expand a row for reasons">Risk /6 ${networkSeveritySort?'↓':'↕'}</button><span>Connection</span><span>Time</span><span></span></div>`;
 }
 function syncNetworkActivityData(payload, {trackPending = false} = {}) {
   if (!payload || typeof payload !== "object") return;
@@ -752,10 +747,11 @@ function syncNetworkActivityData(payload, {trackPending = false} = {}) {
   const incoming = Array.isArray(payload.events) ? payload.events.filter((event) => event && event.event_id) : [];
   let addedCount = 0;
   if (!networkActivityState.sessionId || sessionChanged || payload.reset) {
-    addedCount = incoming.length;
+    const previousIds = new Set(networkActivityState.events.map(event => event.event_id));
+    addedCount = sessionChanged || !hadSession ? incoming.length : incoming.filter(event => !previousIds.has(event.event_id)).length;
     networkActivityState.events = incoming;
     if (sessionChanged) networkActivityState.expanded.clear();
-    networkActivityState.pending = trackPending && hadSession && networkActivityState.paused ? addedCount : 0;
+    networkActivityState.pending = trackPending && hadSession && networkActivityState.paused ? (sessionChanged ? addedCount : networkActivityState.pending + addedCount) : 0;
   } else {
     const events = new Map(networkActivityState.events.map((event) => [event.event_id, event]));
     incoming.forEach((event) => {
@@ -779,12 +775,21 @@ function renderNetworkActivityView({renderRows = true} = {}) {
   const active = document.activeElement;
   const list = app.querySelector("[data-network-activity-list]");
   const listMarkup = networkActivityRowsMarkup();
-  if (renderRows && list && !list.contains(active) && listMarkup !== networkActivityState.renderedListMarkup) {
+  const focusedRow = list?.contains(active) ? active?.closest?.('[data-activity-event]') : null;
+  const focusedId = focusedRow?.dataset.activityEvent;
+  const focusIndex = focusedRow ? [...focusedRow.querySelectorAll('button,a')].indexOf(active) : -1;
+  const editing = list?.contains(active) && active?.matches?.('input,textarea,select,[contenteditable="true"]');
+  if (renderRows && list && !editing && listMarkup !== networkActivityState.renderedListMarkup) {
     const scrollPosition = readPageScrollPosition();
     list.innerHTML = listMarkup;
     networkActivityState.renderedListMarkup = listMarkup;
     applyPageScroll(scrollPosition);
     bindNetworkActivityContent();
+    if (focusedId) {
+      const row = [...list.querySelectorAll('[data-activity-event]')].find(element => element.dataset.activityEvent === focusedId);
+      const controls = row ? [...row.querySelectorAll('button,a')] : [];
+      (controls[focusIndex] || row?.querySelector('[data-activity-toggle]'))?.focus({preventScroll: true});
+    }
   }
   const summary = app.querySelector(".network-activity-summary");
   const summaryMarkup = networkActivitySummaryMarkup();
@@ -792,6 +797,8 @@ function renderNetworkActivityView({renderRows = true} = {}) {
     summary.outerHTML = summaryMarkup;
     networkActivityState.renderedSummaryMarkup = summaryMarkup;
   }
+  const observation=app.querySelector('[data-network-behavioral-status]');
+  if(observation && !networkActivityState.paused) {observation.innerHTML="";behavioral.bind(app);}
   syncNetworkActivityControls();
 }
 async function refreshNetworkActivity() {
@@ -800,8 +807,12 @@ async function refreshNetworkActivity() {
   const visit = requestSequence;
   const isCurrent = () => currentPage === "activity" && requestSequence === visit && networkActivityState.mode === "live" && !document.hidden;
   try {
-    const result = await invokeBounded("get_network_activity", {sinceSequence: networkActivityState.nextSequence, limit: 256}, 10000);
+    // Process evidence can arrive after its connection record. Refresh the
+    // bounded current window periodically even when no new sequence exists.
+    const snapshotDue = !networkActivityState.assessmentRefreshAt || Date.now() - networkActivityState.assessmentRefreshAt >= 15000;
+    const result = await readNetworkActivity(snapshotDue ? 0 : networkActivityState.nextSequence);
     if (!isCurrent()) return;
+    if (snapshotDue) networkActivityState.assessmentRefreshAt = Date.now();
     syncNetworkActivityData(result, {trackPending: true});
     renderNetworkActivityView({renderRows: !networkActivityState.paused});
   } catch (error) {
@@ -813,6 +824,14 @@ async function refreshNetworkActivity() {
     networkActivityState.requestBusy = false;
   }
 }
+function startNetworkActivityPolling() {
+  if (currentPage !== "activity") return;
+  if (updatePoll) { window.clearInterval(updatePoll); updatePoll = null; }
+  if (currentPage !== "activity" || networkActivityState.mode !== "live") return;
+  networkActivityState.assessmentRefreshAt = 0;
+  updatePoll = window.setInterval(refreshNetworkActivity, 2000);
+  void refreshNetworkActivity();
+}
 async function loadNetworkHistory(expectedSequence = null, append = false) {
   const querySequence = expectedSequence ?? ++historyQuerySequence;
   const filters = networkActivityState.filters;
@@ -823,7 +842,7 @@ async function loadNetworkHistory(expectedSequence = null, append = false) {
     const cursor = append ? networkActivityState.historyCursor : null;
     if (append && !cursor) return;
     const filters = {from, limit: NETWORK_HISTORY_PAGE_SIZE, cursor: cursor || undefined, decision: queryFilters.decision === "ALL" ? undefined : queryFilters.decision, protocol: queryFilters.protocol === "ALL" ? undefined : queryFilters.protocol, port: queryFilters.port || undefined, search: queryFilters.search || undefined};
-    const result = await invokeBounded("get_network_history", {filters}, 12000);
+    const result=await invokeBounded("get_network_history", {filters}, 12000);
     if (querySequence !== historyQuerySequence || currentPage !== "activity" || networkActivityState.mode !== "history") return;
     const incoming = Array.isArray(result?.events) ? result.events : [];
     if (append) {
@@ -861,6 +880,9 @@ function cancelNetworkHistoryLoad() {
   historyQuerySequence += 1;
 }
 function bindNetworkActivityContent() {
+  behavioral.bind(app);
+  const severitySort = app.querySelector('[data-network-severity-sort]');
+  if (severitySort) severitySort.onclick = () => {networkSeveritySort=!networkSeveritySort;behavioral.reset("NETWORK");loadPage("activity",{force:true}); severitySort.textContent='Intelligence '+(networkSeveritySort?'↓':'↕'); severitySort.setAttribute('aria-pressed', String(networkSeveritySort)); renderNetworkActivityView();};
   const bindOnce = (element, event, handler) => {
     if (!element || element.dataset.activityBound === "true") return;
     element.dataset.activityBound = "true";
@@ -872,7 +894,7 @@ function bindNetworkActivityContent() {
   bindOnce(app.querySelector("[data-activity-port]"), "input", (event) => { networkActivityState.filters.port = event.currentTarget.value.replace(/[^0-9]/g, ""); event.currentTarget.value = networkActivityState.filters.port; if (networkActivityState.mode === "history") scheduleNetworkHistoryLoad(); else renderNetworkActivityView(); });
   bindOnce(app.querySelector("[data-activity-window]"), "change", (event) => { networkActivityState.filters.window = event.currentTarget.value; loadNetworkHistory(); });
   bindOnce(app.querySelector("[data-activity-clear]"), "click", () => { networkActivityState.filters = networkActivityDefaultFilters(); if (networkActivityState.mode === "history") loadNetworkHistory(); else renderNetworkActivityView(); });
-  app.querySelectorAll("[data-activity-mode]").forEach((button) => bindOnce(button, "click", async (event) => { networkActivityState.mode = event.currentTarget.dataset.activityMode; if (networkActivityState.mode === "history") await loadNetworkHistory(); else { cancelNetworkHistoryLoad(); renderNetworkActivityView(); } }));
+  app.querySelectorAll("[data-activity-mode]").forEach((button) => bindOnce(button, "click", async (event) => { networkActivityState.mode = event.currentTarget.dataset.activityMode; startNetworkActivityPolling(); if (networkActivityState.mode === "history") await loadNetworkHistory(); else { cancelNetworkHistoryLoad(); renderNetworkActivityView(); } }));
   bindOnce(app.querySelector("[data-activity-load-more]"), "click", () => loadNetworkHistory(historyQuerySequence, true));
   bindOnce(app.querySelector("[data-activity-pause]"), "click", () => { networkActivityState.paused = !networkActivityState.paused; if (!networkActivityState.paused) networkActivityState.pending = 0; renderNetworkActivityView({renderRows: true}); });
   app.querySelectorAll("[data-network-set]").forEach((button) => bindOnce(button, "click", () => setNetworkRule(button)));
@@ -896,7 +918,7 @@ function networkActivityMarkup(data, embedded = false) {
   const pause = actionButton(pauseLabel, copy("network.activity.pauseDetail"), "secondary", `data-activity-pause aria-pressed="${networkActivityState.paused ? "true" : "false"}"`, networkActivityState.paused ? "play" : "pause");
   const header = embedded ? `<div class="section-heading"><div><h2>${esc(copy("network.activity.title"))}</h2><p>${esc(copy("network.activity.copy"))}</p></div>${pause}</div>`
     : pageHeader(copy("network.activity.eyebrow"), copy("network.activity.title"), copy("network.activity.copy"), pause + actionButton(copy("ui.refresh"), copy("network.activity.refreshDetail"), "secondary", "data-refresh", "refresh"));
-  return `${header}${networkActivitySummaryMarkup()}<section class="plain-section network-activity-workspace">${networkActivityToolbarMarkup()}${networkActivityLegendMarkup()}<div class="network-activity-list" data-network-activity-list>${networkActivityRowsMarkup()}</div></section><div class="network-action-status" id="network-action-status" role="status" aria-live="polite">${esc(networkActionState.feedback || "")}</div>`;
+  return `${header}${networkActivitySummaryMarkup()}<section class="plain-section network-activity-workspace">${networkActivityToolbarMarkup()}${networkActivityLegendMarkup()}<p class="network-location-credit">Local IP geolocation: <a href="https://db-ip.com" target="_blank" rel="noopener noreferrer">DB-IP</a> · CC BY 4.0. Approximate country, not a risk factor. Risk 1–2: low · 3–4: inspect · 5–6: inspect first.</p><div data-network-behavioral-status></div><div class="network-activity-list" data-network-activity-list>${networkActivityRowsMarkup()}</div></section><div class="network-action-status" id="network-action-status" role="status" aria-live="polite">${esc(networkActionState.feedback || "")}</div>`;
 }
 function securityHistoryMarkup(data) {
   return `${pageHeader(copy("workspace.monitor"), copy("history.title"), copy("history.copy"), actionButton(copy("ui.refresh"), copy("guard.activity.refresh"), "secondary", "data-refresh", "refresh"))}${securityHistory.markup(data)}`;
@@ -1254,11 +1276,11 @@ function filesMarkup(data) {
   const detections = Array.isArray(data.detections) ? data.detections : (data.quarantine || []);
   const clamavState = String(data.clamav?.status || "UNAVAILABLE").toUpperCase();
   const scanAvailable = !loading && data.state === "AVAILABLE" && clamavState === "CURRENT" && Boolean(data.clamav?.engine_version);
-  const definitionAge = Number.isSafeInteger(data.clamav?.database_age_seconds) && data.clamav.database_age_seconds >= 0 ? `${Math.max(0, Math.floor(Number(data.clamav.database_age_seconds) / 86400))}d` : copy("ui.unavailable");
+  const definitionAge = Number.isSafeInteger(data.clamav?.database_age_seconds) && data.clamav.database_age_seconds >= 0 ? `${Math.floor(Number(data.clamav.database_age_seconds) / 86400)}d ${Math.floor((Number(data.clamav.database_age_seconds) % 86400) / 3600)}h` : copy("ui.unavailable");
   const clamav = loading
     ? `<div class="fact-line"><div><span>${esc(copy("file.definitions"))}</span><strong>${esc(copy("file.reading"))}</strong></div><div><span>${esc(copy("file.lastUpdate"))}</span><strong>${esc(copy("file.checkingStatus"))}</strong></div></div>`
     : data.clamav
-    ? `<div class="fact-line"><div><span>${esc(copy("file.definitions"))}</span><strong>${esc(data.clamav.status || copy("ui.unavailable"))}</strong></div><div><span>${esc(copy("file.lastUpdate"))}</span><strong>${esc(localizedTime(data.clamav.database_timestamp))}</strong></div></div>${technicalDisclosure(copy("file.scannerDetails"), "", `<p>${esc(copy("file.engineDatabase", {engine: data.clamav.engine_version || copy("ui.unavailable"), database: data.clamav.database_version || copy("ui.unavailable")}))}</p><p>${esc(copy("file.definitionAge", {age: definitionAge}))}</p><p>${esc(data.clamav.detail || "")}</p>`)}`
+    ? `<div class="fact-line"><div><span>${esc(copy("file.definitions"))}</span><strong>${esc(data.clamav.status || copy("ui.unavailable"))}</strong></div><div><span>${esc(copy("file.lastUpdate"))}</span><strong>${esc(localizedTime(data.clamav.database_timestamp))}</strong></div><div><span>${esc(copy("file.definitionFreshness"))}</span><strong>${esc(definitionAge)}</strong></div><div><span>${esc(copy("file.updater"))}</span><strong>${esc(data.clamav.update_service_state || copy("ui.unavailable"))}</strong></div></div>${data.arrival_scanning ? `<p class="muted">${esc(copy("file.arrivalState"))}: ${esc(data.arrival_scanning.state)} · ${esc(data.arrival_scanning.pending || 0)} ${esc(copy("file.arrivalPending"))}. ${esc(data.arrival_scanning.detail || "")}</p>` : ""}${data.clamav.update_failure_state ? `<p class="muted">${esc(copy("file.updateRetry"))}</p>` : ""}${technicalDisclosure(copy("file.scannerDetails"), "", `<p>${esc(copy("file.engineDatabase", {engine: data.clamav.engine_version || copy("ui.unavailable"), database: data.clamav.database_version || copy("ui.unavailable")}))}</p><p>${esc(copy("file.definitionAge", {age: definitionAge}))}</p><p>${esc(data.clamav.detail || "")}</p>`)}`
     : emptyState(copy("file.scannerUnavailable"), copy("file.scannerUnavailableCopy"), "shield");
   const renderDetection = (item) => {
     const state = item.state === "DETECTED" && item.source_status === "MISSING" ? "SOURCE_MISSING" : String(item.state || "DETECTED").toUpperCase();
@@ -1630,7 +1652,7 @@ function getPageData(page) {
     : page === "applications" ? applicationSecurity.load("applications").then(guard => ({guard, providerPending: true}))
     : page === "history" ? securityHistory.read()
     : page === "recovery" ? invokeBounded("get_devices", {includeHistory: false}, 12000)
-    : page === "activity" ? invokeBounded("get_network_activity", {sinceSequence: 0, limit: 256}, 12000)
+    : page === "activity" ? readNetworkActivity()
         .catch(() => ({state: "UNAVAILABLE", reset: true, session_id: null, events: [], summary: {}}))
     : page === "privacy" ? Promise.all([invokeBounded("get_privacy", undefined, 12000), invokeBounded("get_notification_preferences", undefined, 5000).catch(() => null)]).then(([data, preferences]) => ({...data, notification_preferences: preferences}))
     : page === "overview"
@@ -1805,7 +1827,7 @@ async function loadPage(page = currentPage, options = {}) {
       }).catch(() => {});
     }
     if (currentPage === "updates" && updatePresentation(data).busy) startUpdatePolling();
-    if (currentPage === "activity" && networkActivityState.mode === "live") updatePoll = window.setInterval(refreshNetworkActivity, 2000);
+    if (currentPage === "activity") startNetworkActivityPolling();
   } catch (error) {
     if (request !== requestSequence) return;
     if (refreshInPlace) {
@@ -1875,6 +1897,7 @@ function bind() {
   }
 }
 function bindContent() {
+  if (["history", "activity"].includes(currentPage)) behavioral.bind(app);
   networkRules?.bind(app.querySelector("[data-network-rules]"));
   const administrationButton = app.querySelector('[data-administration-open]');
   if (administrationButton) {
@@ -1891,6 +1914,8 @@ function bindContent() {
       finally { endButton(administrationButton); }
     });
   }
+  app.querySelector('[data-history-severity]')?.addEventListener('change',e=>{securityHistory.assess(e.target.value);loadPage('history',{force:true});});
+  app.querySelector('[data-history-score-sort]')?.addEventListener('click',()=>{securityHistory.sortScore();loadPage('history',{force:true});});
   app.querySelector("[data-history-category]")?.addEventListener("change", event => { securityHistory.select(event.currentTarget.value); loadPage("history", {force: true}); });
   app.querySelector("[data-history-older]")?.addEventListener("click", event => { securityHistory.older(event.currentTarget.dataset.historyOlder); loadPage("history", {force: true}); });
   app.querySelector("[data-history-latest]")?.addEventListener("click", () => { securityHistory.reset(); loadPage("history", {force: true}); });
@@ -1908,7 +1933,7 @@ function bindContent() {
   app.querySelectorAll("[data-page]:not(.nav-item)").forEach((element) => element.addEventListener("click", () => loadPage(element.dataset.page)));
   app.querySelector("[data-file-context-back]")?.addEventListener("click", () => { fileContextDismissed = true; loadPage("overview"); });
   app.querySelector("[data-retry]")?.addEventListener("click", () => loadPage(currentPage, {force: true}));
-  app.querySelector("[data-refresh]")?.addEventListener("click", () => currentPage === "activity" ? (networkActivityState.mode === "history" ? loadNetworkHistory() : refreshNetworkActivity()) : loadPage(currentPage, {force: true}));
+  app.querySelector("[data-refresh]")?.addEventListener("click", () => currentPage === "activity" ? (networkActivityState.mode === "history" ? loadNetworkHistory() : (networkActivityState.assessmentRefreshAt = 0, refreshNetworkActivity())) : loadPage(currentPage, {force: true}));
   app.querySelector("[data-network-probe]")?.addEventListener("click", (event) => probeNetwork(event.currentTarget));
   app.querySelector("[data-updates-refresh]")?.addEventListener("click", () => loadPage("updates", {force: true}));
   app.querySelector("[data-update-resolve]")?.addEventListener("click", (event) => runUpdateAction("resolve_system_update", event.currentTarget, "CHECKING"));
@@ -2335,7 +2360,11 @@ function followSecurityNavigation(raw) {
     if (!pages.includes(page)) return;
     if (page === "protected-data" && reference && !/^resource_[0-9a-f]{64}$/.test(reference)) return;
     focusedThreatEventId = page === "threats" ? String(reference || "") : "";
-    await loadPage(page, {force: ["threats", "protected-data"].includes(page)});
+    if (["history","activity"].includes(page)) {
+      if(reference && !/^incident-[a-f0-9]{24}$/.test(reference)) return;
+      behavioral.focus(reference || "");
+    }
+    await loadPage(page, {force: ["threats", "protected-data", "history", "activity"].includes(page)});
     if (page === "protected-data" && reference && currentPage === page) {
       const button = [...app.querySelectorAll("[data-guard-detail]")]
         .find(control => control.dataset.guardDetail === reference);
@@ -2394,7 +2423,7 @@ function bindStateEvents() {
   });
 }
 const securityHistory = window.GREYWARD_SECURITY_HISTORY.create({request: invokeBounded, copy, esc, icon, time: localizedTime,
-  identityMark: networkIdentityMark,
+  identityMark: networkIdentityMark, behavioral,
   context: async () => {
     const query = {limit: 100, revision: null, after: null};
     const [apps, resources] = await Promise.allSettled([

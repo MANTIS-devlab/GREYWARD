@@ -1,0 +1,3 @@
+#!/bin/sh
+export PYTHONPATH=/usr/lib/greyward-security-context
+exec /usr/bin/python3 -m greyward_security_context.geoip_update

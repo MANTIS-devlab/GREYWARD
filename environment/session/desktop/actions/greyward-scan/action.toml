@@ -1,15 +1,15 @@
 schema_version = 1
 id = "greyward-scan"
 name = "Scan with GREYWARD"
-description = "Scan this file through Security Context; results remain in Security Center."
+description = "Scan the selected file or folder through Security Context; results remain in Security Center."
 icon = "search"
 enabled = true
 menu = "top"
 
 [when]
-kinds = ["file"]
+kinds = ["file", "folder"]
 min_items = 1
-max_items = 1
+max_items = 16
 
 [run]
 runtime = "command"

@@ -256,42 +256,44 @@ def start(uid, pid, ticks):
             raise RuntimeError('A seat is already admitted')
     if Path(f'/proc/{pid}/attr/current').read_text().strip('\0\n') != 'greyward_guard_u:greyward_guard_r:greyward_guard_t:s0':
         raise RuntimeError('Unconfined session refused')
-    # PAM has already established this local seat. Type its physical console
-    # separately so ordinary terminal/SSH PTYs remain usable without granting
-    # applications access to the authentication seat's raw keyboard channel.
-    tty = subprocess.check_output(['/usr/bin/loginctl', 'show-session', sid, '-p', 'TTY', '--value'], text=True, timeout=1).strip()
-    if tty != 'tty1':
-        raise RuntimeError('Unprepared physical console')
-    tty_path = '/dev/' + tty
-    original_tty = os.getxattr(tty_path, 'security.selinux').decode().strip('\0')
-    os.setxattr(tty_path, 'security.selinux', b'system_u:object_r:greyward_as_seat_tty_t:s0')
-    sys.path.insert(0, str(BASE))
-    from materialize import materialize
-    materialize(uid, int(account['gid']), manifest['source']['dms'])
-    for name in ['authentication.log', 'authentication-ready.json', 'bus', 'wayland-0']:
-        old = STATE / f'auth-{uid}/runtime' / name
-        if old.exists() or old.is_symlink():
-            if name == 'wayland-0' and not old.is_symlink():
-                raise RuntimeError('Unsafe protected display alias')
-            old.unlink()
-    cache=STATE/f'display-cache-{uid}'
-    cache.mkdir(mode=0o700,exist_ok=True)
-    if cache.is_symlink() or cache.stat().st_uid not in (0,uid):
-        raise RuntimeError('Unsafe display cache')
-    os.chown(cache,uid,int(account['gid']))
-    os.setxattr(cache,'security.selinux',b'system_u:object_r:greyward_as_display_runtime_t:s0')
-    # logind owns this nondelegated scope. Root attaches only its stopped,
-    # fixed children through the kernel cgroup interface; no ordinary subject
-    # receives delegation or a generic migration operation.
-    cgroup = subprocess.check_output(['/usr/bin/systemctl', 'show', scope, '-p', 'ControlGroup', '--value'], text=True, timeout=1).strip()
-    if cgroup != f'/user.slice/user-{uid}.slice/{scope}':
-        raise RuntimeError('Root-controlled admitted scope required')
-    control = Path('/sys/fs/cgroup'+cgroup+'/cgroup.procs')
-    meta=control.stat()
-    if meta.st_uid != 0 or meta.st_mode & 0o022:
-        raise RuntimeError('Untrusted scope controller')
     children = []
+    tty_path = original_tty = None
     try:
+        # PAM has already established this local seat. Type its physical console
+        # separately so ordinary terminal/SSH PTYs remain usable without granting
+        # applications access to the authentication seat's raw keyboard channel.
+        tty = subprocess.check_output(['/usr/bin/loginctl', 'show-session', sid, '-p', 'TTY', '--value'], text=True, timeout=1).strip()
+        if tty != 'tty1':
+            raise RuntimeError('Unprepared physical console')
+        sys.path.insert(0, str(BASE))
+        from materialize import materialize, preflight
+        preflight(manifest['source']['dms'])
+        tty_path = '/dev/' + tty
+        original_tty = os.getxattr(tty_path, 'security.selinux').decode().strip('\0')
+        os.setxattr(tty_path, 'security.selinux', b'system_u:object_r:greyward_as_seat_tty_t:s0')
+        materialize(uid, int(account['gid']), manifest['source']['dms'])
+        for name in ['authentication.log', 'authentication-ready.json', 'bus', 'wayland-0']:
+            old = STATE / f'auth-{uid}/runtime' / name
+            if old.exists() or old.is_symlink():
+                if name == 'wayland-0' and not old.is_symlink():
+                    raise RuntimeError('Unsafe protected display alias')
+                old.unlink()
+        cache=STATE/f'display-cache-{uid}'
+        cache.mkdir(mode=0o700,exist_ok=True)
+        if cache.is_symlink() or cache.stat().st_uid not in (0,uid):
+            raise RuntimeError('Unsafe display cache')
+        os.chown(cache,uid,int(account['gid']))
+        os.setxattr(cache,'security.selinux',b'system_u:object_r:greyward_as_display_runtime_t:s0')
+        # logind owns this nondelegated scope. Root attaches only its stopped,
+        # fixed children through the kernel cgroup interface; no ordinary subject
+        # receives delegation or a generic migration operation.
+        cgroup = subprocess.check_output(['/usr/bin/systemctl', 'show', scope, '-p', 'ControlGroup', '--value'], text=True, timeout=1).strip()
+        if cgroup != f'/user.slice/user-{uid}.slice/{scope}':
+            raise RuntimeError('Root-controlled admitted scope required')
+        control = Path('/sys/fs/cgroup'+cgroup+'/cgroup.procs')
+        meta=control.stat()
+        if meta.st_uid != 0 or meta.st_mode & 0o022:
+            raise RuntimeError('Untrusted scope controller')
         for kind in ['display', 'authentication']:
             if kind == 'authentication':
                 # The auth shell has a private XDG_RUNTIME_DIR. Give DMS a
@@ -344,24 +346,22 @@ def start(uid, pid, ticks):
             time.sleep(.1)
         # A root guardian joins the actual nondelegated seat. It survives a
         # broker restart and closes the entire session on owner/input loss.
-        guardian = os.fork()
-        if guardian == 0:
-            migration = os.open(control, os.O_WRONLY | os.O_NOFOLLOW | os.O_CLOEXEC)
-            os.write(migration, str(os.getpid()).encode()); os.close(migration)
-            for descriptor in [0, 1, 2]:
-                replacement = os.open('/dev/null', os.O_RDWR)
-                os.dup2(replacement, descriptor); os.close(replacement)
-            monitor(uid, pid, ticks, sid, children, state, tty_path, original_tty)
-            os._exit(0)
+        start_guardian(uid, pid, ticks, sid, children, state, tty_path,
+                       original_tty, control, handle)
         print('ADMITTED', flush=True)
-    except Exception:
-        for child in children:
-            try:
-                child.kill(); child.wait(timeout=2)
-            except ProcessLookupError:
-                pass
-        os.setxattr(tty_path, 'security.selinux', original_tty.encode())
-        state.unlink(missing_ok=True)
+    except BaseException:
+        try:
+            for child in children:
+                try:
+                    child.kill(); child.wait(timeout=2)
+                except ProcessLookupError:
+                    pass
+            state.unlink(missing_ok=True)
+        finally:
+            # Includes preparation failures before the first child exists.
+            # Never strand tty1 in the protected label on an aborted login.
+            if tty_path is not None and original_tty is not None:
+                os.setxattr(tty_path, 'security.selinux', original_tty.encode())
         raise
     finally:
         os.close(handle)
@@ -393,26 +393,99 @@ def authentication_ready(uid, failure=None):
         return unavailable('readiness-format')
 
 
-def record_guardian_event(sid, reason):
+def record_guardian_event(sid, reason, *, event="closed"):
     # stdout/stderr are detached in the guardian. Keep a bounded reason in
     # the system journal, without logging credential or readiness contents.
     # Logging must never prevent the mandatory scope teardown.
     try:
         import syslog
         syslog.openlog('greyward-seat-guardian', facility=syslog.LOG_AUTHPRIV)
-        syslog.syslog(syslog.LOG_ERR, f'Admitted session {sid} closed: {reason}')
+        syslog.syslog(syslog.LOG_INFO if event == 'ready' else syslog.LOG_ERR,
+                      f'Admitted session {sid} {event}: {reason}')
     except (ImportError, OSError):
         pass
 
 
-def monitor(uid, pid, ticks, sid, children, state, tty_path, original_tty):
-    handles = [process(pid, uid, ticks)] + [os.pidfd_open(c.pid) for c in children]
+def start_guardian(uid, pid, ticks, sid, children, state, tty_path,
+                   original_tty, control, owner_handle):
+    """Do not let PID 1 collect admission before its guardian has escaped it.
+
+    The owner's already validated pidfd survives an exec and the fork; reopening
+    /proc ownership here would race the selected command's next exec. This is
+    only called after the ordinary PAM seat and root-owned scope were verified.
+    """
+    worker_handles = []
+    read_ready = write_ready = guardian_handle = None
     try:
+        for child in children:
+            worker_handles.append(os.pidfd_open(child.pid))
+        read_ready, write_ready = os.pipe2(os.O_CLOEXEC)
+        guardian = os.fork()
+        if guardian == 0:
+            os.close(read_ready)
+            try:
+                migration = os.open(control, os.O_WRONLY | os.O_NOFOLLOW | os.O_CLOEXEC)
+                try:
+                    os.write(migration, str(os.getpid()).encode())
+                finally:
+                    os.close(migration)
+                expected = f'0::/user.slice/user-{uid}.slice/session-{sid}.scope'
+                if Path('/proc/self/cgroup').read_text().strip() != expected:
+                    raise RuntimeError('Guardian scope attachment failed')
+                for descriptor in (0, 1, 2):
+                    replacement = os.open('/dev/null', os.O_RDWR)
+                    if replacement != descriptor:
+                        os.dup2(replacement, descriptor)
+                        os.close(replacement)
+                monitor(uid, pid, ticks, sid, children, state, tty_path, original_tty,
+                        handles=[owner_handle, *worker_handles], ready_fd=write_ready)
+            except BaseException:
+                record_guardian_event(sid, 'guardian-start-or-monitor-failed')
+                os._exit(1)
+            os._exit(0)
+        os.close(write_ready)
+        write_ready = None
+        guardian_handle = os.pidfd_open(guardian)
+        readable = select.select([read_ready, guardian_handle], [], [], 3)[0]
+        if read_ready not in readable or os.read(read_ready, 1) != b'G':
+            raise RuntimeError('Protected guardian did not acknowledge readiness')
+        expected = f'0::/user.slice/user-{uid}.slice/session-{sid}.scope'
+        if Path(f'/proc/{guardian}/cgroup').read_text().strip() != expected:
+            raise RuntimeError('Guardian scope acknowledgement changed')
+        if select.select([guardian_handle], [], [], 0)[0]:
+            raise RuntimeError('Protected guardian exited during admission')
+    except BaseException:
+        if guardian_handle is not None:
+            try:
+                signal.pidfd_send_signal(guardian_handle, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+        raise
+    finally:
+        for descriptor in [*worker_handles, read_ready, write_ready, guardian_handle]:
+            if descriptor is not None:
+                os.close(descriptor)
+
+
+def monitor(uid, pid, ticks, sid, children, state, tty_path, original_tty,
+            *, handles=None, ready_fd=None):
+    owned_handles = list(handles or [])
+    try:
+        if handles is None:
+            owned_handles.append(process(pid, uid, ticks))
+            owned_handles.extend(os.pidfd_open(c.pid) for c in children)
+        if ready_fd is not None:
+            if select.select(owned_handles, [], [], 0)[0] or not authentication_ready(uid):
+                raise RuntimeError('Protected guardian inputs already unavailable')
+            os.write(ready_fd, b'G')
+            os.close(ready_fd)
+            ready_fd = None
+            record_guardian_event(sid, 'monitor-ready', event='ready')
         while True:
-            exited = select.select(handles, [], [], 1)[0]
+            exited = select.select(owned_handles, [], [], 1)[0]
             if exited:
                 roles = ['session-owner-exited', 'display-owner-exited', 'authentication-owner-exited']
-                index = next(i for i, handle in enumerate(handles) if handle in exited)
+                index = next(i for i, handle in enumerate(owned_handles) if handle in exited)
                 reason = roles[index] if index < len(roles) else 'protected-worker-exited'
                 record_guardian_event(sid, reason)
                 break
@@ -421,19 +494,25 @@ def monitor(uid, pid, ticks, sid, children, state, tty_path, original_tty):
                 record_guardian_event(sid, failure[0] if failure else 'authentication-unavailable')
                 break
     finally:
-        # logind/PID 1 terminates the admitted scope and ordinary UWSM lifetime;
-        # no unlocked desktop survives loss of protected authentication.
-        state.unlink(missing_ok=True)
-        os.setxattr(tty_path, 'security.selinux', original_tty.encode())
+        for descriptor in [*owned_handles, ready_fd]:
+            if descriptor is not None:
+                try:
+                    os.close(descriptor)
+                except OSError:
+                    pass
+        # Retain the generation-bound locator until the next admission observes
+        # the old owner AND workers gone. Removing it before PID 1 retires this
+        # scope would allow a second admission to race surviving old workers.
         try:
-            subprocess.run(['/usr/bin/loginctl', 'terminate-session', sid], timeout=3)
+            os.setxattr(tty_path, 'security.selinux', original_tty.encode())
         finally:
-            # Fedora may abandon a logind scope when KillUserProcesses is off.
-            # These root-attached protected workers must not outlive admission.
-            # Ask PID 1 to retire this exact validated seat scope, including this
-            # guardian; never terminate the whole user or an SSH session.
-            subprocess.run(['/usr/bin/systemctl', 'stop', '--no-block',
-                            f'session-{sid}.scope'], check=True, timeout=3)
+            try:
+                subprocess.run(['/usr/bin/loginctl', 'terminate-session', sid], timeout=3)
+            finally:
+                # The guardian is itself in this exact scope. PID 1 owns the
+                # complete teardown; never stop the user manager or an SSH seat.
+                subprocess.run(['/usr/bin/systemctl', 'stop', '--no-block',
+                                f'session-{sid}.scope'], check=True, timeout=3)
 
 
 def lock_session(uid):

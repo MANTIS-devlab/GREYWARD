@@ -19,6 +19,9 @@ greyward-security-context|/usr/libexec/greyward-opensnitch-daemon-configure
 greyward-security-context|/usr/libexec/greyward-security-context-session10
 greyward-security-context|/usr/lib/greyward-security-context/greyward_security_context/security_notices.py
 greyward-security-context|/usr/libexec/greyward-clamav-scan
+greyward-security-context|/usr/lib/greyward-security-context/greyward_security_context/arrival_scanner.py
+greyward-security-context|/usr/lib/greyward-security-context/greyward_security_context/scan_cache.py
+greyward-security-context|/usr/lib/systemd/system/clamav-freshclam.service.d/10-greyward-freshclam-recovery.conf
 greyward-security-context|/usr/libexec/greyward-update-center
 greyward-security-context|/usr/libexec/greyward-update-action
 greyward-security-context|/usr/libexec/greyward-auto-update

@@ -18,6 +18,26 @@ Labwc; its X11 fallback fails on this Wayland desktop. Installing another
 portal-dependent application alone does not fix it: GREYWARD intentionally
 hides ordinary capture protocols from both apps and the WLR portal.
 
+## Editor appearance
+
+The [packaged editor adaptation](../../packaging/greyward-swappy/README.md)
+adds native GTK minimize/maximize/close controls and a resizable window, uses
+GTK's built-in dark theme, and supplies a graphite/silver GREYWARD capture icon.
+Branding 19 owns the artwork; Session 43 requires the adapted Swappy capability.
+Future complete image stages require its explicit `--swappy-rpm` input, including
+source provenance. The installed update does not require a logout; a newly opened
+editor uses it immediately. Existing capture/selection protections are unchanged.
+An isolated actual application render was checked on 31 October 2026; this is not
+a new physical capture or titlebar-click acceptance test.
+
+**Save** (or **Ctrl+S**) opens a native local Save dialog instead of silently
+writing another file on the Desktop. It defaults to an edited PNG beside the
+original capture, respecting an explicit Swappy save-directory preference.
+Success appears in the editor header; failures show an error and keep the image
+open. Cancel writes nothing. Originals are kept by default; saved copies use
+private permissions. Revision `8.greyward2` passed real isolated save/cancel/write-
+failure checks on `<validation-host>`; the capture boundary is unaffected.
+
 ## Authority and boundaries
 
 `labwc-screenshot.patch` reserves physical Print input in the protected

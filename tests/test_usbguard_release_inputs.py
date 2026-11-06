@@ -68,6 +68,15 @@ class UsbApprovalReleaseInputs(unittest.TestCase):
         payloads = {path: CHECK.normalized(value).replace(b'\n', b'\r\n') for path, value in payloads.items()}
         CHECK.verify(ROOT, Path('fixture.rpm'), 'context', lambda rpm, path: payloads[path])
 
+    def test_native_fedora_shebang_rewrite_keeps_the_updater_body_bound(self):
+        payloads = self.payloads('context')
+        path = '/usr/libexec/greyward-geoip-update'
+        payloads[path] = CHECK.normalized(payloads[path]).replace(b'#!/bin/sh\n', b'#!/usr/bin/sh\n', 1)
+        CHECK.verify(ROOT, Path('native.rpm'), 'context', lambda rpm, path: payloads[path])
+        payloads[path] += b'\nexit 0\n'
+        with self.assertRaisesRegex(ValueError, 'Stale or missing'):
+            CHECK.verify(ROOT, Path('modified.rpm'), 'context', lambda rpm, path: payloads[path])
+
     def test_helper_source_receipt_is_required_and_cannot_be_stale(self):
         for receipt in ({}, {'usbguardApprovalSourceSha256': '0' * 64}):
             payloads = self.payloads('dms')

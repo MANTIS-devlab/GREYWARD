@@ -68,9 +68,9 @@ WorkAreaMargins=20,20,20,20
 [Thumbnail]
 ShowThumbnails=false
 [Volume]
-MountOnStartup=false
-MountRemovable=false
-AutoRun=false
+MountOnStartup=true
+MountRemovable=true
+AutoRun=true
 ''')
     (desktop / 'folder ; $(literal)').mkdir()
     (labwc / 'rc.xml').write_text('<labwc_config/>\n')
@@ -117,6 +117,10 @@ AutoRun=false
                 raise RuntimeError('Desktop output integration failed: ' + str(code))
             if 'PASS fresh application process restores saved output and exact coordinates' not in output:
                 raise RuntimeError('Missing fresh-process persistence evidence')
+            if 'PASS independent surface destruction and idempotent teardown' not in output:
+                raise RuntimeError('Missing native surface-lifetime evidence')
+            if 'PASS inherited automount preferences cannot start desktop volume management' not in output:
+                raise RuntimeError('Missing inherited automount regression evidence')
         finally:
             if process.poll() is None and os.getpgid(process.pid) == process.pid:
                 os.killpg(process.pid, signal.SIGTERM)

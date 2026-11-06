@@ -417,3 +417,63 @@ The captures confirm the upstream dark libadwaita surface, navigation, search an
 ## Definition of done
 
 Software feels GREYWARD through its curated landing, restrained banner, desktop identity, DMS placement and launch path; Bazaar remains upstream-updateable; Flatpak sandbox permissions remain narrow; search, details, install/update flows, portals and errors remain functional; Update Center owns updates; Security Center exposes real application evidence; and the complete acceptance journeys pass on GREYWARD-DEV at both supported window targets.
+
+
+## 0.5.4 installed recurrence — 2 November 2026
+
+**RECOVERY OBSERVED; ORIGINAL REQUEST FAILURE STILL UNIDENTIFIED.**
+The installed test system has Session 45 / Center 133 / Context 132 and the
+canonical missing-cache helper. Its initially shipped Bazaar 0.9.7 was updated
+through Update Center by the user to 0.9.10 before SSH collection. This does not
+make 0.9.10 a new ISO baseline or prove which process version handled the earlier
+failed request.
+
+The failed-state readback again found no `core/flathub-cache`, despite a recent
+refresh timestamp and existing Flatpak groups/search metadata. NTP was synchronized.
+Existing application request stderr was not retained; audit records and launcher
+lifecycle messages do not identify the failed Explore API request. Do not label
+this a confirmed clock, TLS, MTU, SELinux or upstream-version defect.
+
+With no Bazaar process running, the normal GREYWARD wrapper was launched via the
+existing user manager with temporary diagnostic logging. The ordinary confined
+0.9.10 daemon fetched Explore and created a valid current-day GVariant containing
+20 categories. No cache was deleted/replaced manually, and no network, firewall,
+Flatpak permission, TLS, SELinux or user preference was changed. Incidental portal,
+font-cache and graphics warnings occurred during successful synchronization and
+are not evidence of its original failure. The Administration workspace covered
+the desktop during collection, so this is data/recovery verification, not rendered
+Explore acceptance.
+
+Only the diagnostic app scope was stopped, and the same normal wrapper was then
+reopened without verbose logging. The warm-launch cache hash stayed unchanged;
+both running Bazaar processes have no `G_MESSAGES_DEBUG` override. Detailed local
+evidence remains ignored under `.local/maintenance/20261102-test-iso-bazaar/`.
+No new permanent repair, ISO rebuild, package release or public publication is
+claimed. The startup workaround remains scoped; a durable change needs a captured
+failure or a controlled reproduction, including already-running daemon cases.
+
+### Launch-path investigation
+
+The user reports three unsuccessful close/reopen attempts before the logged
+recovery. Historical user-manager records at 18:33 and 18:34 explicitly name
+`/usr/local/libexec/greyward-software` in DMS application scopes. A disposable
+Quickshell probe, using the running ordinary shell's environment and application
+model, also resolves the Software desktop ID to that wrapper. The exported
+upstream Flatpak desktop file exists, but its presence does **not** establish a
+launcher bypass. No Bazaar process was running before the successful collection;
+an abandoned daemon is likewise not an established explanation.
+
+The successful launch used a transient user service with debug logging; DMS uses
+a transient user scope. Both reach the GREYWARD wrapper, and the current Flatpak
+default and explicit keyfile GSettings reads agree. These observations do not
+prove that the service/scope difference caused recovery. The initial API error
+is absent from the retained user journal, DMS text log and application state.
+
+The installed 0.9.10 manifest pins upstream commit
+`05401f8622e57faa735919c90e7c4422dd0e3dbb`. Inspection of that exact source confirms
+the three-hour startup gate and all-or-nothing Explore request initialization:
+a failed required request rejects the state before it is published. These are
+real recovery weaknesses, not a captured diagnosis of this original failure.
+Do not describe the cache as a packet filter, a generic restart as a proven fix,
+or the alternate desktop entry as the confirmed cause. No launcher, network,
+policy or installed application was changed during this follow-up investigation.

@@ -1,0 +1,53 @@
+--- a/src/ui/browser/properties.rs
++++ b/src/ui/browser/properties.rs
+@@ -15,6 +15,7 @@
+ };
+ use gtk::prelude::*;
+ use gtk::{gio, glib};
++use glib::variant::ToVariant;
+ use std::cell::Cell;
+ use std::rc::Rc;
+ use std::time::{Duration, Instant};
+@@ -162,6 +163,34 @@
+     }
+     parent.append(&row);
+     value
++}
++
++fn scan_receipt_row(parent: &gtk::Box, location: &Location) {
++    let Some(path) = location.native_path() else { return; };
++    let path = path.to_string_lossy().into_owned();
++    let label = properties_row(parent, "GREYWARD SCAN", "Loading scan information…");
++    label.set_wrap(true);
++    label.set_max_width_chars(54);
++    let label = label.downgrade();
++    glib::MainContext::default().spawn_local(async move {
++        let text = async {
++            let connection = gio::bus_get_future(gio::BusType::Session).await.ok()?;
++            let reply = connection.call_future(
++                Some("systems.mantis.greyward.SecurityContext1"),
++                "/systems/mantis/greyward/SecurityContext1",
++                "systems.mantis.greyward.SecurityContext1", "GetFileScanInfo",
++                Some(&(path,).to_variant()), None, gio::DBusCallFlags::NONE, 4000,
++            ).await.ok()?;
++            let (raw,) = reply.get::<(String,)>()?;
++            let value: serde_json::Value = serde_json::from_str(&raw).ok()?;
++            let state = value["state"].as_str().unwrap_or("UNAVAILABLE");
++            let validity = value["validity"].as_str().unwrap_or("UNKNOWN");
++            let detail = value["detail"].as_str().unwrap_or("No current scan result.");
++            let when = value["scanned_at"].as_str().unwrap_or("");
++            Some(format!("{state} · {validity}\n{detail}\n{when}"))
++        }.await.unwrap_or_else(|| "Scan information unavailable".to_owned());
++        if let Some(label) = label.upgrade() { label.set_text(&text); }
++    });
+ }
+ 
+ fn properties_size_row(parent: &gtk::Box, value: &str, spinner: &gtk::Spinner) -> gtk::Label {
+@@ -504,6 +533,7 @@
+                     _ => None,
+                 }),
+         );
++        scan_receipt_row(&details, &location);
+         let opens_with = properties_row(&details, "OPENS WITH", "—");
+         let hidden = properties_row(
+             &details,

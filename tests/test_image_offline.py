@@ -406,10 +406,12 @@ rpm_query() {
         self.assertIn('security_context_unit="$repo_root/security-center/security-context/systemd/greyward-security-context-user.service"', source)
         self.assertNotIn('cp -a "$security_context_unit" "$output/security-context/"', source)
 
-    def test_security_context_user_service_starts_without_wayland_condition(self):
+    def test_security_context_read_activation_remains_headless_without_ssh_autostart(self):
         source = (ROOT / "security-center/security-context/systemd/greyward-security-context-user.service").read_text()
         self.assertNotIn("ConditionEnvironment=WAYLAND_DISPLAY", source)
-        self.assertIn("WantedBy=default.target graphical-session.target", source)
+        self.assertIn("WantedBy=graphical-session.target", source)
+        self.assertNotIn("WantedBy=default.target", source)
+        self.assertIn("ConditionUser=!root", source)
 
     def test_secure_dns_allows_read_only_state_to_security_context(self):
         source = (ROOT / "security-center/security-context/dbus/systems.mantis.greyward.SecureDns1.conf").read_text()
@@ -456,6 +458,12 @@ rpm_query() {
         self.assertNotIn("plymouth-set-default-theme -R", source)
         self.assertLess(source.index(theme), source.index(rebuild))
         self.assertIn("%post --nochroot --erroronfail", source)
+
+    def test_composed_media_has_a_verified_native_checksum(self):
+        source = (ROOT / 'environment/image/build-iso.sh').read_text()
+        self.assertNotIn('--no-md5sum', source)
+        self.assertIn('checkisomd5 --verbose "$publication/image.iso"', source)
+        self.assertLess(source.index('checkisomd5 --verbose'), source.index('# Inspect the embedded payload'))
 
     def test_installer_records_and_confirms_the_post_install_reboot_handoff(self):
         installer = (ROOT / "environment/image/installer.ks.tmpl").read_text()

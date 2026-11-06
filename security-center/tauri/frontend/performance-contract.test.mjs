@@ -14,7 +14,7 @@ test('route mounting retains chrome and marks the correct parent destination',()
 });
 for(const failure of [false,true])test(`departed Activity ${failure?'failure':'success'} cannot overwrite the current view`,async()=>{
  let resolve,reject,paint=0;
- const c=extract('async function refreshNetworkActivity()','async function loadNetworkHistory(',{networkActivityState:{mode:'live',requestBusy:false,state:'AVAILABLE'},currentPage:'activity',requestSequence:3,document:{hidden:false},invokeBounded:()=>new Promise((a,b)=>{resolve=a;reject=b;}),syncNetworkActivityData:()=>paint++,renderNetworkActivityView:()=>paint++,actionError:()=>{throw Error('Old error painted');},copy:x=>x});
+ const c=extract('async function refreshNetworkActivity()','async function loadNetworkHistory(',{networkActivityState:{mode:'live',requestBusy:false,state:'AVAILABLE'},currentPage:'activity',requestSequence:3,document:{hidden:false},readNetworkActivity:()=>new Promise((a,b)=>{resolve=a;reject=b;}),syncNetworkActivityData:()=>paint++,renderNetworkActivityView:()=>paint++,actionError:()=>{throw Error('Old error painted');},copy:x=>x});
  const pending=c.refreshNetworkActivity();c.requestSequence++;c.currentPage='overview';failure?reject(Error('late')):resolve({});await pending;assert.equal(paint,0);assert.equal(c.networkActivityState.state,'AVAILABLE');assert.equal(c.networkActivityState.requestBusy,false);
 });
 test('a scan response belongs to both its operation and its route visit',async()=>{
@@ -42,4 +42,42 @@ test('Recovery omits unrelated device history; the device view retains the norma
  const c=extract('function getPageData(','async function refreshUpdates(',{window:{},pageDataRequests:new Map(),invokeBounded:(command,args)=>{calls.push({command,args});return Promise.resolve({});}});
  await c.getPageData('recovery');await c.getPageData('devices');
  assert.equal(calls.length,2);assert.equal(calls[0].command,'get_devices');assert.equal(calls[0].args.includeHistory,false);assert.equal(calls[1].command,'get_devices');assert.equal(calls[1].args,undefined);
+});
+
+
+test('Live polling is rearmed after entering a page in History and switching back',()=>{
+ let callback,cleared=0,reads=0;
+ const c=extract('function startNetworkActivityPolling()','async function loadNetworkHistory(',{updatePoll:42,currentPage:'activity',networkActivityState:{mode:'history'},window:{clearInterval:()=>cleared++,setInterval:(f,ms)=>{assert.equal(ms,2000);callback=f;return 43;}},refreshNetworkActivity:()=>reads++});
+ c.startNetworkActivityPolling();assert.equal(c.updatePoll,null);assert.equal(reads,0);
+ c.networkActivityState.mode='live';c.startNetworkActivityPolling();assert.equal(c.updatePoll,43);assert.equal(reads,1);callback();assert.equal(reads,2);
+ c.startNetworkActivityPolling();assert.equal(cleared,2);assert.equal(c.networkActivityState.assessmentRefreshAt,0);
+ const binding=source.slice(source.indexOf('app.querySelectorAll("[data-activity-mode]")'),source.indexOf('bindOnce(app.querySelector("[data-activity-load-more]")'));
+ assert.match(binding,/startNetworkActivityPolling\(\)/);
+});
+
+test('retained connection scores are refreshed after late process evidence without a new sequence',async()=>{
+ let cursor;
+ const c=extract('async function refreshNetworkActivity()','function startNetworkActivityPolling(',{networkActivityState:{mode:'live',requestBusy:false,nextSequence:900,assessmentRefreshAt:1},currentPage:'activity',requestSequence:3,document:{hidden:false},Date:{now:()=>20000},readNetworkActivity:async value=>{cursor=value;return {};},syncNetworkActivityData:()=>{},renderNetworkActivityView:()=>{},actionError:()=>'',copy:x=>x});
+ await c.refreshNetworkActivity();assert.equal(cursor,0);assert.equal(c.networkActivityState.assessmentRefreshAt,20000);
+ c.Date.now=()=>21000;await c.refreshNetworkActivity();assert.equal(cursor,900);
+});
+
+test('reassessment snapshots do not count existing paused rows as new activity',()=>{
+ const state={sessionId:'same',events:[{event_id:'one',sequence:1,behavioral:{score:0}}],expanded:new Set(),paused:true,pending:0,nextSequence:1};
+ const c=extract('function syncNetworkActivityData(','function renderNetworkActivityView(',{networkActivityState:state,copy:x=>x});
+ c.syncNetworkActivityData({session_id:'same',reset:true,next_sequence:1,events:[{event_id:'one',sequence:1,behavioral:{score:35}}]},{trackPending:true});
+ assert.equal(state.pending,0);assert.equal(state.events[0].behavioral.score,35);
+ state.pending=5;c.syncNetworkActivityData({session_id:'same',reset:true,next_sequence:1,events:state.events},{trackPending:true});assert.equal(state.pending,5);
+});
+
+test('a focused row button cannot indefinitely freeze all risk badges',()=>{
+ let focused=0,bound=0;
+ const control={focus:options=>{assert.equal(options.preventScroll,true);focused++;}};
+ const row={dataset:{activityEvent:'one'},querySelectorAll:()=>[control],querySelector:()=>control};
+ const active={closest:()=>row,matches:()=>false};row.querySelectorAll=()=>[active];
+ const replacement={dataset:{activityEvent:'one'},querySelectorAll:()=>[control],querySelector:()=>control};
+ const list={contains:()=>true,querySelectorAll:()=>[replacement],innerHTML:'old'};
+ const c=extract('function renderNetworkActivityView(','async function refreshNetworkActivity()',{currentPage:'activity',document:{activeElement:active},networkActivityState:{renderedListMarkup:'old'},app:{querySelector:s=>s==='[data-network-activity-list]'?list:null},networkActivityRowsMarkup:()=>'<new risk=3>',readPageScrollPosition:()=>1,applyPageScroll:()=>{},bindNetworkActivityContent:()=>bound++,networkActivitySummaryMarkup:()=>'',syncNetworkActivityControls:()=>{}});
+ c.renderNetworkActivityView();assert.equal(list.innerHTML,'<new risk=3>');assert.equal(focused,1);assert.equal(bound,1);
+ active.matches=()=>true;list.innerHTML='editing';c.networkActivityState.renderedListMarkup='different';c.renderNetworkActivityView();assert.equal(list.innerHTML,'editing');
 });

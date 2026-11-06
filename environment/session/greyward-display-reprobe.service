@@ -1,0 +1,36 @@
+[Unit]
+Description=GREYWARD bounded KVM display redetection
+Documentation=https://docs.kernel.org/gpu/drm-kms.html
+After=systemd-udevd.service
+StartLimitIntervalSec=30
+StartLimitBurst=4
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 -I /usr/local/libexec/greyward-display-reprobe
+TimeoutStartSec=15
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+PrivateNetwork=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+# Connector status writes are the purpose of this service; all other kernel
+# control directories remain read-only. No sysctl or GPU power setting changes.
+ReadOnlyPaths=/proc/sys /sys/kernel /sys/module /sys/firmware
+RestrictAddressFamilies=AF_UNIX
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+Nice=10
+CPUWeight=20
+MemoryMax=48M
+TasksMax=4
+UMask=0077

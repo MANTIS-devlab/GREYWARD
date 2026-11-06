@@ -2,6 +2,9 @@
 Description=GREYWARD selected packaged DMS shell
 PartOf=graphical-session.target
 After=graphical-session.target
+Wants=greyward-desktop-icons.service
+StartLimitIntervalSec=180
+StartLimitBurst=3
 # The user unit is enabled globally for the production account, but Labwc is
 # responsible for creating WAYLAND_DISPLAY. Prevent an early user-manager
 # start from launching DMS before the compositor socket exists; the Labwc
@@ -11,8 +14,11 @@ ConditionEnvironment=WAYLAND_DISPLAY
 Type=simple
 ExecStartPre=/usr/local/libexec/greyward-dms-session-migrate
 ExecStart=/usr/local/bin/greyward-dms run --session
+# Ordering dependants after exec alone is insufficient: wait for real shell IPC.
+ExecStartPost=/usr/local/libexec/greyward-dms-runtime-check --desktop-only --wait 30
+TimeoutStartSec=60
 Restart=on-failure
-RestartSec=2
+RestartSec=5
 SuccessExitStatus=143 SIGTERM
 Environment=QT_QPA_PLATFORM=wayland
 Environment=QT_WAYLAND_DISABLE_WINDOWDECORATION=1

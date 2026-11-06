@@ -1,5 +1,18 @@
 # DMS 2.0 desktop migration
 
+## Factory taskbar application icons — 1 November 2026
+
+The accepted active reference taskbar uses `appsDockIconSizePercentage: 180`.
+This replaces 155 in `environment/session/dms-2.0-defaults/experience.json` and
+is packaged by the next Session 44 build. Only that icon-size value was captured;
+the disabled reference bar, connector routing and other personal settings are
+not copied. First-session seeding retains established users' layout choices.
+The image stager compares the packaged experience against this canonical source,
+so a Session RPM containing the old size cannot pass complete visual staging.
+No desktop restart, package activation or ISO construction is needed to record
+this default; the reference already uses it through its native DMS preference.
+
+
 Status: revision-7 physical successor activated with the settings-schema and
 Security dashboard refresh. Fresh protected-seat and runtime-schema readback pass;
 physical workflow acceptance remains pending; not release accepted.

@@ -9,14 +9,13 @@ set -euo pipefail
 # list is user-owned: a restart, update, or provisioning rerun must not re-pin
 # an app the user intentionally removed. A malformed state file is preserved
 # for diagnosis.
-read -r selected_release < /etc/greyward/dms-release
-state_directory=DankMaterialShell
-if [[ "$selected_release" == v2.0.0-7 ]]; then
-  state_directory=dms
-fi
+# Use the same verified layout selection as the state migrator; package
+# generation changes must never silently select the legacy directory.
+state_directory=$(/usr/local/libexec/greyward-dms-state-migrate --print-directory)
+case "$state_directory" in dms|DankMaterialShell) ;; *) exit 1 ;; esac
 state_file="${XDG_STATE_HOME:-$HOME/.local/state}/$state_directory/session.json"
 default_pins=("brave-browser" "com.raggesilver.BlackBox" "io.github.lgse.Strata")
-if [[ "$selected_release" == v2.0.0-7 ]]; then
+if [[ "$state_directory" == dms ]]; then
   # Native DMS 2.0 Settings action; keep the legacy generation's identities.
   default_pins+=("dms_settings")
 fi
