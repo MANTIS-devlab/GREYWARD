@@ -1,5 +1,16 @@
 # GREYWARD current status
 
+## Sophon 0.5.5 public release — 6 November 2026
+
+The [0.5.5 Sophon installer](patch-notes/0.5.5-sophon.md), frozen corresponding
+source and four signed Office generation-16 source RPMs are published on
+SourceForge. The existing image is reused; full SFTP readback verifies its
+5,388,173,312 bytes and SHA-256. Center/Context 137, Branding 22, Files 24,
+Session 45 and the Runtime 88 / Enrollment 91 fresh-install pair are included.
+Native composition and independent Windows media checks pass. Full installed,
+encrypted-root/recovery and broad hardware acceptance remain separate.
+The known Bazaar Explore recurrence is not claimed fixed.
+
 ## Network Activity real refresh and mixed attribution — 6 November 2026
 
 **Installed and exercised locally: Center/Context 137.** A real bounded network

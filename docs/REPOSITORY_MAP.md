@@ -1,5 +1,10 @@
 # GREYWARD repository map
 
+[0.5.5 Sophon notes](patch-notes/0.5.5-sophon.md) own the current download,
+frozen sources, selected package tuple, checksums and acceptance limits.
+[Publication](PUBLICATION.md) records the verified upload. Public main can
+contain changes newer than the image's frozen input.
+
 Network country data and risk priority: Context's `network_location.py` and
 `geoip_update.py`, its fixed updater/timer/sysuser and Context RPM own local
 DB-IP MMDB reads and monthly-data recovery. Production enables the timer; the
@@ -24,7 +29,7 @@ See [the input contract](security-center/APPLICATION_SECURITY_ENROLLMENT.md#polk
 and `tests/test_authentication_input_focus.py` for old/new two-output validation;
 no live agent restart or security-policy relaxation is implied.
 
-[0.5.4 Sophon notes](patch-notes/0.5.4-sophon.md) own the current download,
+[0.5.4 Sophon notes](patch-notes/0.5.4-sophon.md) retain the preceding download,
 corresponding-source archive, selected package tuple, checksums and acceptance
 limits. [Publication](PUBLICATION.md) records the verified upload. This release
 documentation does not imply that public main matches every frozen runtime input.

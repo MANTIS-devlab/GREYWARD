@@ -1,4 +1,13 @@
-# Prepared 0.5.5 Sophon source — 6 November 2026
+# Current published installer — 6 November 2026
+
+The current download is [0.5.5 Sophon](https://sourceforge.net/projects/greyward/files/v0.5.5-sophon/).
+Use its [release notes](../../docs/patch-notes/0.5.5-sophon.md), checksums and
+frozen corresponding-source archive for the exact runtime/build inputs. The
+existing ISO and ten companions have complete readback verification.
+No ISO was rebuilt for upload. Composition and publication remain separate
+from full clean-install, encrypted-root/recovery and hardware acceptance.
+
+# 0.5.5 Sophon source — 6 November 2026
 
 The current source includes Center/Context 137 (Live refresh and mixed process
 attribution), local GeoIP flags, evidence-based network risk, Branding 22's boot
@@ -7,12 +16,12 @@ handoff in Runtime 88 / Enrollment 91. The selected Office generation is 16.
 Build with the candidate manifest and all fifteen matched RPM inputs. The source,
 payload, dependency and signature checks remain mandatory, including native
 `checkisomd5` validation. Composition is separate from clean-install and hardware
-acceptance. The public download remains 0.5.4 until a new ISO is uploaded and
-verified; this source update alone does not publish an installer.
+acceptance. The verified 0.5.5 installer is published on SourceForge. Use its frozen
+corresponding-source archive for exact image inputs; public main can be newer.
 
-# Current published installer — 2 November 2026
+# Previous published installer — 2 November 2026
 
-The current download is [0.5.4 Sophon](https://sourceforge.net/projects/greyward/files/v0.5.4-sophon/).
+The preceding download is [0.5.4 Sophon](https://sourceforge.net/projects/greyward/files/v0.5.4-sophon/).
 Use its frozen corresponding-source archive and release notes for the exact
 runtime/build inputs. This README/release-documentation update does not promote
 all implementation paths on public main to that frozen revision.

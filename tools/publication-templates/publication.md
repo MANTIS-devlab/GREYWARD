@@ -1,6 +1,30 @@
 # Public source maintenance
 
-## Sophon 0.5.4 publication — 2 November 2026
+## Sophon 0.5.5 publication — 6 November 2026
+
+The existing [0.5.5 Sophon ISO](patch-notes/0.5.5-sophon.md) and ten companions
+are published on SourceForge. Full SFTP readback verifies all 5,388,173,312
+ISO bytes against SHA-256
+`6175a18609bb41bdf3f3c12b7c1aabef38c63ea17ad2dec7ec96331d796d2092`,
+plus the frozen corresponding sources, four signed Office generation-16 source
+RPMs, manifest, verification, release notes and checksums. Strict host-key and
+TLS checks remain enabled. The final ISO filename was exposed only after
+verification. No ISO was rebuilt for publication.
+
+The source archive contains 5,295 project files with original/published hashes,
+source origins, executable modes and all fifteen selected RPM inputs. Its SHA-256
+is `f42437f21d3421d538d0c7fee54ce77104303e97e2c0013014cab3e0cfd9bce1`.
+It retains the exact validated Center/Context 137 build source; private history,
+credentials and host configuration are excluded and documentation is sanitized.
+No non-document source bytes change from their recorded origins.
+The README gallery and GIF are unchanged.
+
+Use the frozen archive for this image; public main can contain later changes.
+Complete clean-install, encrypted-root/recovery and hardware acceptance remain
+separate. The previously reported Bazaar Explore recurrence has no confirmed
+durable correction in this release.
+
+## Historical Sophon 0.5.4 publication — 2 November 2026
 
 The existing [0.5.4 Sophon ISO](https://github.com/MANTIS-devlab/GREYWARD/blob/main/docs/patch-notes/0.5.4-sophon.md) and ten companions
 are published on SourceForge. Full HTTPS readback verifies all 5,267,587,072 ISO
