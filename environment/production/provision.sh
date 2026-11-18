@@ -336,9 +336,7 @@ install -D -m 0755 "$stage/production-acceptance.sh" /usr/local/libexec/greyward
 install -D -m 0644 "$flatpak/labwc-portals.conf" /etc/xdg-desktop-portal/labwc-portals.conf
 install -D -m 0644 "$flatpak/labwc-portals.conf" /etc/xdg-desktop-portal/greyward/labwc-portals.conf
 install -D -m 0644 "$flatpak/greyward-portal-backends.conf" /usr/lib/systemd/user/xdg-desktop-portal.service.d/greyward-backends.conf
-for backend in gtk wlr; do
-    ln -sfn "/usr/share/xdg-desktop-portal/portals/$backend.portal" "/etc/xdg-desktop-portal/greyward/$backend.portal"
-done
+ln -sfn /usr/share/xdg-desktop-portal/portals/gtk.portal /etc/xdg-desktop-portal/greyward/gtk.portal
 install -D -m 0644 "$flatpak/bazaar-main-runtime.yaml" /usr/share/greyward/bazaar/main.yaml
 install -D -m 0644 "$flatpak/greyward-privacy-runtime.yaml" /usr/share/greyward/bazaar/greyward-privacy.yaml
 install -D -m 0644 "$flatpak/greyward-software-banner.svg" /usr/share/greyward/bazaar/greyward-software-banner.svg

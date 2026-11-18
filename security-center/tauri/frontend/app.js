@@ -94,7 +94,7 @@ let fileContextActionPending = false;
 const privacyState = {feedback: "", exportPath: "", profilePending: null, localActionPending: false, feedbackScope: "local"};
 const updateListState = {limit: UPDATE_PAGE_SIZE};
 const fileSecurityState = {operationId: null, polling: null, pollDelayMs: 900, requestBusy: false, feedback: ""};
-const deviationState = {feedback: ""};
+const deviationState = {feedback: "", acknowledged: new Set()};
 const DEFAULT_NETWORK_ACTIVITY_FILTERS = Object.freeze({search: "", decision: "ALL", protocol: "ALL", port: "", window: "30m"});
 function networkActivityDefaultFilters() { return {...DEFAULT_NETWORK_ACTIVITY_FILTERS}; }
 const networkActivityState = {
@@ -105,6 +105,7 @@ const networkActivityState = {
   filters: networkActivityDefaultFilters(),
   expanded: new Set(),
   paused: false,
+  frozen: null,
   pending: 0,
   requestBusy: false,
   assessmentRefreshAt: 0,
@@ -363,16 +364,14 @@ function localizedTime(value, fallback = copy("ui.unavailable")) {
 function deviationAction(row) {
   const accepted = row.accepted_deviation === true;
   if (!accepted && !["REVIEW NEEDED", "ACTION REQUIRED", "UNAVAILABLE"].includes(String(row.state || "").toUpperCase())) return "";
+  if (row.can_ignore !== true) {
+    if (deviationState.acknowledged.has(row.check_id)) return '<span class="section-meta">' + esc(copy("evidence.deviation.acknowledged")) + '</span>';
+    return '<button class="text-button evidence-deviation" data-acknowledge-check="' + esc(row.check_id) + '">' + esc(copy("evidence.deviation.acknowledge")) + '</button>';
+  }
   const label = accepted ? copy("evidence.deviation.restore") : copy("evidence.deviation.ignore");
   return `<button class="text-button evidence-deviation" data-deviation-id="${esc(row.check_id)}" data-deviation-accepted="${accepted ? "false" : "true"}">${label} ${icon("arrow")}</button>`;
 }
-function recoveryDeviationAction(row) {
-  const value = String(row?.value || "").toUpperCase();
-  const accepted = row?.value_key === "evidence.limitation.accepted" || value === "PROTECTED";
-  return ["REVIEW NEEDED", "ACTION REQUIRED", "UNAVAILABLE", "PROTECTED"].includes(value)
-    ? `<button class="text-button evidence-deviation" data-deviation-id="recovery.readiness" data-deviation-accepted="${accepted ? "false" : "true"}">${esc(copy(accepted ? "evidence.deviation.restore" : "evidence.deviation.ignore"))} ${icon("arrow")}</button>`
-    : "";
-}
+
 function evidenceValues(row) {
   const values = {...(row?.copy_values || {})};
   if (values.missing) values.missing = String(values.missing).split("|").filter(Boolean).map((key) => copy(key)).join(", ");
@@ -423,6 +422,26 @@ function evidenceTechnicalMarkup(row) {
   return `<article class="evidence-row tone-${tone(row.tone)}"><div class="evidence-row-top"><strong>${esc(evidenceCopy(row, "title_key", "system.checks.unnamed"))}</strong>${status(row.state, row.tone, {canonical:true})}${row.accepted_deviation ? `<span class="section-meta">${esc(copy("evidence.limitation.accepted"))}</span>` : ""}</div><p>${esc(evidenceCopy(row, "summary_key", "system.checks.noSummary"))}</p><small>${esc(evidenceCopy(row, "recorded_result_key", "system.checks.notRecorded"))} \u00b7 ${esc(t("system.checks.evidenceCount", {count: row.evidence_count ?? 0}))}</small><p>${esc(evidenceCopy(row, "recommendation_key", "system.checks.noAction"))}</p>${technicalDisclosure(copy("system.checks.technicalRecord"), "", technicalRecord)}${deviationAction(row)}</article>`;
 }
 
+let tpmGuideReadThisSession = false;
+async function markTpmGuideRead(button) {
+  const note = app.querySelector("[data-tpm-guide-state]");
+  button.disabled = true;
+  try {
+    await invokeBounded("mark_tpm_guide_read", undefined, 3000);
+    tpmGuideReadThisSession = true;
+    pageCache.delete("overview");
+    if (note?.isConnected) note.textContent = copy("devices.tpm.read");
+    button.hidden = true;
+  } catch {
+    if (note?.isConnected) note.textContent = copy("devices.tpm.readFailed");
+    button.disabled = false;
+  }
+}
+function tpmGuideMarkup(capability, read) {
+  const guideRead = read || tpmGuideReadThisSession;
+  const label = {Available: "detected", Missing: "missing", Unusable: "unusable"}[capability] || "unknown";
+  return `<section class="plain-section feature-section" id="tpm-guide" aria-labelledby="tpm-guide-title"><div class="feature-heading"><span class="feature-icon">${icon("devices")}</span><div><h2 id="tpm-guide-title" tabindex="-1">${esc(copy("devices.tpm.title"))}</h2><p class="section-meta">${esc(copy(`devices.tpm.${label}`))}</p></div></div><p>${esc(copy("devices.tpm.about"))}</p><p>${esc(copy("devices.tpm.enable"))}</p><p>${esc(copy("devices.tpm.enrollment"))}</p><p class="section-meta" data-tpm-guide-state role="status">${esc(guideRead ? copy("devices.tpm.read") : copy("devices.tpm.optional"))}</p>${guideRead ? "" : `<button class="text-button" data-tpm-guide-read>${esc(copy("devices.tpm.markRead"))}</button>`}</section>`;
+}
 function overviewMarkup(data, digest = {}, guard = {}) {
   const overview = data.overview || data;
   const systemPosture = overview.posture || {state:"UNAVAILABLE", tone:"unavailable", message_key:"overview.posture.unavailable.message", care_key:"overview.posture.unavailable.care", evaluated_at:copy("ui.unknown")};
@@ -444,8 +463,9 @@ function overviewMarkup(data, digest = {}, guard = {}) {
     : `data-page="${esc(normalizePage(next?.destination || "system"))}"`;
   const decision = next ? `<div class="brief-decision"><div class="eyebrow">${esc(t("overview.next"))}</div><h2>${esc(nextTitle)}</h2><p>${esc(nextSummary)}</p>${actionButton(copy("overview.reviewAction", {name: nextTitle}), copy("overview.reviewAction.detail"), "primary", nextAction, "arrow")}</div>` : `<div class="brief-decision ${posture.state === "UNAVAILABLE" || limited ? "review" : "calm"}"><div class="eyebrow">${esc(t("overview.next"))}</div><h2>${esc(copy(posture.state === "UNAVAILABLE" ? "overview.unavailable.title" : limited ? "overview.limited.title" : "overview.noAction.title"))}</h2>${actionButton(t("overview.viewSystem"), copy("overview.viewSystem.detail"), "secondary", 'data-page="system"', "shield")}</div>`;
   const findingsSection = remainingFindings.length ? `<section class="overview-section priority-section"><div class="section-heading"><div><div class="eyebrow">${esc(copy("overview.more.eyebrow"))}</div><h2>${esc(copy("overview.more.count", {count: remainingFindings.length}))}</h2></div></div><div class="finding-list">${remainingFindings.map((finding, index) => findingMarkup(finding, index + 2)).join("")}</div></section>` : "";
+  const setupNote = (tpmGuideReadThisSession || overview.tpm_guide_read !== false) ? "" : `<section class="overview-protection"><span class="guard-item-icon" aria-hidden="true">${icon("devices")}</span><div><strong>${esc(copy("devices.tpm.intro"))}</strong><p>${esc(copy("devices.tpm.optional"))}</p></div><button class="text-button" data-tpm-guide-open>${esc(copy("devices.tpm.learn"))} ${icon("arrow")}</button></section>`;
   const administration = `<section class="overview-protection"><span class="guard-item-icon" aria-hidden="true">${icon("terminal")}</span><div><strong>${esc(copy("administration.title"))}</strong><p>${esc(copy("administration.copy"))}</p><p id="administration-status" role="status"></p></div><button class="secondary" data-administration-open disabled>${esc(copy("administration.open"))}</button></section>`;
-  return `${pageHeader(copy("overview.eyebrow"), t("nav.overview"), "", actionButton(t("ui.refresh"), copy("overview.refresh.detail"), "secondary", "data-refresh", "refresh"))}<section class="overview-brief tone-${tone(posture.tone)}"><div class="brief-index"><div class="eyebrow">${esc(copy("overview.posture.eyebrow"))}</div></div><div class="brief-main"><div class="brief-state"><div class="eyebrow">${esc(copy("design.overview.scope"))}</div><h2>${esc(copy(`design.posture.${posture.state === "SECURE" ? "secure" : posture.state === "PROTECTED" ? "protected" : posture.state === "REVIEW NEEDED" ? "review" : "unavailable"}`))}</h2></div>${posture.state === "REVIEW NEEDED" ? "" : `<p>${esc(postureMessage)}</p>`}<div class="brief-context"><span>${esc(copy(posture.care_key || "", postureValues) || posture.care || copy("overview.posture.unavailable.care"))}</span><time>${esc(t("ui.checked", {time: localizedTime(posture.evaluated_at, copy("ui.unknown"))}))}</time></div></div>${decision}</section>${findingsSection}<section id="guard-overview" aria-live="polite">${applicationView.overviewSummary(guard)}</section><div class="overview-lower product-overview"><section class="overview-section domain-section"><div class="section-heading"><div><div class="eyebrow">${esc(copy("overview.domains.eyebrow"))}</div><h2>${esc(copy("overview.domains.title"))}</h2></div><button class="text-button" data-page="system">${esc(copy("overview.domains.action"))} ${icon("arrow")}</button></div><div class="domain-list">${domains.map(domainMarkup).join("")}</div></section>${administration}${overviewActivitySection(overview, digest)}</div>`;
+  return `${pageHeader(copy("overview.eyebrow"), t("nav.overview"), "", actionButton(t("ui.refresh"), copy("overview.refresh.detail"), "secondary", "data-refresh", "refresh"))}<section class="overview-brief tone-${tone(posture.tone)}"><div class="brief-index"><div class="eyebrow">${esc(copy("overview.posture.eyebrow"))}</div></div><div class="brief-main"><div class="brief-state"><div class="eyebrow">${esc(copy("design.overview.scope"))}</div><h2>${esc(copy(`design.posture.${posture.state === "SECURE" ? "secure" : posture.state === "PROTECTED" ? "protected" : posture.state === "REVIEW NEEDED" ? "review" : "unavailable"}`))}</h2></div>${posture.state === "REVIEW NEEDED" ? "" : `<p>${esc(postureMessage)}</p>`}<div class="brief-context"><span>${esc(copy(posture.care_key || "", postureValues) || posture.care || copy("overview.posture.unavailable.care"))}</span><time>${esc(t("ui.checked", {time: localizedTime(posture.evaluated_at, copy("ui.unknown"))}))}</time></div></div>${decision}</section>${findingsSection}<section id="guard-overview" aria-live="polite">${applicationView.overviewSummary(guard)}</section><div class="overview-lower product-overview"><section class="overview-section domain-section"><div class="section-heading"><div><div class="eyebrow">${esc(copy("overview.domains.eyebrow"))}</div><h2>${esc(copy("overview.domains.title"))}</h2></div><button class="text-button" data-page="system">${esc(copy("overview.domains.action"))} ${icon("arrow")}</button></div><div class="domain-list">${domains.map(domainMarkup).join("")}</div></section>${setupNote}${administration}${overviewActivitySection(overview, digest)}</div>`;
 }function plainSection(eyebrow, title, rows, glyph) { return `<section class="plain-section"><div class="section-heading"><div><div class="eyebrow">${esc(eyebrow)}</div><h2>${esc(title)}</h2></div></div>${rows.length ? rows.map((row) => statusRow(row, true)).join("") : emptyState(copy("ui.unavailable"), copy("ui.unavailableCopy"), glyph)}</section>`; }
 
 function secureDnsMarkup(dns) {
@@ -607,8 +627,12 @@ function networkActivityFiltersAreDefault() {
     && filters.port === DEFAULT_NETWORK_ACTIVITY_FILTERS.port
     && filters.window === DEFAULT_NETWORK_ACTIVITY_FILTERS.window;
 }
+function pruneNetworkExpansions() {
+  const ids = new Set(networkActivityState.events.map(event => event.event_id));
+  networkActivityState.expanded = new Set([...networkActivityState.expanded].filter(id => ids.has(id)));
+}
 function networkActivitySource() {
-  return networkActivityState.mode === "history" ? networkActivityState.historyEvents : networkActivityState.events;
+  return networkActivityState.mode === "history" ? networkActivityState.historyEvents : (networkActivityState.frozen?.events ?? networkActivityState.events);
 }
 async function readNetworkActivity(sinceSequence=0) {
   return invokeBounded("get_network_activity", {sinceSequence: sinceSequence, limit:256},12000).catch(()=>({state:"UNAVAILABLE",reset:true,session_id:null,events:[],summary:{}}));
@@ -727,13 +751,14 @@ function networkActivityRowsMarkup() {
   return visible.map(networkActivityRowMarkup).join("") + note + more;
 }
 function networkActivitySummaryMarkup() {
-  const summary = networkActivityState.summary || {};
+  const view = networkActivityState.frozen || networkActivityState;
+  const summary = view.summary || {};
   const buckets = Array.isArray(summary.buckets) ? summary.buckets : [];
   const peak = Math.max(1, ...buckets.map((bucket) => Number(bucket.total || 0)));
   const bars = buckets.slice(-30).map((bucket) => `<span style="height:${Math.max(8, Math.round((Number(bucket.total || 0) / peak) * 100))}%" title="${esc(copy("network.activity.observedEvents", {count: bucket.total || 0}))}"></span>`).join("");
-  const state = String(networkActivityState.state || "UNAVAILABLE").toUpperCase();
+  const state = String(view.state || "UNAVAILABLE").toUpperCase();
   const headline = state === "OPERATING" ? copy("network.activity.state.active") : state === "DEGRADED" ? copy("network.activity.state.delayed") : copy("network.activity.state.unavailable");
-  const detail = state === "OPERATING" ? copy("network.activity.detail.operating") : networkActivityState.detail || copy("network.activity.detail.unavailable");
+  const detail = state === "OPERATING" ? copy("network.activity.detail.operating") : view.detail || copy("network.activity.detail.unavailable");
   return `<section class="network-activity-summary" data-state="${esc(state)}"><article class="network-activity-health"><div class="eyebrow">${esc(copy("network.activity.observation"))}</div><h2>${esc(headline)}</h2><p>${esc(detail)}</p>${status(headline, state === "OPERATING" ? "positive" : state === "DEGRADED" ? "review" : "unknown")}</article><article class="network-summary-card"><span>${esc(copy("network.activity.observed"))}</span><strong>${esc(summary.total || 0)}</strong><small>${esc(copy("network.activity.lastThirtyMinutes"))}</small></article><article class="network-summary-card is-allowed"><span>${esc(copy("network.activity.decision.allowed"))}</span><strong>${esc(summary.allowed || 0)}</strong><small>${esc(copy("network.activity.observedDecisions"))}</small></article><article class="network-summary-card${Number(summary.blocked) > 0 ? " is-blocked" : ""}"><span>${esc(copy("network.activity.decision.blocked"))}</span><strong>${esc(summary.blocked || 0)}</strong><small>${esc(copy("network.activity.observedDecisions"))}</small></article><article class="network-activity-chart"><div><span>${esc(copy("network.activity.rhythm"))}</span><small>${esc(copy("network.activity.boundedWindow"))}</small></div><div class="network-activity-sparkline" aria-label="${esc(copy("network.activity.chartLabel"))}">${bars || "<span style=\"height:8%\"></span>"}</div></article></section>`;
 }
 function networkActivityLegendMarkup() {
@@ -750,8 +775,8 @@ function syncNetworkActivityData(payload, {trackPending = false} = {}) {
     const previousIds = new Set(networkActivityState.events.map(event => event.event_id));
     addedCount = sessionChanged || !hadSession ? incoming.length : incoming.filter(event => !previousIds.has(event.event_id)).length;
     networkActivityState.events = incoming;
-    if (sessionChanged) networkActivityState.expanded.clear();
-    networkActivityState.pending = trackPending && hadSession && networkActivityState.paused ? (sessionChanged ? addedCount : networkActivityState.pending + addedCount) : 0;
+    if (sessionChanged && !networkActivityState.paused) networkActivityState.expanded.clear();
+    if (trackPending && networkActivityState.paused) networkActivityState.pending += addedCount;
   } else {
     const events = new Map(networkActivityState.events.map((event) => [event.event_id, event]));
     incoming.forEach((event) => {
@@ -767,7 +792,7 @@ function syncNetworkActivityData(payload, {trackPending = false} = {}) {
   networkActivityState.state = payload.state || "UNAVAILABLE";
   networkActivityState.detail = payload.detail || copy("network.activity.detail.unavailable");
   networkActivityState.mutationAvailable = payload.rule_mutation === "TYPED_POLICY";
-  networkActivityState.expanded = new Set([...networkActivityState.expanded].filter((id) => networkActivityState.events.some((event) => event.event_id === id)));
+  if (!networkActivityState.paused) pruneNetworkExpansions();
   return addedCount;
 }
 function renderNetworkActivityView({renderRows = true} = {}) {
@@ -896,7 +921,16 @@ function bindNetworkActivityContent() {
   bindOnce(app.querySelector("[data-activity-clear]"), "click", () => { networkActivityState.filters = networkActivityDefaultFilters(); if (networkActivityState.mode === "history") loadNetworkHistory(); else renderNetworkActivityView(); });
   app.querySelectorAll("[data-activity-mode]").forEach((button) => bindOnce(button, "click", async (event) => { networkActivityState.mode = event.currentTarget.dataset.activityMode; startNetworkActivityPolling(); if (networkActivityState.mode === "history") await loadNetworkHistory(); else { cancelNetworkHistoryLoad(); renderNetworkActivityView(); } }));
   bindOnce(app.querySelector("[data-activity-load-more]"), "click", () => loadNetworkHistory(historyQuerySequence, true));
-  bindOnce(app.querySelector("[data-activity-pause]"), "click", () => { networkActivityState.paused = !networkActivityState.paused; if (!networkActivityState.paused) networkActivityState.pending = 0; renderNetworkActivityView({renderRows: true}); });
+  bindOnce(app.querySelector("[data-activity-pause]"), "click", () => { networkActivityState.paused = !networkActivityState.paused;
+    if (networkActivityState.paused) {
+      const {events, summary, state, detail} = networkActivityState;
+      networkActivityState.frozen = {events: events.slice(), summary, state, detail};
+    } else {
+      networkActivityState.frozen = null;
+      networkActivityState.pending = 0;
+      pruneNetworkExpansions();
+    }
+    renderNetworkActivityView({renderRows: true}); });
   app.querySelectorAll("[data-network-set]").forEach((button) => bindOnce(button, "click", () => setNetworkRule(button)));
   app.querySelectorAll("[data-threat-exception]").forEach((button) => bindOnce(button, "click", () => setThreatException(button)));
   app.querySelectorAll("[data-threat-toggle]").forEach((button) => bindOnce(button, "click", () => setThreatProtectionEnabled(button)));
@@ -1130,7 +1164,8 @@ function backupProblemCopy(problem) {
     DESTINATION_MOUNT_VALIDATION: "backup.problem.destination", DESTINATION_MOUNT_PROVIDER: "backup.problem.destination",
     DESTINATION_IDENTITY_MISSING: "backup.configure.choose",
     DESTINATION_CHANGED: "backup.problem.destination", REPOSITORY_MISMATCH: "backup.problem.retry",
-    REPOSITORY_INACCESSIBLE: "backup.problem.retry",
+    REPOSITORY_INACCESSIBLE: "backup.problem.retry", REPOSITORY_UNAVAILABLE: "backup.problem.repositoryMissing",
+    SOURCE_UNREADABLE: "backup.problem.partial", INTERRUPTED: "backup.problem.interrupted",
     TRY_LATER: "backup.problem.later", SERVICE_UNAVAILABLE: "backup.problem.unavailable", TRY_AGAIN: "backup.problem.retry",
   };
   return copy(labels[String(problem || "TRY_AGAIN").toUpperCase()] || "backup.problem.retry");
@@ -1140,6 +1175,8 @@ function recoveryQueueItem(command, data) {
   const points = Array.isArray(recovery.points) ? recovery.points : [];
   const backup = data.backup || {};
   const operation = backup.operation || {};
+  const available = backup.destination_available === true && backup.repository_available === true;
+  const unavailable = backup.destination_available === true ? "REPOSITORY_UNAVAILABLE" : backup.destination_problem;
   const operationFor = (kind) => String(operation.kind || "").toUpperCase() === kind ? {
     state: String(operation.state || "READY").toUpperCase(),
     detail: (() => {
@@ -1161,20 +1198,20 @@ function recoveryQueueItem(command, data) {
   }
   if (command === "configure_backup") {
     if (backup.ok === false) return {state: "BLOCKED", detail: copy("backup.configure.unavailable")};
-    if (backup.configured === true && backup.destination_available === true) return {state: "COMPLETED", detail: copy("backup.configure.configured")};
-    if (backup.configured === true) return {state: "BLOCKED", detail: backupProblemCopy(backup.destination_problem)};
+    if (backup.configured === true && available) return {state: "COMPLETED", detail: copy("backup.configure.configured")};
+    if (backup.configured === true) return {state: "BLOCKED", detail: backupProblemCopy(unavailable)};
     return {state: "READY", detail: copy("backup.configure.choose")};
   }
   if (command === "backup_now") {
-    const current = operationFor("BACKUP"); if (current) return current;
     if (backup.configured !== true) return {state: "BLOCKED", detail: copy("backup.configure.required")};
-    if (backup.destination_available !== true) return {state: "BLOCKED", detail: backupProblemCopy(backup.destination_problem)};
+    if (!available) return {state: "BLOCKED", detail: backupProblemCopy(unavailable)};
+    const current = operationFor("BACKUP"); if (current) return current;
     if (backup.last_backup_status === "SUCCESSFUL") return {state: "COMPLETED", detail: backup.last_retention_status === "FAILED" ? copy("backup.latest.retentionRetry") : copy("backup.latest.completed")};
     if (backup.last_backup_status === "FAILED") return {state: "FAILED", detail: backupProblemCopy(backup.last_backup_problem)};
     return {state: "READY", detail: copy("backup.latest.ready")};
   }
+  if (backup.configured !== true || !available) return {state: "BLOCKED", detail: backup.configured === true ? backupProblemCopy(unavailable) : copy("backup.configure.required")};
   const current = operationFor("VERIFY"); if (current) return current;
-  if (backup.configured !== true || backup.destination_available !== true) return {state: "BLOCKED", detail: backup.configured === true ? backupProblemCopy(backup.destination_problem) : copy("backup.configure.required")};
   if (backup.last_check_status === "VERIFIED") return {state: "COMPLETED", detail: copy("backup.verify.passed")};
   if (backup.last_check_status === "FAILED") return {state: "FAILED", detail: backupProblemCopy(backup.last_check_problem)};
   return {state: "READY", detail: copy("backup.verify.ready")};
@@ -1200,13 +1237,20 @@ function recoveryMarkup(data) {
   const backup = data.backup || {};
   const backupUnavailable = backup.ok === false;
   const backupDestinationUnavailable = !backupUnavailable && backup.configured === true && backup.destination_available === false;
-  const backupReady = !backupUnavailable && backup.configured === true && backup.destination_available === true;
-  const latest = points[0];
+  const repositoryMissing = !backupUnavailable && backup.configured === true && backup.destination_available === true && backup.repository_available !== true;
+  const backupReady = !backupUnavailable && backup.configured === true && backup.destination_available === true && backup.repository_available === true;
+  const latest = points.find((point) => point.status === "valid");
+  const recoveryProblem = copy(recovery.problem === "ROOT_NOT_BTRFS" ? "backup.recovery.unsupported" : "backup.recovery.unavailable");
+  const bootArchiveLabel = {
+    CAPTURED: "backup.recovery.bootCaptured",
+    MISSING: "backup.recovery.bootMissing",
+    NOT_CAPTURED: "backup.recovery.bootLegacy",
+  };
   const pointRows = points.length
-    ? points.map((point) => `<article class="recovery-point-row"><div><strong>${esc(point.reason === "pre-update" ? copy("backup.recovery.point.preUpdate") : copy("backup.recovery.point.manual"))}</strong><p>${esc(recoveryTime(point.created_at))} \u00b7 ${esc(copy("backup.recovery.point.snapshots", {count: (point.snapshots || []).length}))}</p></div>${status(point.status === "valid" ? "AVAILABLE" : "INCOMPLETE", point.status === "valid" ? "positive" : "review")}</article>`).join("")
-    : emptyState(recoveryUnavailable ? copy("backup.recovery.pointsUnavailable") : copy("backup.recovery.noPoints"), recoveryUnavailable ? copy("backup.recovery.unavailable") : copy("backup.recovery.createPrompt"), "recovery");
-  const backupState = backupUnavailable ? "UNAVAILABLE" : !backup.configured ? "NOT CONFIGURED" : backupDestinationUnavailable ? "DESTINATION UNAVAILABLE" : backup.last_backup_status === "SUCCESSFUL" ? "SUCCESSFUL" : backup.last_backup_status === "FAILED" ? "FAILED" : "NOT RUN YET";
-  const backupTone = backupUnavailable || !backup.configured || backupDestinationUnavailable ? "unknown" : backup.last_backup_status === "SUCCESSFUL" ? "positive" : backup.last_backup_status === "FAILED" ? "critical" : "review";
+    ? points.map((point) => `<article class="recovery-point-row"><div><strong>${esc(point.reason === "pre-update" ? copy("backup.recovery.point.preUpdate") : copy("backup.recovery.point.manual"))}</strong><p>${esc(recoveryTime(point.created_at))} \u00b7 ${esc(copy("backup.recovery.point.snapshots", {count: (point.snapshots || []).length}))}${Object.hasOwn(bootArchiveLabel, point.boot_files) ? " · " + esc(copy(bootArchiveLabel[point.boot_files])) : ""}</p></div>${status(point.status === "valid" ? "AVAILABLE" : "INCOMPLETE", point.status === "valid" ? "positive" : "review")}</article>`).join("")
+    : emptyState(recoveryUnavailable ? copy("backup.recovery.pointsUnavailable") : copy("backup.recovery.noPoints"), recoveryUnavailable ? recoveryProblem : copy("backup.recovery.createPrompt"), "recovery");
+  const backupState = backupUnavailable ? "UNAVAILABLE" : !backup.configured ? "NOT CONFIGURED" : backupDestinationUnavailable ? "DESTINATION UNAVAILABLE" : repositoryMissing ? copy("backup.repository.unavailable") : backup.last_backup_status === "SUCCESSFUL" ? "SUCCESSFUL" : backup.last_backup_status === "PARTIAL" ? copy("backup.status.partialLabel") : backup.last_backup_status === "FAILED" ? "FAILED" : "NOT RUN YET";
+  const backupTone = backupUnavailable || !backup.configured || backupDestinationUnavailable || repositoryMissing ? "unknown" : backup.last_backup_status === "SUCCESSFUL" ? "positive" : backup.last_backup_status === "FAILED" ? "critical" : "review";
   const recoveryActionAttrs = recoveryUnavailable ? 'disabled aria-disabled="true"' : "data-recovery-create";
   const backupConfigureAttrs = backupUnavailable ? 'disabled aria-disabled="true"' : "data-backup-configure";
   const backupConfigureLabel = backup.configured === true ? copy("backup.configure.change") : copy("backup.configure.setup");
@@ -1217,15 +1261,15 @@ function recoveryMarkup(data) {
   const backupNowDetail = copy("backup.panel.nowDetail");
   const backupVerifyAttrs = backupReady ? "data-backup-verify" : 'disabled aria-disabled="true"';
   const backupRestoreAttrs = backupReady ? "data-backup-restore" : 'disabled aria-disabled="true"';
-  const restorePanel = `<div id="recovery-restore-picker" class="recovery-restore-picker" hidden><div class="eyebrow">${esc(copy("backup.restore.eyebrow"))}</div><p id="recovery-restore-summary" class="section-meta"></p><p id="recovery-restore-count" class="section-meta"></p><div id="recovery-file-list" class="recovery-file-list"></div><div class="inline-actions">${actionButton(copy("backup.restore.selectedAction"), copy("backup.restore.selectedAction.detail"), "primary", "data-recovery-restore-confirm", "arrow")}<button class="text-button" data-recovery-restore-cancel>${esc(copy("ui.cancel"))}</button></div></div>`;
-  const integrityLabel = backupUnavailable ? copy("backup.verify.unavailable") : backup.last_check_status === "VERIFIED" ? copy("backup.verify.verifiedAt", {time: recoveryTime(backup.last_check_at)}) : backup.last_check_status === "FAILED" ? copy("backup.verify.failed") : copy("backup.verify.notVerified");
+  const restorePanel = `<div id="recovery-restore-picker" class="recovery-restore-picker" hidden><div class="eyebrow">${esc(copy("backup.restore.eyebrow"))}</div><label for="recovery-restore-version" hidden id="recovery-restore-version-label">${esc(copy("backup.restore.version"))} <select id="recovery-restore-version"></select></label><p id="recovery-restore-summary" class="section-meta"></p><p id="recovery-restore-count" class="section-meta"></p><div id="recovery-file-list" class="recovery-file-list"></div><div class="inline-actions">${actionButton(copy("backup.restore.selectedAction"), copy("backup.restore.selectedAction.detail"), "primary", "data-recovery-restore-confirm", "arrow")}<button class="text-button" data-recovery-restore-cancel>${esc(copy("ui.cancel"))}</button></div></div>`;
+  const integrityLabel = backupUnavailable ? copy("backup.verify.unavailable") : backup.last_check_status === "VERIFIED" ? copy("backup.verify.lastPassed", {time: recoveryTime(backup.last_check_at)}) : backup.last_check_status === "FAILED" ? copy("backup.verify.failed") : copy("backup.verify.notVerified");
   const backupDestination = backupUnavailable ? copy("backup.verify.unavailable") : backup.destination || copy("backup.panel.notConfigured");
-  const backupActionStatus = backupUnavailable ? copy("backup.configure.unavailable") : !backup.configured ? copy("backup.status.choose") : backupDestinationUnavailable ? backupProblemCopy(backup.destination_problem) : backup.last_backup_status === "SUCCESSFUL" ? backup.last_retention_status === "FAILED" ? copy("backup.status.retentionRetry") : copy("backup.status.completed") : backup.last_backup_status === "FAILED" ? copy("backup.status.failed") : copy("backup.status.notRun");
+  const backupActionStatus = backup.operation?.problem === "INTERRUPTED" ? backupProblemCopy("INTERRUPTED") : backupUnavailable ? copy("backup.configure.unavailable") : !backup.configured ? copy("backup.status.choose") : backupDestinationUnavailable ? backupProblemCopy(backup.destination_problem) : repositoryMissing ? backupProblemCopy("REPOSITORY_UNAVAILABLE") : backup.last_backup_status === "SUCCESSFUL" ? backup.last_retention_status === "FAILED" ? copy("backup.status.retentionRetry") : copy("backup.status.completed") : ["FAILED", "PARTIAL"].includes(backup.last_backup_status) ? backupProblemCopy(backup.last_backup_problem) : copy("backup.status.notRun");
   const scope = Array.isArray(backup.sources) && backup.sources.length ? backup.sources.map((source) => esc(source)).join(" \u00b7 ") : copy("backup.panel.noScope");
   const retention = backup.retention ? copy("backup.panel.retention", {daily: backup.retention.daily || 0, weekly: backup.retention.weekly || 0}) : copy("backup.panel.retentionUnavailable");
-  const cleanupAvailable = !recoveryUnavailable && points.length > 3;
+  const cleanupAvailable = !recoveryUnavailable && (points.length > 3 || points.some((point) => point.status === "failed"));
   const cleanupControl = cleanupAvailable ? `<button class="text-button" data-recovery-cleanup>${esc(copy("backup.recovery.cleanup"))} ${icon("clean")}</button>` : "";
-  return `${recoveryQueueMarkup(data)}<div class="recovery-workspaces"><section class="recovery-v1-panel"><div class="recovery-v1-heading"><div><div class="eyebrow">${esc(copy("backup.recovery.localEyebrow"))}</div><h2>${esc(copy("backup.recovery.title"))}</h2><p>${esc(copy("backup.recovery.copy"))}</p></div>${recoveryUnavailable ? status("UNAVAILABLE", "unknown") : latest ? status("AVAILABLE", "positive") : status("NOT CREATED", "review")}</div><div class="recovery-facts"><div><span>${esc(copy("backup.recovery.latest"))}</span><strong>${esc(recoveryUnavailable ? copy("backup.verify.unavailable") : latest ? recoveryTime(latest.created_at) : copy("backup.recovery.notCreated"))}</strong></div><div><span>${esc(copy("backup.recovery.retention"))}</span><strong>${esc(recoveryUnavailable ? copy("backup.verify.unavailable") : copy("backup.recovery.retentionValue"))}</strong></div><div><span>${esc(copy("backup.recovery.home"))}</span><strong>${esc(recoveryUnavailable ? copy("backup.verify.unavailable") : copy("backup.recovery.homeExcluded"))}</strong></div></div><div class="recovery-actions">${actionButton(copy("backup.recovery.create"), copy("backup.recovery.createDetail"), "primary", recoveryActionAttrs, "recovery")}${cleanupControl}</div><div id="recovery-point-status" class="action-status" role="status" aria-live="polite"></div><details class="technical-disclosure"><summary><span>${esc(copy("backup.recovery.availablePoints"))}</span><span class="section-meta">${esc(points.length)}</span></summary><div class="recovery-point-list">${pointRows}</div></details></section><section class="recovery-v1-panel"><div class="recovery-v1-heading"><div><div class="eyebrow">${esc(copy("backup.panel.eyebrow"))}</div><h2>${esc(copy("backup.panel.title"))}</h2><p>${esc(copy("backup.panel.copy"))}</p></div>${status(backupState, backupTone)}</div><div class="recovery-facts"><div><span>${esc(copy("backup.panel.destination"))}</span><strong>${esc(backupDestination)}</strong></div><div><span>${esc(copy("backup.panel.lastBackup"))}</span><strong>${esc(backupUnavailable ? copy("backup.verify.unavailable") : recoveryTime(backup.last_backup_at))}</strong></div><div><span>${esc(copy("backup.panel.integrity"))}</span><strong>${esc(integrityLabel)}</strong></div></div><div class="recovery-actions">${actionButton(backupConfigureLabel, backupConfigureDetail, backupReady ? "secondary" : "primary", backupConfigureAttrs, "folder")}${actionButton(backupNowLabel, backupNowDetail, backupReady ? "primary" : "secondary", backupNowAttrs, "export")}${actionButton(copy("backup.verify"), copy("backup.panel.verifyDetail"), "secondary", backupVerifyAttrs, "check")}${actionButton(copy("backup.restore"), copy("backup.panel.restoreDetail"), "secondary", backupRestoreAttrs, "file")}</div><div id="backup-action-status" class="action-status" role="status" aria-live="polite">${backupActionStatus}</div>${restorePanel}<details class="technical-disclosure"><summary><span>${esc(copy("backup.panel.scope"))}</span></summary><div class="technical-disclosure-content"><p>${scope} \u00b7 ${esc(retention)} \u00b7 ${esc(copy("backup.panel.noSystemFiles"))}</p></div></details></section></div>`;
+  return `${recoveryQueueMarkup(data)}<div class="recovery-workspaces"><section class="recovery-v1-panel"><div class="recovery-v1-heading"><div><div class="eyebrow">${esc(copy("backup.recovery.localEyebrow"))}</div><h2>${esc(copy("backup.recovery.title"))}</h2><p>${esc(copy("backup.recovery.copy"))}</p></div>${recoveryUnavailable ? status("UNAVAILABLE", "unknown") : latest ? status("AVAILABLE", "positive") : points.length ? status("INCOMPLETE", "review") : status("NOT CREATED", "muted")}</div><div class="recovery-facts"><div><span>${esc(copy("backup.recovery.latest"))}</span><strong>${esc(recoveryUnavailable ? copy("backup.verify.unavailable") : latest ? recoveryTime(latest.created_at) : copy("backup.recovery.notCreated"))}</strong></div><div><span>${esc(copy("backup.recovery.retention"))}</span><strong>${esc(recoveryUnavailable ? copy("backup.verify.unavailable") : copy("backup.recovery.retentionValue"))}</strong></div><div><span>${esc(copy("backup.recovery.home"))}</span><strong>${esc(recoveryUnavailable ? copy("backup.verify.unavailable") : copy("backup.recovery.homeExcluded"))}</strong></div></div><div class="recovery-actions">${actionButton(copy("backup.recovery.create"), copy("backup.recovery.createDetail"), "primary", recoveryActionAttrs, "recovery")}${cleanupControl}</div><div id="recovery-point-status" class="action-status" role="status" aria-live="polite"></div><details class="technical-disclosure"><summary><span>${esc(copy("backup.recovery.availablePoints"))}</span><span class="section-meta">${esc(points.length)}</span></summary><div class="recovery-point-list">${pointRows}</div></details></section><section class="recovery-v1-panel"><div class="recovery-v1-heading"><div><div class="eyebrow">${esc(copy("backup.panel.eyebrow"))}</div><h2>${esc(copy("backup.panel.title"))}</h2><p>${esc(copy("backup.panel.copy"))}</p></div>${status(backupState, backupTone)}</div><div class="recovery-facts"><div><span>${esc(copy("backup.panel.destination"))}</span><strong>${esc(backupDestination)}</strong></div><div><span>${esc(copy("backup.panel.lastBackup"))}</span><strong>${esc(backupUnavailable ? copy("backup.verify.unavailable") : recoveryTime(backup.last_backup_at))}</strong></div><div><span>${esc(copy("backup.panel.integrity"))}</span><strong>${esc(integrityLabel)}</strong></div></div><div class="recovery-actions">${actionButton(backupConfigureLabel, backupConfigureDetail, backupReady ? "secondary" : "primary", backupConfigureAttrs, "folder")}${actionButton(backupNowLabel, backupNowDetail, backupReady ? "primary" : "secondary", backupNowAttrs, "export")}${actionButton(copy("backup.verify"), copy("backup.panel.verifyDetail"), "secondary", backupVerifyAttrs, "check")}${actionButton(copy("backup.restore"), copy("backup.panel.restoreDetail"), "secondary", backupRestoreAttrs, "file")}</div><div id="backup-action-status" class="action-status" role="status" aria-live="polite">${backupActionStatus}</div>${restorePanel}<details class="technical-disclosure"><summary><span>${esc(copy("backup.panel.scope"))}</span></summary><div class="technical-disclosure-content"><p>${scope} \u00b7 ${esc(retention)} \u00b7 ${esc(copy("backup.panel.noSystemFiles"))}</p></div></details></section></div>`;
 }
 function devicesMarkup(data) {
   const history = data.device_history || {};
@@ -1235,7 +1279,7 @@ function devicesMarkup(data) {
   const deviceRows = connected.length ? connected.map((item) => `<article class="activity-row device-history-row"><span class="activity-icon">${icon("devices")}</span><div><strong>${esc(item.name || copy("devices.history.externalDevice"))}</strong><p>${esc(item.device_class || copy("devices.history.externalDevice"))} \u00b7 ${esc(item.trusted ? copy("devices.history.known") : copy("devices.history.unknown"))}</p></div><time>${esc(item.last_seen || copy("ui.unknown"))}</time></article>`).join("") : emptyState(summary.source_state === "UNAVAILABLE" ? copy("devices.history.unavailable") : copy("devices.history.empty"), summary.source_state === "UNAVAILABLE" ? copy("devices.history.unavailableCopy") : copy("devices.history.emptyCopy"), "devices");
   const unknownRows = records.length ? records.map((item) => `<article class="activity-row device-history-row"><span class="activity-icon">${icon("warning")}</span><div><strong>${esc(item.name || copy("devices.history.unknownDevice"))}</strong><p>${esc(item.connected ? copy("devices.history.firstSeenCurrent", {time: item.first_seen || copy("ui.unknown")}) : copy("devices.history.firstSeenLast", {first: item.first_seen || copy("ui.unknown"), last: item.last_seen || copy("ui.unknown")}))}</p></div>${status(item.connected ? "REVIEW NEEDED" : copy("devices.history.recorded"), item.connected ? "review" : "muted", {canonical: item.connected})}</article>`).join("") : emptyState(copy(summary.source_state === "UNAVAILABLE" ? "devices.history.unavailable" : "devices.history.noNew"), copy(summary.source_state === "UNAVAILABLE" ? "devices.history.unavailableCopy" : "devices.history.noNewCopy"), "devices");
   const usbRows = (data.usb || []).length ? data.usb.map((row) => statusRow(row)).join("") : emptyState(copy("devices.usb.unavailable"), copy("devices.usb.unavailableCopy"), "devices");
-  return `${pageHeader(copy("devices.eyebrow"), copy("route.devices"), copy("devices.copy"), actionButton(copy("ui.refresh"), copy("devices.refresh.detail"), "secondary", "data-refresh", "refresh"))}<div class="action-status deviation-action-status" role="status" aria-live="polite"></div><div class="device-inventory"><section class="device-history-section"><div class="section-heading"><div><div class="eyebrow">${esc(copy("devices.history.connectedEyebrow"))}</div><h2>${esc(summary.source_state === "UNAVAILABLE" ? copy("state.unavailable") : copy("devices.history.connected", {count: summary.connected_external ?? 0}))}</h2></div></div>${deviceRows}</section><section class="device-history-section"><div class="section-heading"><div><div class="eyebrow">${esc(copy("devices.history.weekEyebrow"))}</div><h2>${esc(copy("devices.history.newUnknown"))}</h2></div><span class="section-meta">${esc(summary.source_state === "UNAVAILABLE" ? copy("state.unavailable") : summary.new_unknown_count ?? 0)}</span></div>${unknownRows}</section></div><div class="two-column"><section class="plain-section feature-section"><div class="feature-heading"><span class="feature-icon">${icon("devices")}</span><div><div class="eyebrow">${esc(copy("devices.usb.eyebrow"))}</div><h2>${esc(copy("devices.usb.title"))}</h2></div></div>${usbRows}</section><section class="plain-section feature-section"><div class="feature-heading"><span class="feature-icon">${icon("recovery")}</span><div><div class="eyebrow">${esc(copy("devices.recovery.eyebrow"))}</div><h2>${esc(copy("devices.recovery.title"))}</h2></div></div>${(data.recovery || []).length ? data.recovery.map((row) => statusRow(row, false, recoveryDeviationAction(row))).join("") : emptyState(copy("devices.recovery.unavailable"), copy("devices.recovery.unavailableCopy"), "recovery")}</section></div>`;
+  return `${pageHeader(copy("devices.eyebrow"), copy("route.devices"), copy("devices.copy"), actionButton(copy("ui.refresh"), copy("devices.refresh.detail"), "secondary", "data-refresh", "refresh"))}<div class="action-status deviation-action-status" role="status" aria-live="polite"></div><div class="device-inventory"><section class="device-history-section"><div class="section-heading"><div><div class="eyebrow">${esc(copy("devices.history.connectedEyebrow"))}</div><h2>${esc(summary.source_state === "UNAVAILABLE" ? copy("state.unavailable") : copy("devices.history.connected", {count: summary.connected_external ?? 0}))}</h2></div></div>${deviceRows}</section><section class="device-history-section"><div class="section-heading"><div><div class="eyebrow">${esc(copy("devices.history.weekEyebrow"))}</div><h2>${esc(copy("devices.history.newUnknown"))}</h2></div><span class="section-meta">${esc(summary.source_state === "UNAVAILABLE" ? copy("state.unavailable") : summary.new_unknown_count ?? 0)}</span></div>${unknownRows}</section></div><div class="two-column"><section class="plain-section feature-section"><div class="feature-heading"><span class="feature-icon">${icon("devices")}</span><div><div class="eyebrow">${esc(copy("devices.usb.eyebrow"))}</div><h2>${esc(copy("devices.usb.title"))}</h2></div></div>${usbRows}</section>${tpmGuideMarkup(data.tpm, data.tpm_guide_read)}</div>`;
 }
 function evidenceMarkup(data) {
   const sections = data.sections || [];
@@ -1273,7 +1317,8 @@ function fileSecurityOperationMarkup(operation) {
 
 function filesMarkup(data) {
   const loading = data.loading === true;
-  const detections = Array.isArray(data.detections) ? data.detections : (data.quarantine || []);
+  const detectionsAvailable = !loading && (data.detections_state ?? data.state) === "AVAILABLE" && Array.isArray(data.detections);
+  const detections = detectionsAvailable ? data.detections : [];
   const clamavState = String(data.clamav?.status || "UNAVAILABLE").toUpperCase();
   const scanAvailable = !loading && data.state === "AVAILABLE" && clamavState === "CURRENT" && Boolean(data.clamav?.engine_version);
   const definitionAge = Number.isSafeInteger(data.clamav?.database_age_seconds) && data.clamav.database_age_seconds >= 0 ? `${Math.floor(Number(data.clamav.database_age_seconds) / 86400)}d ${Math.floor((Number(data.clamav.database_age_seconds) % 86400) / 3600)}h` : copy("ui.unavailable");
@@ -1301,7 +1346,9 @@ function filesMarkup(data) {
   const handled = (item) => ["QUARANTINED", "DELETED"].includes(String(item.state || "").toUpperCase()) || (item.state === "DETECTED" && item.source_status === "MISSING");
   const pendingDetections = detections.filter((item) => !handled(item));
   const resolvedDetections = detections.filter(handled);
-  const detectionRows = pendingDetections.length ? pendingDetections.map(renderDetection).join("") : emptyState(copy("file.detections.none"), copy("file.detections.noneCopy"), "file");
+  const detectionRows = !detectionsAvailable
+    ? emptyState(copy(loading ? "file.detections.loading" : "file.detections.unavailable"), copy("file.detections.unavailableCopy"), "file")
+    : pendingDetections.length ? pendingDetections.map(renderDetection).join("") : emptyState(copy("file.detections.none"), copy("file.detections.noneCopy"), "file");
   const active = data.active_scan || null;
   const latest = data.latest_scan || null;
   const operation = active || latest ? fileSecurityOperationMarkup(active || latest) : emptyState(copy("file.scan.none"), copy("file.scan.noneCopy"), "activity");
@@ -1311,8 +1358,10 @@ function filesMarkup(data) {
   const protectionCopy = loading ? copy("file.protection.checkingCopy") : pendingDetections.length ? copy("file.protection.reviewCopy") : clamavState === "INITIALIZING" ? copy("file.protection.initializingCopy") : clamavState === "UPDATING" ? copy("file.protection.updatingCopy") : !scanAvailable ? (data.state === "UNAVAILABLE" ? copy("file.protection.unavailableState") : copy("file.protection.updateRequired")) : copy("file.protection.readyCopy");
   const scanAttrs = scanAvailable ? "" : 'disabled aria-disabled="true"';
   const unavailableHint = scanAvailable ? "" : `<p class="action-status" role="status">${esc(copy("file.protection.disabledHint"))}</p>`;
-  const scanSurface = `<section class="plain-section file-scan-surface"><div class="section-heading"><div><div class="eyebrow">${esc(copy("file.scan.eyebrow"))}</div><h2>${esc(copy("file.scan.title"))}</h2></div></div><div class="file-scan-actions">${actionButton(copy("files.scanFile"), copy("file.scan.fileDetail"), "primary", `${scanAttrs} data-file-scan-file`, "file")}${actionButton(copy("files.scanFolder"), copy("file.scan.folderDetail"), "secondary", `${scanAttrs} data-file-scan-folder`, "folder")}${actionButton(copy("files.scanSystem"), copy("file.scan.systemDetail"), "secondary", `${scanAttrs} data-file-scan-system`, "shield")}</div><div id="file-security-action-status" class="action-status" role="status" aria-live="polite">${esc(fileSecurityState.feedback)}</div>${unavailableHint}<div id="file-security-operation">${operation}</div></section>`;
-  return `${pageHeader(copy("file.eyebrow"), copy("file.title"), copy("file.copy"), actionButton(copy("ui.refresh"), copy("file.refresh.detail"), "secondary", "data-refresh", "refresh"))}<section class="file-security-hero"><div><div class="eyebrow">${esc(copy("file.protection.eyebrow"))}</div><h2>${esc(protectionState)}</h2><p>${esc(protectionCopy)}</p></div><div class="file-security-definitions">${clamav}</div></section>${active ? scanSurface : ""}<section class="plain-section"><div class="section-heading"><div><div class="eyebrow">${esc(copy("file.detections.eyebrow"))}</div><h2>${esc(copy("file.detections.title"))}</h2></div><span class="section-meta">${esc(pendingDetections.length)}</span></div><div class="file-detection-list">${detectionRows}</div>${resolvedDetections.length ? technicalDisclosure(copy("design.files.resolved"), resolvedDetections.length, resolvedDetections.map(renderDetection).join("")) : ""}</section>${active ? "" : scanSurface}${technicalDisclosure(copy("file.tools.title"), "", `<div class="workflow-step"><div><div class="eyebrow">${esc(copy("file.tools.eyebrow"))}</div><h2>${esc(copy("file.tools.heading"))}</h2><p>${esc(copy("file.tools.copy"))}</p></div>${safeOpen}</div>`)}${technicalDisclosure(copy("file.activity.title"), activity.length, activity.length ? `<div class="activity-list">${activity.map(activityMarkup).join("")}</div>` : emptyState(copy("file.activity.none"), copy("file.activity.noneCopy"), "activity"))}`;
+  const scanActions = `<div class="file-scan-actions">${actionButton(copy("files.scanFile"), copy("file.scan.fileDetail"), "primary", `${scanAttrs} data-file-scan-file`, "file")}${actionButton(copy("files.scanFolder"), copy("file.scan.folderDetail"), "secondary", `${scanAttrs} data-file-scan-folder`, "folder")}${actionButton(copy("files.scanSystem"), copy("file.scan.systemDetail"), "secondary", `${scanAttrs} data-file-scan-system`, "shield")}</div>`;
+  const scanFeedback = `<div id="file-security-action-status" class="action-status" role="status" aria-live="polite">${esc(fileSecurityState.feedback)}</div>${unavailableHint}`;
+  const scanSurface = `<section class="plain-section file-scan-surface"><div id="file-security-operation">${operation}</div></section>`;
+  return `${pageHeader(copy("file.eyebrow"), copy("file.title"), copy("file.copy"), actionButton(copy("ui.refresh"), copy("file.refresh.detail"), "secondary", "data-refresh", "refresh"))}${scanActions}${scanFeedback}${active ? scanSurface : ""}<section class="file-security-hero"><div><div class="eyebrow">${esc(copy("file.protection.eyebrow"))}</div><h2>${esc(protectionState)}</h2><p>${esc(protectionCopy)}</p></div><div class="file-security-definitions">${clamav}</div></section><section class="plain-section"><div class="section-heading"><div><div class="eyebrow">${esc(copy("file.detections.eyebrow"))}</div><h2>${esc(copy("file.detections.title"))}</h2></div>${detectionsAvailable ? `<span class="section-meta">${esc(pendingDetections.length)}</span>` : ""}</div><div class="file-detection-list">${detectionRows}</div>${resolvedDetections.length ? technicalDisclosure(copy("design.files.resolved"), resolvedDetections.length, resolvedDetections.map(renderDetection).join("")) : ""}</section>${active ? "" : scanSurface}${technicalDisclosure(copy("file.tools.title"), "", `<div class="workflow-step"><div><div class="eyebrow">${esc(copy("file.tools.eyebrow"))}</div><h2>${esc(copy("file.tools.heading"))}</h2><p>${esc(copy("file.tools.copy"))}</p></div>${safeOpen}</div>`)}${technicalDisclosure(copy("file.activity.title"), activity.length, activity.length ? `<div class="activity-list">${activity.map(activityMarkup).join("")}</div>` : emptyState(copy("file.activity.none"), copy("file.activity.noneCopy"), "activity"))}`;
 }
 
 function privacyHistoryLabel(data) {
@@ -1651,7 +1700,7 @@ function getPageData(page) {
     : page === "protected-data" ? applicationSecurity.load("resources")
     : page === "applications" ? applicationSecurity.load("applications").then(guard => ({guard, providerPending: true}))
     : page === "history" ? securityHistory.read()
-    : page === "recovery" ? invokeBounded("get_devices", {includeHistory: false}, 12000)
+    : page === "recovery" ? invokeBounded("get_recovery_workspace", undefined, 25000)
     : page === "activity" ? readNetworkActivity()
         .catch(() => ({state: "UNAVAILABLE", reset: true, session_id: null, events: [], summary: {}}))
     : page === "privacy" ? Promise.all([invokeBounded("get_privacy", undefined, 12000), invokeBounded("get_notification_preferences", undefined, 5000).catch(() => null)]).then(([data, preferences]) => ({...data, notification_preferences: preferences}))
@@ -1716,6 +1765,15 @@ function contextMarkup(data) {
   return `<div class="file-context-window">${pageHeader(copy("file.context.eyebrow"), data.file_name || copy("file.context.selected"), copy("file.context.copy"), actionButton(copy("file.context.back"), copy("file.context.backDetail"), "secondary", "data-file-context-back", "shield"))}<section class="context-grid"><div class="context-row"><span>${esc(copy("file.context.path"))}</span><strong>${esc(data.path || copy("file.context.unavailable"))}</strong></div><div class="context-row"><span>${esc(copy("file.context.source"))}</span><strong>${esc(provenanceSummary(data.provenance))}</strong></div></section></div>`;
 }
 
+function focusPageTarget(selector, request) {
+  requestAnimationFrame(() => {
+    if (request !== requestSequence) return;
+    const target = app.querySelector(selector);
+    if (!target) return;
+    target.scrollIntoView({block: "start", inline: "nearest"});
+    target.focus({preventScroll: true});
+  });
+}
 async function loadPage(page = currentPage, options = {}) {
   applicationSecurity.cancelDetail();
   if (stopGuardWatch) stopGuardWatch();
@@ -1741,7 +1799,7 @@ async function loadPage(page = currentPage, options = {}) {
   const cachedData = cached?.data;
   const initialCachedData = currentPage === "overview" && !applicationSecurity.live(cachedData?.guard?.coverage)
     ? null : cachedData;
-  const canReuseCachedPage = options.force !== true && PAGE_CACHE_REUSE_ROUTES.has(currentPage) && Boolean(initialCachedData) && (Date.now() - cached.loadedAt) < PAGE_CACHE_TTL_MS;
+  const canReuseCachedPage = !options.focusTarget && options.force !== true && PAGE_CACHE_REUSE_ROUTES.has(currentPage) && Boolean(initialCachedData) && (Date.now() - cached.loadedAt) < PAGE_CACHE_TTL_MS;
   const refreshInPlace = preserveScroll && Boolean(app.querySelector(".app-shell .content-frame")) && !canReuseCachedPage;
   if (canReuseCachedPage && preserveScroll) {
     if (currentPage === "overview") watchGuardWorkspace(currentPage, request);
@@ -1794,7 +1852,8 @@ async function loadPage(page = currentPage, options = {}) {
         requestAnimationFrame(() => startupMarkOnce("first_authoritative_overview_frame"));
       }
     }
-    applyPageScroll(scrollPosition);
+    if (options.focusTarget) focusPageTarget(options.focusTarget, request);
+    else applyPageScroll(scrollPosition);
     if (refreshInPlace) bindContent();
     else bind();
     if (["applications", "protected-data", "overview"].includes(currentPage)) watchGuardWorkspace(currentPage, request);
@@ -1917,8 +1976,8 @@ function bindContent() {
   app.querySelector('[data-history-severity]')?.addEventListener('change',e=>{securityHistory.assess(e.target.value);loadPage('history',{force:true});});
   app.querySelector('[data-history-score-sort]')?.addEventListener('click',()=>{securityHistory.sortScore();loadPage('history',{force:true});});
   app.querySelector("[data-history-category]")?.addEventListener("change", event => { securityHistory.select(event.currentTarget.value); loadPage("history", {force: true}); });
-  app.querySelector("[data-history-older]")?.addEventListener("click", event => { securityHistory.older(event.currentTarget.dataset.historyOlder); loadPage("history", {force: true}); });
-  app.querySelector("[data-history-latest]")?.addEventListener("click", () => { securityHistory.reset(); loadPage("history", {force: true}); });
+  app.querySelector("[data-history-older]")?.addEventListener("click", event => { securityHistory.older(event.currentTarget.dataset.historyOlder); loadPage("history", {force: true, focusTarget: ".history-events"}); });
+  app.querySelector("[data-history-latest]")?.addEventListener("click", () => { securityHistory.reset(); loadPage("history", {force: true, focusTarget: ".history-events"}); });
 
   app.querySelector("[data-guard-search-input]")?.addEventListener("input", filterGuardInventory);
   filterGuardInventory();
@@ -1946,17 +2005,29 @@ function bindContent() {
   app.querySelectorAll("[data-threat-exception]").forEach((button) => button.addEventListener("click", () => setThreatException(button)));
   app.querySelectorAll("[data-threat-toggle]").forEach((button) => button.addEventListener("click", () => setThreatProtectionEnabled(button)));
   app.querySelectorAll("[data-network-remove]").forEach((button) => button.addEventListener("click", () => removeNetworkRule(button)));
+  app.querySelectorAll("[data-acknowledge-check]").forEach(button => button.addEventListener("click", () => {
+    deviationState.acknowledged.add(button.dataset.acknowledgeCheck);
+    const note = document.createElement("span");
+    note.className = "section-meta";
+    note.tabIndex = -1;
+    note.textContent = copy("evidence.deviation.acknowledged");
+    button.replaceWith(note);
+    note.focus({preventScroll: true});
+  }));
   app.querySelectorAll("[data-deviation-id]").forEach((button) => button.addEventListener("click", () => runDeviation(button)));
   app.querySelectorAll("[data-profile]").forEach((button) => button.addEventListener("click", () => changeProfile(button.dataset.profile, button)));
   app.querySelector("[data-sensor-start-notifications]")?.addEventListener("change", setSensorStartNotifications);
   app.querySelector("[data-secure-dns-retry]")?.addEventListener("click", retrySecureDns);
   app.querySelector("[data-secure-dns-mode]")?.addEventListener("change", (event) => changeSecureDnsMode(event.currentTarget.value));
-  app.querySelector("[data-recovery-create]")?.addEventListener("click", (event) => runRecoveryAction("create_recovery_point", event.currentTarget, copy("backup.action.createWorking"), "#recovery-point-status", copy("backup.action.createName")));
-  app.querySelector("[data-recovery-cleanup]")?.addEventListener("click", (event) => runRecoveryAction("cleanup_recovery_points", event.currentTarget, copy("backup.action.cleanupWorking"), "#recovery-point-status", copy("backup.action.cleanupName")));
-  app.querySelector("[data-backup-configure]")?.addEventListener("click", (event) => runRecoveryAction("configure_backup", event.currentTarget, copy("backup.action.chooseWorking"), "#backup-action-status", copy("backup.action.configurationName"), 900000));
-  app.querySelector("[data-backup-now]")?.addEventListener("click", (event) => runRecoveryAction("backup_now", event.currentTarget, copy("backup.action.backupWorking"), "#backup-action-status", copy("backup.action.backupName"), 7200000));
-  app.querySelector("[data-backup-verify]")?.addEventListener("click", (event) => runRecoveryAction("verify_backup", event.currentTarget, copy("backup.action.verifying"), "#backup-action-status", copy("backup.action.verificationName"), 14400000));
+  app.querySelector("[data-tpm-guide-open]")?.addEventListener("click", () => loadPage("devices", {focusTarget: "#tpm-guide-title"}));
+  app.querySelector("[data-tpm-guide-read]")?.addEventListener("click", (event) => markTpmGuideRead(event.currentTarget));
+  app.querySelector("[data-recovery-create]")?.addEventListener("click", (event) => runRecoveryAction("create_recovery_point", event.currentTarget, copy("backup.action.createWorking"), "#recovery-point-status", copy("backup.action.createName"), 920000));
+  app.querySelector("[data-recovery-cleanup]")?.addEventListener("click", (event) => runRecoveryAction("cleanup_recovery_points", event.currentTarget, copy("backup.action.cleanupWorking"), "#recovery-point-status", copy("backup.action.cleanupName"), 920000));
+  app.querySelector("[data-backup-configure]")?.addEventListener("click", (event) => runRecoveryAction("configure_backup", event.currentTarget, copy("backup.action.chooseWorking"), "#backup-action-status", copy("backup.action.configurationName"), 1820000));
+  app.querySelector("[data-backup-now]")?.addEventListener("click", (event) => runRecoveryAction("backup_now", event.currentTarget, copy("backup.action.backupWorking"), "#backup-action-status", copy("backup.action.backupName"), 7540000));
+  app.querySelector("[data-backup-verify]")?.addEventListener("click", (event) => runRecoveryAction("verify_backup", event.currentTarget, copy("backup.action.verifying"), "#backup-action-status", copy("backup.action.verificationName"), 14760000));
   app.querySelector("[data-backup-restore]")?.addEventListener("click", showBackupFiles);
+  app.querySelector("#recovery-restore-version")?.addEventListener("change", (event) => showBackupFiles(event, event.currentTarget.value));
   app.querySelector("[data-recovery-restore-confirm]")?.addEventListener("click", restoreSelectedFiles);
   app.querySelector("[data-recovery-restore-cancel]")?.addEventListener("click", () => resetRestorePicker());
   app.querySelector("[data-safe-open]")?.addEventListener("click", safeOpen);
@@ -1989,20 +2060,51 @@ function bindFileSecurityOperation() {
   bindOnce(app.querySelector("[data-file-scan-cancel]"), (event) => cancelFileSecurityScan(event.currentTarget));
   bindOnce(app.querySelector("[data-file-scan-status-retry]"), () => refreshFileSecurityOperation());
 }
+let recoveryActionInFlight = false;
+function watchBackupProgress(kind, selector, label) {
+  let stopped = false;
+  let timer;
+  const visit = requestSequence;
+  async function sample() {
+    if (stopped || currentPage !== "recovery" || requestSequence !== visit || document.hidden) {
+      if (!stopped && currentPage === "recovery" && requestSequence === visit) timer = window.setTimeout(sample, 5000);
+      return;
+    }
+    const backup = await invokeBounded("get_backup", undefined, 5000).catch(() => null);
+    if (stopped || currentPage !== "recovery" || requestSequence !== visit) return;
+    const op = backup?.operation;
+    if (op?.kind === kind && ["QUEUED", "PREPARING", "RUNNING"].includes(op.state)) {
+      setStatus(selector, copy(op.state === "RUNNING" ? "backup.operation.active" : "backup.operation.preparing", {kind: label}));
+    }
+    timer = window.setTimeout(sample, 5000);
+  }
+  timer = window.setTimeout(sample, 5000);
+  return () => { stopped = true; window.clearTimeout(timer); };
+}
 async function runRecoveryAction(command, button, label, selector, name, timeout = 120000) {
+  if (recoveryActionInFlight) return;
+  recoveryActionInFlight = true;
   beginButton(button, label); setStatus(selector, copy("backup.operation.working", {name}));
+  let feedback = "";
+  const kind = command === "backup_now" ? "BACKUP" : command === "verify_backup" ? "VERIFY" : null;
+  const stopProgress = kind ? watchBackupProgress(kind, selector, name) : () => {};
   try {
     const result = await invokeBounded(command, undefined, timeout);
-    if (result?.ok === false && !result.cancelled) {
-      const error = new Error(result.error || result.message || `${name} failed.`);
-      error.problem = result.problem;
-      throw error;
-    }
-    setStatus(selector, result?.cancelled ? copy("feedback.cancelled") : copy("feedback.completed", {name}));
-    if (["devices", "recovery"].includes(currentPage)) { const route = currentPage; window.setTimeout(() => { if (currentPage === route) loadPage(route, {force: true}); }, 300); }
+    feedback = result?.cancelled ? copy("feedback.cancelled")
+      : result?.ok === false ? backupProblemCopy(result.problem)
+      : result?.cleanup === "pending" ? copy("backup.recovery.cleanupPending")
+      : copy("feedback.completed", {name});
   } catch (error) {
-    setStatus(selector, error.problem ? backupProblemCopy(error.problem) : actionError(error, name));
-  } finally { endButton(button); }
+    feedback = error.problem ? backupProblemCopy(error.problem) : actionError(error, name);
+  } finally {
+    stopProgress();
+    endButton(button);
+    pageCache.delete("recovery");
+    try {
+      if (currentPage === "recovery") await loadPage("recovery", {force: true});
+      if (currentPage === "recovery") setStatus(selector, feedback);
+    } finally { recoveryActionInFlight = false; }
+  }
 }
 function syncRestoreSelectionLimit() {
   const inputs = [...app.querySelectorAll("#recovery-file-list input")];
@@ -2017,41 +2119,97 @@ function resetRestorePicker() {
   const list = app.querySelector("#recovery-file-list");
   const summary = app.querySelector("#recovery-restore-summary");
   const count = app.querySelector("#recovery-restore-count");
-  if (panel) { panel.hidden = true; delete panel.dataset.selectionLimit; }
+  if (panel) { panel.hidden = true; delete panel.dataset.selectionLimit; delete panel.dataset.snapshot; }
   if (list) list.replaceChildren();
   if (summary) summary.textContent = "";
   if (count) count.textContent = "";
 }
-async function showBackupFiles(event) {
-  const button = event.currentTarget; beginButton(button, copy("backup.restore.loading")); setStatus("#backup-action-status", copy("backup.restore.reading"));
+async function showBackupFiles(event, snapshot = null) {
+  if (recoveryActionInFlight) return;
+  const button = event.currentTarget;
+  const panel = app.querySelector("#recovery-restore-picker");
+  const version = panel.querySelector("#recovery-restore-version");
+  const loadButton = app.querySelector("[data-backup-restore]");
+  const selectionBefore = panel.dataset.snapshot;
+  recoveryActionInFlight = true;
+  version.disabled = true;
+  beginButton(loadButton || button, copy("backup.restore.loading"));
+  setStatus("#backup-action-status", copy("backup.restore.reading"));
   try {
-    const result = await invokeBounded("list_backup_files", undefined, 120000);
-    const candidates = (Array.isArray(result?.candidates) ? result.candidates : (result?.files || []).map((path) => ({path, kind: "UNKNOWN"})))
-      .map((candidate) => typeof candidate === "string" ? {path: candidate, kind: "UNKNOWN"} : candidate)
-      .filter((candidate) => candidate && typeof candidate.path === "string" && candidate.path.length);
-    const panel = app.querySelector("#recovery-restore-picker"); const list = app.querySelector("#recovery-file-list");
-    if (!candidates.length) { resetRestorePicker(); setStatus("#backup-action-status", copy("backup.restore.empty")); return; }
+    const result = await invokeBounded("list_backup_files", {snapshot}, 460000);
+    if (!panel.isConnected) return;
+    if (result?.cancelled) {
+      setStatus("#backup-action-status", copy("feedback.cancelled"));
+      return;
+    }
+    if (result?.ok !== true) {
+      setStatus("#backup-action-status", backupProblemCopy(result?.problem));
+      return;
+    }
+    const versions = Array.isArray(result.versions) ? result.versions : [];
+    if (!versions.length || !result.snapshot) {
+      resetRestorePicker();
+      setStatus("#backup-action-status", copy("backup.restore.noVersions"));
+      return;
+    }
+    const candidates = (result.candidates || []).filter((candidate) => candidate && typeof candidate.path === "string" && candidate.path.length);
+    const list = panel.querySelector("#recovery-file-list");
+    version.innerHTML = versions.map((item) => `<option value="${esc(item.id)}">${esc(recoveryTime(item.time))} · ${esc(item.id.slice(0, 8))}</option>`).join("");
+    panel.querySelector("#recovery-restore-version-label").hidden = versions.length < 2;
+    panel.dataset.snapshot = result.snapshot;
     list.innerHTML = candidates.map((candidate) => {
       const kind = String(candidate.kind || "UNKNOWN").toUpperCase();
       const kindKey = kind === "DIRECTORY" ? "backup.restore.directory" : kind === "FILE" ? "backup.restore.file" : "backup.restore.unknown";
       return `<label class="recovery-file-option"><input type="checkbox" value="${esc(candidate.path)}"><span><strong>${esc(candidate.path)}</strong><small>${esc(copy(kindKey))}</small></span></label>`;
     }).join("");
-    panel.dataset.selectionLimit = String(result?.selection_limit || 100);
-    const visible = Number(result?.shown_count ?? candidates.length); const total = Number(result?.available_count ?? candidates.length);
-    const summary = app.querySelector("#recovery-restore-summary");
-    if (summary) summary.textContent = copy("backup.restore.available", {visible, total});
+    panel.dataset.selectionLimit = String(result.selection_limit || 100);
+    const visible = Number(result.shown_count ?? candidates.length);
+    const total = Number(result.available_count ?? candidates.length);
+    panel.querySelector("#recovery-restore-summary").textContent = copy("backup.restore.available", {visible, total});
     list.querySelectorAll("input").forEach((input) => input.addEventListener("change", syncRestoreSelectionLimit));
-    panel.hidden = false; syncRestoreSelectionLimit(); setStatus("#backup-action-status", visible < total ? copy("backup.restore.limitedCandidates", {shown: visible, total}) : copy("backup.restore.choose"));
-  } catch (error) { setStatus("#backup-action-status", actionError(error, copy("backup.restore.listAction"))); }
-  finally { endButton(button); }
+    panel.hidden = false;
+    syncRestoreSelectionLimit();
+    setStatus("#backup-action-status", !visible ? copy("backup.restore.empty") : visible < total ? copy("backup.restore.limitedCandidates", {shown: visible, total}) : copy("backup.restore.choose"));
+  } catch (error) {
+    if (panel.isConnected) setStatus("#backup-action-status", actionError(error, copy("backup.restore.listAction")));
+  } finally {
+    version.value = panel.dataset.snapshot || selectionBefore || "";
+    version.disabled = false;
+    endButton(loadButton || button);
+    recoveryActionInFlight = false;
+  }
 }
 async function restoreSelectedFiles(event) {
-  const button = event.currentTarget; const paths = [...app.querySelectorAll("#recovery-file-list input:checked")].map((input) => input.value);
-  const limit = Number(app.querySelector("#recovery-restore-picker")?.dataset.selectionLimit || 100);
-  if (!paths.length) { setStatus("#backup-action-status", copy("backup.restore.required")); return; }
+  if (recoveryActionInFlight) return;
+  const button = event.currentTarget;
+  const panel = app.querySelector("#recovery-restore-picker");
+  const snapshot = panel.dataset.snapshot;
+  const paths = [...panel.querySelectorAll("#recovery-file-list input:checked")].map((input) => input.value);
+  const limit = Number(panel.dataset.selectionLimit || 100);
+  if (!snapshot || !paths.length) { setStatus("#backup-action-status", copy("backup.restore.required")); return; }
   if (paths.length > limit) { setStatus("#backup-action-status", copy("backup.restore.limit", {limit})); return; }
-  beginButton(button, copy("backup.restore.staging")); setStatus("#backup-action-status", copy("backup.restore.stagingCopy"));
-  try { const result = await invokeBounded("restore_backup_files", {paths}, 7200000); if (result?.ok === false) { const error = new Error(result.error || "Restore failed."); error.problem = result.problem; throw error; } resetRestorePicker(); setStatus("#backup-action-status", copy("backup.restore.staged", {path: result.staging_path || copy("backup.restore.defaultFolder")})); } catch (error) { setStatus("#backup-action-status", error.problem ? backupProblemCopy(error.problem) : actionError(error, copy("backup.restore.action"))); } finally { endButton(button); }
+  recoveryActionInFlight = true;
+  beginButton(button, copy("backup.restore.staging"));
+  setStatus("#backup-action-status", copy("backup.restore.stagingCopy"));
+  const stopProgress = watchBackupProgress("RESTORE", "#backup-action-status", copy("backup.restore.action"));
+  try {
+    const result = await invokeBounded("restore_backup_files", {snapshot, paths}, 7540000);
+    if (!panel.isConnected) return;
+    if (result?.cancelled) { setStatus("#backup-action-status", copy("feedback.cancelled")); return; }
+    if (result?.ok !== true || !result.staging_path) {
+      setStatus("#backup-action-status", backupProblemCopy(result?.problem));
+      return;
+    }
+    resetRestorePicker();
+    setStatus("#backup-action-status", copy("backup.restore.staged", {path: result.staging_path}));
+  } catch (error) {
+    if (panel.isConnected) setStatus("#backup-action-status", actionError(error, copy("backup.restore.action")));
+  } finally {
+    stopProgress();
+    endButton(button);
+    recoveryActionInFlight = false;
+    pageCache.delete("recovery");
+  }
 }
 function setStatus(selector, message) { const text = String(message || ""); const element = app.querySelector(selector); if (element) element.textContent = text; const live = app.querySelector("[data-live-status]"); if (live && live !== element) live.textContent = element ? "" : text; }
 function setDeviationFeedback(message) { deviationState.feedback = String(message || ""); setStatus(".deviation-action-status", deviationState.feedback); }
@@ -2088,7 +2246,7 @@ async function reviewUpdates() {
   const button = app.querySelector("[data-updates-refresh]");
   if (button) await runUpdateAction("resolve_system_update", button, "CHECKING");
 }
-async function runUpdateAction(command, button, phase) { const buttons = [...app.querySelectorAll(".action-button")]; buttons.forEach((item) => { item.disabled = true; }); const pending = UPDATE_PHASE_PRESENTATION[phase] || UPDATE_PHASE_PRESENTATION.CHECKING; beginButton(button, copy(pending.stateKey)); setStatus("[data-update-status]", copy(pending.messageKey)); try { await invokeBounded(command, undefined, 15000); pageCache.delete("updates"); await loadPage("updates"); } catch (error) { setStatus("[data-update-status]", actionError(error, copy("feedback.update"))); buttons.forEach((item) => { item.disabled = false; }); endButton(button); } }
+async function runUpdateAction(command, button, phase) { const buttons = [...app.querySelectorAll(".action-button")]; buttons.forEach((item) => { item.disabled = true; }); const pending = UPDATE_PHASE_PRESENTATION[phase] || UPDATE_PHASE_PRESENTATION.CHECKING; beginButton(button, copy(pending.stateKey)); setStatus("[data-update-status]", copy(pending.messageKey)); try { const result = await invokeBounded(command, undefined, 15000); pageCache.delete("updates"); await loadPage("updates"); if (command === "restart_apply_update" && result?.error) setStatus("[data-update-status]", result.error); } catch (error) { setStatus("[data-update-status]", actionError(error, copy("feedback.update"))); buttons.forEach((item) => { item.disabled = false; }); endButton(button); } }
 async function probeNetwork(button) { beginButton(button, copy("network.feedback.testing")); setStatus("#network-action-status", copy("network.feedback.probing")); try { const result = await invokeBounded("get_network_protection", undefined, 9000); result.probe_feedback = copy("network.feedback.probeComplete"); pageCache.set("network", {data: result, loadedAt: Date.now()}); const frame = app.querySelector(".content-frame"); if (frame && currentPage === "network") { frame.innerHTML = renderContent("network", result); bindContent(); } } catch (error) { setStatus("#network-action-status", actionError(error, copy("network.feedback.probeAction"))); endButton(button); } }
 async function changeZone(target) { const buttons = [...app.querySelectorAll("[data-zone]")]; const button = buttons.find((item) => item.dataset.zone === target); buttons.forEach((item) => { item.disabled = true; }); beginButton(button, target === "trusted" ? copy("network.zone.trusting") : copy("network.zone.restoring")); setStatus("#network-action-status, #action-status", copy("network.zone.changing")); try { const network = await invokeBounded("get_network", undefined, 9000); if (!network.interface) throw new Error("No active connection is available."); const result = await invokeBounded("set_network_trust_zone", {interface: network.interface, target}, 15000); if (!result.ok) throw new Error(result.message || "The network zone could not be changed."); setStatus("#network-action-status, #action-status", copy("network.zone.updated")); await loadPage("network", {force: true}); } catch (error) { setStatus("#network-action-status, #action-status", actionError(error, copy("network.zone.action"))); buttons.forEach((item) => { item.disabled = false; }); endButton(button); } }
 async function setNetworkRule(button) {
@@ -2162,7 +2320,32 @@ async function changeProfile(profile, button) {
     if (privacyState.profilePending === null) endButton(button);
   }
 }
-async function changeSecureDnsMode(mode) { const control = app.querySelector("[data-secure-dns-mode]"); if (control) control.disabled = true; setStatus("#network-action-status", copy("network.dns.saving")); try { const result = await invokeBounded("set_secure_dns_mode", {mode}, 12000); if (!result.ok) throw new Error(result.detail || "DNS mode was refused."); await loadPage("network", {force: true}); } catch (error) { if (control) control.disabled = false; setStatus("#network-action-status", actionError(error, copy("network.dns.changeAction"))); } }
+async function changeSecureDnsMode(mode) {
+  const control = app.querySelector("[data-secure-dns-mode]");
+  const visit = requestSequence;
+  const visible = () => currentPage === "network" && visit === requestSequence;
+  if (control) control.disabled = true;
+  setStatus("#network-action-status", copy("network.dns.saving"));
+  try {
+    const result = await invokeBounded("set_secure_dns_mode", {mode}, 12000);
+    if (!result.ok) throw new Error(result.detail || "DNS mode was refused.");
+    if (!visible()) return;
+    if (result.result?.degradation_reason === "ReconciliationPending") {
+      setStatus("#network-action-status", copy("network.dns.pending"));
+      for (let attempt = 0; attempt < 8 && visible(); attempt++) {
+        await new Promise(resolve => window.setTimeout(resolve, 1500));
+        if (!visible()) return;
+        const dns = await invokeBounded("get_secure_dns", undefined, 3000).catch(() => null);
+        if (dns && dns.degradation_reason !== "ReconciliationPending") break;
+      }
+    }
+    if (visible()) await loadPage("network", {force: true});
+  } catch (error) {
+    if (visible()) setStatus("#network-action-status", actionError(error, copy("network.dns.changeAction")));
+  } finally {
+    if (control?.isConnected) control.disabled = false;
+  }
+}
 async function retrySecureDns() { const button = app.querySelector("[data-secure-dns-retry]"); beginButton(button, copy("network.dns.retrying")); setStatus("#network-action-status", copy("network.dns.retrying")); try { const result = await invokeBounded("retry_secure_dns", undefined, 12000); if (!result.ok) throw new Error(result.detail || "Secure DNS retry failed."); await loadPage("network", {force: true}); } catch (error) { setStatus("#network-action-status", actionError(error, copy("network.dns.retryAction"))); endButton(button); } }
 async function launchSoftware(button) {
   beginButton(button, copy("applications.feedback.opening"));

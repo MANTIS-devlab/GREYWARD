@@ -9,8 +9,10 @@ Window.SetBackgroundBottomColor(0.0, 0.0, 0.0);
 
 screen.width = Window.GetWidth();
 screen.height = Window.GetHeight();
-screen.center_x = screen.width / 2;
-screen.center_y = screen.height / 2;
+// This Plymouth renderer overlays all heads around the center of its
+// largest-width and largest-height canvas.
+screen.center_x = Math.Int(screen.width / 2);
+screen.center_y = Math.Int(screen.height / 2);
 
 state.name = "boot";
 state.password_was_visible = 0;
@@ -212,7 +214,37 @@ fun update_verification_grid() {
   }
 }
 
+fun move_sprite(sprite, dx, dy) {
+  sprite.SetX(sprite.GetX() + dx);
+  sprite.SetY(sprite.GetY() + dy);
+}
+
 fun refresh_callback() {
+  // A DRM head may become usable after the theme or password prompt loads.
+  // Keep the last position while there are no graphical displays.
+  width = Window.GetWidth();
+  height = Window.GetHeight();
+  if (width > 0 && height > 0) {
+    x = Math.Int(width / 2);
+    y = Math.Int(height / 2);
+    dx = x - screen.center_x;
+    dy = y - screen.center_y;
+    if (dx || dy) {
+      move_sprite(logo.sprite, dx, dy);
+      move_sprite(title.sprite, dx, dy);
+      move_sprite(support.sprite, dx, dy);
+      move_sprite(baseline.sprite, dx, dy);
+      move_sprite(bullets.sprite, dx, dy);
+      move_sprite(state_label.sprite, dx, dy);
+      move_sprite(message.sprite, dx, dy);
+      move_sprite(update_bar.sprite, dx, dy);
+      move_sprite(update_percent.sprite, dx, dy);
+      grid.origin_x += dx;
+      grid.origin_y += dy;
+      screen.center_x = x;
+      screen.center_y = y;
+    }
+  }
   state.ticks++;
   update_verification_grid();
 }

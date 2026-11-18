@@ -204,6 +204,21 @@ test("invalid presentation deadlines do not dispatch backend work", async () => 
   assert.equal(fixture.timers.size, 0);
 });
 
+test("every recovery action can dispatch with its native presentation deadline", async () => {
+  const fixture = requestFixture((command) => ({command}));
+  const actions = [
+    ["create_recovery_point", 920000], ["cleanup_recovery_points", 920000],
+    ["configure_backup", 1820000], ["backup_now", 7540000], ["verify_backup", 14760000],
+    ["list_backup_files", 460000], ["restore_backup_files", 7540000],
+  ];
+  for (const [command, deadline] of actions) {
+    assert.equal((await fixture.request(command, undefined, deadline)).command, command);
+    await assert.rejects(fixture.request(command, undefined, deadline + 1));
+  }
+  assert.deepEqual(fixture.calls, actions.map(([command]) => command));
+  assert.equal(fixture.timers.size, 0);
+});
+
 test("an old Updates read cannot replace a later visit to the same route", async () => {
   let complete;
   const frames = [];
@@ -693,7 +708,7 @@ test("shares a short-lived authoritative core snapshot across read-only pages", 
   assert.match(rust, /fn invalidate_core_snapshot_cache\(\)/);
   assert.match(rust, /fn get_overview\(\)[\s\S]*core_collection_for_read\(\)/);
   assert.match(rust, /fn get_evidence\(\)[\s\S]*core_collection_for_read\(\)/);
-  assert.match(rust, /fn get_devices\([^)]*\)[\s\S]*collect_device_snapshot\(\)/);
+  assert.match(rust, /fn get_devices\([^)]*\)[\s\S]*collect_usb_facts\(\)/);
   assert.match(rust, /fn emit_state_changed\([\s\S]*invalidate_core_snapshot_cache\(\)/);
 });
 
@@ -709,7 +724,7 @@ test("bypasses presentation caches after mutable security actions", () => {
 
 test("keeps cold provider reads page-specific and Flatpak inspection bounded", () => {
   const adapters = readFileSync(new URL("../../crates/greyward-security-backends/src/adapters.rs", import.meta.url), "utf8");
-  assert.match(adapters, /pub fn collect_device_facts\(\)/);
+  assert.match(adapters, /pub fn collect_tpm_capability\(\)/);
   assert.match(adapters, /pub fn collect_flatpak_facts\(\)[\s\S]*thread::scope/);
   assert.match(adapters, /descriptors\.chunks\(4\)/);
   assert.match(adapters, /flatpak_permissions\(&reference, scope_flag\.as_str\(\), deadline\)/);
@@ -725,7 +740,7 @@ test("reuses fresh page data for navigation while refreshes still query the curr
   assert.match(source, /request\.finally\(\(\) =>/);
   assert.match(source, /const initialCachedData = currentPage === "overview" && !applicationSecurity.live/);
   assert.doesNotMatch(source, /relatedCachedData/);
-  assert.match(source, /const canReuseCachedPage = options\.force !== true && PAGE_CACHE_REUSE_ROUTES\.has\(currentPage\)/);
+  assert.match(source, /const canReuseCachedPage = !options\.focusTarget && options\.force !== true && PAGE_CACHE_REUSE_ROUTES\.has\(currentPage\)/);
   assert.match(source, /if \(canReuseCachedPage\) \{[\s\S]*?return;/);
   assert.match(source, /pageCache\.set\(currentPage, \{data, loadedAt: Date\.now\(\)\}\)/);
   assert.match(source, /if \(canReuseCachedPage && preserveScroll\)/);
@@ -766,8 +781,28 @@ test("gives system checks an explicit resolution workflow", () => {
   assert.match(source, /copy\(remediation\.action_key, evidenceValues\(row\)\)/);
   assert.doesNotMatch(source, /const routes = \{/);
   assert.match(source, /class="evidence-resolution-card/);
-  assert.match(source, /data-deviation-id="recovery\.readiness"/);
-  assert.match(source, /function recoveryDeviationAction/);
+  assert.doesNotMatch(source, /data-deviation-id="recovery\.readiness"/);
+  assert.match(source, /get_recovery_workspace/);
+});
+
+test("TPM acknowledgement survives reload without changing posture", async () => {
+  const calls = [];
+  const state = {isConnected: true};
+  const button = {};
+  const context = {
+    app: {querySelector: () => state},
+    pageCache: new Map([["overview", {}]]),
+    copy: String, esc: String, icon: String,
+    invokeBounded: async (command) => { calls.push(command); },
+  };
+  vm.runInNewContext(source.slice(source.indexOf("let tpmGuideReadThisSession"), source.indexOf("function overviewMarkup(")), context);
+  assert.match(context.tpmGuideMarkup("Missing", false), /data-tpm-guide-read/);
+  assert.doesNotMatch(context.tpmGuideMarkup("Missing", true), /data-tpm-guide-read/);
+  await context.markTpmGuideRead(button);
+  assert.deepEqual(calls, ["mark_tpm_guide_read"]);
+  assert.equal(state.textContent, "devices.tpm.read");
+  assert.equal(button.hidden, true);
+  assert.equal(context.pageCache.has("overview"), false);
 });
 
 test("shows measured firmware security attributes without routing to an empty updates page", () => {
@@ -784,7 +819,7 @@ test("lets users ignore unavailable recommendations and refreshes posture", () =
   assert.match(source, /pageCache\.set\("overview", \{data: updatedOverview/);
   assert.match(source, /pageCache\.delete\("evidence"\)/);
   assert.match(source, /setDeviationFeedback\(workingCopy\)/);
-  assert.match(source, /const deviationState = \{feedback: ""\}/);
+  assert.match(source, /row\.can_ignore !== true[\s\S]*?data-acknowledge-check/);
 });
 
 test("does not present unavailable posture as if nothing needs attention", () => {
@@ -998,11 +1033,11 @@ test("keeps recovery operation wording aligned with terminal state", () => {
 });
 
 test("labels restore candidates and clears the picker after success", () => {
-  assert.match(source, /result\?\.candidates/);
+  assert.match(source, /result\.candidates/);
   assert.match(source, /backup\.restore\.directory/);
   assert.match(source, /backup\.restore\.file/);
   assert.match(source, /function resetRestorePicker\(\)/);
-  assert.match(source, /resetRestorePicker\(\); setStatus\("#backup-action-status"/);
+  assert.match(source, /resetRestorePicker\(\);\s+setStatus\("#backup-action-status", copy\("backup\.restore\.staged"/);
   assert.match(source, /replaceChildren\(\)/);
 });
 
@@ -1205,7 +1240,7 @@ test("cleans up local request timers and bounds Security Context D-Bus calls", (
   assert.match(rust, /SECURITY_CONTEXT_CALL_TIMEOUT/);
   assert.match(rust, /const FAST_HELPER_TIMEOUT_SECONDS: u64 = 20/);
   assert.match(rust, /Command::new\("\/usr\/bin\/timeout"\)/);
-  assert.match(rust, /output\.status\.code\(\) == Some\(124\)/);
+  assert.match(rust, /matches!\(output\.status\.code\(\), Some\(124 \| 137\)\)/);
   const widget = readFileSync(new URL("../../../environment/session/dankmaterialshell/plugins/greywardSecure/SecureWidget.qml", import.meta.url), "utf8");
   assert.match(widget, /requestGeneration/);
   assert.match(widget, /requestTimeout/);
@@ -1253,7 +1288,7 @@ test("recovery queue shows real pending work without inventing an idle checklist
   assert.equal(context.recoveryQueueMarkup({}), "");
   assert.equal(context.recoveryQueueMarkup({backup: {operation: {kind: "BACKUP", state: "COMPLETED"}}}), "");
   for (const state of ["QUEUED", "PREPARING", "RUNNING"]) {
-    const html = context.recoveryQueueMarkup({backup: {operation: {kind: "BACKUP", state}}});
+    const html = context.recoveryQueueMarkup({backup: {configured: true, destination_available: true, repository_available: true, operation: {kind: "BACKUP", state}}});
     assert.equal((html.match(/<article/g) || []).length, 1);
     assert.match(html, /role="progressbar"/);
     assert.ok(html.includes(state));

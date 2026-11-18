@@ -1,6 +1,6 @@
 Name:           greyward-security-context
 Version:        0.1.0
-Release:        137%{?dist}
+Release:        143%{?dist}
 Summary:        GREYWARD OpenSnitch control plane and Security Context session bus
 License:        GPL-3.0-only
 Source0:        %{name}-%{version}.tar.gz
@@ -28,6 +28,8 @@ Requires:       systemd-resolved
 Requires:       dnf5daemon-server
 Requires:       dnf5daemon-server-polkit
 Requires:       btrfs-progs
+Requires:       tar
+Requires:       /usr/bin/prlimit
 Requires:       restic
 Requires:       polkit
 Requires:       firewalld
@@ -112,7 +114,7 @@ install -Dm0644 security-context/tmpfiles.d/greyward-secure-dns.conf %{buildroot
 
 %post
 %sysusers_create %{_sysusersdir}/greyward-geoip.conf
-%tmpfiles_create %{_tmpfilesdir}/greyward-secure-dns.conf
+%tmpfiles_create %{_tmpfilesdir}/greyward-secure-dns.conf %{_tmpfilesdir}/greyward-opensnitch.conf
 %systemd_post greyward-opensnitch-control-plane.service
 %systemd_post greyward-opensnitch-policy.service
 %systemd_post greyward-feodo-update.timer
@@ -218,6 +220,12 @@ done
 
 
 %changelog
+* Sat Nov 07 2026 MANTIS SYSTEMS - 0.1.0-139
+- Persist detection ownership and guard DNS, backup and offline update boundaries.
+
+* Sat Nov 07 2026 MANTIS SYSTEMS - 0.1.0-138
+- Separate optional TPM guidance from posture; harden personal backup and recovery.
+
 * Fri Nov 06 2026 MANTIS SYSTEMS - 0.1.0-137
 - Keep application/UID pattern evidence across partial process attribution.
 

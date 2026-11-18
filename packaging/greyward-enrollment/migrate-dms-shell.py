@@ -630,20 +630,77 @@ def refresh_installed_broker():
         raise RuntimeError('Application Security broker is not active after migration')
 
 
+def migrate_administration_terminal():
+    """Refresh the package-owned Administration renderer and only its receipt."""
+    import fcntl
+
+    lock_fd = os.open(LOCK, os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600)
+    try:
+        metadata = os.fstat(lock_fd)
+        if (not stat.S_ISREG(metadata.st_mode) or metadata.st_uid != 0
+                or metadata.st_nlink != 1 or metadata.st_mode & 0o077):
+            raise RuntimeError('Unsafe migration lock')
+        fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        desktop_bytes = trusted_file(BASE / 'desktop.json', 1024 * 1024)
+        desktop = json.loads(desktop_bytes)
+        if desktop.get('schema') != 'greyward.protected-desktop/v1':
+            raise RuntimeError('Existing protected desktop receipt is unsupported')
+        accounts = {item.get('name') for item in desktop.get('accounts', {}).values()
+                    if isinstance(item, dict) and isinstance(item.get('name'), str)}
+        if not accounts:
+            raise RuntimeError('Protected desktop account receipt is missing')
+        ensure_quiescent(accounts)
+        trusted_tree(BASE, desktop)
+        path = ADMIN / 'terminal'
+        manifest_path = ADMIN / 'manifest.json'
+        previous = trusted_file(path)
+        original = trusted_file(manifest_path, 1024 * 1024)
+        manifest = json.loads(original)
+        if (manifest.get('schema') != 'greyward.administration/v1'
+                or manifest.get('desktop') != digest(desktop_bytes)
+                or manifest.get('files', {}).get('terminal') != digest(previous)):
+            raise RuntimeError('Administration terminal receipt mismatch')
+        verify_admin_tree(manifest, ADMIN)
+        source = Path('/usr/libexec/greyward-admin-terminal')
+        replacement = trusted_file(source)
+        if not replacement.startswith(bytes((127, 69, 76, 70))):
+            raise RuntimeError('Expected an ELF Administration renderer')
+        if previous == replacement:
+            return 'Administration terminal already matches the installed package.'
+        manifest['files']['terminal'] = digest(replacement)
+        updated = (json.dumps(manifest, indent=2) + chr(10)).encode()
+        ensure_quiescent(accounts)
+        try:
+            atomic_write(path, replacement, 0o555, path)
+            atomic_write(manifest_path, updated, 0o444, manifest_path)
+            verify_admin_tree(json.loads(trusted_file(manifest_path)), ADMIN)
+        except Exception:
+            atomic_write(path, previous, 0o555, path)
+            atomic_write(manifest_path, original, 0o444, manifest_path)
+            raise
+        return 'Administration terminal and its receipt refreshed.'
+    finally:
+        os.close(lock_fd)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--assembler', type=Path, default=ASSEMBLER,
                         help='installed trusted assembler; development migration only')
-    parser.add_argument('--refresh-session-only', action='store_true',
+    modes = parser.add_mutually_exclusive_group()
+    modes.add_argument('--refresh-administration-only', action='store_true',
+                       help='refresh only the protected Administration terminal and its receipt')
+    modes.add_argument('--refresh-session-only', action='store_true',
                         help='refresh only the protected session guardian and its receipts')
-    parser.add_argument('--refresh-verifier-only', action='store_true',
+    modes.add_argument('--refresh-verifier-only', action='store_true',
                         help='refresh only the protected-seat verifier and its receipts')
     parser.add_argument('--desktop-source', type=Path, default=DESKTOP_SOURCE,
                         help='trusted root-owned desktop input directory')
     options = parser.parse_args()
-    if options.refresh_session_only and options.refresh_verifier_only:
-        parser.error('Choose exactly one protected input to refresh')
     try:
+        if options.refresh_administration_only:
+            print(migrate_administration_terminal())
+            return
         if options.refresh_session_only:
             result=migrate_verifier_only(desktop_source=options.desktop_source, session_only=True)
         elif options.refresh_verifier_only:

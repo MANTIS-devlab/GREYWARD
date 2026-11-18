@@ -449,6 +449,7 @@ class TelemetryStore:
             CREATE TABLE IF NOT EXISTS file_detections (
                 detection_id TEXT PRIMARY KEY,
                 operation_id TEXT NOT NULL,
+                owner_uid INTEGER,
                 original_path TEXT NOT NULL,
                 file_ref TEXT NOT NULL,
                 detection_name TEXT NOT NULL,
@@ -507,6 +508,20 @@ class TelemetryStore:
         connection.execute("CREATE INDEX IF NOT EXISTS file_scan_owner_time ON file_scan_operations(owner_uid, started_at DESC)")
         if "restore_staging_path" not in detection_columns:
             connection.execute("ALTER TABLE file_detections ADD COLUMN restore_staging_path TEXT")
+        if not connection.execute("SELECT 1 FROM sqlite_master WHERE type = 'index' AND name = 'file_detection_owner_time'").fetchone():
+            # The parent scan is the only authoritative legacy ownership record.
+            # The migration and its index commit together before pruning can run.
+            with connection:
+                connection.execute("BEGIN IMMEDIATE")
+                columns = {row[1] for row in connection.execute("PRAGMA table_info(file_detections)")}
+                if "owner_uid" not in columns:
+                    connection.execute("ALTER TABLE file_detections ADD COLUMN owner_uid INTEGER")
+                connection.execute("""UPDATE file_detections AS d SET owner_uid = (
+                    SELECT o.owner_uid FROM file_scan_operations AS o WHERE o.operation_id = d.operation_id
+                ) WHERE d.owner_uid IS NULL AND EXISTS (
+                    SELECT 1 FROM file_scan_operations AS o WHERE o.operation_id = d.operation_id AND o.owner_uid >= 0
+                )""")
+                connection.execute("CREATE INDEX IF NOT EXISTS file_detection_owner_time ON file_detections(owner_uid, updated_at DESC)")
         connection.execute("CREATE INDEX IF NOT EXISTS events_session_time ON events(session_id, occurred_at DESC)")
         connection.execute("CREATE INDEX IF NOT EXISTS events_operation ON events(operation_id, occurred_at DESC)")
         connection.execute("CREATE INDEX IF NOT EXISTS events_transaction ON events(transaction_id, occurred_at DESC)")
@@ -645,7 +660,7 @@ class TelemetryStore:
                 )
                 connection.execute(
                     """DELETE FROM file_detections WHERE detection_id NOT IN
-                    (SELECT detection_id FROM file_detections ORDER BY updated_at DESC LIMIT ?) AND state NOT IN ('QUARANTINED','QUARANTINE_FAILED')""",
+                    (SELECT detection_id FROM file_detections WHERE state IN ('RESTORED','DELETED') ORDER BY updated_at DESC LIMIT ?) AND state IN ('RESTORED','DELETED')""",
                     (MAX_FILE_DETECTIONS,),
                 )
             while self._size_bytes() > self.max_bytes:
@@ -654,7 +669,7 @@ class TelemetryStore:
                 ).fetchall()
                 if not row:
                     file_rows = connection.execute(
-                        "SELECT detection_id FROM file_detections WHERE state NOT IN ('QUARANTINED','QUARANTINE_FAILED') ORDER BY updated_at ASC, detection_id ASC LIMIT 64"
+                        "SELECT detection_id FROM file_detections WHERE state IN ('RESTORED','DELETED') ORDER BY updated_at ASC, detection_id ASC LIMIT 64"
                     ).fetchall()
                     if file_rows:
                         with connection:
@@ -923,21 +938,22 @@ class TelemetryStore:
         finally:
             connection.close()
 
-    def upsert_file_detection(self, value: Mapping[str, Any]) -> dict[str, Any]:
+    def upsert_file_detection(self, value: Mapping[str, Any], *, owner_uid: int | None = None) -> dict[str, Any]:
         detection_id = _text(value.get("detection_id"), 128)
         if not detection_id:
             raise TelemetryError("Detection ID is required")
+        operation_id = _text(value.get("operation_id"), 96)
         connection = self._connect()
         try:
             with connection:
                 connection.execute(
                     """INSERT INTO file_detections
-                    (detection_id,operation_id,original_path,file_ref,detection_name,detected_at,scanner_version,
+                    (detection_id,operation_id,owner_uid,original_path,file_ref,detection_name,detected_at,scanner_version,
                      database_version,file_size,file_hash,state,quarantine_id,restore_staging_path,last_error,updated_at)
-                    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                    VALUES(?,?,COALESCE((SELECT owner_uid FROM file_scan_operations WHERE operation_id = ? AND owner_uid >= 0), ?),?,?,?,?,?,?,?,?,?,?,?,?,?)
                     ON CONFLICT(detection_id) DO UPDATE SET state=excluded.state,quarantine_id=excluded.quarantine_id,
                     restore_staging_path=excluded.restore_staging_path,last_error=excluded.last_error,updated_at=excluded.updated_at""",
-                    (detection_id, _text(value.get("operation_id"), 96), _text(value.get("original_path"), 4096),
+                    (detection_id, operation_id, operation_id, owner_uid, _text(value.get("original_path"), 4096),
                      _text(value.get("file_ref"), 96), _text(value.get("detection_name"), 160) or "Known threat",
                      _text(value.get("detected_at"), 64) or stamp(), _text(value.get("scanner_version"), 48) or None,
                      _text(value.get("database_version"), 96) or None, value.get("file_size"), _text(value.get("file_hash"), 128) or None,
@@ -966,14 +982,14 @@ class TelemetryStore:
         try:
             clauses, params = [], []
             if owner_uid is not None:
-                clauses.append("o.owner_uid = ?")
+                clauses.append("d.owner_uid = ?")
                 params.append(int(owner_uid))
             for column, value in (("d.state", state), ("d.operation_id", operation_id)):
                 if value:
                     clauses.append(column + " = ?")
                     params.append(_text(value, 96))
             where = " WHERE " + " AND ".join(clauses) if clauses else ""
-            rows = connection.execute("SELECT d.detection_id FROM file_detections d LEFT JOIN file_scan_operations o ON o.operation_id = d.operation_id" + where + " ORDER BY d.updated_at DESC LIMIT ?", (*params, max(1, min(256, int(limit))))).fetchall()
+            rows = connection.execute("SELECT d.detection_id FROM file_detections d" + where + " ORDER BY CASE WHEN d.state IN ('RESTORED','DELETED') THEN 1 ELSE 0 END, d.updated_at DESC LIMIT ?", (*params, max(1, min(256, int(limit))))).fetchall()
             return [value for row in rows if (value := self.get_file_detection(row["detection_id"]))]
         finally:
             connection.close()

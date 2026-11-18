@@ -51,22 +51,16 @@ pub enum TpmCapability {
     Unknown,
 }
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
-pub struct TpmFacts {
-    pub capability: TpmCapability,
-}
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub enum AdapterFacts {
     Selinux(SelinuxFacts),
     Boot(BootFacts),
     Storage(StorageFacts),
-    Tpm(TpmFacts),
     Firmware(FirmwareFacts),
     SecurityUpdates(SecurityUpdatesFacts),
     Network(NetworkFacts),
     Flatpak(FlatpakFacts),
     Portal(PortalFacts),
     Usb(UsbFacts),
-    Recovery(RecoveryFacts),
 }
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub enum FirmwareSecurityState {
@@ -409,25 +403,6 @@ pub struct UsbFacts {
     pub authorized_devices: u32,
     pub unknown_devices: u32,
 }
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
-pub enum RecoveryReadiness {
-    Ready,
-    Partial,
-    Unavailable,
-    Unknown,
-    Error,
-}
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
-pub struct RecoveryFacts {
-    pub readiness: RecoveryReadiness,
-    pub rescue_kernel: bool,
-    pub uefi: bool,
-    pub secure_boot: SecureBootState,
-    pub encryption: EncryptionState,
-    pub firmware_updates: FirmwareUpdateState,
-    pub tpm: TpmCapability,
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

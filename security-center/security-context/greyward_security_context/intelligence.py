@@ -446,8 +446,7 @@ def network_assessment(event, process=None, sensor=None, reputation=None, patter
         address=None;assessed=False
     if not assessed:return {**unknown,'detail':'Incomplete connection metadata; the firewall decision remains authoritative.'}
     reputation=reputation or {}
-    fresh=event_time(reputation.get('last_successful_update'))
-    feed_available=reputation.get('state') in {'READY','EMPTY'} and fresh is not None and 0<=time.time()-fresh<=86400
+    feed_available=feodo.snapshot_usable(reputation)
     indicator=feodo.matching_indicator(SimpleNamespace(dst_ip=str(address),dst_port=port),reputation) if feed_available else None
     coverage={'reputation':'FRESH' if feed_available else 'UNAVAILABLE',
               'reputation_provider':'Feodo recommended IP/port indicators',

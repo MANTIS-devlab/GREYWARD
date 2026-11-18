@@ -13,7 +13,6 @@ flatpak
 xdg-desktop-portal
 xdg-desktop-portal-gtk
 xdg-desktop-portal-hyprland
-xdg-desktop-portal-wlr
 xorg-x11-server-Xwayland
 # DMS owns the graphical Polkit agent; a second agent conflicts with it.
 quickshell
@@ -50,6 +49,7 @@ cryptsetup
 plymouth
 plymouth-scripts
 dracut
+kbd-misc
 linux-firmware
 iwlwifi-mvm-firmware
 iwlbluetooth-firmware

@@ -349,17 +349,27 @@ class UpdateCenterBusTests(unittest.TestCase):
         self.assertIn("transaction 70", value["details"])
 
     def test_dnf_post_reboot_history_matches_only_an_offline_update(self):
-        completed = types.SimpleNamespace(
-            returncode=0,
-            stdout='[{"id":72,"command_line":"/usr/bin/dnf5 upgrade --offline --assumeyes","start_time":1000,"status":"Ok"},{"id":71,"command_line":"dnf install package","start_time":999,"status":"Ok"}]',
-            stderr="",
-        )
-        with patch.object(update_center_bus.subprocess, "run", return_value=completed) as run:
-            value = update_center_bus.dnf_offline_history_result("1970-01-01T00:16:40Z")
+        token = "--comment=greyward-operation-dnf5-123"
+        records = [
+            {"id": 71, "user_id": 0, "command_line": f"/usr/bin/dnf5 upgrade --offline {token}", "start_time": 1000, "status": "Ok"},
+            {"id": 72, "user_id": 0, "command_line": "/usr/bin/dnf5 upgrade --offline --comment=greyward-operation-dnf5-456", "start_time": 1001, "status": "Ok"},
+            {"id": 73, "user_id": 0, "command_line": f"/usr/bin/dnf5 upgrade --offline {token}", "start_time": 999, "status": "Ok"},
+            {"id": 74, "user_id": 0, "command_line": f"/usr/bin/dnf5 upgrade {token}", "start_time": 1001, "status": "Ok"},
+        ]
 
-        self.assertEqual(value["id"], 72)
-        self.assertEqual(run.call_args.args[0], [update_center_bus.DNF_CLI, "history", "list", "--json"])
-        self.assertEqual(run.call_args.kwargs["timeout"], 30)
+        def lookup():
+            return update_center_bus.dnf_offline_history_result("dnf5-123", "1970-01-01T00:16:40Z")
+
+        completed = types.SimpleNamespace(returncode=0, stdout=json.dumps(records))
+        with patch.object(update_center_bus.subprocess, "run", return_value=completed) as run:
+            self.assertEqual(lookup()["id"], 71)
+            self.assertEqual(run.call_args.args[0], [update_center_bus.DNF_CLI, "history", "list", "--json"])
+            self.assertEqual(run.call_args.kwargs["timeout"], 30)
+            completed.stdout = json.dumps(records[1:])
+            self.assertIsNone(lookup())
+            completed.stdout = json.dumps(records + [{**records[0], "id": 75}])
+            self.assertIsNone(lookup())
+
 
     def test_restarting_dnf_transaction_uses_the_same_post_reboot_verification(self):
         transaction = {
@@ -393,7 +403,7 @@ class UpdateCenterBusTests(unittest.TestCase):
             value = update_center_bus.reconcile_transaction(transaction)
 
         self.assertEqual(value["phase"], "FAILED")
-        self.assertEqual(value["restart_required"], "REQUIRED")
+        self.assertEqual(value["restart_required"], "UNKNOWN")
         self.assertIn("did not restart", value["error"])
 
     def test_ready_dnf_transaction_surfaces_missing_post_reboot_history(self):
@@ -411,7 +421,7 @@ class UpdateCenterBusTests(unittest.TestCase):
             value = update_center_bus.reconcile_transaction(transaction)
 
         self.assertEqual(value["phase"], "FAILED")
-        self.assertIn("did not produce", value["error"])
+        self.assertIn("did not confirm", value["error"])
         self.assertIn("missing", value["details"])
 
     def test_new_resolve_operation_clears_stale_transaction_feedback(self):
@@ -510,12 +520,13 @@ class UpdateCenterBusTests(unittest.TestCase):
             patch.object(helper, "offline_restart_is_scheduled", return_value=True),
             patch('greyward_security_context.dms_compatibility.constraints', return_value={name: 'test-1' for name in ('dms-greeter', 'labwc', 'quickshell', 'uwsm')}),
         ):
-            self.assertEqual(helper.prepare_dnf([]), (0, True))
+            self.assertEqual(helper.prepare_dnf([], "dnf5-123"), (0, True))
 
         self.assertEqual(run.call_args_list[2].args[0][-1], "--disablerepo=fedora-cisco-openh264")
         self.assertEqual(run.call_args_list[0].kwargs["timeout"], helper.PROVIDER_TIMEOUT)
         self.assertEqual(run.call_args_list[1].kwargs["timeout"], helper.RPM_QUERY_TIMEOUT)
-        self.assertEqual(run.call_args_list[2].kwargs["timeout"], helper.PROVIDER_TIMEOUT)
+        self.assertGreater(run.call_args_list[2].kwargs["timeout"], 0)
+        self.assertLessEqual(run.call_args_list[2].kwargs["timeout"], helper.PROVIDER_TIMEOUT)
         self.assertEqual(run.call_args_list[4].kwargs["env"]["DNF_SYSTEM_UPGRADE_NO_REBOOT"], "1")
 
     def test_dnf_helper_installs_only_validated_driver_packages_in_same_prepare(self):
@@ -532,7 +543,7 @@ class UpdateCenterBusTests(unittest.TestCase):
             patch.object(helper, "offline_restart_is_scheduled", return_value=True),
             patch('greyward_security_context.dms_compatibility.constraints', return_value={name: 'test-1' for name in ('dms-greeter', 'labwc', 'quickshell', 'uwsm')}),
         ):
-            self.assertEqual(helper.prepare_dnf(["kernel-modules-extra"]), (0, False))
+            self.assertEqual(helper.prepare_dnf(["kernel-modules-extra"], "dnf5-123"), (0, False))
 
         self.assertEqual(
             run.call_args_list[0].args[0],
@@ -540,6 +551,7 @@ class UpdateCenterBusTests(unittest.TestCase):
                 helper.DNF, "do", "--offline", "--assumeyes",
                 "--action=upgrade", "*",
                 "--action=install", "kernel-modules-extra",
+                "--comment=greyward-operation-dnf5-123",
                 "--exclude=dms-greeter,labwc,quickshell,uwsm",
             ],
         )
@@ -558,7 +570,7 @@ class UpdateCenterBusTests(unittest.TestCase):
             patch.object(helper, "run", return_value=completed),
             patch.object(helper, "offline_restart_is_scheduled", return_value=False),
         ):
-            self.assertEqual(helper.prepare_dnf([]), (1, False))
+            self.assertEqual(helper.prepare_dnf([], "dnf5-123"), (1, False))
 
     def test_dnf_helper_rejects_untrusted_driver_package_arguments(self):
         helper_path = Path(__file__).parents[1] / "bin" / "greyward-update-action"
@@ -569,6 +581,53 @@ class UpdateCenterBusTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             helper.validate_driver_packages(["kernel-modules-extra;rm"])
 
+    def test_restart_needs_ready_transaction_current_boot_and_matching_marker(self):
+        service = update_center_bus
+        ready = {**service.default_transaction(), "phase": "READY_TO_RESTART", "id": "dnf5-1",
+                 "operation": "apply_all", "boot_id": "boot-a", "restart_required": "REQUIRED",
+                 "provider_results": [{"provider": "DNF5", "state": "SUCCESS"}],
+                 "restart_marker": [1, 2, 3], "started_at": "unchanged"}
+        for phase, boot, marker in (("COMPLETE", "boot-a", [1, 2, 3]),
+                                    ("READY_TO_RESTART", "boot-b", [1, 2, 3]),
+                                    ("READY_TO_RESTART", "boot-a", None),
+                                    ("READY_TO_RESTART", "boot-a", [1, 2, 4]),
+                                    ("READY_TO_RESTART", "boot-a", [1, 2, 3])):
+            current = {**ready, "phase": phase}
+            with self.subTest(phase=phase, boot=boot, marker=marker), \
+                 patch.object(service, "transaction_copy", return_value=current), \
+                 patch.object(service, "current_boot_id", return_value=boot), \
+                 patch.object(service, "offline_marker_identity", return_value=marker), \
+                 patch.object(service, "set_transaction", side_effect=lambda **kw: {**current, **kw}), \
+                 patch.object(service.threading, "Thread") as worker:
+                result = service.start_operation("reboot")
+                if phase == "READY_TO_RESTART" and boot == "boot-a" and marker == [1, 2, 3]:
+                    self.assertEqual(result["phase"], "RESTARTING")
+                    self.assertEqual(result["started_at"], "unchanged")
+                    worker.assert_called_once_with(target=service.restart_worker, args=("dnf5-1",), daemon=True)
+                else:
+                    self.assertEqual(result["error"], service.RESTART_NOT_READY)
+                    worker.assert_not_called()
+
+    def test_restart_worker_rechecks_marker_after_request(self):
+        service = update_center_bus
+        current = {**service.default_transaction(), "phase": "RESTARTING", "id": "dnf5-1",
+                   "operation": "apply_all", "boot_id": "boot-a", "restart_required": "REQUIRED",
+                   "provider_results": [{"provider": "DNF5", "state": "SUCCESS"}],
+                   "restart_marker": [1, 2, 3]}
+        for marker in (None, [1, 2, 3]):
+            with patch.object(service, "transaction_copy", return_value=current), \
+                 patch.object(service, "current_boot_id", return_value="boot-a"), \
+                 patch.object(service, "offline_marker_identity", return_value=marker), \
+                 patch.object(service, "set_transaction") as save, \
+                 patch.object(service.dbus, "SystemBus") as system:
+                service.restart_worker("dnf5-1")
+                reboot = system.return_value.get_object.return_value.Reboot
+                if marker is None:
+                    reboot.assert_not_called()
+                    self.assertEqual(save.call_args.kwargs["phase"], "FAILED")
+                else:
+                    reboot.assert_called_once()
+
     def test_update_helper_creates_recovery_before_preparing_dnf(self):
         helper_path = Path(__file__).parents[1] / "bin" / "greyward-update-action"
         loader = importlib.machinery.SourceFileLoader("greyward_update_action_order", str(helper_path))
@@ -577,12 +636,13 @@ class UpdateCenterBusTests(unittest.TestCase):
         spec.loader.exec_module(helper)
         order = []
         create = lambda reason, operation_id: order.append(("recovery", reason, operation_id)) or {"id": "point-1", "status": "valid"}
-        prepare = lambda packages: order.append(("dnf", packages)) or (0, False)
+        prepare = lambda packages, operation_id: order.append(("dnf", packages, operation_id)) or (0, False)
         args = types.SimpleNamespace(operation_id="dnf5-123", system=True, system_flatpak=False, firmware=False, driver_package=["kernel-modules-extra"])
-        with patch.object(helper, "load_recovery_create", return_value=create), patch.object(helper, "prepare_dnf", side_effect=prepare), patch.object(helper, "emit"):
+        with patch.object(helper, "load_recovery_create", return_value=create), patch.object(helper, "prepare_dnf", side_effect=prepare), patch("greyward_security_context.update_center.offline_marker_identity", return_value=[1, 2, 3]), patch.object(helper, "emit") as emit:
             self.assertEqual(helper.apply(args), 0)
+            self.assertEqual(emit.call_args.kwargs["restart_marker"], [1, 2, 3])
 
-        self.assertEqual(order, [("recovery", "pre-update", "dnf5-123"), ("dnf", ["kernel-modules-extra"])])
+        self.assertEqual(order, [("recovery", "pre-update", "dnf5-123"), ("dnf", ["kernel-modules-extra"], "dnf5-123")])
 
 
 if __name__ == "__main__":

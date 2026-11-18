@@ -36,6 +36,7 @@ for relative in \
  security-center/packaging/application-security/desktop/labwc-protected-input.patch \
  security-center/packaging/application-security/desktop/labwc-administration-indicator.patch \
  security-center/packaging/application-security/desktop/labwc-screenshot.patch \
+ security-center/packaging/application-security/desktop/labwc-session-lock-output-focus.patch \
  security-center/packaging/application-security/maintenance.py \
  security-center/packaging/application-security/greyward-maintenance.target \
  security-center/packaging/application-security/greyward-maintenance-console.service; do
@@ -50,6 +51,7 @@ tar --sort=name --mtime=@1791590400 --owner=0 --group=0 --numeric-owner \
  security-center/packaging/application-security/desktop/labwc-protected-input.patch \
  security-center/packaging/application-security/desktop/labwc-administration-indicator.patch \
  security-center/packaging/application-security/desktop/labwc-screenshot.patch \
+ security-center/packaging/application-security/desktop/labwc-session-lock-output-focus.patch \
  security-center/packaging/application-security/maintenance.py \
  security-center/packaging/application-security/greyward-maintenance.target \
  security-center/packaging/application-security/greyward-maintenance-console.service

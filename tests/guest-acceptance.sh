@@ -21,13 +21,15 @@ receipt="$runtime_root/release.json"
 /usr/local/libexec/greyward-dms-runtime-check
 test -x /usr/bin/dsearch
 if [ "$compositor" = labwc ]; then
-  systemctl --user is-active xdg-desktop-portal.service xdg-desktop-portal-wlr.service
+  systemctl --user is-active xdg-desktop-portal.service
   pgrep -u "$USER" -x labwc >/dev/null
 else
   systemctl --user is-active xdg-desktop-portal.service xdg-desktop-portal-hyprland.service
   pgrep -u "$USER" -x Hyprland >/dev/null
 fi
-rpm -q labwc xdg-desktop-portal-wlr quickshell uwsm hyperv-daemons
+grep -Fx 'org.freedesktop.impl.portal.ScreenCast=none' /etc/xdg-desktop-portal/greyward/labwc-portals.conf
+grep -Fx 'org.freedesktop.impl.portal.Screenshot=none' /etc/xdg-desktop-portal/greyward/labwc-portals.conf
+rpm -q labwc xdg-desktop-portal-gtk quickshell uwsm hyperv-daemons
 if [ "$compositor" != labwc ]; then
   rpm -q hyprland
   test "$(rpm -q --qf '%{VERSION}' hyprland)" = 0.56.2

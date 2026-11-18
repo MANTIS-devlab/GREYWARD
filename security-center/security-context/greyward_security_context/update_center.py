@@ -6,9 +6,12 @@ read-only and provider metadata is preserved without inventing trust or risk.
 import datetime as dt
 import json
 import os
+import re
+import uuid
 import shutil
 import subprocess
 from pathlib import Path
+from stat import S_ISDIR, S_ISLNK
 
 try:
     import dbus
@@ -26,6 +29,32 @@ PCI_DEVICES_ROOT = Path("/sys/bus/pci/devices")
 ESSENTIAL_PCI_CLASSES = {"01", "02", "03"}
 DRIVER_QUERY_FORMAT = "%{name}|%{evr}|%{arch}|%{repoid}|%{full_nevra}\n"
 DRIVER_PACKAGE_LIMIT = 32
+OPERATION_ID = re.compile(r"dnf5-[0-9]{1,39}")
+OFFLINE_COMMENT_PREFIX = "greyward-operation-"
+
+
+def new_operation_id():
+    return f"dnf5-{uuid.uuid4().int}"
+
+
+def offline_comment_option(operation_id):
+    if not isinstance(operation_id, str) or not OPERATION_ID.fullmatch(operation_id):
+        raise ValueError("invalid update operation id")
+    return f"--comment={OFFLINE_COMMENT_PREFIX}{operation_id}"
+
+
+def offline_marker_identity(marker=Path("/system-update"), target=Path("/usr/lib/sysimage/libdnf5/offline")):
+    """Identify the root-owned marker for this native offline preparation."""
+    try:
+        info = marker.lstat()
+        if not S_ISLNK(info.st_mode) or info.st_uid != 0 or marker.resolve(strict=True) != target:
+            return None
+        directory = target.stat()
+        if not S_ISDIR(directory.st_mode) or directory.st_uid != 0:
+            return None
+        return [info.st_dev, info.st_ino, info.st_ctime_ns, directory.st_dev, directory.st_ino, directory.st_mtime_ns]
+    except (OSError, RuntimeError):
+        return None
 
 
 def now():

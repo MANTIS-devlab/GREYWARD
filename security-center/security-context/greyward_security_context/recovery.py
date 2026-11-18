@@ -1,19 +1,23 @@
 """Small, defensive local Btrfs recovery-point manager.
 
 This module is intentionally a one-shot command implementation.  It only
-creates read-only snapshots and metadata; it does not attempt boot rollback
-or restore the installed system.
+creates read-only snapshots and a verified archive of boot files for use
+in offline recovery. It never writes to the system being recovered.
 """
 from __future__ import annotations
 
 import argparse
 import datetime as dt
+import fcntl
+import hashlib
 import json
 import os
 import shutil
+import stat
 import subprocess
 import tempfile
 import uuid
+from contextlib import contextmanager
 from pathlib import Path
 
 from greyward_security_context.telemetry import event as telemetry_event
@@ -24,6 +28,11 @@ DEFAULT_POINT_DIR = DEFAULT_STATE_DIR / "points"
 KEEP_POINTS = 3
 SYSTEM_SUBVOLUMES = (("/var/lib/portables", "var-lib-portables"),)
 MAX_TEXT = 240
+BOOT_ROOT = Path("/boot")
+BOOT_ARCHIVE = "boot.tar"
+MAX_BOOT_ARCHIVE_BYTES = 3 * 1024**3
+BOOT_CAPTURE_TIMEOUT = 300
+SNAPSHOT_TIMEOUT = 120
 
 
 class RecoveryError(RuntimeError):
@@ -111,11 +120,55 @@ def list_points() -> list[dict]:
     return result
 
 
+def inspect_points() -> dict:
+    # This query runs as the desktop user. Do not require privileged Btrfs
+    # ioctls merely to tell the user which workflow is available.
+    if shutil.which("btrfs") is None:
+        return {"ok": False, "problem": "SERVICE_UNAVAILABLE", "points": []}
+    filesystem = run(["findmnt", "-n", "-o", "FSTYPE", "-T", "/"], timeout=5)
+    if filesystem.stdout.strip() != "btrfs":
+        return {"ok": False, "problem": "ROOT_NOT_BTRFS", "points": []}
+    points = list_points()
+    allowed = {"root", *(label for _, label in SYSTEM_SUBVOLUMES)}
+    for point in points:
+        if point.get("status") != "valid":
+            continue
+        snapshots = point.get("snapshots")
+        names = {
+            item.get("path")
+            for item in snapshots
+            if isinstance(item, dict) and isinstance(item.get("path"), str) and item.get("read_only") is True
+        } if isinstance(snapshots, list) else set()
+        base = _safe_point_path(point)
+        archive = base / BOOT_ARCHIVE
+        receipt = point.get("boot_archive")
+        point["boot_files"] = "NOT_CAPTURED"
+        if receipt is not None:
+            try:
+                info = archive.lstat()
+                present = stat.S_ISREG(info.st_mode) and info.st_uid == 0 and info.st_size == receipt["bytes"]
+            except (OSError, KeyError, TypeError):
+                present = False
+            point["boot_files"] = "CAPTURED" if present else "MISSING"
+            if not present:
+                point["status"] = "incomplete"
+        if (
+            not isinstance(snapshots, list) or len(names) != len(snapshots)
+            or "root" not in names or not names <= allowed
+            or any(not (base / name).is_dir() or (base / name).is_symlink() for name in names)
+        ):
+            point["status"] = "incomplete"
+    return {"ok": True, "points": points}
+
+
 def _safe_point_path(point: dict) -> Path:
     identifier = point.get("id")
     if not isinstance(identifier, str) or not identifier or Path(identifier).name != identifier:
         raise RecoveryError("Recovery metadata has an invalid point ID")
-    candidate = (point_dir() / identifier).resolve()
+    unresolved = point_dir() / identifier
+    if unresolved.is_symlink():
+        raise RecoveryError("Recovery point cannot be a symbolic link.")
+    candidate = unresolved.resolve()
     root = point_dir().resolve()
     if candidate.parent != root:
         raise RecoveryError("Recovery point is outside the managed directory")
@@ -130,7 +183,101 @@ def _delete_snapshot(path: Path) -> None:
     run(["btrfs", "subvolume", "delete", str(path)], timeout=120)
 
 
+@contextmanager
+def recovery_lock():
+    state_dir().mkdir(parents=True, exist_ok=True)
+    with (state_dir() / ".lock").open("a", encoding="ascii") as lock:
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError as error:
+            raise RecoveryError("Another recovery operation is in progress.") from error
+        yield
+
+
+def boot_mounts():
+    """Read mount identity so disappearing separate boot volumes fail capture."""
+    mounts = {}
+    for target in (BOOT_ROOT, BOOT_ROOT / "efi"):
+        configured = run(["findmnt", "--fstab", "--mountpoint", str(target)],
+                         timeout=5, check=False).returncode == 0
+        if target.is_dir():
+            current = run(["findmnt", "-n", "-o", "ID,SOURCE,FSTYPE", "--target", str(target)],
+                          timeout=5).stdout.strip()
+        else:
+            current = ""
+        if configured:
+            exact = run(["findmnt", "-n", "-o", "ID,SOURCE,FSTYPE", "--mountpoint", str(target)],
+                        timeout=5, check=False)
+            if exact.returncode or not current or exact.stdout.strip() != current:
+                raise RecoveryError(f"The configured boot filesystem is not mounted at {target}.")
+        if current:
+            mounts[str(target)] = current
+    return mounts
+
+
+def boot_digest(archive: Path) -> str:
+    descriptor = os.open(archive, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    with os.fdopen(descriptor, "rb") as stream:
+        info = os.fstat(stream.fileno())
+        if (not stat.S_ISREG(info.st_mode) or info.st_uid != 0 or info.st_mode & 0o077
+                or not 0 < info.st_size <= MAX_BOOT_ARCHIVE_BYTES):
+            raise RecoveryError("Invalid boot archive.")
+        return hashlib.file_digest(stream, "sha256").hexdigest()
+
+
+def capture_boot(destination: Path) -> dict:
+    if not BOOT_ROOT.is_dir() or BOOT_ROOT.is_symlink():
+        raise RecoveryError("The boot directory is unavailable.")
+    mounts = boot_mounts()
+    if not mounts.get(str(BOOT_ROOT)):
+        raise RecoveryError("The boot filesystem could not be identified.")
+    entries = [BOOT_ROOT.name]
+    efi_mount = mounts.get(str(BOOT_ROOT / "efi"))
+    if efi_mount and efi_mount != mounts[str(BOOT_ROOT)]:
+        entries.append(f"{BOOT_ROOT.name}/efi")
+    archive = destination / BOOT_ARCHIVE
+    # File size is enforced during creation, including sparse expansion.
+    with os.fdopen(
+            os.open(archive, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600), "wb") as output:
+        # The archive is root-only and the output limit is local to this child.
+        with tempfile.TemporaryFile() as errors:
+            try:
+                result = subprocess.run(
+                    ["/usr/bin/prlimit", f"--fsize={MAX_BOOT_ARCHIVE_BYTES}:{MAX_BOOT_ARCHIVE_BYTES}",
+                     "--", "/usr/bin/tar", "--create", "--file=-", "--numeric-owner",
+                     "--acls", "--xattrs", "--selinux", "--one-file-system",
+                     "--directory", str(BOOT_ROOT.parent), *entries],
+                    stdout=output, stderr=errors, timeout=BOOT_CAPTURE_TIMEOUT, check=False,
+                )
+            except (OSError, subprocess.SubprocessError) as error:
+                raise RecoveryError("Boot files could not be archived.") from error
+            if result.returncode:
+                errors.seek(0)
+                detail = errors.read(MAX_TEXT).decode(errors="replace").strip()
+                raise RecoveryError("Boot file archive failed: " + (detail or str(result.returncode)))
+        output.flush()
+        os.fsync(output.fileno())
+    if boot_mounts() != mounts:
+        raise RecoveryError("A boot filesystem changed during capture.")
+    return {"sha256": boot_digest(archive), "bytes": archive.stat().st_size}
+
+
+def verify_boot(point: dict) -> dict:
+    receipt = point.get("boot_archive")
+    if not isinstance(receipt, dict):
+        raise RecoveryError("This recovery point predates boot file capture.")
+    archive = _safe_point_path(point) / BOOT_ARCHIVE
+    if boot_digest(archive) != receipt.get("sha256") or archive.stat().st_size != receipt.get("bytes"):
+        raise RecoveryError("The boot archive does not match its recovery point.")
+    return {"ok": True, "id": point["id"], "archive": str(archive), **receipt}
+
+
 def create(reason: str, operation_id: str | None = None) -> dict:
+    with recovery_lock():
+        return _create(reason, operation_id)
+
+
+def _create(reason: str, operation_id: str | None = None) -> dict:
     if reason not in {"manual", "pre-update"}:
         raise RecoveryError("Recovery point reason must be manual or pre-update")
     if operation_id and len(operation_id) > 160:
@@ -153,20 +300,22 @@ def create(reason: str, operation_id: str | None = None) -> dict:
         "dnf_transaction_id": None,
         "status": "creating",
         "cleanup": "retained",
-        "excluded": ["/home", "/boot", "/boot/efi"],
+        "excluded": ["/home"],
         "snapshots": snapshots,
     }
     try:
+        atomic_write(destination / "metadata.json", metadata)
         root_destination = destination / "root"
-        run(["btrfs", "subvolume", "snapshot", "-r", "/", str(root_destination)], timeout=600)
+        run(["btrfs", "subvolume", "snapshot", "-r", "/", str(root_destination)], timeout=SNAPSHOT_TIMEOUT)
         snapshots.append({"source": "/", "path": "root", "read_only": True})
         for source_text, label in SYSTEM_SUBVOLUMES:
             source = Path(source_text)
             if not is_subvolume(source):
                 continue
             target = destination / label
-            run(["btrfs", "subvolume", "snapshot", "-r", str(source), str(target)], timeout=600)
+            run(["btrfs", "subvolume", "snapshot", "-r", str(source), str(target)], timeout=SNAPSHOT_TIMEOUT)
             snapshots.append({"source": source_text, "path": label, "read_only": True})
+        metadata["boot_archive"] = capture_boot(destination)
         metadata["status"] = "valid"
         atomic_write(destination / "metadata.json", metadata)
         record_event(telemetry_event(
@@ -185,8 +334,6 @@ def create(reason: str, operation_id: str | None = None) -> dict:
             quality={"source_state": "AVAILABLE", "attribution": "EXACT", "confidence": "EXACT"},
             retention_class="semantic",
         ))
-        cleanup()
-        return metadata
     except Exception as error:
         metadata["status"] = "failed"
         metadata["cleanup"] = "pending"
@@ -212,9 +359,21 @@ def create(reason: str, operation_id: str | None = None) -> dict:
             retention_class="semantic",
         ))
         raise
+    # Retention happens after the point is usable. A failed deletion of an
+    # older point must not invalidate a newly created point or abort updates.
+    try:
+        _cleanup()
+    except (RecoveryError, OSError):
+        return {**metadata, "cleanup": "pending"}
+    return metadata
 
 
 def cleanup() -> dict:
+    with recovery_lock():
+        return _cleanup()
+
+
+def _cleanup() -> dict:
     points = list_points()
     valid = [item for item in points if item.get("status") == "valid"]
     failed = [item for item in points if item.get("status") != "valid"]
@@ -225,7 +384,11 @@ def cleanup() -> dict:
             relative = snapshot.get("path") if isinstance(snapshot, dict) else None
             if not isinstance(relative, str) or Path(relative).name != relative:
                 raise RecoveryError("Recovery metadata has an invalid snapshot path")
-            _delete_snapshot(base / relative)
+            if relative not in {"root", *(label for _, label in SYSTEM_SUBVOLUMES)}:
+                raise RecoveryError("Recovery metadata has an unexpected snapshot name.")
+        for name in [*(label for _, label in reversed(SYSTEM_SUBVOLUMES)), "root"]:
+            _delete_snapshot(base / name)
+        (base / BOOT_ARCHIVE).unlink(missing_ok=True)
         metadata = base / "metadata.json"
         if metadata.exists():
             metadata.unlink()
@@ -272,6 +435,8 @@ def command_line(argv: list[str] | None = None) -> int:
     create_parser.add_argument("--operation-id")
     sub.add_parser("list")
     sub.add_parser("cleanup")
+    verify_parser = sub.add_parser("verify-boot")
+    verify_parser.add_argument("point_id")
     associate_parser = sub.add_parser("associate")
     associate_parser.add_argument("--operation-id", required=True)
     associate_parser.add_argument("--dnf-transaction-id", required=True)
@@ -280,13 +445,22 @@ def command_line(argv: list[str] | None = None) -> int:
         if args.command == "create":
             value = create(args.reason, args.operation_id)
         elif args.command == "list":
-            value = {"ok": True, "points": list_points()}
+            value = inspect_points()
         elif args.command == "cleanup":
             value = cleanup()
+        elif args.command == "verify-boot":
+            if os.geteuid() != 0:
+                raise RecoveryError("Boot archive verification requires Administration.")
+            with recovery_lock():
+                point = next((item for item in list_points() if item["id"] == args.point_id
+                              and item.get("status") == "valid"), None)
+                if point is None:
+                    raise RecoveryError("No valid recovery point matches that ID.")
+                value = verify_boot(point)
         else:
             value = associate(args.operation_id, args.dnf_transaction_id)
         print(json.dumps(value, sort_keys=True, separators=(",", ":")))
         return 0
-    except RecoveryError as error:
+    except (RecoveryError, OSError) as error:
         print(json.dumps({"ok": False, "error": str(error)[:MAX_TEXT]}, separators=(",", ":")))
         return 1

@@ -243,13 +243,13 @@
     "greywardSoftware/plugin.json": "b8857ea5ba800b9b21964b0bd0380cd0f1ebc8318cc6d41ce8cfe540fe04fd70"
   },
   "candidatePackages": {
-    "dms": "2.0.0-8",
-    "session": "0.1.0-45",
+    "dms": "2.0.0-8.2",
+    "session": "0.1.0-46",
     "files": "1.0.0-24",
-    "securityCenter": "0.1.0-137",
-    "applicationSecurity": "0.1.0-88",
-    "enrollment": "0.1.0-91",
-    "securityContext": "0.1.0-137"
+    "securityCenter": "0.1.0-141",
+    "applicationSecurity": "0.1.0-89",
+    "enrollment": "0.1.0-94",
+    "securityContext": "0.1.0-143"
   },
   "acceptance": {
     "releaseAccepted": false,

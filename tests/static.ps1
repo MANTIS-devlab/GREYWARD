@@ -720,10 +720,11 @@ if (Test-Path -LiteralPath $imageIsoEntryPoint) {
     if ($imageBuilder -notmatch 'mkksiso' -or $imageBuilder -notmatch 'xorriso' -or $imageBuilder -notmatch 'Fedora-E-' -or $imageBuilder -notmatch '--ks' -or $imageBuilder -notmatch '--add' -or $imageBuilder -notmatch '--updates' -or $imageBuilder -notmatch 'rpm2cpio' -or $imageBuilder -notmatch 'etc/anaconda/profile\.d/greyward\.conf' -or $imageBuilder -notmatch 'greyward-anaconda-logo\.png' -or $imageBuilder -notmatch 'inst\.profile=greyward') {
         $errors.Add('The ISO builder must keep Fedora Anaconda behavior intact while adding the Kickstart, staged production payload, and minimal GTK branding.')
     }
-    if ($imageBuilder -notmatch 'Install GREYWARD OS' -or $imageBuilder -notmatch 'GREYWARD-INSTALLER-44') {
+    $installerMenu = Get-Content -Raw -LiteralPath (Join-Path $repo 'environment/image/installer-menu.py')
+    if ($imageBuilder -notmatch 'installer-menu\.py' -or $installerMenu -notmatch 'Install GREYWARD' -or $imageBuilder -notmatch 'GREYWARD-INSTALLER-44') {
         $errors.Add('The installer ISO must expose the GREYWARD boot-menu label and volume.')
     }
-    if ($imageBuilder -notmatch 'set default="0"' -or $imageBuilder -notmatch '--replace .set default="1". .set default="0".') {
+    if ($installerMenu -notmatch 'set default="0"') {
         $errors.Add('The installer ISO must boot the normal installation entry instead of the media-check entry.')
     }
     if ($imageBuilder -match 'livemedia-creator|greyward-live\.ks|liveinst|greyward-live-installer') {

@@ -1,3 +1,4 @@
+import json
 import sys
 import tempfile
 import unittest
@@ -18,6 +19,38 @@ except ModuleNotFoundError as error:
 
 @unittest.skipIf(_managed is None, "resolve1 runtime dependencies are unavailable on this host")
 class SecureDnsOwnershipTests(unittest.TestCase):
+    def test_status_reads_cache_and_coalesces_only_provider_triggers(self):
+        from greyward_security_context import secure_dns_reconciler as dns
+        bus = Mock()
+        with patch.object(dns.dbus.service.Object, '__init__', return_value=None), \
+             patch.object(dns.GLib, 'timeout_add', return_value=1) as schedule, \
+             patch.object(dns.GLib, 'timeout_add_seconds'), \
+             patch.object(dns, '_state') as reconcile, patch.object(dns, '_write') as write, \
+             patch.object(dns.time, 'monotonic', return_value=20) as clock:
+            service = dns.SecureDnsService(bus)
+            for _ in range(10):
+                self.assertEqual(json.loads(service.GetState())['degradation_reason'], 'ReconciliationPending')
+            schedule.assert_called_once()
+            reconcile.assert_not_called()
+            write.assert_not_called()
+            for call in bus.add_signal_receiver.call_args_list:
+                self.assertIn(call.kwargs['bus_name'], ('org.freedesktop.NetworkManager', 'org.freedesktop.DBus'))
+                if call.kwargs['signal_name'] == 'PropertiesChanged':
+                    self.assertIn('arg0', call.kwargs)
+            service._refresh_source = None
+            service._refresh_running = True
+            for _ in range(20):
+                service._schedule_refresh()
+            schedule.assert_called_once()
+            service._finish_refresh(service._policy_generation, {'effective_policy': 'SecureProvider'})
+            self.assertEqual(schedule.call_count, 2)
+            self.assertEqual(json.loads(service.GetState())['effective_policy'], 'SecureProvider')
+            write.assert_called_once()
+            clock.return_value = 115
+            self.assertEqual(json.loads(service.GetState())['degradation_reason'], 'ObservationStale')
+            write.assert_called_once()
+            reconcile.assert_not_called()
+
     def state_fixture(self, domains, devices=None, probe_error=None):
         from greyward_security_context import secure_dns_reconciler as dns
         props = {'DNSEx': [(2, [172, 26, 144, 1], 0, '')],

@@ -7,7 +7,9 @@ import errno
 import getpass
 import json
 import os
+import re
 import shutil
+import socket
 import subprocess
 import sys
 import tempfile
@@ -33,6 +35,9 @@ SETTING_DIRS = (".config/DankMaterialShell", ".config/labwc", ".config/greyward"
 PERSONAL_DIRS = ("Desktop", "Documents", "Downloads", "Music", "Pictures", "Videos")
 TERMINAL_OPERATION_STATES = {"COMPLETED", "FAILED", "CANCELLED"}
 MOUNT_PROBE_TIMEOUT = 8
+SNAPSHOT_TAG = "greyward-personal"
+SNAPSHOT_ID = re.compile(r"[0-9a-f]{64}")
+MAX_SNAPSHOT_VERSIONS = 20
 
 
 class BackupError(RuntimeError):
@@ -42,6 +47,8 @@ class BackupError(RuntimeError):
 def problem_for(error: BaseException | str) -> str:
     """Return a stable, user-safe outcome instead of provider diagnostics."""
     text = str(error).lower()
+    if isinstance(error, BackupError) and getattr(error, "problem", None):
+        return error.problem
     if any(token in text for token in ("wrong password", "incorrect password", "invalid password", "no key found")):
         return "CHECK_PASSPHRASE"
     if "outside the home" in text:
@@ -99,17 +106,6 @@ def atomic_write(path: Path, value: object) -> None:
     os.replace(temporary, path)
 
 
-def atomic_write_text(path: Path, value: str) -> None:
-    """Restore an existing JSON file without losing its original contents."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=path.parent, prefix=f".{path.name}.", delete=False) as handle:
-        temporary = Path(handle.name)
-        handle.write(value)
-        handle.flush()
-        os.fsync(handle.fileno())
-    os.replace(temporary, path)
-
-
 def load_json(path: Path, default: object) -> object:
     try:
         return json.loads(path.read_text(encoding="utf-8"))
@@ -139,9 +135,9 @@ def _repository_id_from_config_output(output: str) -> str | None:
     return None
 
 
-def repository_identity(password: str) -> str:
+def repository_identity(password: str, *, config: dict | None = None) -> str:
     """Read the Restic repository identity without storing credentials."""
-    result = restic(["cat", "config"], password)
+    result = restic(["cat", "config"], password, **({"config": config} if config is not None else {}))
     identifier = _repository_id_from_config_output(result.stdout)
     if not identifier:
         raise BackupError("The Restic repository identity could not be verified")
@@ -151,7 +147,9 @@ def repository_identity(password: str) -> str:
 def ensure_repository_identity(password: str) -> str:
     config = load_config()
     identifier = repository_identity(password)
-    if config.get("repository_id") != identifier:
+    if config.get("repository_id") and config["repository_id"] != identifier:
+        raise BackupError("The configured Restic repository identity has changed; choose it again")
+    if not config.get("repository_id"):
         config["repository_id"] = identifier
         atomic_write(CONFIG_PATH, config)
     return identifier
@@ -189,7 +187,7 @@ def operation_lock():
     """Serialize helper invocations and release the lock if a process dies."""
     lock_path = STATE_PATH.with_name("backup-operation.lock")
     lock_path.parent.mkdir(parents=True, exist_ok=True)
-    handle = lock_path.open("w", encoding="utf-8")
+    handle = lock_path.open("a", encoding="utf-8")
     try:
         if fcntl is not None:
             try:
@@ -205,12 +203,28 @@ def operation_lock():
         handle.close()
 
 
+def operation_active() -> bool:
+    if fcntl is None:
+        return True
+    try:
+        with STATE_PATH.with_name("backup-operation.lock").open("r", encoding="utf-8") as handle:
+            try:
+                fcntl.flock(handle.fileno(), fcntl.LOCK_SH | fcntl.LOCK_NB)
+            except BlockingIOError:
+                return True
+            return False
+    except FileNotFoundError:
+        return False
+    except OSError:
+        return True  # An unreadable lock is not proof that work has stopped.
+
+
 def _mount_identity(path: Path) -> dict[str, str]:
     if shutil.which("findmnt") is None:
         raise BackupError("findmnt is unavailable; the destination cannot be validated")
     try:
         probe = subprocess.run(
-            ["findmnt", "-T", str(path), "-no", "TARGET,SOURCE,FSTYPE,UUID"],
+            ["findmnt", "--json", "--list", "-T", str(path), "-o", "TARGET,SOURCE,FSTYPE,UUID"],
             capture_output=True,
             text=True,
             check=False,
@@ -220,15 +234,21 @@ def _mount_identity(path: Path) -> dict[str, str]:
         raise BackupError("The destination mount could not be validated") from error
     if probe.returncode != 0:
         raise BackupError("The destination mount could not be validated")
-    lines = [line.strip() for line in probe.stdout.splitlines() if line.strip()]
-    if len(lines) != 1:
-        raise BackupError("The destination mount could not be validated")
-    fields = lines[0].split()
-    if len(fields) != 4:
-        raise BackupError("The destination mount could not be validated")
-    target, source, filesystem, uuid = fields
+    try:
+        entries = json.loads(probe.stdout)["filesystems"]
+        if len(entries) != 1:
+            raise ValueError
+        entry = entries[0]
+        target, source, filesystem = (entry[key] for key in ("target", "source", "fstype"))
+        uuid = entry.get("uuid")
+        if not all(isinstance(value, str) and value for value in (target, source, filesystem)):
+            raise ValueError
+    except (ValueError, KeyError, IndexError, TypeError, AttributeError) as error:
+        raise BackupError("The destination mount could not be validated") from error
     if target == "/":
         raise BackupError("The destination is not mounted")
+    if not isinstance(uuid, str) or not uuid:
+        raise BackupError("The destination mount could not be validated: no filesystem UUID")
     return {"target": target, "source": source, "filesystem": filesystem, "uuid": uuid}
 
 
@@ -267,15 +287,17 @@ def _validated_configuration(config: dict) -> tuple[Path, dict[str, str]]:
     path, mount = _validated_destination(destination_text)
     try:
         configured_repo = Path(repo).expanduser().resolve()
-        expected_repo = repository(path).resolve()
+        expected_repo = repository(path)
     except (OSError, RuntimeError) as error:
         raise BackupError("The configured Restic repository could not be resolved") from error
-    if configured_repo != expected_repo:
+    if expected_repo.is_symlink() or configured_repo != expected_repo:
         raise BackupError("The configured Restic repository does not match the destination")
     recorded_mount = config.get("mount")
     if not isinstance(recorded_mount, dict):
         raise BackupError("The configured backup destination mount identity is not recorded; choose it again")
-    if recorded_mount != mount:
+    # Linux device names (e.g. /dev/sdb1) can change when a drive is replugged.
+    # A filesystem UUID and type still have to match at the configured mount.
+    if any(recorded_mount.get(key) != mount[key] for key in ("target", "filesystem", "uuid")):
         raise BackupError("The configured backup destination mount identity has changed; choose it again")
     return path, mount
 
@@ -290,43 +312,31 @@ def sources() -> list[Path]:
     return [path for path in values if path.exists()]
 
 
-def password_file(password: str):
-    runtime = Path(os.environ.get("XDG_RUNTIME_DIR", tempfile.gettempdir()))
-    runtime.mkdir(parents=True, exist_ok=True)
-    handle = tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=runtime, prefix="greyward-restic-", delete=False)
-    path = Path(handle.name)
-    try:
-        os.chmod(path, 0o600)
-        handle.write(password)
-        handle.write("\n")
-        handle.flush()
-        handle.close()
-        return path
-    except Exception:
-        handle.close()
-        path.unlink(missing_ok=True)
-        raise
-
-
-def restic(argv: list[str], password: str, timeout: int = 7200) -> subprocess.CompletedProcess[str]:
-    config = load_config()
+def restic(argv: list[str], password: str, timeout: int = 7200, *, config: dict | None = None) -> subprocess.CompletedProcess[str]:
+    if config is None:
+        config = load_config()
     _validated_configuration(config)
     repo = config["repository"]
     if shutil.which("restic") is None:
         raise BackupError("Restic is unavailable")
-    temporary = password_file(password)
+    env = {**os.environ, "RESTIC_REPOSITORY": repo, "LC_ALL": "C", "LANG": "C"}
+    for key in ("RESTIC_PASSWORD", "RESTIC_PASSWORD_FILE", "RESTIC_PASSWORD_COMMAND", "RESTIC_REPOSITORY_FILE"):
+        env.pop(key, None)
+    # Use a pipe so an interrupted or killed helper cannot leave a credential
+    # file behind. None of these fixed Restic commands uses stdin for data.
     try:
-        env = {**os.environ, "RESTIC_REPOSITORY": repo, "RESTIC_PASSWORD_FILE": str(temporary), "LC_ALL": "C", "LANG": "C"}
-        try:
-            result = subprocess.run(["restic", *argv], capture_output=True, text=True, timeout=timeout, check=False, env=env)
-        except (OSError, subprocess.SubprocessError) as error:
-            raise BackupError(f"Restic failed to start: {type(error).__name__}") from error
-        if result.returncode != 0:
-            detail = (result.stderr or result.stdout or "Restic reported a failure").strip().replace(password, "[redacted]")[:MAX_TEXT]
-            raise BackupError(detail)
-        return result
-    finally:
-        temporary.unlink(missing_ok=True)
+        result = subprocess.run(
+            ["restic", "--password-file", "/dev/stdin", *argv],
+            input=password + "\n", capture_output=True, text=True, timeout=timeout, check=False, env=env,
+        )
+    except subprocess.TimeoutExpired as error:
+        raise BackupError("The Restic operation timed out") from error
+    except (OSError, subprocess.SubprocessError) as error:
+        raise BackupError(f"Restic failed to start: {type(error).__name__}") from error
+    if result.returncode != 0 and not (argv[0] == "backup" and result.returncode == 3):
+        detail = (result.stderr or result.stdout or "Restic reported a failure").strip()
+        raise BackupError((detail.replace(password, "[redacted]") if password else detail)[:MAX_TEXT])
+    return result
 
 
 def configure(path_text: str, password: str, confirm: str) -> dict:
@@ -337,31 +347,13 @@ def configure(path_text: str, password: str, confirm: str) -> dict:
         raise BackupError("Choose a mounted backup destination before configuring Restic")
     path, mount = _validated_destination(requested)
     repo = repository(path)
-    try:
-        previous_config = CONFIG_PATH.read_text(encoding="utf-8")
-    except FileNotFoundError:
-        previous_config = None
-    except OSError as error:
-        raise BackupError("The existing backup configuration could not be read safely") from error
-    atomic_write(CONFIG_PATH, {"schema": "greyward.restic-backup/v1", "destination": str(path), "repository": str(repo), "mount": mount, "configured_at": stamp()})
-    try:
-        try:
-            restic(["init"], password)
-        except BackupError as error:
-            if "already exists" not in str(error).lower() and "already initialized" not in str(error).lower():
-                raise
-        restic(["snapshots", "--latest", "1"], password)
-        identifier = repository_identity(password)
-        atomic_write(CONFIG_PATH, {"schema": "greyward.restic-backup/v1", "destination": str(path), "repository": str(repo), "mount": mount, "repository_id": identifier, "configured_at": stamp()})
-    except BackupError:
-        try:
-            if previous_config is None:
-                CONFIG_PATH.unlink(missing_ok=True)
-            else:
-                atomic_write_text(CONFIG_PATH, previous_config)
-        except OSError as restore_error:
-            raise BackupError("The previous backup configuration could not be restored") from restore_error
-        raise
+    candidate = {"schema": "greyward.restic-backup/v1", "destination": str(path), "repository": str(repo), "mount": mount, "configured_at": stamp()}
+    if repo.is_symlink():
+        raise BackupError("The configured Restic repository does not match the destination")
+    if not (repo / "config").exists():
+        restic(["init"], password, config=candidate)
+    identifier = repository_identity(password, config=candidate)
+    atomic_write(CONFIG_PATH, {**candidate, "repository_id": identifier})
     state = load_state()
     _repository_record(state, identifier, create=True)
     _save_repository_record(state, identifier, _repository_record(state, identifier))
@@ -376,20 +368,30 @@ def status() -> dict:
     record = _repository_record(state, identifier) if identifier else {}
     path = config.get("destination")
     available = False
+    repository_available = False
     destination_problem = None
     if configured:
         try:
-            _validated_configuration(config)
+            destination_path, _ = _validated_configuration(config)
             available = True
+            repository_config = repository(destination_path) / "config"
+            repository_available = (not repository_config.is_symlink()
+                                    and repository_config.is_file()
+                                    and os.access(repository_config, os.R_OK))
         except BackupError as error:
             destination_problem = problem_for(error)
     operation = record.get("operation") if configured and identifier else None
+    if isinstance(operation, dict) and operation.get("state") not in TERMINAL_OPERATION_STATES:
+        if not operation_active():
+            operation = {**operation, "state": "FAILED", "problem": "INTERRUPTED"}
     return {
         "ok": True,
         "configured": configured,
         "destination": path,
         "destination_available": available,
         "destination_problem": destination_problem,
+        "repository_available": repository_available,
+        "last_check_scope": "FULL_DATA" if record.get("last_check_at") else None,
         "repository_id": identifier,
         "last_backup_at": record.get("last_backup_at") if configured and identifier else None,
         "last_backup_status": record.get("last_backup_status") if configured and identifier else None,
@@ -408,7 +410,8 @@ def status() -> dict:
 
 
 def backup(password: str) -> dict:
-    if not sources():
+    selected_sources = sources()
+    if not selected_sources:
         raise BackupError("No personal files or approved settings are available to back up")
     config = load_config()
     if not isinstance(config.get("repository"), str) or not config.get("repository"):
@@ -420,7 +423,18 @@ def backup(password: str) -> dict:
     record["operation"] = operation_record("BACKUP", "RUNNING", started_at=started_at)
     _save_repository_record(state, identifier, record)
     try:
-        result = restic(["backup", "--json", *[str(path) for path in sources()]], password)
+        result = restic(["backup", "--json", "--host", socket.gethostname(), "--tag", SNAPSHOT_TAG, *[str(path) for path in selected_sources]], password)
+        snapshot_id = None
+        for line in reversed(result.stdout.splitlines()):
+            try:
+                value = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if isinstance(value, dict) and value.get("message_type") == "summary" and value.get("snapshot_id"):
+                snapshot_id = value["snapshot_id"]
+                break
+        if not snapshot_id:
+            raise BackupError("Restic did not confirm a saved snapshot")
     except BackupError as error:
         problem = problem_for(error)
         record.update({
@@ -443,18 +457,19 @@ def backup(password: str) -> dict:
             retention_class="semantic",
         ))
         raise
-    snapshot_id = None
-    for line in reversed(result.stdout.splitlines()):
-        try:
-            value = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        if isinstance(value, dict) and value.get("snapshot_id"):
-            snapshot_id = value["snapshot_id"]
-            break
+    if result.returncode == 3:
+        record.update({
+            "last_backup_status": "PARTIAL",
+            "last_backup_problem": "SOURCE_UNREADABLE",
+            "operation": operation_record("BACKUP", "FAILED", "SOURCE_UNREADABLE", started_at=started_at),
+        })
+        _save_repository_record(state, identifier, record)
+        return {"ok": False, "status": "PARTIAL", "problem": "SOURCE_UNREADABLE", "snapshot_id": snapshot_id}
     backup_at = stamp()
     record.update({"last_backup_at": backup_at, "last_backup_status": "SUCCESSFUL", "last_snapshot_id": snapshot_id})
     record.pop("last_backup_problem", None)
+    record["last_retention_status"] = "PENDING"
+    _save_repository_record(state, identifier, record)
 
     # Retention is maintenance after the encrypted snapshot has been safely
     # written. A prune failure must not turn a completed backup into a failed
@@ -462,7 +477,7 @@ def backup(password: str) -> dict:
     retention_status = "SUCCESSFUL"
     retention_error = None
     try:
-        restic(["forget", "--keep-daily", str(KEEP_DAILY), "--keep-weekly", str(KEEP_WEEKLY), "--prune", "--json"], password)
+        restic(["forget", "--host", socket.gethostname(), "--tag", SNAPSHOT_TAG, "--keep-daily", str(KEEP_DAILY), "--keep-weekly", str(KEEP_WEEKLY), "--prune", "--json"], password)
     except BackupError as error:
         retention_status = "FAILED"
         retention_error = problem_for(error)
@@ -501,7 +516,7 @@ def verify(password: str) -> dict:
     record["operation"] = operation_record("VERIFY", "RUNNING", started_at=started_at)
     _save_repository_record(state, identifier, record)
     try:
-        restic(["check"], password, timeout=14400)
+        restic(["check", "--read-data"], password, timeout=14400)
     except BackupError as error:
         problem = problem_for(error)
         record.update({
@@ -554,57 +569,91 @@ def _restore_candidate_kind(value: dict) -> str:
     return "UNKNOWN"
 
 
-def list_files(password: str) -> dict:
-    result = restic(["ls", "latest", "--json"], password)
+def _home_path(value: str, home: PurePosixPath) -> bool:
+    path = PurePosixPath(value)
+    return path != home and ".." not in path.parts and home in path.parents
+
+
+def list_files(password: str, snapshot: str | None = None) -> dict:
+    ensure_repository_identity(password)
+    home = PurePosixPath(Path.home().resolve().as_posix())
+    try:
+        records = json.loads(restic(["snapshots", "--json"], password).stdout)
+    except (ValueError, TypeError) as error:
+        raise BackupError("Restic did not return the saved backup versions") from error
+    if not isinstance(records, list):
+        raise BackupError("Restic did not return the saved backup versions")
+    versions = [
+        {"id": item["id"], "time": item["time"]}
+        for item in records
+        if isinstance(item, dict) and isinstance(item.get("id"), str) and SNAPSHOT_ID.fullmatch(item["id"])
+        and isinstance(item.get("time"), str) and isinstance(item.get("paths"), list)
+        and any(isinstance(path, str) and _home_path(path, home) for path in item["paths"])
+    ]
+    versions.sort(key=lambda item: item["time"], reverse=True)
+    versions = versions[:MAX_SNAPSHOT_VERSIONS]
+    if snapshot is None and versions:
+        snapshot = versions[0]["id"]
+    if snapshot is not None and not any(item["id"] == snapshot for item in versions):
+        raise BackupError("The selected backup version is no longer available")
+    result = restic(["ls", snapshot, "--json"], password) if snapshot else None
     candidates_by_path = {}
-    home = PurePosixPath(str(Path.home().resolve()).replace("\\", "/"))
-    for line in result.stdout.splitlines():
+    scope = {str(home / relative) for relative in PERSONAL_DIRS + SETTING_DIRS}
+    scope_candidates = {}
+    available_count = 0
+    for line in result.stdout.splitlines() if result else ():
         try:
             value = json.loads(line)
         except json.JSONDecodeError:
             continue
         path = value.get("path") if isinstance(value, dict) else None
-        if isinstance(path, str):
-            path = path.replace("\\", "/")
-        if isinstance(path, str):
-            try:
-                PurePosixPath(path).relative_to(home)
-            except ValueError:
-                continue
-            candidates_by_path[path] = {"path": path, "kind": _restore_candidate_kind(value)}
-    available = [candidates_by_path[path] for path in sorted(candidates_by_path)]
-    shown = available[:MAX_RESTORE_CANDIDATES]
+        if not isinstance(path, str) or not _home_path(path, home):
+            continue
+        kind = _restore_candidate_kind(value)
+        if kind == "UNKNOWN":
+            continue
+        available_count += 1
+        if path in scope:
+            scope_candidates[path] = {"path": path, "kind": kind}
+        elif len(candidates_by_path) < MAX_RESTORE_CANDIDATES:
+            candidates_by_path[path] = {"path": path, "kind": kind}
+    # Keep every backed top-level folder selectable even when an earlier
+    # directory alone contains more than the display limit.
+    shown = [scope_candidates[path] for path in sorted(scope_candidates)]
+    shown += [candidates_by_path[path] for path in sorted(candidates_by_path)[:MAX_RESTORE_CANDIDATES - len(shown)]]
     return {
         "ok": True,
         "files": [candidate["path"] for candidate in shown],
         "candidates": shown,
-        "available_count": len(available),
+        "available_count": available_count,
         "shown_count": len(shown),
         "selection_limit": MAX_RESTORE_SELECTION,
+        "snapshot": snapshot,
+        "versions": versions,
     }
 
 
-def restore(password: str, selected: list[str]) -> dict:
-    home = Path.home().resolve()
-    safe = []
-    for value in selected:
-        path = Path(value).expanduser().resolve()
-        if path != home and home not in path.parents:
-            raise BackupError("Restore is limited to files in the user home")
-        safe.append(str(path))
-    if not safe:
+def restore(password: str, snapshot: str, selected: list[str]) -> dict:
+    if not selected:
         raise BackupError("Select at least one file to restore")
-    if len(safe) > MAX_RESTORE_SELECTION:
+    if len(selected) > MAX_RESTORE_SELECTION:
         raise BackupError("Select fewer files for one restore operation")
+    if not SNAPSHOT_ID.fullmatch(snapshot):
+        raise BackupError("Choose an exact backup version to restore")
+    home = PurePosixPath(Path.home().resolve().as_posix())
+    safe = list(dict.fromkeys(selected))
+    if any(not _home_path(path, home) or not PurePosixPath(path).is_absolute() for path in safe):
+        raise BackupError("Restore is limited to files in the user home")
     identifier = ensure_repository_identity(password)
     state = load_state()
     record = _repository_record(state, identifier, create=True)
     started_at = stamp()
     record["operation"] = operation_record("RESTORE", "PREPARING", started_at=started_at)
     _save_repository_record(state, identifier, record)
-    staging = home / ".local/share/greyward/recovery-restore" / dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    restore_root = Path(home) / ".local/share/greyward/recovery-restore"
     try:
-        staging.mkdir(parents=True, exist_ok=False)
+        restore_root.mkdir(parents=True, exist_ok=True, mode=0o700)
+        staging = Path(tempfile.mkdtemp(dir=restore_root, prefix=dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ-")))
     except OSError as error:
         record["operation"] = operation_record("RESTORE", "FAILED", "TRY_AGAIN", started_at=started_at)
         _save_repository_record(state, identifier, record)
@@ -612,7 +661,12 @@ def restore(password: str, selected: list[str]) -> dict:
     try:
         record["operation"] = operation_record("RESTORE", "RUNNING", started_at=started_at)
         _save_repository_record(state, identifier, record)
-        restic(["restore", "latest", "--target", str(staging), *sum((["--include", path] for path in safe), [])], password)
+        # Restic's include arguments are glob patterns, even for paths selected
+        # in the UI. Escape filename metacharacters and pin the browsed version.
+        patterns = [part for path in safe for part in ("--include", re.sub(r"([\\*?\[\]])", r"\\\1", path))]
+        restic(["restore", snapshot, "--target", str(staging), "--verify", *patterns], password)
+        if any(not (staging / path.lstrip("/")).exists() for path in safe):
+            raise BackupError("The backup version does not contain every selected file")
     except BackupError as error:
         shutil.rmtree(staging, ignore_errors=True)
         record["operation"] = operation_record("RESTORE", "FAILED", problem_for(error), started_at=started_at)
@@ -628,9 +682,13 @@ def command_line(argv: list[str] | None = None) -> int:
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("status")
     config = sub.add_parser("configure"); config.add_argument("--destination", default=""); config.add_argument("--password-stdin", action="store_true")
-    for name in ("backup", "verify", "list-files"):
-        operation = sub.add_parser(name); operation.add_argument("--password-stdin", action="store_true")
-    restore_parser = sub.add_parser("restore"); restore_parser.add_argument("paths", nargs="+"); restore_parser.add_argument("--password-stdin", action="store_true")
+    for name in ("backup", "verify", "list-files", "restore"):
+        operation = sub.add_parser(name)
+        operation.add_argument("--password-stdin", action="store_true")
+        if name in {"list-files", "restore"}:
+            operation.add_argument("--snapshot", required=name == "restore")
+        if name == "restore":
+            operation.add_argument("paths", nargs="+")
     args = parser.parse_args(argv)
     try:
         if args.command == "status":
@@ -643,11 +701,17 @@ def command_line(argv: list[str] | None = None) -> int:
                 password, confirm = values[0], values[1]
             else:
                 password = getpass.getpass("Restic passphrase: "); confirm = getpass.getpass("Confirm Restic passphrase: ")
-            value = configure(args.destination, password, confirm)
+            with operation_lock():
+                value = configure(args.destination, password, confirm)
         else:
             with operation_lock():
                 password = sys.stdin.readline().rstrip("\n") if args.password_stdin else getpass.getpass("Restic passphrase: ")
-                value = {"backup": backup, "verify": verify, "list-files": list_files}.get(args.command, lambda secret: restore(secret, args.paths))(password)
+                if args.command == "list-files":
+                    value = list_files(password, args.snapshot)
+                elif args.command == "restore":
+                    value = restore(password, args.snapshot, args.paths)
+                else:
+                    value = {"backup": backup, "verify": verify}[args.command](password)
         print(json.dumps(value, sort_keys=True, separators=(",", ":")))
         return 0
     except BackupError as error:

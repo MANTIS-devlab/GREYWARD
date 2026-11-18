@@ -1,0 +1,157 @@
+--- a/include/session-lock.h
++++ b/include/session-lock.h
+@@ -13,6 +13,7 @@
+ 	/* View re-focused on unlock */
+ 	struct view *last_active_view;
+ 	struct wlr_surface *focused;
++	struct wl_event_source *focus_idle;
+ 	/*
+ 	 * When not locked: lock=NULL, locked=false
+ 	 * When locked: lock=non-NULL, locked=true
+--- a/src/session-lock.c
++++ b/src/session-lock.c
+@@ -4,6 +4,7 @@
+ #include <assert.h>
+ #include <wlr/types/wlr_output_layout.h>
+ #include <wlr/types/wlr_scene.h>
++#include <wlr/types/wlr_seat.h>
+ #include <wlr/types/wlr_session_lock_v1.h>
+ #include "common/mem.h"
+ #include "labwc.h"
+@@ -35,35 +36,49 @@
+ 	seat_focus_lock_surface(&manager->server->seat, focused);
+ }
+ 
+-static void
+-refocus_output(struct session_lock_output *output)
+-{
+-	/* Try to focus another session-lock surface */
+-	if (output->manager->focused != output->surface->surface) {
++/* A powered-off output can still own a mapped lock surface. Keep keyboard
++ * focus on a mapped, enabled output of this lock, never on ordinary content. */
++static void
++reconcile_lock_focus(struct session_lock_manager *manager,
++		struct session_lock_output *excluded)
++{
++	if (!manager->locked || !manager->lock) {
+ 		return;
+ 	}
+ 
+-	struct session_lock_output *iter;
+-	wl_list_for_each(iter, &output->manager->lock_outputs, link) {
+-		if (iter == output || !iter->surface || !iter->surface->surface) {
++	struct wlr_surface *next = NULL;
++	struct session_lock_output *output;
++	wl_list_for_each(output, &manager->lock_outputs, link) {
++		if (output == excluded || !output->output->wlr_output->enabled
++				|| !output->surface || !output->surface->surface->mapped) {
+ 			continue;
+ 		}
+-		if (iter->surface->surface->mapped) {
+-			focus_surface(output->manager, iter->surface->surface);
+-			return;
++		struct wlr_surface *surface = output->surface->surface;
++		if (surface == manager->focused) {
++			next = surface;
++			break;
+ 		}
+-	}
+-	focus_surface(output->manager, NULL);
++		if (!next) {
++			next = surface;
++		}
++	}
++
++	struct wlr_seat *seat = manager->server->seat.seat;
++	if (next != manager->focused || next != seat->keyboard_state.focused_surface) {
++		focus_surface(manager, next);
++	}
+ }
+ 
+ static void
+ update_focus(void *data)
+ {
+-	struct session_lock_output *output = data;
+-	cursor_update_focus(output->manager->server);
+-	if (!output->manager->focused) {
+-		focus_surface(output->manager, output->surface->surface);
+-	}
++	struct session_lock_manager *manager = data;
++	manager->focus_idle = NULL;
++	if (!manager->locked || !manager->lock) {
++		return;
++	}
++	cursor_update_focus(manager->server);
++	reconcile_lock_focus(manager, NULL);
+ }
+ 
+ static void
+@@ -71,15 +86,13 @@
+ {
+ 	struct session_lock_output *output =
+ 		wl_container_of(listener, output, surface_map);
+-	/*
+-	 * In order to update cursor shape on map, the call to
+-	 * cursor_update_focus() should be delayed because only the
+-	 * role-specific surface commit/map handler has been processed in
+-	 * wlroots at this moment and get_cursor_context() returns NULL as a
+-	 * buffer has not been actually attached to the surface.
+-	 */
+-	wl_event_loop_add_idle(
+-		output->manager->server->wl_event_loop, update_focus, output);
++	struct session_lock_manager *manager = output->manager;
++	/* Wait for the buffer attachment before updating cursor focus. Use the
++	 * manager as idle data because an output may disappear before it runs. */
++	if (!manager->focus_idle) {
++		manager->focus_idle = wl_event_loop_add_idle(
++			manager->server->wl_event_loop, update_focus, manager);
++	}
+ }
+ 
+ static void
+@@ -87,7 +100,7 @@
+ {
+ 	struct session_lock_output *output =
+ 		wl_container_of(listener, output, surface_destroy);
+-	refocus_output(output);
++	reconcile_lock_focus(output->manager, output);
+ 
+ 	assert(output->surface);
+ 	output->surface = NULL;
+@@ -155,7 +168,7 @@
+ session_lock_output_destroy(struct session_lock_output *output)
+ {
+ 	if (output->surface) {
+-		refocus_output(output);
++		reconcile_lock_focus(output->manager, output);
+ 		wl_list_remove(&output->surface_destroy.link);
+ 		wl_list_remove(&output->surface_map.link);
+ 	}
+@@ -182,6 +195,9 @@
+ 		| WLR_OUTPUT_STATE_SCALE | WLR_OUTPUT_STATE_TRANSFORM;
+ 	if (event->state->committed & require_reconfigure) {
+ 		lock_output_reconfigure(output);
++	}
++	if (event->state->committed & WLR_OUTPUT_STATE_ENABLED) {
++		reconcile_lock_focus(output->manager, NULL);
+ 	}
+ }
+ 
+@@ -271,6 +287,10 @@
+ static void
+ session_lock_destroy(struct session_lock_manager *manager)
+ {
++	if (manager->focus_idle) {
++		wl_event_source_remove(manager->focus_idle);
++		manager->focus_idle = NULL;
++	}
+ 	struct session_lock_output *lock_output, *next;
+ 	wl_list_for_each_safe(lock_output, next, &manager->lock_outputs, link) {
+ 		wlr_scene_node_destroy(&lock_output->tree->node);
+@@ -459,4 +479,5 @@
+ 	wl_list_for_each(lock_output, &manager->lock_outputs, link) {
+ 		lock_output_reconfigure(lock_output);
+ 	}
+-}
++	reconcile_lock_focus(manager, NULL);
++}

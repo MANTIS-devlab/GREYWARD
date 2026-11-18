@@ -379,7 +379,7 @@ class FileSecurityManager:
 
     def _owned_detection(self, detection_id: str, actor_uid: int) -> dict:
         value = self.store.get_file_detection(detection_id)
-        if not value or (actor_uid != 0 and not self._owned_scan(value.get("operation_id", ""), actor_uid)):
+        if not value or (actor_uid != 0 and value.get("owner_uid") != actor_uid):
             raise ValueError("The detection is no longer available.")
         return value
 
@@ -470,7 +470,7 @@ class FileSecurityManager:
             "original_path": original, "file_ref": _file_ref(original),
             "detection_name": result.get("detection_name") or "Known threat", "detected_at": current,
             "file_size": size, "file_hash": file_hash, "state": "DETECTED",
-        })
+        }, owner_uid=owner_uid)
         if self.on_change:
             self.on_change()
 
@@ -1105,7 +1105,7 @@ class FileSecurityManager:
                         "file_ref": _file_ref(original), "detection_name": detection_name, "detected_at": stamp(),
                         "scanner_version": info.get("engine_version"), "database_version": info.get("database_version"),
                         "file_size": size, "file_hash": file_hash, "state": "DETECTED",
-                    })
+                    }, owner_uid=operation.get("owner_uid"))
                     detections += 1
                     self._emit(operation_id, "FILE_DETECTION", "DETECTED", detection_name, "WARNING", details={"detection_id": detection_id, "file_ref": _file_ref(original)})
                 elif line.strip().endswith((": OK", ": Empty file")):

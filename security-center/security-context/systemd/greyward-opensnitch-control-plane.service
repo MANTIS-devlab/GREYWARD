@@ -1,14 +1,14 @@
 [Unit]
 Description=GREYWARD OpenSnitch control plane
-After=network-pre.target
+After=network-pre.target systemd-tmpfiles-setup.service
 Before=opensnitch.service
 
 [Service]
-Type=simple
+Type=notify
+NotifyAccess=main
+TimeoutStartSec=15s
 User=root
 Group=root
-RuntimeDirectory=greyward-opensnitch greyward-security-context
-RuntimeDirectoryMode=0750
 ExecStart=/usr/libexec/greyward-opensnitch-control-plane serve
 Restart=on-failure
 RestartSec=2s

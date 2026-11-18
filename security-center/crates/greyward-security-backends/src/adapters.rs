@@ -48,15 +48,6 @@ pub fn collect_core_facts() -> (Vec<AdapterFacts>, Vec<CollectionIssue>) {
         home: mount_state("/home"),
         swap: EncryptionState::Unknown,
     };
-    let tpm = TpmFacts {
-        capability: if fs::metadata("/dev/tpmrm0").is_ok() {
-            TpmCapability::Available
-        } else if fs::metadata("/sys/class/tpm").is_ok() {
-            TpmCapability::Unusable
-        } else {
-            TpmCapability::Missing
-        },
-    };
     // These probes are read-only and independent. Running them together keeps
     // the snapshot bounded by the slowest local provider instead of the sum of
     // multiple command launches, without broadening the collection surface.
@@ -78,9 +69,6 @@ pub fn collect_core_facts() -> (Vec<AdapterFacts>, Vec<CollectionIssue>) {
             usb.join().unwrap_or_else(|_| collect_usb_facts()),
         )
     });
-    let recovery = startup_provider_trace("recovery", || {
-        collect_recovery_facts(&boot, &storage, &tpm, &firmware)
-    });
     if matches!(mode, SelinuxMode::Unknown) {
         issues.push(CollectionIssue {
             backend_id: "selinux".into(),
@@ -101,64 +89,30 @@ pub fn collect_core_facts() -> (Vec<AdapterFacts>, Vec<CollectionIssue>) {
             }),
             AdapterFacts::Boot(boot),
             AdapterFacts::Storage(storage),
-            AdapterFacts::Tpm(tpm),
             AdapterFacts::Firmware(firmware),
             AdapterFacts::SecurityUpdates(updates),
             AdapterFacts::Network(network),
             AdapterFacts::Flatpak(flatpak),
             AdapterFacts::Portal(portal),
             AdapterFacts::Usb(usb),
-            AdapterFacts::Recovery(recovery),
         ],
         issues,
     )
 }
 
-/// Collect only the local facts required by the Devices surface. This keeps a
-/// device page read from paying for firmware, package, Flatpak, portal, and
-/// network providers that belong to the full posture graph.
-pub fn collect_device_facts() -> Vec<AdapterFacts> {
-    let boot = BootFacts {
-        firmware: if fs::metadata("/sys/firmware/efi").is_ok() {
-            FirmwareMode::Uefi
-        } else {
-            FirmwareMode::Legacy
-        },
-        secure_boot: secure_boot(),
-    };
-    let storage = StorageFacts {
-        root: mount_state("/"),
-        home: mount_state("/home"),
-        swap: EncryptionState::Unknown,
-    };
-    let tpm = TpmFacts {
-        capability: if fs::metadata("/dev/tpmrm0").is_ok() {
-            TpmCapability::Available
-        } else if fs::metadata("/sys/class/tpm").is_ok() {
-            TpmCapability::Unusable
-        } else {
-            TpmCapability::Missing
-        },
-    };
-    let usb = collect_usb_facts();
-    let recovery = collect_recovery_facts(
-        &boot,
-        &storage,
-        &tpm,
-        &FirmwareFacts {
-            fwupd_available: false,
-            security: FirmwareSecurityState::Unknown,
-            security_attributes: Vec::new(),
-            updates: FirmwareUpdateState::Unknown,
-        },
-    );
-    vec![
-        AdapterFacts::Boot(boot),
-        AdapterFacts::Storage(storage),
-        AdapterFacts::Tpm(tpm),
-        AdapterFacts::Usb(usb),
-        AdapterFacts::Recovery(recovery),
-    ]
+/// Hardware presence is informational and does not prove disk unlock enrollment.
+pub fn collect_tpm_capability() -> TpmCapability {
+    match fs::metadata("/dev/tpmrm0") {
+        Ok(_) => TpmCapability::Available,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            match fs::metadata("/sys/class/tpm/tpm0") {
+                Ok(_) => TpmCapability::Unusable,
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => TpmCapability::Missing,
+                Err(_) => TpmCapability::Unknown,
+            }
+        }
+        Err(_) => TpmCapability::Unknown,
+    }
 }
 fn secure_boot() -> SecureBootState {
     match fs::read("/sys/firmware/efi/efivars/SecureBoot-8be4df61-93ca-11d2-aa0d-00e098032b8c") {
@@ -852,44 +806,6 @@ pub fn collect_usb_facts() -> UsbFacts {
         connected_devices,
         authorized_devices,
         unknown_devices,
-    }
-}
-
-pub fn collect_recovery_facts(
-    boot: &BootFacts,
-    storage: &StorageFacts,
-    tpm: &TpmFacts,
-    firmware: &FirmwareFacts,
-) -> RecoveryFacts {
-    let rescue_kernel = fs::read_dir("/boot")
-        .map(|entries| {
-            entries
-                .flatten()
-                .any(|e| e.file_name().to_string_lossy().contains("vmlinuz-0-rescue"))
-        })
-        .unwrap_or(false);
-    let uefi = matches!(boot.firmware, FirmwareMode::Uefi);
-    let readiness = if !rescue_kernel {
-        RecoveryReadiness::Unavailable
-    } else if uefi
-        && matches!(boot.secure_boot, SecureBootState::Enabled)
-        && matches!(storage.root, EncryptionState::Encrypted)
-        && matches!(tpm.capability, TpmCapability::Available)
-    {
-        RecoveryReadiness::Ready
-    } else if uefi || rescue_kernel {
-        RecoveryReadiness::Partial
-    } else {
-        RecoveryReadiness::Unknown
-    };
-    RecoveryFacts {
-        readiness,
-        rescue_kernel,
-        uefi,
-        secure_boot: boot.secure_boot.clone(),
-        encryption: storage.root.clone(),
-        firmware_updates: firmware.updates.clone(),
-        tpm: tpm.capability.clone(),
     }
 }
 

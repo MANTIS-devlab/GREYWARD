@@ -11,6 +11,7 @@ import os
 import tempfile
 import urllib.error
 import urllib.request
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -21,6 +22,7 @@ SNAPSHOT_PATH = Path("/var/lib/greyward/opensnitch/feodo-snapshot.json")
 MAX_FEED_BYTES = 4 * 1024 * 1024
 MAX_INDICATORS = 4096
 FETCH_TIMEOUT_SECONDS = 20
+MAX_SNAPSHOT_AGE_SECONDS = 86400
 
 
 def _clean(value: Any, maximum: int = 160) -> str:
@@ -143,7 +145,6 @@ def update_feed(fetcher=fetch_feed, path: Path = SNAPSHOT_PATH) -> dict[str, Any
             raise ValueError("The Feodo response is larger than the safety limit.")
         payload = json.loads(raw.decode("utf-8"))
         indicators = normalize_feed(payload)
-        from datetime import datetime, timezone
         timestamp = datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
         updated = {
             "schema": SNAPSHOT_SCHEMA,
@@ -173,6 +174,17 @@ def _load_snapshot_from(path: Path) -> dict[str, Any]:
     return value
 
 
+def snapshot_usable(snapshot: dict[str, Any]) -> bool:
+    if snapshot.get("state") not in {"READY", "EMPTY"}:
+        return False
+    try:
+        updated = datetime.fromisoformat(str(snapshot.get("last_successful_update") or ""))
+        age = (datetime.now(timezone.utc) - updated).total_seconds()
+    except (ValueError, TypeError, OverflowError):
+        return False
+    return 0 <= age <= MAX_SNAPSHOT_AGE_SECONDS
+
+
 def matching_indicator(connection: Any, snapshot: dict[str, Any] | None = None) -> dict[str, Any] | None:
     address = str(getattr(connection, "dst_ip", "") or "")
     try:
@@ -180,7 +192,9 @@ def matching_indicator(connection: Any, snapshot: dict[str, Any] | None = None) 
         port = int(getattr(connection, "dst_port", 0) or 0)
     except (ValueError, TypeError):
         return None
-    source = snapshot or load_snapshot()
+    source = load_snapshot() if snapshot is None else snapshot
+    if not snapshot_usable(source):
+        return None
     for indicator in source.get("indicators", []):
         if indicator.get("ip") == address and int(indicator.get("port", 0) or 0) == port:
             return dict(indicator)
@@ -189,6 +203,11 @@ def matching_indicator(connection: Any, snapshot: dict[str, Any] | None = None) 
 
 def threat_status(policy: dict[str, Any], activity: list[dict[str, Any]] | None = None) -> dict[str, Any]:
     snapshot = load_snapshot()
+    state = snapshot.get("state", "ERROR")
+    error = snapshot.get("error")
+    if state in {"READY", "EMPTY"} and not snapshot_usable(snapshot):
+        state = "STALE"
+        error = "The last successful feed refresh is outside the supported age window."
     config = policy.get("threat_intel") if isinstance(policy, dict) else None
     enabled = bool(config.get("enabled", True)) if isinstance(config, dict) else True
     blocked = [
@@ -200,9 +219,9 @@ def threat_status(policy: dict[str, Any], activity: list[dict[str, Any]] | None 
     return {
         "enabled": enabled,
         "provider": FEODO_PROVIDER,
-        "state": "DISABLED" if not enabled else snapshot.get("state", "ERROR"),
+        "state": "DISABLED" if not enabled else state,
         "last_successful_update": snapshot.get("last_successful_update"),
         "indicator_count": int(snapshot.get("indicator_count", 0) or 0),
-        "last_error": snapshot.get("error"),
+        "last_error": error,
         "recent_blocked_connections": blocked[-64:][::-1],
     }

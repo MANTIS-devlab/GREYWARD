@@ -29,11 +29,16 @@ def tree_digest(files):
 def update_plugins(payload, manifest, receipt, source_root=ROOT):
     """Refuse stale sources, undeclared deltas and changes outside visual adapters."""
     pin = manifest['build']['pluginUpdate']
-    allowed = {'greywardSecure/SecureWidget.qml', 'greywardSecure/StatusCard.qml',
-               'greywardSecure/plugin.json'}
+    allowed = set(pin['changedFirstPartyFiles'])
+    card = 'greywardSecure/StatusCard.qml'
+    reviewed_deltas = (
+        {card},
+        {card, 'greywardSecure/StatusModel.js'},
+        {card, 'greywardSecure/SecureWidget.qml', 'greywardSecure/plugin.json'},
+    )
     old = receipt['firstPartyFiles']
     if (old != receipt['firstPartySources'] or tree_digest(old) != pin['baseFirstPartySha256']
-            or set(pin['changedFirstPartyFiles']) != allowed
+            or allowed not in reviewed_deltas
             or pin['requiresProtectedMigration'] is not False):
         raise ValueError('Invalid ordinary-plugin predecessor or change scope.')
     plugins = source_root / manifest['firstPartyDirectory']
@@ -127,6 +132,7 @@ def main():
     requirements = subprocess.check_output(['rpm', '-qp', '--requires', str(args.base_rpm)], text=True).splitlines()
     requirements = [r for r in requirements if not r.startswith(('rpmlib(', 'config('))]
     version, release = manifest['dms']['tag'][1:], manifest['build']['rpmRelease']
+    generation = manifest['releaseId'].rsplit('-', 1)[1]
     spec = f'''%global __os_install_post %{{nil}}
 Name: greyward-dms
 Version: {version}
@@ -134,12 +140,13 @@ Release: {release}%{{?dist}}
 Summary: GREYWARD pinned DMS desktop with coordinated Settings artwork
 License: GPL-3.0-only AND MIT
 AutoReqProv: no
-Provides: greyward-dms = {version}-7%{{?dist}}
+Provides: greyward-dms = {version}-{generation}%{{?dist}}
 '''
     spec += ''.join('Requires: ' + value + '\n' for value in requirements)
     if args.plugins_only:
         predecessor = pin['basePackage'].removeprefix('greyward-dms-').removesuffix('.x86_64')
-        spec += 'Provides: greyward-dms = ' + predecessor + '\n'
+        if predecessor != f'{version}-{generation}.fc44':
+            spec += 'Provides: greyward-dms = ' + predecessor + '\n'
     spec += '''%description
 Validated predecessor executables and shell, with the single manifest-locked
 Settings SVG update. Activate through the protected-profile migration.

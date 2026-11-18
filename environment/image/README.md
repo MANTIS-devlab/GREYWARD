@@ -112,23 +112,24 @@ ISO validation. Every candidate still requires a clean offline install test.
 
 ## Internal alpha installer ISO
 
-On a Fedora build host with `mkksiso`, `rpm2cpio`, `cpio`, and the required RPM
-inputs, build the two Security Center RPMs first with the development
+On a Fedora build host with Lorax (mkksiso), squashfs-tools, GRUB2 tools,
+cpio and the required RPM inputs, build the two Security Center RPMs first with the development
 component builder, then run:
 
 ```bash
-environment/image/build-iso.sh \
+environment/image/build-iso.sh --dms-candidate \
   --base-iso cache/iso/Fedora-Everything-netinst-x86_64-44-1.7.iso \
-  --output output/greyward-alpha-installer.iso \
-  --baseline output/iso-baselines/greyward-149-YYYYMMDD.json \
   --base-sha256 "$verified_vendor_sha256" \
-  --branding-rpm output/branding-current/greyward-branding-*.rpm \
-  --dms-rpm path/to/selected-greyward-dms.rpm \
-  --session-rpm path/to/selected-greyward-session.rpm \
-  --security-rpm output/security-center-current/greyward-security-center-*.rpm \
-  --security-rpm output/security-center-current/greyward-security-context-*.rpm \
-  --security-build-manifest output/security-center-current/security-center-build-manifest.tsv \
-  --production-rpm cache/packages/opensnitch-1.8.0-1.x86_64.rpm
+  --output output/GREYWARD-0.5.6-Sophon-x86_64-candidate.iso \
+  --baseline inputs/baseline.json \
+  --branding-rpm "$branding_rpm" --dms-rpm "$dms_rpm" --session-rpm "$session_rpm" \
+  --files-rpm "$files_rpm" --swappy-rpm "$swappy_rpm" --intelligence-rpm "$intelligence_rpm" \
+  --enrollment-rpm "$enrollment_rpm" --enrollment-rpm "$appsec_rpm" \
+  --security-rpm "$center_rpm" --security-rpm "$context_rpm" \
+  --security-build-manifest "$security_build_manifest" \
+  --office-rpm "$writer_rpm" --office-rpm "$sheets_rpm" \
+  --office-rpm "$slides_rpm" --office-rpm "$pdf_rpm" \
+  --production-rpm "$opensnitch_rpm"
 ```
 
 Place the checkout, `GREYWARD_ISO_WORK_ROOT`, and output on Linux filesystems
@@ -136,20 +137,26 @@ with at least 40 GiB free for downloads, dependency validation and composition.
 The offline helper needs noninteractive sudo for isolated DNF roots and network
 namespaces. See the canonical runbook for build prerequisites.
 
-The resulting ISO is a minimally customized Fedora Everything/netinst image.
-Its default boot entry is labelled `Install GREYWARD OS` and starts the
-unmodified graphical Fedora Anaconda setup directly. The base Fedora profile
-keeps the account pages visible; it must not be replaced by the Fedora
-Workstation profile because GREYWARD does not ship GNOME Initial Setup. The
-builder adds only the GREYWARD GTK profile, stylesheet, and logo through a
-small Anaconda `updates.img`; it does not replace the account pages, storage
-logic, or stage2 code. The full GREYWARD branding RPM remains in the staged
-target payload and is installed before the first target reboot so Plymouth/LUKS
-is branded, while the
-production stage is available from the mounted installer media for the target
-Kickstart (normally `/run/install/repo/greyward/production`; the Kickstart
-resolves the payload marker with controlled fallbacks). The explicit media-test and basic-graphics entries remain
-diagnostic alternatives; none starts a live desktop.
+The ISO uses Fedora Everything/netinst and offers three GRUB entries on
+both BIOS and UEFI: Install GREYWARD, Verify media and install GREYWARD, and
+Install GREYWARD with diagnostic logs. The diagnostic entry exposes kernel
+and installer logging while leaving normal graphics driver selection active. The media check uses Fedora's historical `rd.live.check`
+parameter to verify the embedded checksum. All three paths start the installer.
+
+The GREYWARD `updates.img` carries the profile, stylesheet, logo, and a
+keyboard step inserted into the pinned Anaconda GTK entry point before
+storage initializes. The build extracts and hashes that entry point from
+the selected Fedora stage2. Review it when replacing the vendor ISO. The
+installer starts in English and requires confirmation of one layout. The
+three choices are US QWERTY, French AZERTY (Latin-9, no dead keys) and German
+QWERTZ (no dead keys). Native Anaconda owns account setup, disk selection,
+and passphrase entry. The selected console map must appear in the target and
+each generated initramfs before Kickstart can proceed to reboot.
+
+The full GREYWARD branding RPM is installed before the first reboot so the
+encrypted-disk prompt uses Plymouth's GREYWARD theme on the first boot.
+The payload resides on the same installer media, normally at
+`/run/install/repo/greyward/production`.
 
 No development account, SSH key, passwordless sudo, Hyper-V service, or
 development overlay is included. Only the builder needs internet: the ISO

@@ -46,7 +46,12 @@ pub fn set_accepted_deviation(check_id: &str, accepted: bool) -> Result<Vec<Stri
     {
         return Err("invalid check identifier".into());
     }
+    let recommendations = optional_recommendation_ids(&evaluate_facts(&[]).checks);
+    if accepted && !recommendations.iter().any(|id| id == check_id) {
+        return Err("only optional recommendations may be ignored".into());
+    }
     let mut values = load_accepted_deviations();
+    values.retain(|id| recommendations.contains(id));
     if accepted {
         if !values.iter().any(|id| id == check_id) {
             values.push(check_id.into());
@@ -67,6 +72,13 @@ pub fn set_accepted_deviation(check_id: &str, accepted: bool) -> Result<Vec<Stri
     .map_err(|e| e.to_string())?;
     Ok(values)
 }
+fn optional_recommendation_ids(checks: &[CheckResult]) -> Vec<String> {
+    checks.iter()
+        .filter(|check| check.requiredness == Requiredness::Recommended)
+        .map(|check| check.check_id.to_string())
+        .collect()
+}
+
 pub fn evaluate_facts(facts: &[AdapterFacts]) -> PostureSnapshot {
     evaluate_facts_with_deviations(facts, &[])
 }
@@ -80,7 +92,6 @@ pub fn evaluate_facts_with_deviations(
     let mut se = SelinuxMode::Unknown;
     let mut sb = SecureBootState::Unknown;
     let mut enc = EncryptionState::Unknown;
-    let mut tpm = TpmCapability::Unknown;
     let mut firmware = FirmwareFacts {
         fwupd_available: false,
         security: FirmwareSecurityState::Unknown,
@@ -110,15 +121,6 @@ pub fn evaluate_facts_with_deviations(
         authorized_devices: 0,
         unknown_devices: 0,
     };
-    let mut recovery = RecoveryFacts {
-        readiness: RecoveryReadiness::Unknown,
-        rescue_kernel: false,
-        uefi: false,
-        secure_boot: SecureBootState::Unknown,
-        encryption: EncryptionState::Unknown,
-        firmware_updates: FirmwareUpdateState::Unknown,
-        tpm: TpmCapability::Unknown,
-    };
     let mut network = NetworkFacts {
         active_connection: None,
         interface: None,
@@ -132,12 +134,10 @@ pub fn evaluate_facts_with_deviations(
             AdapterFacts::Selinux(x) => se = x.mode.clone(),
             AdapterFacts::Boot(x) => sb = x.secure_boot.clone(),
             AdapterFacts::Storage(x) => enc = x.root.clone(),
-            AdapterFacts::Tpm(x) => tpm = x.capability.clone(),
             AdapterFacts::Firmware(x) => firmware = x.clone(),
             AdapterFacts::SecurityUpdates(x) => updates = x.clone(),
             AdapterFacts::Network(x) => network = x.clone(),
             AdapterFacts::Usb(x) => usb = x.clone(),
-            AdapterFacts::Recovery(x) => recovery = x.clone(),
             AdapterFacts::Flatpak(x) => flatpak = x.clone(),
             AdapterFacts::Portal(x) => portal = x.clone(),
         }
@@ -372,22 +372,6 @@ pub fn evaluate_facts_with_deviations(
         EvidenceValue::Text(format!("{enc:?}")),
     ));
     checks.push(make(
-        "devices.tpm.presence",
-        Domain::Devices,
-        Requiredness::Recommended,
-        if matches!(tpm, TpmCapability::Missing | TpmCapability::Unusable) {
-            RuntimeAvailability::Absent
-        } else {
-            RuntimeAvailability::Available
-        },
-        if matches!(tpm, TpmCapability::Available) {
-            PredicateResult::Satisfied
-        } else {
-            PredicateResult::Indeterminate
-        },
-        EvidenceValue::Text(format!("{tpm:?}")),
-    ));
-    checks.push(make(
         "devices.usbguard.posture",
         Domain::Devices,
         Requiredness::Recommended,
@@ -409,27 +393,6 @@ pub fn evaluate_facts_with_deviations(
             usb.policy, usb.connected_devices, usb.authorized_devices, usb.unknown_devices
         )),
     ));
-    checks.push(make(
-        "recovery.readiness",
-        Domain::Devices,
-        Requiredness::Recommended,
-        RuntimeAvailability::Available,
-        match recovery.readiness {
-            RecoveryReadiness::Ready => PredicateResult::Satisfied,
-            RecoveryReadiness::Partial => PredicateResult::ImprovementRecommended,
-            RecoveryReadiness::Unavailable | RecoveryReadiness::Error => PredicateResult::Failed,
-            RecoveryReadiness::Unknown => PredicateResult::Indeterminate,
-        },
-        EvidenceValue::Text(format!(
-            "readiness={:?};rescue-kernel={};uefi={};secure-boot={:?};encryption={:?};tpm={:?}",
-            recovery.readiness,
-            recovery.rescue_kernel,
-            recovery.uefi,
-            recovery.secure_boot,
-            recovery.encryption,
-            recovery.tpm
-        )),
-    ));
     let disclosures = external_service_manifest();
     checks.push(make(
         "privacy.transparency",
@@ -443,6 +406,12 @@ pub fn evaluate_facts_with_deviations(
             disclosures.iter().filter(|s| s.local_only).count()
         )),
     ));
+    let recommendations = optional_recommendation_ids(&checks);
+    let accepted_deviations: Vec<String> = accepted_deviations.iter()
+        .filter(|id| recommendations.contains(id))
+        .take(MAX_ACCEPTED_DEVIATIONS)
+        .cloned()
+        .collect();
     for check in &mut checks {
         if matches!(
             check.state,
@@ -501,6 +470,6 @@ pub fn evaluate_facts_with_deviations(
         domains,
         checks,
         collection_issues: Vec::new(),
-        accepted_deviations: accepted_deviations.iter().take(64).cloned().collect(),
+        accepted_deviations,
     }
 }

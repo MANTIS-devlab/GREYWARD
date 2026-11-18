@@ -1178,7 +1178,7 @@ class SecurityContext(dbus.service.Object):
    scans=self.file_security.reconcile_interrupted_scans(32,owner_uid=os.getuid())
    detections=self.file_security.detections(limit=128,owner_uid=os.getuid())
    active=next((item for item in scans if item.get("state") in {"QUEUED","SCANNING","FINALIZING"}),None)
-   return json.dumps(self._merge_file_activity({"schema":"greyward.file-security/v1","state":"UNAVAILABLE","active_scan":None,"latest_scan":scans[0] if scans else None,"detections":detections,"clamav":clamav_status()}),sort_keys=True,separators=(",",":"))
+   return json.dumps(self._merge_file_activity({"schema":"greyward.file-security/v1","state":"UNAVAILABLE","detections_state":"AVAILABLE","active_scan":None,"latest_scan":scans[0] if scans else None,"detections":detections,"clamav":clamav_status()}),sort_keys=True,separators=(",",":"))
   except (TelemetryError,OSError,TypeError,ValueError,json.JSONDecodeError) as error:
    return json.dumps({"schema":"greyward.file-security/v1","state":"UNAVAILABLE","active_scan":None,"latest_scan":None,"detections":[],"detail":str(error)[:240]},separators=(",",":"))
  @dbus.service.method(BUS_NAME,in_signature="s",out_signature="s")

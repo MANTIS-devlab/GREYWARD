@@ -17,4 +17,5 @@ ProtectControlGroups=yes
 RestrictSUIDSGID=yes
 LockPersonality=yes
 RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
-TimeoutStartSec=50min
+# Cover the 20-minute check, 45-minute preparation and notification delivery.
+TimeoutStartSec=70min

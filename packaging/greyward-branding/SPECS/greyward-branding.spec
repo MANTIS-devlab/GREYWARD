@@ -1,6 +1,6 @@
 Name:           greyward-branding
 Version:        0.1.0
-Release:        22%{?dist}
+Release:        24%{?dist}
 Summary:        GREYWARD-owned shell, Anaconda, wallpaper, and Plymouth branding assets
 License:        GPL-3.0-only AND LicenseRef-GREYWARD-Branding
 BuildArch:      noarch
@@ -108,6 +108,9 @@ fi
 %license %{_licensedir}/%{name}/GREYWARD-Branding-NOTICE
 
 %changelog
+* Sun Nov 15 2026 MANTIS SYSTEMS - 0.1.0-23
+- Recenter Plymouth sprites when the early-boot display canvas changes.
+
 * Fri Nov 06 2026 MANTIS SYSTEMS - 0.1.0-22
 - Reject CRLF and invalid native Plymouth scripts at RPM and initramfs build time.
 - Refresh installed kernel images after a GREYWARD theme update.

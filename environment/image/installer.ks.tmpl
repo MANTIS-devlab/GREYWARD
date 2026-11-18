@@ -5,10 +5,7 @@ graphical
 cdrom
 
 lang en_US.UTF-8
-# Do not pre-answer the keyboard page. Anaconda derives English (US) from
-# the language above and requires the user to confirm or change the layout
-# in its native Keyboard screen, including the typing-test field. A keyboard
-# Kickstart command would mark that choice complete and hide the required hint.
+# The pinned GTK preflight confirms both installer and early-boot keymaps.
 timezone Europe/Paris --utc
 firstboot --disable
 network --hostname=greyward
@@ -31,6 +28,15 @@ reboot --eject
 # Generated from the complete, baseline-checked RPM closure. The builder
 # excludes openssh-server and both Initial Setup implementations.
 %include /run/install/repo/greyward/production/offline/installer-packages.ks
+
+%pre --erroronfail
+# Abort before storage UI if the installer overlay did not apply.
+set -eu
+gui=/usr/lib64/python3.14/site-packages/pyanaconda/ui/gui
+test -s "$gui/greyward_keyboard.py"
+grep -Fq 'if not confirm_keyboard(self.mainWindow._stack):' "$gui/__init__.py"
+grep -Fq 'GREYWARD requires the graphical keyboard confirmation' "$gui/../tui/__init__.py"
+%end
 
 %post --nochroot --erroronfail --log=/mnt/sysroot/root/greyward-installer-post.log
 set -euxo pipefail
@@ -112,6 +118,14 @@ rm -f "$payload_check"
 if [[ -n "$temporary_media_mount" ]]; then
   umount "$temporary_media_mount" 2>/dev/null || true
 fi
+# Anaconda writes the confirmed console map during its localization task.
+# Abort instead of rebooting if the selected layout was lost.
+keymap=$(cat /run/greyward-installer-keymap)
+case "$keymap" in
+  us|fr-latin9_nodeadkeys|de-nodeadkeys) ;;
+  *) echo "No confirmed GREYWARD boot keymap" >&2; exit 1 ;;
+esac
+grep -Fxq "KEYMAP=\"$keymap\"" /mnt/sysroot/etc/vconsole.conf
 # Prime the installed initramfs before the first reboot. The first LUKS unlock
 # happens before the first-boot production service can run, so selecting the
 # theme only from the post-reboot provisioner would make the first prompt use
@@ -121,9 +135,82 @@ test -n "$branding_rpm"
 test "$(printf '%s\n' "$branding_rpm" | wc -l)" -eq 1
 rpm --root /mnt/sysroot -Uvh --replacepkgs "$branding_rpm"
 chroot /mnt/sysroot /usr/bin/plymouth-set-default-theme greyward
+# Give desktop information panels and installed boot entries their GREYWARD
+# display name. Preserve Fedora's ID, VERSION_ID and vendor release files for
+# DNF, signed repositories and package compatibility.
+python3 - /mnt/sysroot "$target_stage/manifest.json" <<'PY_BRANDING'
+import json
+from pathlib import Path
+import re
+import sys
+
+root, manifest = map(Path, sys.argv[1:])
+release = json.loads(manifest.read_text())["release"]
+name = "GREYWARD {version} {codename}".format(**release)
+if not re.fullmatch(r"GREYWARD [0-9.]+ [A-Za-z0-9 -]+", name):
+    raise ValueError("Invalid GREYWARD release name")
+
+fields = {
+    "NAME": 'NAME="GREYWARD"',
+    "PRETTY_NAME": f'PRETTY_NAME="{name}"',
+    "LOGO": "LOGO=greyward-symbol",
+}
+vendor = root / "usr/lib/os-release"
+source = [line for line in vendor.read_text().splitlines()
+          if line.partition("=")[0] not in fields]
+override = root / "etc/.os-release.greyward"
+override.write_text("\n".join([*fields.values(), *source]) + "\n")
+override.chmod(0o644)
+override.replace(root / "etc/os-release")
+
+for entry in (root / "boot/loader/entries").glob("*.conf"):
+    data = entry.read_text()
+    version = re.search(r"^version (.+)$", data, re.M)
+    if version and not any(line.startswith("title GREYWARD ") for line in data.splitlines()):
+        label = "rescue" if version[1].startswith("0-rescue-") else version[1]
+        entry.write_text(re.sub(r"^title .+$", lambda _: f"title {name} ({label})",
+                                data, count=1, flags=re.M))
+PY_BRANDING
+install -D -m0644 \
+  /mnt/sysroot/usr/share/plymouth/themes/greyward/greyward-symbol-256.png \
+  /mnt/sysroot/usr/share/icons/hicolor/256x256/apps/greyward-symbol.png
 # The installer runs an older kernel than the baseline-checked target. Plymouth's
 # -R helper uses uname -r even inside chroot; rebuild the installed kernels instead.
 chroot /mnt/sysroot /usr/bin/dracut --regenerate-all --force
+# Check the actual boot artifacts. Fedora's generic rescue initramfs is
+# created earlier and needs its own rebuild to embed the confirmed keymap.
+initramfs_files=$(mktemp)
+verify_boot_initramfs() {
+  local image=$1
+  chroot /mnt/sysroot /usr/bin/lsinitrd -f /etc/vconsole.conf "$image" |
+    grep -Fx "KEYMAP=\"$keymap\""
+  chroot /mnt/sysroot /usr/bin/lsinitrd "$image" > "$initramfs_files"
+  grep -Eq "/$keymap\\.map(\\.gz)?$" "$initramfs_files"
+  grep -Fq 'usr/share/plymouth/themes/greyward/greyward.script' "$initramfs_files"
+}
+for kernel in /mnt/sysroot/usr/lib/modules/*/vmlinuz; do
+  version=$(basename "$(dirname "$kernel")")
+  verify_boot_initramfs "/boot/initramfs-$version.img"
+done
+for rescue_kernel in /mnt/sysroot/boot/vmlinuz-0-rescue-*; do
+  [[ -f "$rescue_kernel" ]] || continue
+  rescue_version=''
+  for kernel in /mnt/sysroot/usr/lib/modules/*/vmlinuz; do
+    if cmp -s "$kernel" "$rescue_kernel"; then
+      rescue_version=$(basename "$(dirname "$kernel")")
+      break
+    fi
+  done
+  if [[ -z "$rescue_version" ]]; then
+    echo 'Could not identify the kernel for the GREYWARD rescue initramfs' >&2
+    exit 1
+  fi
+  rescue_image="/boot/initramfs-$(basename "$rescue_kernel" | cut -c9-).img"
+  chroot /mnt/sysroot /usr/bin/dracut --force --no-hostonly --no-uefi --add rescue \
+    --include /etc/vconsole.conf /etc/vconsole.conf --kver "$rescue_version" "$rescue_image"
+  verify_boot_initramfs "$rescue_image"
+done
+rm -f "$initramfs_files"
 # Keep Anaconda's target chroot limited to file copies. DNF, DMS, Flatpak, and
 # systemd-dependent work runs from the installed system after reboot, where a
 # real system bus and the account created by Anaconda are available.

@@ -1,6 +1,6 @@
 Name: greyward-session
 Version: 0.1.0
-Release: 45%{?dist}
+Release: 46%{?dist}
 Summary: GREYWARD static desktop session policy and factory defaults
 License: GPL-3.0-only
 BuildArch: noarch
@@ -28,7 +28,6 @@ Requires: gtk-layer-shell
 Requires: python3-cairo
 Requires: pam
 Requires: xdg-desktop-portal-gtk
-Requires: xdg-desktop-portal-wlr
 
 %description
 Package-owned routing, lock/idle policy, user units and immutable factory
@@ -74,9 +73,7 @@ printf '[Unit]\nConditionEnvironment=HYPRLAND_INSTANCE_SIGNATURE\n' > %{buildroo
 printf '[Unit]\nConditionEnvironment=XDG_CURRENT_DESKTOP=GNOME\n' > %{buildroot}/usr/lib/systemd/user/xdg-desktop-portal-gnome.service.d/greyward-session-owner.conf
 install -Dm0644 environment/flatpak/greyward-portal-backends.conf %{buildroot}/usr/lib/systemd/user/xdg-desktop-portal.service.d/greyward-backends.conf
 install -Dm0644 environment/flatpak/labwc-portals.conf %{buildroot}/etc/xdg-desktop-portal/greyward/labwc-portals.conf
-for backend in gtk wlr; do
- ln -s /usr/share/xdg-desktop-portal/portals/$backend.portal %{buildroot}/etc/xdg-desktop-portal/greyward/$backend.portal
-done
+ln -s /usr/share/xdg-desktop-portal/portals/gtk.portal %{buildroot}/etc/xdg-desktop-portal/greyward/gtk.portal
 
 %post
 %selinux_modules_install -s targeted /usr/share/selinux/packages/greyward_oauth_callback.cil

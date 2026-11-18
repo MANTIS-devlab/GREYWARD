@@ -12,7 +12,59 @@ static uint32_t pixel(cairo_surface_t *surface,int col) {
     /* Below the glyph baseline, within the cell's background. */
     return *(uint32_t *)(data+(TERMINAL_TOP+CELL_HEIGHT-1)*cairo_image_surface_get_stride(surface)+(TERMINAL_MARGIN+col*CELL_WIDTH+1)*4)&0xffffff;
 }
+static void command_review(void) {
+    char command[5210];
+    memset(command,'a',sizeof(command)-1);
+    const char suffix[]={32,34,92,0xc3,0xa9};
+    memcpy(command+sizeof(command)-1-sizeof(suffix),suffix,sizeof(suffix));
+    command[sizeof(command)-1]=0;
+    arguments[1]=command;argument_count=1;
+    struct output *out=&outputs[0];
+    out->surface=(void *)out;
+    out->width=800;out->height=550;
+    refresh_review_layout();
+    assert(review_lines>2*review_rows);
+    GString *joined=g_string_new(NULL);
+    for(guint i=0;i<review_text->len;i++)g_string_append(joined,g_ptr_array_index(review_text,i));
+    char *escaped=g_strescape(command,NULL);
+    char *expected=g_strdup_printf("1: %c%s%c",34,escaped,34);
+    assert(!strcmp(joined->str,expected));
+    g_free(expected);g_free(escaped);g_string_free(joined,TRUE);
+    request_started=milliseconds();
+    advance_review(out);
+    assert(review_page==0);
+    out->can_review=true;out->review_page_drawn=0;
+    advance_review(out);assert(review_page==1);
+    advance_review(out);assert(review_page==1); /* Cannot skip an undrawn page. */
+    out->review_page_drawn=1;
+    request_started=milliseconds()-REVIEW_TIMEOUT_MS-1;
+    advance_review(out);assert(review_page==1);
+    out->height=620;
+    refresh_review_layout();
+    assert(review_page==0 && !out->can_review);
+    g_ptr_array_free(review_text,TRUE);review_text=NULL;
+}
+
+static void queued_input(void) {
+    int descriptors[2];
+    assert(pipe2(descriptors,O_NONBLOCK)==0);
+    pty_fd=descriptors[1];
+    char buffer[4096];
+    memset(buffer,'x',sizeof(buffer));
+    while(write(pty_fd,buffer,sizeof(buffer))>0){}
+    output_write("compound command",16,NULL);
+    assert(!interrupted && input_length==16);
+    while(read(descriptors[0],buffer,sizeof(buffer))>0){}
+    flush_terminal_input();
+    assert(input_length==0);
+    assert(read(descriptors[0],buffer,sizeof(buffer))==16);
+    assert(!memcmp(buffer,"compound command",16));
+    close(descriptors[0]);close(pty_fd);pty_fd=-1;
+}
+
 int main(void) {
+    command_review();
+    queued_input();
     VTerm *vt=vterm_new(2,20);defaults(vt);vterm_set_utf8(vt,1);
     VTermScreen *cells=vterm_obtain_screen(vt);vterm_screen_reset(cells,1);
     cairo_surface_t *surface=cairo_image_surface_create(CAIRO_FORMAT_RGB24,300,200);

@@ -32,7 +32,7 @@ pub struct EvidenceRemediation {
 #[allow(clippy::too_many_lines)]
 pub fn evidence_presentation(
     check: &CheckResult,
-    accepted_deviations: &[String],
+    _accepted_deviations: &[String],
 ) -> EvidencePresentation {
     let evidence = evidence_text(check);
     let lower = evidence.to_ascii_lowercase();
@@ -258,23 +258,6 @@ pub fn evidence_presentation(
             }),
             no_remediation_key: None,
         },
-        "devices.tpm.presence" => EvidencePresentation {
-            domain_key,
-            title_key: "evidence.finding.tpm.title",
-            summary_key: if lower.contains("available") {
-                "evidence.finding.tpm.available"
-            } else {
-                "evidence.finding.tpm.unavailable"
-            },
-            recorded_result_key: recorded_result_key(check),
-            recommendation_key: "evidence.finding.tpm.recommendation",
-            values: BTreeMap::new(),
-            remediation: Some(EvidenceRemediation {
-                route: "devices",
-                action_key: "system.checks.openRecovery",
-            }),
-            no_remediation_key: None,
-        },
         "devices.usbguard.posture" => EvidencePresentation {
             domain_key,
             title_key: "evidence.finding.usbGuard.title",
@@ -288,40 +271,10 @@ pub fn evidence_presentation(
             values: BTreeMap::new(),
             remediation: Some(EvidenceRemediation {
                 route: "devices",
-                action_key: "system.checks.openRecovery",
+                action_key: "system.checks.openDevices",
             }),
             no_remediation_key: None,
         },
-        "recovery.readiness" => {
-            let missing = recovery_missing(&lower, accepted_deviations);
-            let mut values = BTreeMap::new();
-            if !missing.is_empty() {
-                values.insert("missing".into(), missing.join("|"));
-            }
-            EvidencePresentation {
-                domain_key,
-                title_key: "evidence.finding.recovery.title",
-                summary_key: if check.reason_code == "accepted-deviation" {
-                    "evidence.finding.recovery.accepted"
-                } else if lower.contains("readiness=ready") {
-                    "evidence.finding.recovery.ready"
-                } else if lower.contains("readiness=partial") && !missing.is_empty() {
-                    "evidence.finding.recovery.partialWithMissing"
-                } else if lower.contains("readiness=partial") {
-                    "evidence.finding.recovery.partial"
-                } else {
-                    "evidence.finding.recovery.unavailable"
-                },
-                recorded_result_key: recorded_result_key(check),
-                recommendation_key: "evidence.finding.recovery.recommendation",
-                values,
-                remediation: Some(EvidenceRemediation {
-                    route: "devices",
-                    action_key: "system.checks.openRecovery",
-                }),
-                no_remediation_key: None,
-            }
-        }
         "privacy.transparency" => EvidencePresentation {
             domain_key,
             title_key: "evidence.finding.privacy.title",
@@ -395,25 +348,6 @@ fn evidence_field<'a>(evidence: &'a str, key: &str) -> Option<&'a str> {
     })
 }
 
-fn recovery_missing(evidence: &str, _accepted_deviations: &[String]) -> Vec<&'static str> {
-    let mut missing = Vec::new();
-    if evidence.contains("rescue-kernel=false") {
-        missing.push("evidence.recovery.missing.rescueKernel");
-    }
-    if evidence.contains("uefi=false") {
-        missing.push("evidence.recovery.missing.uefi");
-    }
-    if evidence.contains("secure-boot=disabled") {
-        missing.push("evidence.recovery.missing.secureBoot");
-    }
-    if evidence.contains("encryption=plain") {
-        missing.push("evidence.recovery.missing.encryption");
-    }
-    if evidence.contains("tpm=missing") || evidence.contains("tpm=unusable") {
-        missing.push("evidence.recovery.missing.tpm");
-    }
-    missing
-}
 
 #[cfg(test)]
 mod tests {
@@ -527,38 +461,4 @@ mod tests {
         );
     }
 
-    #[test]
-    fn recovery_presentation_retains_accepted_missing_secure_boot() {
-        let value = evidence_presentation(
-            &check(
-                "recovery.readiness",
-                Domain::Devices,
-                "readiness=Partial;secure-boot=Disabled;encryption=Plain",
-            ),
-            &["system.boot.secure-boot".into()],
-        );
-        assert_eq!(
-            value.values.get("missing"),
-            Some(
-                &"evidence.recovery.missing.secureBoot|evidence.recovery.missing.encryption"
-                    .to_string()
-            )
-        );
-    }
-
-    #[test]
-    fn recovery_presentation_retains_accepted_missing_tpm() {
-        let value = evidence_presentation(
-            &check(
-                "recovery.readiness",
-                Domain::Devices,
-                "readiness=Partial;secure-boot=Enabled;encryption=Encrypted;tpm=Missing",
-            ),
-            &["devices.tpm.presence".into()],
-        );
-        assert_eq!(
-            value.values.get("missing").unwrap(),
-            "evidence.recovery.missing.tpm"
-        );
-    }
 }

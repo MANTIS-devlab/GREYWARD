@@ -1,5 +1,6 @@
 #!/usr/bin/python3 -I
 """Explicit quiescent compositor update; preserve the protected account/auth inputs."""
+import argparse
 import hashlib
 import importlib.machinery
 import importlib.util
@@ -32,17 +33,6 @@ def recover_quiescent_console(migration, accounts):
     migration.ensure_quiescent(accounts)
     if any(Path('/run/greyward-application-security').glob('seat-*.json')):
         raise RuntimeError('Seat receipt remains; refusing console recovery')
-    for process in Path('/proc').iterdir():
-        if not process.name.isdigit():
-            continue
-        try:
-            context = (process / 'attr/current').read_text().strip('\0\n')
-        except (FileNotFoundError, ProcessLookupError):
-            continue
-        if context in (
-                'greyward_guard_u:greyward_guard_r:greyward_as_display_t:s0',
-                'system_u:system_r:greyward_as_auth_t:s0'):
-            raise RuntimeError('Protected worker remains; refusing console recovery')
     console = Path('/dev/tty1')
     metadata = console.lstat()
     if (not stat.S_ISCHR(metadata.st_mode) or metadata.st_uid != 0
@@ -58,6 +48,17 @@ def recover_quiescent_console(migration, accounts):
         return False
     if current != 'system_u:object_r:greyward_as_seat_tty_t:s0':
         raise RuntimeError('Unexpected console label; refusing recovery')
+    for process in Path('/proc').iterdir():
+        if not process.name.isdigit():
+            continue
+        try:
+            context = (process / 'attr/current').read_text().strip('\0\n')
+        except (FileNotFoundError, ProcessLookupError):
+            continue
+        if context in (
+                'greyward_guard_u:greyward_guard_r:greyward_as_display_t:s0',
+                'system_u:system_r:greyward_as_auth_t:s0'):
+            raise RuntimeError('Protected worker remains; refusing console recovery')
     # Recheck immediately before restoring only the canonical device label.
     migration.ensure_quiescent(accounts)
     os.setxattr(console, 'security.selinux', expected.encode(), follow_symlinks=False)
@@ -66,19 +67,22 @@ def recover_quiescent_console(migration, accounts):
     return True
 
 
-def updated_receipts(desktop_bytes, admin_bytes, inputs, binary, patch):
+def updated_receipts(desktop_bytes, admin_bytes, inputs, binary, patch, focus_patch=None):
     desktop, admin = json.loads(desktop_bytes), json.loads(admin_bytes)
     digest = lambda data: hashlib.sha256(data).hexdigest()
     if (inputs.get('schema') != 'greyward.enrollment-inputs/v1'
             or inputs.get('labwcCommit') != desktop.get('source', {}).get('labwc')
             or inputs.get('labwcSha256') != digest(binary)
             or inputs.get('screenshotPatchSha256') != digest(patch)
+            or (focus_patch is not None and inputs.get('lockFocusPatchSha256') != digest(focus_patch))
             or desktop.get('schema') != 'greyward.protected-desktop/v1'
             or admin.get('schema') != 'greyward.administration/v1'
             or admin.get('desktop') != digest(desktop_bytes)):
         raise RuntimeError('Compositor/package/linked receipt mismatch')
     desktop['files']['bin/labwc'] = digest(binary)
     desktop['source']['screenshotPatchSha256'] = digest(patch)
+    if focus_patch is not None:
+        desktop['source']['lockFocusPatchSha256'] = digest(focus_patch)
     refreshed = (json.dumps(desktop, indent=2) + '\n').encode()
     admin['desktop'] = digest(refreshed)
     return refreshed, (json.dumps(admin, indent=2) + '\n').encode()
@@ -86,6 +90,9 @@ def updated_receipts(desktop_bytes, admin_bytes, inputs, binary, patch):
 
 def main():
     import fcntl
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--compositor-only", action="store_true", help="Refresh the protected compositor and linked receipts without changing SELinux policy")
+    options = parser.parse_args()
     if os.getuid() != 0 or os.geteuid() != 0:
         raise RuntimeError('Explicit trusted root migration required')
     for path in (MIGRATION, *MIGRATION.parents):
@@ -126,19 +133,22 @@ def main():
         inputs = json.loads(migration.trusted_file(ENROLLMENT / 'inputs.json'))
         candidate = migration.trusted_file(COMPOSITOR)
         patch = migration.trusted_file(ENROLLMENT / 'patches/labwc-screenshot.patch')
-        updated_desktop, updated_admin = updated_receipts(desktop_bytes, admin_bytes, inputs, candidate, patch)
+        focus_patch = migration.trusted_file(ENROLLMENT / "patches/labwc-session-lock-output-focus.patch")
+        updated_desktop, updated_admin = updated_receipts(desktop_bytes, admin_bytes, inputs, candidate, patch, focus_patch)
         previous_binary = migration.trusted_file(base / 'bin/labwc')
-        policy = ENROLLMENT / 'policy/greyward_application_display.pp'
-        migration.trusted_file(policy)
-        work = Path(tempfile.mkdtemp(prefix='.screenshot-migration-', dir=base.parent))
-        # Extract the exact active module before any kernel/file modification.
-        run('/usr/sbin/semodule', '-X', '400', '--cil', '-E', 'greyward_application_display', cwd=work)
-        previous_policy = work / 'greyward_application_display.cil'
-        migration.trusted_file(previous_policy)
+        if not options.compositor_only:
+            policy = ENROLLMENT / 'policy/greyward_application_display.pp'
+            migration.trusted_file(policy)
+            work = Path(tempfile.mkdtemp(prefix='.screenshot-migration-', dir=base.parent))
+            # Extract the exact active module before any kernel/file modification.
+            run('/usr/sbin/semodule', '-X', '400', '--cil', '-E', 'greyward_application_display', cwd=work)
+            previous_policy = work / 'greyward_application_display.cil'
+            migration.trusted_file(previous_policy)
         migration.ensure_quiescent(accounts)
         recover_quiescent_console(migration, accounts)
         changed = True
-        run('/usr/sbin/semodule', '-i', str(policy))
+        if not options.compositor_only:
+            run('/usr/sbin/semodule', '-i', str(policy))
         migration.atomic_write(base / 'bin/labwc', candidate, 0o555, base / 'bin/labwc')
         migration.atomic_write(desktop_path, updated_desktop, 0o444, desktop_path)
         migration.atomic_write(admin_path, updated_admin, 0o444, admin_path)
@@ -146,13 +156,15 @@ def main():
         migration.verify_admin_tree(json.loads(migration.trusted_file(admin_path)), admin)
         if json.loads(migration.trusted_file(admin_path))['desktop'] != migration.digest(migration.trusted_file(desktop_path)):
             raise RuntimeError('Linked Administration receipt mismatch')
-        print('Protected compositor and display policy updated; account/authentication files preserved. Login validation pending.')
+        component = 'Protected compositor' if options.compositor_only else 'Protected compositor and display policy'
+        print(f'{component} updated; account/authentication files preserved. Login validation pending.')
     except Exception:
         if changed:
             migration.atomic_write(base / 'bin/labwc', previous_binary, 0o555, base / 'bin/labwc')
             migration.atomic_write(desktop_path, desktop_bytes, 0o444, desktop_path)
             migration.atomic_write(admin_path, admin_bytes, 0o444, admin_path)
-            run('/usr/sbin/semodule', '-i', str(previous_policy))
+            if not options.compositor_only:
+                run('/usr/sbin/semodule', '-i', str(previous_policy))
         raise
     finally:
         if work is not None:

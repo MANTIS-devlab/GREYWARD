@@ -52,7 +52,8 @@ struct output {
     struct ext_session_lock_surface_v1 *lock_surface;
     int width, height;
     double approve_x, approve_y;
-    bool can_approve;
+    int review_page_drawn;
+    bool can_review;
     double cancel_x, cancel_y;
 };
 struct frame { struct wl_buffer *buffer; void *pixels; size_t size; };
@@ -62,7 +63,7 @@ static struct wl_shm *shm;
 static struct wl_seat *seat;
 static struct wl_keyboard *keyboard;
 static struct wl_pointer *pointer;
-static struct output *pointer_output;
+static struct output *pointer_output, *keyboard_output;
 static double pointer_x, pointer_y;
 static bool end_hover, approve_hover, cancel_hover;
 static int repeat_rate, repeat_delay;
@@ -79,9 +80,16 @@ static VTerm *terminal;
 static VTermScreen *screen;
 static int pty_fd = -1, request_fd = 3, rows = 24, columns = 80;
 static pid_t child;
+#define INPUT_QUEUE_SIZE 16384
+static char input_queue[INPUT_QUEUE_SIZE];
+static size_t input_length;
 static bool locked, reviewed, finished, exiting, dirty = true;
 static bool paused;
-static bool review_fits;
+static int review_page, review_columns, review_rows, review_lines;
+static GPtrArray *review_text;
+#define REVIEW_TIMEOUT_MS 120000
+#define REVIEW_ROW_HEIGHT 22
+#define REVIEW_ROW_TOP 274
 static unsigned live_frames;
 static volatile sig_atomic_t interrupted;
 static volatile sig_atomic_t pause_requested, resume_requested;
@@ -249,7 +257,7 @@ static void logo(cairo_t *cr,double x,double y,double size) {
     }
     cairo_restore(cr);
 }
-static void approval_button(cairo_t *cr,double x,double y,bool hover) {
+static void approval_button(cairo_t *cr,double x,double y,bool hover,bool final_page) {
     cairo_save(cr);rounded(cr,x,y,280,48,9);cairo_clip(cr);
     cairo_pattern_t *p=cairo_pattern_create_linear(0,y,0,y+48);
     cairo_pattern_add_color_stop_rgb(p,0,hover?.92:.84,hover?.95:.88,hover?.97:.91);
@@ -257,7 +265,7 @@ static void approval_button(cairo_t *cr,double x,double y,bool hover) {
     cairo_pattern_add_color_stop_rgb(p,1,hover?.72:.61,hover?.78:.69,hover?.83:.74);
     cairo_set_source(cr,p);cairo_paint(cr);cairo_pattern_destroy(p);texture(cr,.018);cairo_restore(cr);
     rounded(cr,x+.5,y+.5,279,47,9);cairo_set_source_rgba(cr,1,1,1,.44);cairo_set_line_width(cr,1);cairo_stroke(cr);
-    cairo_set_source_rgb(cr,.055,.073,.092);text(cr,x+22,y+14,"Approve & authenticate",15,true);
+    cairo_set_source_rgb(cr,.055,.073,.092);text(cr,x+22,y+14,final_page?"Approve & authenticate":"Next page",15,true);
     cairo_set_source_rgba(cr,.08,.11,.14,.16);rounded(cr,x+230,y+11,38,26,5);cairo_fill(cr);
     cairo_set_source_rgb(cr,.12,.17,.20);text(cr,x+236,y+18,"Enter",10,true);
 }
@@ -322,7 +330,7 @@ static void paint(struct output *out) {
     wl_buffer_add_listener(frame->buffer, &buffer_listener, frame); live_frames++;
     cairo_surface_t *surface = cairo_image_surface_create_for_data(frame->pixels, CAIRO_FORMAT_RGB24, width, height, stride);
     cairo_t *cr = cairo_create(surface);
-    out->can_approve=false;
+    out->can_review=false;
     cairo_set_source_rgb(cr,SURFACE_RED/255.0,SURFACE_GREEN/255.0,SURFACE_BLUE/255.0); cairo_paint(cr);
     texture(cr,.012);
     cairo_pattern_t *gradient = cairo_pattern_create_linear(0,0,0,110);
@@ -339,60 +347,55 @@ static void paint(struct output *out) {
         cairo_set_source_rgb(cr,.61,.69,.72);text(cr,width-372,55,"Ctrl+Alt+F12 to verify  ·  Clipboard off",13,false);
     }
     if (!reviewed) {
-        bool acknowledged = getenv("GREYWARD_ADMIN_WARNING_ACKNOWLEDGED") != NULL;
-        double card_width=width-64; if(card_width>1000)card_width=1000;
-        double left=(width-card_width)/2, y=153;
-        cairo_set_source_rgb(cr,.91,.94,.95);text(cr,left,y,"Review administrative access",32,true);
-        cairo_set_source_rgb(cr,.64,.72,.76);
-        y+=53; y+=paragraph(cr,left,y,card_width,"You requested sudo. GREYWARD opens this protected Administration console to keep your password and elevated access separate from ordinary applications. Review the request, then authenticate here.",16)+30;
-        double risk_top=y;
-        const char *risk=acknowledged
-            ? "Elevated commands can read your protected files, change or disable security controls, and damage the system. Code you run here can use this authority."
-            : "Elevated commands can read or expose protected files, including credentials; change or disable GREYWARD's security controls; and delete data or damage the system. Programs and scripts you run here may use this authority, including malicious code.";
-        /* Measure wrapped copy before filling its bounded material panel. */
-        cairo_save(cr);cairo_rectangle(cr,0,0,0,0);cairo_clip(cr);
-        int risk_height=paragraph(cr,left+24,y+55,card_width-48,risk,16);
-        cairo_restore(cr);
-        material(cr,left,y,card_width,risk_height+80,12,true);
-        cairo_set_source_rgb(cr,.93,.64,.61);text(cr,left+24,y+20,"Administration can change your protections",17,true);
-        cairo_set_source_rgb(cr,.83,.81,.81);paragraph(cr,left+24,y+55,card_width-48,risk,16);
-        y=risk_top+risk_height+106;
-        cairo_set_source_rgb(cr,.64,.72,.76);
-        y+=paragraph(cr,left,y,card_width,"Sudo authentication is cached for two minutes in this console only. Expiry does not end a running root shell or command: exit it to end its privileges.",14)+26;
-        double operation_top=y;
-        int shown=argument_count<13?argument_count:12;
-        material(cr,left,y,card_width,84+shown*26,12,false);
-        cairo_set_source_rgb(cr,.67,.74,.78);text(cr,left+24,y+18,"YOUR REQUEST  /  Arguments shown individually",12,true);
-        cairo_set_source_rgb(cr,.91,.94,.96);styled_text(cr,left+24,y+47,"/usr/bin/sudo",18,true,true);
-        review_fits = argument_count < 13 && height > operation_top+shown*26+225 && width >= 720;
-        for (int i = 1; i <= argument_count && i < 13; i++) {
-            char label[MAX_REQUEST + 32]; snprintf(label,sizeof(label),"%d: \"%s\"",i,arguments[i]);
-            PangoLayout *measure = pango_cairo_create_layout(cr);
-            PangoFontDescription *font = pango_font_description_from_string("monospace 16px");
-            pango_layout_set_font_description(measure, font); pango_layout_set_text(measure, label, -1);
-            int extent; pango_layout_get_pixel_size(measure, &extent, NULL);
-            review_fits &= extent <= card_width - 64;
-            pango_font_description_free(font); g_object_unref(measure);
-            cairo_save(cr);cairo_rectangle(cr,left+24,operation_top,card_width-48,84+shown*26);cairo_clip(cr);
-            styled_text(cr,left+24,operation_top+49+i*26,label,16,false,true);cairo_restore(cr);
+        double card_width=width-48;
+        if(card_width>1000)card_width=1000;
+        double left=(width-card_width)/2;
+        cairo_set_source_rgb(cr,.91,.94,.95);text(cr,left,130,"Review sudo request",25,true);
+        cairo_set_source_rgb(cr,.69,.75,.80);
+        paragraph(cr,left,169,card_width,
+            "This command can read protected files, change security settings or delete data. Review every page before you authenticate.",14);
+        if (review_text && width >= 480 && height >= 470) {
+            int first=review_page*review_rows;
+            int last=first+review_rows;
+            if(last>review_lines)last=review_lines;
+            bool final_page=last==review_lines;
+            char caption[128];
+            snprintf(caption,sizeof(caption),"/usr/bin/sudo  ·  %d arguments  ·  Page %d of %d",
+                argument_count,review_page+1,(review_lines+review_rows-1)/review_rows);
+            material(cr,left,223,card_width,56+review_rows*REVIEW_ROW_HEIGHT,12,false);
+            cairo_set_source_rgb(cr,.71,.79,.84);text(cr,left+20,239,caption,14,true);
+            cairo_set_source_rgb(cr,.91,.94,.96);
+            for(int i=first;i<last;i++)
+                styled_text(cr,left+20,REVIEW_ROW_TOP+(i-first)*REVIEW_ROW_HEIGHT,
+                    g_ptr_array_index(review_text,i),14,false,true);
+            double action_y=293+review_rows*REVIEW_ROW_HEIGHT;
+            out->approve_x=left;out->approve_y=action_y;
+            out->cancel_x=left+294;out->cancel_y=action_y;
+            out->review_page_drawn=review_page;
+            out->can_review=milliseconds()-request_started<REVIEW_TIMEOUT_MS;
+            if(out->can_review) {
+                approval_button(cr,left,action_y,approve_hover,final_page);
+                material(cr,left+294,action_y,126,48,9,false);
+                if(cancel_hover){
+                    rounded(cr,left+294,action_y,126,48,9);
+                    cairo_set_source_rgba(cr,.75,.83,.90,.09);cairo_fill(cr);
+                }
+                cairo_set_source_rgb(cr,.84,.89,.93);text(cr,left+311,action_y+14,"Cancel · Esc",14,true);
+            }
+            notice=out->can_review
+                ? "Enter: continue  ·  Page Up: previous page  ·  Esc: cancel  ·  Escapes show exact argument bytes"
+                : "Review expired. Press Escape and request Administration again.";
+        } else {
+            notice="This display is too small to review the request. Use another display or press Escape.";
         }
-        if(review_fits&&milliseconds()-request_started<=120000){
-            y=operation_top+shown*26+112;
-            out->approve_x=left;out->approve_y=y;out->can_approve=true;
-            approval_button(cr,left,y,approve_hover);
-            out->cancel_x=left+296;out->cancel_y=y;
-            material(cr,left+296,y,150,48,9,false);
-            if(cancel_hover){rounded(cr,left+296,y,150,48,9);cairo_set_source_rgba(cr,.75,.83,.90,.09);cairo_fill(cr);}
-            cairo_set_source_rgb(cr,.84,.89,.93);text(cr,left+314,y+14,"Cancel",15,true);
-            cairo_set_source_rgb(cr,.56,.65,.72);text(cr,left+408,y+18,"Esc",10,false);
-        }
-        notice = milliseconds()-request_started>120000 ? "Request expired. Press Escape and request Administration again."
-            : review_fits ? "Enter: approve this request (valid for two minutes)  ·  Escape: cancel"
-            : "Request cannot be displayed completely. Escape to return; open sudo -i and type the operation inside.";
     } else if (screen) {
+        cairo_save(cr);
+        cairo_rectangle(cr,0,TERMINAL_TOP,width,height-TERMINAL_TOP-60);
+        cairo_clip(cr);
         for (int row=0;row<rows;row++)for(int col=0;col<columns;col++)draw_cell(cr,screen,row,col);
         VTermPos cursor; vterm_state_get_cursorpos(vterm_obtain_state(terminal),&cursor);
         cairo_set_source_rgba(cr,.80,.85,.86,.4);cairo_rectangle(cr,TERMINAL_MARGIN+cursor.col*CELL_WIDTH,TERMINAL_TOP+cursor.row*CELL_HEIGHT,CELL_WIDTH,CELL_HEIGHT);cairo_fill(cr);
+        cairo_restore(cr);
     }
     cairo_set_source_rgb(cr,.045,.055,.066);cairo_rectangle(cr,0,height-60,width,60);cairo_fill(cr);
     cairo_set_source_rgba(cr,.70,.78,.82,.16);cairo_rectangle(cr,0,height-60,width,1);cairo_fill(cr);
@@ -405,12 +408,61 @@ static void paint(struct output *out) {
     wl_surface_attach(out->surface,frame->buffer,0,0);
     wl_surface_damage(out->surface,0,0,width,height);wl_surface_commit(out->surface);
 }
-static void output_write(const char *bytes, size_t size, void *data) {
-    (void)data;
-    if (pty_fd < 0 || size > 4096) return;
-    ssize_t n = write(pty_fd,bytes,size);
-    if (n < 0 && errno != EAGAIN && errno != EINTR) interrupted = 1;
+static void flush_terminal_input(void) {
+    if(pty_fd<0||!input_length)return;
+    ssize_t sent=write(pty_fd,input_queue,input_length);
+    if(sent>0){
+        input_length-=(size_t)sent;
+        memmove(input_queue,input_queue+sent,input_length);
+        explicit_bzero(input_queue+input_length,(size_t)sent);
+    }else if(sent<0&&errno!=EAGAIN&&errno!=EINTR){
+        interrupted=1;
+    }
 }
+
+static void output_write(const char *bytes,size_t size,void *data) {
+    (void)data;
+    if(pty_fd<0)return;
+    if(size>sizeof(input_queue)-input_length){
+        /* Fail closed rather than run a partially entered command. */
+        interrupted=1;
+        return;
+    }
+    memcpy(input_queue+input_length,bytes,size);
+    input_length+=size;
+    flush_terminal_input();
+}
+static void refresh_review_layout(void) {
+    int min_columns=105, min_rows=32;
+    bool display_available=false;
+    for(int i=0;i<MAX_OUTPUTS;i++){
+        struct output *out=&outputs[i];
+        if(!out->surface||out->width<480||out->height<470)continue;
+        display_available=true;
+        int cols=(out->width-88)/9;
+        int rows_for_output=(out->height-411)/REVIEW_ROW_HEIGHT;
+        if(cols<min_columns)min_columns=cols;
+        if(rows_for_output<min_rows)min_rows=rows_for_output;
+    }
+    if(!display_available)return;
+    if(review_text&&min_columns==review_columns&&min_rows==review_rows)return;
+    review_page=0;review_columns=min_columns;review_rows=min_rows;
+    if(review_text)g_ptr_array_free(review_text,TRUE);
+    review_text=g_ptr_array_new_with_free_func(g_free);
+    for(int i=0;i<MAX_OUTPUTS;i++)outputs[i].can_review=false;
+    for(int i=1;i<=argument_count;i++){
+        /* Escape control and non-ASCII bytes and literal quotes/backslashes.
+         * Monospace wrapping then cannot conceal bidi or zero-width content. */
+        char *escaped=g_strescape(arguments[i],NULL);
+        char *label=g_strdup_printf("%d: \"%s\"",i,escaped);
+        size_t length=strlen(label);
+        for(size_t start=0;start<length;start+=(size_t)review_columns)
+            g_ptr_array_add(review_text,g_strndup(label+start,(size_t)review_columns));
+        g_free(label);g_free(escaped);
+    }
+    review_lines=(int)review_text->len;
+}
+
 static void start_console(void) {
     if (write(4,"REVIEWED\n",9) != 9) { exiting = true; return; }
     struct winsize size = {.ws_row=rows,.ws_col=columns};
@@ -429,7 +481,16 @@ static void start_console(void) {
     screen=vterm_obtain_screen(terminal);vterm_screen_enable_altscreen(screen,1);
     vterm_screen_reset(screen,1);reviewed=true;
     notice="Ctrl+Shift+Q: end Administration  ·  exit: close shell  ·  Clipboard sharing is disabled";
+    notice="Ctrl+Shift+Q: end Administration  ·  exit: close shell  ·  Clipboard sharing is disabled";
 }
+static void advance_review(struct output *out) {
+    if(reviewed||!out||!out->can_review||out->review_page_drawn!=review_page||
+            milliseconds()-request_started>=REVIEW_TIMEOUT_MS)return;
+    if((review_page+1)*review_rows>=review_lines)start_console();
+    else review_page++;
+    dirty=true;
+}
+
 static void map_keys(void *data, struct wl_keyboard *kb, uint32_t format, int32_t fd, uint32_t size) {
     (void)data;(void)kb;
     if (format != WL_KEYBOARD_KEYMAP_FORMAT_XKB_V1 || size > 1024*1024 || !size) {close(fd);return;}
@@ -441,9 +502,27 @@ static void map_keys(void *data, struct wl_keyboard *kb, uint32_t format, int32_
     keymap=xkb_keymap_new_from_string(xkb,map,XKB_KEYMAP_FORMAT_TEXT_V1,0);
     keys=keymap?xkb_state_new(keymap):NULL;munmap(map,size);close(fd);
 }
-static void enter(void *d,struct wl_keyboard *k,uint32_t serial,struct wl_surface *s,struct wl_array *a){(void)d;(void)k;(void)serial;(void)s;(void)a;}
+static void resize_terminal(struct output *out) {
+    if(!out||out->width<100||out->height<TERMINAL_TOP+180)return;
+    int next_columns=(out->width-2*TERMINAL_MARGIN)/CELL_WIDTH;
+    int next_rows=(out->height-TERMINAL_TOP-80)/CELL_HEIGHT;
+    if(next_columns==columns&&next_rows==rows)return;
+    columns=next_columns;rows=next_rows;
+    if(terminal)vterm_set_size(terminal,rows,columns);
+    if(pty_fd>=0){
+        struct winsize size={.ws_row=rows,.ws_col=columns};
+        if(ioctl(pty_fd,TIOCSWINSZ,&size)<0&&errno!=EIO)interrupted=1;
+    }
+    dirty=true;
+}
+
+static void enter(void *d,struct wl_keyboard *k,uint32_t serial,struct wl_surface *s,struct wl_array *a){
+    (void)d;(void)k;(void)serial;(void)a;keyboard_output=NULL;
+    for(int i=0;i<MAX_OUTPUTS;i++)if(outputs[i].surface==s)keyboard_output=&outputs[i];
+    resize_terminal(keyboard_output);
+}
 static int64_t milliseconds(void){struct timespec now;clock_gettime(CLOCK_MONOTONIC,&now);return (int64_t)now.tv_sec*1000+now.tv_nsec/1000000;}
-static void leave(void *d,struct wl_keyboard *k,uint32_t serial,struct wl_surface *s){(void)d;(void)k;(void)serial;(void)s;repeating=false;}
+static void leave(void *d,struct wl_keyboard *k,uint32_t serial,struct wl_surface *s){(void)d;(void)k;(void)serial;(void)s;repeating=false;keyboard_output=NULL;}
 static void key(void *d,struct wl_keyboard *k,uint32_t serial,uint32_t time,uint32_t code,uint32_t state) {
     (void)d;(void)k;(void)serial;(void)time;
     if(state==WL_KEYBOARD_KEY_STATE_RELEASED&&repeat_code==code)repeating=false;
@@ -454,9 +533,11 @@ static void key(void *d,struct wl_keyboard *k,uint32_t serial,uint32_t time,uint
     bool alt=xkb_state_mod_name_is_active(keys,XKB_MOD_NAME_ALT,XKB_STATE_MODS_EFFECTIVE);
     if(!reviewed){
         if(sym==XKB_KEY_Escape)exiting=true;
-        if(sym==XKB_KEY_Return && review_fits){
-            if(milliseconds()-request_started>120000){notice="Request expired. Press Escape and request Administration again.";dirty=true;}
-            else start_console();
+        if(sym==XKB_KEY_Return||sym==XKB_KEY_KP_Enter||sym==XKB_KEY_Page_Down) {
+            if(sym!=XKB_KEY_Page_Down||(review_page+1)*review_rows<review_lines)
+                advance_review(keyboard_output);
+        }else if(sym==XKB_KEY_Page_Up&&review_page>0){
+            review_page--;dirty=true;
         }
     }else if(finished){if(sym==XKB_KEY_Return||sym==XKB_KEY_Escape)exiting=true;}
     else if(ctrl&&shift&&(sym==XKB_KEY_Q||sym==XKB_KEY_q)){
@@ -486,9 +567,9 @@ static void pointer_motion(void *d,struct wl_pointer *p,uint32_t time,wl_fixed_t
     (void)d;(void)p;(void)time;pointer_x=wl_fixed_to_double(x);pointer_y=wl_fixed_to_double(y);
     bool hover=pointer_output&&pointer_x>=pointer_output->width-164&&pointer_x<=pointer_output->width-20&&pointer_y>=pointer_output->height-44&&pointer_y<=pointer_output->height-12;
     if(hover!=end_hover){end_hover=hover;dirty=true;}
-    hover=pointer_output&&pointer_output->can_approve&&pointer_x>=pointer_output->approve_x&&pointer_x<=pointer_output->approve_x+280&&pointer_y>=pointer_output->approve_y&&pointer_y<=pointer_output->approve_y+48;
+    hover=pointer_output&&pointer_output->can_review&&pointer_x>=pointer_output->approve_x&&pointer_x<=pointer_output->approve_x+280&&pointer_y>=pointer_output->approve_y&&pointer_y<=pointer_output->approve_y+48;
     if(hover!=approve_hover){approve_hover=hover;dirty=true;}
-    hover=pointer_output&&pointer_output->can_approve&&pointer_x>=pointer_output->cancel_x&&pointer_x<=pointer_output->cancel_x+150&&pointer_y>=pointer_output->cancel_y&&pointer_y<=pointer_output->cancel_y+48;
+    hover=pointer_output&&pointer_output->can_review&&pointer_x>=pointer_output->cancel_x&&pointer_x<=pointer_output->cancel_x+126&&pointer_y>=pointer_output->cancel_y&&pointer_y<=pointer_output->cancel_y+48;
     if(hover!=cancel_hover){cancel_hover=hover;dirty=true;}
 }
 static void pointer_enter(void *d,struct wl_pointer *p,uint32_t serial,struct wl_surface *s,wl_fixed_t x,wl_fixed_t y){
@@ -497,11 +578,13 @@ static void pointer_enter(void *d,struct wl_pointer *p,uint32_t serial,struct wl
 static void pointer_leave(void *d,struct wl_pointer *p,uint32_t serial,struct wl_surface *s){(void)d;(void)p;(void)serial;(void)s;pointer_output=NULL;end_hover=false;approve_hover=false;cancel_hover=false;dirty=true;}
 static void pointer_button(void *d,struct wl_pointer *p,uint32_t serial,uint32_t time,uint32_t button,uint32_t state){
     (void)d;(void)p;(void)serial;(void)time;
-    if(button==0x110&&state==WL_POINTER_BUTTON_STATE_RELEASED&&locked&&!reviewed&&cancel_hover&&pointer_output&&pointer_output->can_approve)exiting=true;
-    if(button==0x110&&state==WL_POINTER_BUTTON_STATE_RELEASED&&locked&&!reviewed&&approve_hover&&pointer_output&&pointer_output->can_approve){
-        if(milliseconds()-request_started>120000)notice="Request expired. Press Escape and request Administration again.";
-        else start_console();
-        dirty=true;
+    if(button==0x110&&state==WL_POINTER_BUTTON_STATE_RELEASED&&locked&&!reviewed&&pointer_output&&pointer_output->can_review
+            &&pointer_x>=pointer_output->cancel_x&&pointer_x<=pointer_output->cancel_x+126
+            &&pointer_y>=pointer_output->cancel_y&&pointer_y<=pointer_output->cancel_y+48)exiting=true;
+    if(button==0x110&&state==WL_POINTER_BUTTON_STATE_RELEASED&&locked&&!reviewed&&pointer_output&&pointer_output->can_review
+            &&pointer_x>=pointer_output->approve_x&&pointer_x<=pointer_output->approve_x+280
+            &&pointer_y>=pointer_output->approve_y&&pointer_y<=pointer_output->approve_y+48){
+        advance_review(pointer_output);
     }
     if(button==0x110&&state==WL_POINTER_BUTTON_STATE_RELEASED&&end_hover){
         if(!reviewed||finished||!strcmp(notice,"Press Ctrl+Shift+Q again to end Administration and interrupt its commands."))exiting=true;
@@ -524,7 +607,8 @@ static void seat_name(void *d,struct wl_seat *s,const char *name){(void)d;(void)
 static const struct wl_seat_listener seat_listener={capabilities,seat_name};
 static void configure(void *data,struct ext_session_lock_surface_v1 *s,uint32_t serial,uint32_t width,uint32_t height){
     struct output *out=data;out->width=width;out->height=height;ext_session_lock_surface_v1_ack_configure(s,serial);
-    if(!reviewed){columns=(width-2*TERMINAL_MARGIN)/CELL_WIDTH;rows=(height-TERMINAL_TOP-80)/CELL_HEIGHT;if(columns<20)columns=20;if(rows<5)rows=5;}
+    if(keyboard_output==out)resize_terminal(out);
+    if(!reviewed)refresh_review_layout();
     paint(out);dirty=true;
 }
 static const struct ext_session_lock_surface_v1_listener surface_listener={configure};
@@ -537,7 +621,10 @@ static void global(void *d,struct wl_registry *reg,uint32_t name,const char *int
     else if(!strcmp(interface,ext_session_lock_manager_v1_interface.name))manager=wl_registry_bind(reg,name,&ext_session_lock_manager_v1_interface,1);
     else if(!strcmp(interface,wl_output_interface.name))for(int i=0;i<MAX_OUTPUTS;i++)if(!outputs[i].output){outputs[i].name=name;outputs[i].output=wl_registry_bind(reg,name,&wl_output_interface,1);if(lock)make_surface(&outputs[i]);break;}
 }
-static void remove_global(void *d,struct wl_registry *reg,uint32_t name){(void)d;(void)reg;for(int i=0;i<MAX_OUTPUTS;i++)if(outputs[i].name==name){if(outputs[i].lock_surface)ext_session_lock_surface_v1_destroy(outputs[i].lock_surface);if(outputs[i].surface)wl_surface_destroy(outputs[i].surface);wl_output_destroy(outputs[i].output);memset(&outputs[i],0,sizeof(outputs[i]));}}
+static void remove_global(void *d,struct wl_registry *reg,uint32_t name){(void)d;(void)reg;for(int i=0;i<MAX_OUTPUTS;i++)if(outputs[i].name==name){if(outputs[i].lock_surface)ext_session_lock_surface_v1_destroy(outputs[i].lock_surface);if(outputs[i].surface)wl_surface_destroy(outputs[i].surface);wl_output_destroy(outputs[i].output);
+    if(pointer_output==&outputs[i])pointer_output=NULL;
+    if(keyboard_output==&outputs[i])keyboard_output=NULL;
+    memset(&outputs[i],0,sizeof(outputs[i]));if(!reviewed)refresh_review_layout();dirty=true;}}
 static const struct wl_registry_listener registry_listener={global,remove_global};
 static void secure(void *d,struct ext_session_lock_v1 *l){
     (void)d;(void)l;locked=true;dirty=true;
@@ -548,7 +635,7 @@ static const struct ext_session_lock_v1_listener lock_listener={secure,rejected}
 static void release_surface(void) {
     if(locked)ext_session_lock_v1_unlock_and_destroy(lock);
     else if(lock)ext_session_lock_v1_destroy(lock);
-    lock=NULL;locked=false;
+    lock=NULL;locked=false;keyboard_output=NULL;pointer_output=NULL;
     for(int i=0;i<MAX_OUTPUTS;i++)if(outputs[i].surface){
         ext_session_lock_surface_v1_destroy(outputs[i].lock_surface);
         wl_surface_destroy(outputs[i].surface);outputs[i].lock_surface=NULL;outputs[i].surface=NULL;
@@ -585,6 +672,7 @@ int main(int argc,char **argv){
         if(cache_requested){cache_requested=0;if(child>0)kill(child,SIGURG);invalidate_cache();}
         if(pause_requested && !paused){
             repeating=false;
+            if(input_length){interrupted=1;break;}
             pause_requested=0;if(child>0)kill(child,SIGURG);invalidate_cache();release_surface();paused=true;
             if(write(4,"PAUSED\n",7)!=7)exiting=true;
         }
@@ -593,10 +681,12 @@ int main(int argc,char **argv){
             synthesizing_repeat=true;key(NULL,keyboard,0,0,repeat_code,WL_KEYBOARD_KEY_STATE_PRESSED);synthesizing_repeat=false;
             repeat_due=milliseconds()+1000/repeat_rate;
         }
+        if(!reviewed && milliseconds()-request_started>=REVIEW_TIMEOUT_MS)
+            for(int i=0;i<MAX_OUTPUTS;i++)if(outputs[i].can_review){dirty=true;break;}
         if(dirty){for(int i=0;i<MAX_OUTPUTS;i++)if(outputs[i].surface)paint(&outputs[i]);dirty=false;}
         while(wl_display_prepare_read(display)!=0)if(wl_display_dispatch_pending(display)<0)goto done;
         wl_display_flush(display);
-        struct pollfd fds[2]={{wl_display_get_fd(display),POLLIN,0},{pty_fd,POLLIN,0}};
+        struct pollfd fds[2]={{wl_display_get_fd(display),POLLIN,0},{pty_fd,POLLIN|(!paused&&input_length?POLLOUT:0),0}};
         int count=poll(fds,pty_fd>=0?2:1,repeating?16:100);
         if(count<0){wl_display_cancel_read(display);if(errno==EINTR)continue;break;}
         if(fds[0].revents&POLLIN){if(wl_display_read_events(display)<0)break;wl_display_dispatch_pending(display);}else wl_display_cancel_read(display);
@@ -606,6 +696,7 @@ int main(int argc,char **argv){
             if(size>0){vterm_input_write(terminal,bytes,size);vterm_screen_flush_damage(screen);dirty=true;}
             else if(size==0||(size<0&&errno==EIO)){finished=true;close(pty_fd);pty_fd=-1;notice="Administration finished. Press Enter or Escape to return to your desktop.";dirty=true;}
         }
+        if(!paused&&!interrupted&&pty_fd>=0&&fds[1].revents&POLLOUT)flush_terminal_input();
     }
 done:
     /* The root owner tears down the private workload and cache after return.
@@ -613,8 +704,10 @@ done:
     invalidate_cache();
     release_surface();
     wl_display_flush(display);wl_display_roundtrip(display);wl_display_disconnect(display);
+    explicit_bzero(input_queue,sizeof(input_queue));
     if(pty_fd>=0)close(pty_fd);
     if(terminal)vterm_free(terminal);
+    if(review_text)g_ptr_array_free(review_text,TRUE);
     if(keys)xkb_state_unref(keys);
     if(keymap)xkb_keymap_unref(keymap);
     xkb_context_unref(xkb);

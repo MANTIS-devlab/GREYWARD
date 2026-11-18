@@ -29,7 +29,7 @@ def decorate(events, observations=None, context_partial=False):
         observed=(value.get('process_assessments') or {}).get(key,[])
         process=max(observed,key=lambda p:p.get('score') if isinstance(p.get('score'),int) else -1,default=None)
         destination=event.get('destination') or {}
-        indicator=feodo.matching_indicator(SimpleNamespace(dst_ip=destination.get('ip'),dst_port=destination.get('port')),reputation) if reputation.get('state') in {'READY','EMPTY'} else None
+        indicator=feodo.matching_indicator(SimpleNamespace(dst_ip=destination.get('ip'),dst_port=destination.get('port')),reputation)
         if indicator: event['threat']={'provider':'feodo-recommended','ip':destination.get('ip')}
         event['behavioral']=network_assessment(event,process,value.get('sensor'),reputation,patterns.get(event.get('event_id')))
         event['behavioral']['sensor_state']=(value.get('sensor') or {}).get('state','UNAVAILABLE')

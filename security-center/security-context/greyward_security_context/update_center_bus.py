@@ -4,6 +4,7 @@ import json
 import os
 import threading
 import shutil
+import shlex
 import subprocess
 import time
 from datetime import datetime, timezone
@@ -14,7 +15,7 @@ import dbus.mainloop.glib
 import dbus.service
 from gi.repository import GLib
 
-from greyward_security_context.update_center import BUS_NAME, OBJECT_PATH, SCHEMA, essential_driver_package_names, load_history, selected_system_provider, snapshot
+from greyward_security_context.update_center import BUS_NAME, OBJECT_PATH, SCHEMA, essential_driver_package_names, load_history, new_operation_id, offline_comment_option, offline_marker_identity, selected_system_provider, snapshot
 from greyward_security_context.telemetry import event as telemetry_event
 from greyward_security_context.telemetry import record_event
 from greyward_security_context import dms_compatibility
@@ -35,10 +36,6 @@ def stamp():
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
-def new_operation_id():
-    return f"dnf5-{int(time.time() * 1000)}"
-
-
 def default_transaction():
     return {
         "id": None,
@@ -56,6 +53,7 @@ def default_transaction():
         "error": None,
         "details": None,
         "restart_required": "UNKNOWN",
+        "restart_marker": None,
         "started_at": None,
         "updated_at": stamp(),
         "finished_at": None,
@@ -74,12 +72,16 @@ def current_boot_id():
         return None
 
 
-def dnf_offline_history_result(started_at):
+def dnf_offline_history_result(operation_id, started_at):
     """Return the matching post-reboot DNF5 history record, if one exists."""
     try:
-        threshold = int(datetime.fromisoformat(str(started_at or "").replace("Z", "+00:00")).timestamp()) - 300
+        token = offline_comment_option(operation_id)
+        started = datetime.fromisoformat(str(started_at or ""))
+        if started.tzinfo is None:
+            return None
+        threshold = int(started.timestamp())
     except (TypeError, ValueError, OverflowError):
-        threshold = 0
+        return None
     try:
         completed = subprocess.run(
             [DNF_CLI, "history", "list", "--json"],
@@ -94,17 +96,21 @@ def dnf_offline_history_result(started_at):
         return None
     if not isinstance(records, list):
         return None
-    for record in sorted(
-        (item for item in records if isinstance(item, dict)),
-        key=lambda item: int(item.get("start_time") or 0),
-        reverse=True,
-    ):
-        command = str(record.get("command_line") or "").lower()
-        if int(record.get("start_time") or 0) < threshold:
+    matches = []
+    for record in records:
+        if not isinstance(record, dict) or record.get("user_id") != 0:
             continue
-        if "--offline" in command and (" upgrade" in f" {command}" or " do " in f" {command} "):
-            return record
-    return None
+        try:
+            command = shlex.split(record.get("command_line") or "")
+            if int(record.get("start_time") or 0) < threshold:
+                continue
+        except (TypeError, ValueError):
+            continue
+        if len(command) < 3 or command[:2] not in ([DNF_CLI, "upgrade"], [DNF_CLI, "do"]):
+            continue
+        if "--offline" in command and token in command:
+            matches.append(record)
+    return matches[0] if len(matches) == 1 else None
 
 
 def reconcile_completed_restart(value):
@@ -115,15 +121,33 @@ def reconcile_completed_restart(value):
         for item in value.get("provider_results") or []
         if isinstance(item, dict)
     )
-    history = dnf_offline_history_result(value.get("started_at")) if dnf_expected else None
+    history = dnf_offline_history_result(value.get("id"), value.get("started_at")) if dnf_expected else None
     if dnf_expected and (history is None or str(history.get("status") or "").lower() != "ok"):
         status = str((history or {}).get("status") or "missing").lower()
-        value.update({"phase":"FAILED", "current_item":"The prepared system update could not be verified after restart.", "restart_required":"UNKNOWN", "error":"The offline system update did not produce a successful DNF5 history result.", "details":f"DNF5 post-restart history status: {status}.", "finished_at":stamp(), "updated_at":stamp(), "cancellable":False, "boot_id":current_boot_id()})
+        value.update({"phase":"FAILED", "current_item":"The prepared system update could not be verified after restart.", "restart_required":"UNKNOWN", "error":"DNF5 history did not confirm this exact offline operation.", "details":f"DNF5 post-restart history status: {status}.", "finished_at":stamp(), "updated_at":stamp(), "cancellable":False, "boot_id":current_boot_id()})
         return value
     history_id = history.get("id") if history else None
     detail = f"GREYWARD observed a new boot and matched successful DNF5 history transaction {history_id}." if history_id is not None else "GREYWARD observed a new boot after the prepared provider update."
     value.update({"phase":"COMPLETE", "current_item":"The prepared update restart completed.", "restart_required":"UNKNOWN", "error":None, "details":detail, "finished_at":stamp(), "updated_at":stamp(), "boot_id":current_boot_id()})
     return value
+
+
+RESTART_NOT_READY = "No verified offline update is ready to restart. Check for updates again."
+
+
+def native_restart_verified(transaction):
+    boot = current_boot_id()
+    expected = transaction.get("restart_marker")
+    providers = transaction.get("provider_results")
+    return bool(
+        boot and transaction.get("boot_id") == boot
+        and transaction.get("id") and transaction.get("operation") in {"apply", "apply_all"}
+        and transaction.get("restart_required") == "REQUIRED"
+        and isinstance(providers, list)
+        and any(isinstance(item, dict) and item.get("provider") == "DNF5" and item.get("state") == "SUCCESS"
+                for item in providers)
+        and expected and expected == offline_marker_identity()
+    )
 
 
 def reconcile_transaction(value):
@@ -150,7 +174,13 @@ def reconcile_transaction(value):
     if phase in {"RESTARTING", "READY_TO_RESTART"} and boot_changed:
         value = reconcile_completed_restart(value)
     elif phase == "RESTARTING" and age > 900:
-        value.update({"phase":"FAILED", "current_item":"The requested restart did not occur.", "restart_required":"REQUIRED", "error":"The system did not restart to install the prepared update.", "details":"GREYWARD kept the prepared update available so the restart can be retried.", "finished_at":stamp(), "updated_at":stamp(), "cancellable":False, "boot_id":current_boot_id()})
+        ready = native_restart_verified(value)
+        value.update({"phase": "READY_TO_RESTART" if ready else "FAILED",
+                      "current_item": "The requested restart did not occur.",
+                      "restart_required": "REQUIRED" if ready else "UNKNOWN",
+                      "error": "The system did not restart to install the prepared update.",
+                      "details": "The verified restart can be retried." if ready else RESTART_NOT_READY,
+                      "finished_at": stamp(), "updated_at": stamp(), "cancellable": False})
     elif boot_changed:
         value.update({"phase":"FAILED", "current_item":"The interrupted update was reset after restart.", "restart_required":"UNKNOWN", "error":"The update was interrupted before it completed.", "details":"GREYWARD found no active update worker after the system restarted and closed the stale transaction.", "finished_at":stamp(), "updated_at":stamp(), "cancellable":False, "boot_id":current_boot_id()})
     return value
@@ -297,7 +327,7 @@ def native_daemon_error(error):
     return "ServiceUnknown" in detail or "not activatable" in detail
 
 
-def run_privileged_update(operation_id, *, system=False, system_flatpak=False, firmware=False, driver_packages=None, timeout=3600):
+def run_privileged_update(operation_id, *, system=False, system_flatpak=False, firmware=False, driver_packages=None, timeout=115 * 60):
     """Run the bounded privileged provider plan through one Polkit decision."""
     global _cli_process
     if not Path(UPDATE_HELPER).exists():
@@ -634,7 +664,8 @@ def run_optional_provider_updates(data, initial_results=None, privileged_plan=No
         readback = None
     if readback is None:
         for result in results:
-            if result.get("state") == "SUCCESS":
+            # DNF5 readiness has its own authenticated marker readback below.
+            if result.get("state") == "SUCCESS" and result.get("provider") != "DNF5":
                 result.update({"state": "DEGRADED", "reason": "Provider completion could not be verified."})
     else:
         cache_snapshot(readback)
@@ -652,10 +683,14 @@ def run_optional_provider_updates(data, initial_results=None, privileged_plan=No
             if still_available:
                 result.update({"state": "DEGRADED", "reason": "The provider still reports an available update after the operation."})
     current = transaction_copy()
-    readback_requires_restart = bool(readback and any(item.get("reboot_required") == "REQUIRED" for item in readback.get("records", [])))
-    restart_required = "REQUIRED" if current.get("restart_required") == "REQUIRED" or readback_requires_restart else current.get("restart_required", "UNKNOWN")
-    final_phase = "READY_TO_RESTART" if restart_required == "REQUIRED" else "COMPLETE"
-    value = set_transaction(provider_results=results, phase=final_phase, current_item=None, progress=None, restart_required=restart_required, finished_at=stamp())
+    dnf_ready = native_restart_verified({**current, "provider_results": results})
+    if current.get("restart_required") == "REQUIRED" and not dnf_ready:
+        value = set_transaction(provider_results=results, phase="FAILED", restart_required="UNKNOWN",
+                                error=RESTART_NOT_READY, finished_at=stamp())
+    else:
+        value = set_transaction(provider_results=results, phase="READY_TO_RESTART" if dnf_ready else "COMPLETE",
+                                current_item=None, progress=None,
+                                restart_required="REQUIRED" if dnf_ready else "UNKNOWN", finished_at=stamp())
     request_snapshot_refresh(force=True)
     return value
 
@@ -711,6 +746,7 @@ def apply_all_worker():
                 details += " The optional OpenH264 repository was unavailable; its codec packages were deferred."
             set_transaction(
                 provider_results=results,
+                restart_marker=completion.get("restart_marker"),
                 recovery_point_id=point.get("id") or transaction_copy().get("recovery_point_id"),
                 recovery_point_status="VALID" if point.get("status") == "valid" else transaction_copy().get("recovery_point_status"),
                 restart_required="REQUIRED" if plan["system"] else transaction_copy().get("restart_required", "UNKNOWN"),
@@ -726,14 +762,33 @@ def apply_worker():
     return apply_all_worker()
 
 
-def restart_worker():
+def refuse_restart(current):
+    if current.get("phase") in {"READY_TO_RESTART", "RESTARTING"}:
+        return set_transaction(phase="FAILED", restart_required="UNKNOWN", error=RESTART_NOT_READY,
+                               details=None, finished_at=stamp())
+    return {**current, "error": RESTART_NOT_READY}
+
+
+def restart_worker(operation_id):
     try:
-        set_transaction(phase="RESTARTING", current_item="Restarting through the desktop system service.", restart_required="REQUIRED")
         system_bus = dbus.SystemBus()
         login1 = system_bus.get_object("org.freedesktop.login1", "/org/freedesktop/login1")
+        current = transaction_copy()
+        if current.get("id") != operation_id or current.get("phase") != "RESTARTING":
+            return
+        if not native_restart_verified(current):
+            refuse_restart(current)
+            return
         login1.Reboot(True, dbus_interface="org.freedesktop.login1.Manager", timeout=LOGIN1_DBUS_TIMEOUT)
     except Exception as error:
-        set_transaction(phase="FAILED", error="The system could not be restarted.", details=str(error), finished_at=stamp())
+        # A denied reboot leaves the same prepared update available for retry.
+        current = transaction_copy()
+        if current.get("id") == operation_id and current.get("phase") == "RESTARTING":
+            if not native_restart_verified(current):
+                refuse_restart(current)
+            else:
+                set_transaction(phase="READY_TO_RESTART", error="The system could not be restarted.",
+                                details=str(error), finished_at=stamp())
 
 
 def start_operation(operation):
@@ -752,17 +807,20 @@ def start_operation(operation):
     if current.get("phase") in ACTIVE_PHASES:
         return current
     if operation == "resolve":
-        value = set_transaction(id=new_operation_id(), operation=operation, phase="RESOLVING", summary=None, progress=None, current_item="Resolving Fedora updates.", error=None, details=None, recovery_point_id=None, recovery_point_status=None, provider_results=[], downloaded=0, download_total=0, processed=0, total=0, restart_required="UNKNOWN", started_at=stamp(), finished_at=None, cancellable=False)
+        value = set_transaction(id=new_operation_id(), operation=operation, phase="RESOLVING", summary=None, progress=None, current_item="Resolving Fedora updates.", error=None, details=None, recovery_point_id=None, recovery_point_status=None, provider_results=[], downloaded=0, download_total=0, processed=0, total=0, restart_required="UNKNOWN", restart_marker=None, started_at=stamp(), finished_at=None, cancellable=False)
         threading.Thread(target=resolve_worker, daemon=True).start()
         return value
     if operation in ("apply", "apply_all"):
-        value = set_transaction(id=new_operation_id(), operation=operation, phase="RESOLVING", progress=None, current_item="Confirming the reviewed provider plan.", error=None, details=None, recovery_point_id=None, recovery_point_status=None, provider_results=[], downloaded=0, download_total=0, processed=0, total=0, restart_required="UNKNOWN", started_at=stamp(), finished_at=None, cancellable=False)
+        value = set_transaction(id=new_operation_id(), operation=operation, phase="RESOLVING", progress=None, current_item="Confirming the reviewed provider plan.", error=None, details=None, recovery_point_id=None, recovery_point_status=None, provider_results=[], downloaded=0, download_total=0, processed=0, total=0, restart_required="UNKNOWN", restart_marker=None, started_at=stamp(), finished_at=None, cancellable=False)
         worker = apply_all_worker if operation == "apply_all" else apply_worker
         threading.Thread(target=worker, daemon=True).start()
         return value
     if operation == "reboot":
-        value = set_transaction(operation="reboot", phase="RESTARTING", current_item="Restarting through the desktop system service.", started_at=stamp(), finished_at=None, cancellable=False)
-        threading.Thread(target=restart_worker, daemon=True).start()
+        if current.get("phase") != "READY_TO_RESTART" or not native_restart_verified(current):
+            return refuse_restart(current)
+        value = set_transaction(phase="RESTARTING", current_item="Restarting through the desktop system service.",
+                                error=None, details=None, finished_at=None, cancellable=False)
+        threading.Thread(target=restart_worker, args=(current["id"],), daemon=True).start()
         return value
     return current
 

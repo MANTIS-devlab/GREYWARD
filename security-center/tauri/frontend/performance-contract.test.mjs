@@ -41,7 +41,7 @@ test('Recovery omits unrelated device history; the device view retains the norma
  const calls=[];
  const c=extract('function getPageData(','async function refreshUpdates(',{window:{},pageDataRequests:new Map(),invokeBounded:(command,args)=>{calls.push({command,args});return Promise.resolve({});}});
  await c.getPageData('recovery');await c.getPageData('devices');
- assert.equal(calls.length,2);assert.equal(calls[0].command,'get_devices');assert.equal(calls[0].args.includeHistory,false);assert.equal(calls[1].command,'get_devices');assert.equal(calls[1].args,undefined);
+ assert.equal(calls.length,2);assert.equal(calls[0].command,'get_recovery_workspace');assert.equal(calls[0].args,undefined);assert.equal(calls[1].command,'get_devices');assert.equal(calls[1].args,undefined);
 });
 
 

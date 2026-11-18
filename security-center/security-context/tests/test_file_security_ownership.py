@@ -67,6 +67,35 @@ class ScanOwnershipTests(unittest.TestCase):
         # The owner retains legitimate idempotent access.
         self.assertEqual(self.manager.prepare_quarantine('det-mine', actor_uid=1000)['state'], 'QUARANTINED')
 
+    def test_unresolved_detection_survives_retention_and_cannot_change_owner(self):
+        with self.store._connect() as connection:
+            connection.execute("UPDATE file_scan_operations SET state='COMPLETED', ended_at='2020-01-01T00:00:00Z'")
+            connection.execute("UPDATE file_detections SET state='DETECTED', updated_at='2020-01-01T00:00:00Z' WHERE detection_id='det-mine'")
+        with patch('greyward_security_context.telemetry.MAX_FILE_DETECTIONS', 0), \
+             patch.object(self.store, '_size_bytes', side_effect=[10**9, 0]):
+            self.store.prune(now='2026-11-07T00:00:00Z')
+        self.assertIsNone(self.store.get_file_scan('mine'))
+        result = self.store.upsert_file_detection({'detection_id': 'det-mine',
+            'operation_id': 'foreign', 'state': 'QUARANTINE_FAILED', 'owner_uid': 1001}, owner_uid=1001)
+        self.assertEqual((result['operation_id'], result['owner_uid']), ('mine', 1000))
+        self.assertEqual(self.manager._owned_detection('det-mine', 1000)['state'], 'QUARANTINE_FAILED')
+        self.assertEqual([d['detection_id'] for d in self.manager.detections(owner_uid=1000)], ['det-mine'])
+        with self.assertRaises(ValueError):
+            self.manager._owned_detection('det-mine', 1001)
+
+    def test_legacy_migration_backfills_only_existing_authoritative_parent(self):
+        connection = self.store._connect()
+        with connection:
+            connection.execute("DELETE FROM file_scan_operations WHERE operation_id='foreign'")
+            connection.execute("DROP INDEX file_detection_owner_time")
+            connection.execute("ALTER TABLE file_detections DROP COLUMN owner_uid")
+        connection.close()
+        migrated = TelemetryStore(self.store.path)
+        self.assertEqual(migrated.get_file_detection('det-mine')['owner_uid'], 1000)
+        self.assertIsNone(migrated.get_file_detection('det-foreign')['owner_uid'])
+        self.assertEqual(migrated.list_file_detections(owner_uid=1001), [])
+        self.assertEqual(migrated.get_file_detection('det-historical')['state'], 'QUARANTINED')
+
     def test_missing_owner_is_not_inferred_from_current_filesystem(self):
         original_stat = Path.stat
 

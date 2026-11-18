@@ -45,17 +45,6 @@ baseline=''
 base_sha256=''
 dms_candidate=false
 
-# mkksiso/mkefiboot must run as root.  Re-exec the complete canonical build
-# non-interactively instead of merely checking sudo and failing at the final
-# composition step after the expensive dependency work has completed.
-if [[ "$(id -u)" != 0 ]]; then
-  sudo -n true || { echo 'ISO composition requires noninteractive sudo.' >&2; exit 1; }
-  exec sudo -n env "GREYWARD_ISO_WORK_ROOT=$work_root" \
-    "GREYWARD_FLATPAK_SEED=${GREYWARD_FLATPAK_SEED:-}" \
-    "GREYWARD_FLATHUB_REPO_FILE=${GREYWARD_FLATHUB_REPO_FILE:-}" \
-    "GREYWARD_ACQUISITION_CACHE=${GREYWARD_ACQUISITION_CACHE:-$work_root/.greyward-acquisition-cache}" bash "$0" "$@"
-fi
-
 while (($#)); do
   case "$1" in
     --dms-candidate) dms_candidate=true; shift ;;
@@ -155,9 +144,20 @@ done
 [[ -n "$baseline" && "$base_sha256" =~ ^[0-9a-fA-F]{64}$ ]] || {
   echo 'A captured --baseline and verified vendor --base-sha256 are required.' >&2; exit 2;
 }
+# mkksiso/mkefiboot must run as root.  Re-exec the complete canonical build
+# non-interactively instead of merely checking sudo and failing at the final
+# composition step after the expensive dependency work has completed.
+if [[ "$(id -u)" != 0 ]]; then
+  sudo -n true || { echo 'ISO composition requires noninteractive sudo.' >&2; exit 1; }
+  exec sudo -n env "GREYWARD_ISO_WORK_ROOT=$work_root" \
+    "GREYWARD_FLATPAK_SEED=${GREYWARD_FLATPAK_SEED:-}" \
+    "GREYWARD_FLATHUB_REPO_FILE=${GREYWARD_FLATHUB_REPO_FILE:-}" \
+    "GREYWARD_ACQUISITION_CACHE=${GREYWARD_ACQUISITION_CACHE:-$work_root/.greyward-acquisition-cache}" bash "$0" "$@"
+fi
+
 printf '%s  %s\n' "$base_sha256" "$base_iso" | sha256sum -c -
 
-for command in mkksiso xorriso mcopy rpm rpmkeys rpm2cpio cpio tar gzip sha256sum awk sed realpath python3 find sort xargs df cmp createrepo_c dnf5 flatpak git curl unshare; do
+for command in mkksiso xorriso mcopy rpm rpmkeys rpm2cpio cpio tar gzip checkisomd5 sha256sum awk sed realpath python3 find sort xargs df cmp createrepo_c dnf5 flatpak git curl unshare unsquashfs grub2-script-check; do
   command -v "$command" >/dev/null || { echo "Required command not found: $command" >&2; exit 1; }
 done
 bash -n "$stage_validator"
@@ -220,6 +220,10 @@ publication=$(mktemp -d "$(dirname "$output")/.greyward-iso-publication.XXXXXX")
 cleanup() { rm -rf "$stage" "$iso_tree" "$branding_root" "$publication"; }
 trap cleanup EXIT
 
+# Preserve Lorax firmware setup and use a separate fallback graphics entry.
+python3 "$repo_root/environment/image/installer-menu.py" \
+  "$base_iso" "$publication/menu-base.iso"
+
 staging_args=(
   --output "$stage/production"
   --branding-rpm "$branding_rpm"
@@ -241,11 +245,8 @@ for rpm in "${enrollment_rpms[@]}"; do staging_args+=(--enrollment-rpm "$rpm"); 
 for rpm in "${office_rpms[@]}"; do staging_args+=(--office-rpm "$rpm"); done
 if $dms_candidate; then staging_args+=(--dms-candidate); fi
 bash "$repo_root/environment/image/build.sh" "${staging_args[@]}" --require-complete
-# Inject only the GREYWARD GTK branding assets into Anaconda's supported
-# updates.img mechanism. Do not replace Anaconda's account pages, storage
-# logic, or stage2 code: Fedora's native Everything profile remains the owner
-# of installation behavior. The full branding RPM remains in the target stage
-# and is applied before the first installed-system LUKS unlock.
+# The Fedora updates image adds branding and the keyboard confirmation step
+# before any native storage screen. The target branding RPM is used for Plymouth.
 branding_payload="$branding_root/root"
 mkdir -p "$branding_payload"
 rpm2cpio "$branding_rpm" | (cd "$branding_payload" && cpio -idm --quiet)
@@ -270,19 +271,24 @@ branding/source/greyward-settings.svg|usr/share/icons/hicolor/scalable/apps/grey
 environment/production/desktop-entry-overrides/org.gnome.Loupe.desktop|usr/local/share/applications/org.gnome.Loupe.desktop
 environment/flatpak/software-runtime.desktop|usr/local/share/applications/io.github.kolunmi.Bazaar.desktop
 BRANDING
-for installer_branding_path in \
-  etc/anaconda/profile.d/greyward.conf \
-  usr/share/anaconda/pixmaps/greyward-anaconda-logo.png \
-  usr/share/anaconda/pixmaps/greyward-anaconda.css; do
-  test -s "$branding_payload/$installer_branding_path"
-done
+# Extract the same stage2 image the resulting installer will boot. A new
+# upstream GTK entry point requires review before it can produce a candidate.
+xorriso -osirrox on -indev "$base_iso" \
+  -extract /images/install.img "$branding_root/install.img"
+python3 "$repo_root/environment/image/build-installer-ui.py" \
+  "$branding_root/install.img" "$branding_payload"
+rm -f "$branding_root/install.img"
 (
   cd "$branding_payload"
   printf '%s\n' \
     etc/anaconda/profile.d/greyward.conf \
     usr/share/anaconda/pixmaps/greyward-anaconda-logo.png \
-    usr/share/anaconda/pixmaps/greyward-anaconda.css |
-    cpio -o -H newc --quiet | gzip -9 > "$iso_tree/updates.img"
+    usr/share/anaconda/pixmaps/greyward-anaconda.css \
+    usr/lib64/python3.14/site-packages/pyanaconda/ui/gui/__init__.py \
+    usr/lib64/python3.14/site-packages/pyanaconda/ui/gui/greyward_keyboard.py \
+    usr/lib64/python3.14/site-packages/pyanaconda/ui/tui/__init__.py \
+    usr/lib64/python3.14/site-packages/pyanaconda/startup_utils.py |
+    cpio -o -H newc --reproducible --owner=0:0 --quiet | gzip -n -9 > "$iso_tree/updates.img"
 )
 
 # Downloads happen here, never on the user's installation. The helper uses
@@ -334,11 +340,8 @@ awk -v stage="$stage" '
 
 # mkksiso injects the Kickstart, production payload, and the minimal GTK
 # branding image into every normal boot path. The menu remains useful for the explicit
-# media-test/basic-graphics paths, while the default entry is unmistakably the
+# media-test/diagnostic paths, while the default entry is unmistakably the
 # GREYWARD installer.
-# Hyper-V's basic Linux framebuffer can stay black when Anaconda starts its
-# graphical stage with accelerated mode selection. Keep the normal installer
-# entry conservative; the installed GREYWARD desktop keeps its native mode.
 mkksiso \
   --tmp "$work_root" \
   --ks "$iso_tree/installer.ks" \
@@ -346,13 +349,9 @@ mkksiso \
   --cmdline 'inst.profile=greyward inst.geoloc=0' \
   --add "$iso_tree/greyward" \
   --add "$iso_tree/repodata" \
-  --replace 'Install Fedora 44' 'Install GREYWARD OS' \
-  --replace 'Test this media & install Fedora 44' 'Test GREYWARD media & install GREYWARD OS' \
-  --replace 'set default="1"' 'set default="0"' \
-  --replace 'linux /images/pxeboot/vmlinuz inst.stage2=hd:LABEL=GREYWARD-INSTALLER-44 quiet' \
-            'linux /images/pxeboot/vmlinuz inst.stage2=hd:LABEL=GREYWARD-INSTALLER-44 nomodeset quiet' \
   --volid GREYWARD-INSTALLER-44 \
-  "$base_iso" "$publication/image.iso"
+  "$publication/menu-base.iso" "$publication/image.iso"
+rm -f "$publication/menu-base.iso"
 
 # The embedded Test-media entry uses rd.live.check. Verify the checksum that
 # mkksiso implants by default before giving the image its final filename.
@@ -361,7 +360,8 @@ checkisomd5 --verbose "$publication/image.iso"
 # Inspect the embedded payload, not merely mkksiso's exit status. A failed
 # compose/inspection never leaves a plausibly complete final ISO filename.
 python3 "$repo_root/environment/image/installer-contract.py" \
-  --iso "$publication/image.iso" --branding-root "$branding_payload"
+  --iso "$publication/image.iso" --branding-root "$branding_payload" \
+  | tee "$publication/installer-contract.json"
 xorriso -osirrox on -indev "$publication/image.iso" \
   -extract /greyward/production "$publication/production"
 (cd "$publication/production" && sha256sum --quiet -c payload.sha256)
@@ -405,6 +405,7 @@ json.dump({'schema': 'greyward.iso-provenance/v1', 'iso_sha256': sha(root/'image
            'branding_rpm_sha256': sha(sys.argv[4]), 'security_manifest_sha256': sha(sys.argv[5]),
            'payload_manifest_sha256': sha(root/'production/payload.sha256'),
            'offline_payload_sha256': sha(root/'production/offline/manifest.json'),
+           'installer_contract': json.loads((root/'installer-contract.json').read_text()),
            'installation_requires_network': False,
            'installer_dependency_resolution_tested': True,
            'installed_system_tested': False}, open(root/'manifest.json', 'w'), indent=2)

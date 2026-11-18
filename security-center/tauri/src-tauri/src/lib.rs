@@ -5,7 +5,7 @@ use greyward_security_backends::{
     ActivityCategory, ActivityItem, ActivitySeverity, ApplicationPageQuery, CoreCollection,
     FlatpakAvailability, MAX_APPLICATION_READ_BYTES, ProtectedResourcePageQuery, TrustZone,
     change_active_trust_zone, choose_overall_posture, clear_activity, collect_core_collection,
-    collect_core_snapshot, collect_device_snapshot, collect_flatpak_facts, collect_network_facts,
+    collect_core_snapshot, collect_flatpak_facts, collect_network_facts, collect_tpm_capability, collect_usb_facts,
     collect_portal_facts, decode_application_coverage, decode_application_detail,
     decode_application_page, decode_protected_resource_lookup, decode_protected_resource_page,
     evidence_domain_key, evidence_domain_route, evidence_presentation, external_service_manifest,
@@ -115,6 +115,7 @@ fn invalidate_core_snapshot_cache() {
 
 #[derive(Clone, Serialize)]
 pub struct OverviewPayload {
+    pub tpm_guide_read: bool,
     pub posture: PostureSummary,
     pub priority_findings: Vec<FindingSummary>,
     pub metrics: MetricsSummary,
@@ -227,10 +228,9 @@ pub struct ApplicationTechnicalDetails {
 #[derive(Clone, Serialize)]
 pub struct DevicePayload {
     pub usb: Vec<StatusRow>,
-    pub recovery: Vec<StatusRow>,
+    pub tpm: greyward_security_backends::TpmCapability,
+    pub tpm_guide_read: bool,
     pub device_history: Value,
-    pub recovery_v1: Value,
-    pub backup: Value,
 }
 #[derive(Clone, Serialize)]
 pub struct EvidencePayload {
@@ -255,6 +255,7 @@ pub struct EvidenceRow {
     pub recommendation_key: String,
     pub copy_values: std::collections::BTreeMap<String, String>,
     pub accepted_deviation: bool,
+    pub can_ignore: bool,
     pub evidence_count: usize,
     pub remediation: Option<EvidenceRemediationProjection>,
     pub no_remediation_key: Option<String>,
@@ -435,6 +436,7 @@ fn get_overview() -> Result<OverviewPayload, String> {
         .and_then(|summary| summary.clamav);
     // Optional history must not hold authoritative posture behind a busy session bus.
     let result = Ok(OverviewPayload {
+        tpm_guide_read: tpm_guide_read(),
         posture: PostureSummary {
             state: state.into(),
             tone: tone.into(),
@@ -462,6 +464,29 @@ fn get_overview_activity() -> Result<Value, String> {
     let (activity, activity_state) = activity_summaries();
     Ok(json!({"activity": activity, "activity_state": activity_state}))
 }
+fn tpm_guide_path() -> Result<PathBuf, String> {
+    greyward_security_backends::state_directory()
+        .map(|path| path.join("tpm-guide-v1-read"))
+        .map_err(|error| error.to_string())
+}
+
+fn tpm_guide_read() -> bool {
+    tpm_guide_path().is_ok_and(|path| path.is_file())
+}
+
+#[tauri::command]
+fn mark_tpm_guide_read() -> Result<(), String> {
+    let path = tpm_guide_path()?;
+    if let Some(directory) = path.parent() {
+        std::fs::create_dir_all(directory).map_err(|error| error.to_string())?;
+    }
+    match std::fs::OpenOptions::new().write(true).create_new(true).open(&path) {
+        Ok(_) => Ok(()),
+        Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists && path.is_file() => Ok(()),
+        Err(error) => Err(error.to_string()),
+    }
+}
+
 #[tauri::command]
 fn set_deviation(check_id: String, accepted: bool) -> Result<OverviewPayload, String> {
     set_accepted_deviation(&check_id, accepted)?;
@@ -856,7 +881,7 @@ fn run_json_helper(
 ) -> Result<Value, String> {
     let mut command = Command::new("/usr/bin/timeout");
     command
-        .arg("--foreground")
+        .arg("--kill-after=10s")
         .arg(format!("{timeout_seconds}s"))
         .arg(path)
         .args(args)
@@ -878,7 +903,7 @@ fn run_json_helper(
     let output = child
         .wait_with_output()
         .map_err(|_| "The GREYWARD recovery helper did not complete.".to_string())?;
-    if output.status.code() == Some(124) {
+    if matches!(output.status.code(), Some(124 | 137)) {
         return Err("The GREYWARD helper took too long and was stopped.".into());
     }
     let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
@@ -929,7 +954,7 @@ fn get_recovery() -> Result<Value, String> {
     Ok(recovery_point_status())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn create_recovery_point() -> Result<Value, String> {
     let helper = recovery_helper_path();
     let args: Vec<String> = vec!["create".into(), "--reason".into(), "manual".into()];
@@ -951,7 +976,7 @@ fn create_recovery_point() -> Result<Value, String> {
     Ok(value)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn cleanup_recovery_points() -> Result<Value, String> {
     let helper = recovery_helper_path();
     run_json_helper(
@@ -1003,7 +1028,11 @@ fn pick_directory() -> Result<Option<String>, String> {
     let output = interactive_output(&mut command)
         .map_err(|error| format!("The native directory picker failed: {error}"))?;
     if !output.status.success() {
-        return Ok(None);
+        return if output.status.code() == Some(1) && output.stderr.is_empty() {
+            Ok(None)
+        } else {
+            Err("The native directory picker is unavailable.".into())
+        };
     }
     let path = String::from_utf8(output.stdout)
         .map_err(|_| "The directory picker returned an invalid path.".to_string())?
@@ -1018,7 +1047,11 @@ fn prompt_secret(title: &str) -> Result<Option<String>, String> {
     let output = interactive_output(&mut command)
         .map_err(|error| format!("The native password prompt failed: {error}"))?;
     if !output.status.success() {
-        return Ok(None);
+        return if output.status.code() == Some(1) && output.stderr.is_empty() {
+            Ok(None)
+        } else {
+            Err("The native password prompt is unavailable.".into())
+        };
     }
     let value = String::from_utf8(output.stdout)
         .map_err(|_| "The password prompt returned invalid data.".to_string())?
@@ -1062,6 +1095,13 @@ fn backup_operation(operation: &str, extra: &[String]) -> Result<Value, String> 
             "message": "The configured Restic destination is not available. Reconnect it or choose another destination."
         }));
     }
+    if status.get("repository_available") != Some(&Value::Bool(true)) {
+        return Ok(json!({
+            "ok": false,
+            "problem": "REPOSITORY_UNAVAILABLE",
+            "message": "The configured Restic repository could not be found or read."
+        }));
+    }
     let Some(password) = prompt_secret("GREYWARD Restic passphrase")? else {
         return Ok(
             json!({"ok": false, "cancelled": true, "message": "No passphrase was entered."}),
@@ -1069,10 +1109,10 @@ fn backup_operation(operation: &str, extra: &[String]) -> Result<Value, String> 
     };
     let mut args = vec![operation.to_string(), "--password-stdin".to_string()];
     args.extend(extra.iter().cloned());
-    let timeout = if operation == "list-files" {
-        BACKUP_LIST_TIMEOUT_SECONDS
-    } else {
-        BACKUP_HELPER_TIMEOUT_SECONDS
+    let timeout = match operation {
+        "list-files" => BACKUP_LIST_TIMEOUT_SECONDS,
+        "verify" => 14_430,
+        _ => BACKUP_HELPER_TIMEOUT_SECONDS,
     };
     run_json_helper(
         backup_helper_path(),
@@ -1082,12 +1122,12 @@ fn backup_operation(operation: &str, extra: &[String]) -> Result<Value, String> 
     )
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn get_backup() -> Result<Value, String> {
     Ok(backup_status())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn configure_backup() -> Result<Value, String> {
     let Some(destination) = pick_directory()? else {
         return Ok(
@@ -1107,41 +1147,51 @@ fn configure_backup() -> Result<Value, String> {
     configure_backup_with_password(destination, password, confirm)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn backup_now() -> Result<Value, String> {
-    if backup_status().get("configured") != Some(&Value::Bool(true)) {
-        return Ok(
-            json!({"ok": false, "needs_configuration": true, "message": "Choose a backup destination before starting a Restic backup."}),
-        );
-    }
     backup_operation("backup", &[])
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn verify_backup() -> Result<Value, String> {
     backup_operation("verify", &[])
 }
 
-#[tauri::command]
-fn list_backup_files() -> Result<Value, String> {
-    backup_operation("list-files", &[])
-}
-
-#[tauri::command]
-fn restore_backup_files(paths: Vec<String>) -> Result<Value, String> {
-    if paths.len() > 100 {
-        return Err("Select fewer files for one restore operation.".into());
-    }
-    backup_operation("restore", &paths)
+#[tauri::command(async)]
+fn list_backup_files(snapshot: Option<String>) -> Result<Value, String> {
+    let args = if let Some(snapshot) = snapshot {
+        vec!["--snapshot".into(), snapshot]
+    } else {
+        Vec::new()
+    };
+    backup_operation("list-files", &args)
 }
 
 #[tauri::command(async)]
-fn get_devices(include_history: Option<bool>) -> Result<DevicePayload, String> {
-    // Devices only needs local USB/recovery facts. Do not make it wait for the
-    // full posture graph's unrelated firmware, package, Flatpak, portal, and
-    // network providers.
-    let collection = collect_device_snapshot();
-    let usb = collection.usb;
+fn restore_backup_files(snapshot: String, paths: Vec<String>) -> Result<Value, String> {
+    if paths.is_empty() || paths.len() > 100 || paths.iter().any(|path| path.len() > 4096) {
+        return Err("Choose between one and 100 supported restore paths.".into());
+    }
+    let mut args = vec!["--snapshot".into(), snapshot, "--".into()];
+    args.extend(paths);
+    backup_operation("restore", &args)
+}
+
+#[tauri::command(async)]
+fn get_recovery_workspace() -> Value {
+    std::thread::scope(|scope| {
+        let points = scope.spawn(recovery_point_status);
+        let backup = backup_status();
+        json!({
+            "recovery_v1": points.join().unwrap_or_else(|_| json!({"ok": false, "points": []})),
+            "backup": backup,
+        })
+    })
+}
+
+#[tauri::command(async)]
+fn get_devices() -> Result<DevicePayload, String> {
+    let usb = collect_usb_facts();
     let usb_installed = matches!(
         usb.availability,
         greyward_security_backends::UsbGuardAvailability::Available
@@ -1151,58 +1201,10 @@ fn get_devices(include_history: Option<bool>) -> Result<DevicePayload, String> {
             usb.policy,
             greyward_security_backends::UsbGuardPolicy::Running
         );
-    let snapshot = collection.snapshot;
-    let recovery = snapshot
-        .checks
-        .iter()
-        .find(|c| c.check_id.as_str() == "recovery.readiness");
-    let recovery_row = match recovery {
-        Some(check) => {
-            let presentation = evidence_presentation(check, &snapshot.accepted_deviations);
-            StatusRow {
-                label: String::new(),
-                label_key: Some(presentation.title_key.into()),
-                value: display_state(check.state),
-                value_key: (check.reason_code == "accepted-deviation")
-                    .then(|| "evidence.limitation.accepted".into()),
-                detail: String::new(),
-                detail_key: Some(presentation.summary_key.into()),
-                copy_values: presentation.values,
-                tone: state_tone(check.state).into(),
-            }
-        }
-        None => semantic_row(
-            "devices.recovery.readiness",
-            "UNKNOWN",
-            "devices.recovery.readinessUnavailable",
-            "unknown",
-        ),
-    };
-    // These are independent read-only surfaces. Keep the local device facts
-    // authoritative, while avoiding a serial wait on three unrelated IPC /
-    // helper paths before the page can render.
-    let (device_history, recovery_v1, backup) = std::thread::scope(|scope| {
-        let device_history = scope.spawn(|| {
-            // Backup/recovery has no device-history surface. Keep its required
-            // local readiness/status reads independent of this optional user-bus read.
-            if include_history == Some(false) {
-                return json!({"summary":{"source_state":"UNAVAILABLE","connected_external":null,"new_unknown_count":null,"new_unknown":[]},"devices":[]});
-            }
-            security_context_method(
-                "systems.mantis.greyward.SecurityContext1.GetDeviceOverview",
-            )
-            .unwrap_or_else(|_| {
-                json!({"summary":{"source_state":"UNAVAILABLE","connected_external":null,"new_unknown_count":null,"new_unknown":[]},"devices":[]})
-            })
-        });
-        let recovery_v1 = scope.spawn(recovery_point_status);
-        let backup = scope.spawn(backup_status);
-        (
-            device_history.join().unwrap_or_else(|_| json!({"summary":{"source_state":"UNAVAILABLE","connected_external":null,"new_unknown_count":null,"new_unknown":[]},"devices":[]})),
-            recovery_v1.join().unwrap_or_else(|_| json!({"ok":false,"points":[]})),
-            backup.join().unwrap_or_else(|_| json!({"ok":false,"configured":false})),
-        )
-    });
+    let device_history = security_context_method(
+        "systems.mantis.greyward.SecurityContext1.GetDeviceOverview",
+    )
+    .unwrap_or_else(|_| json!({"summary":{"source_state":"UNAVAILABLE","connected_external":null,"new_unknown_count":null,"new_unknown":[]},"devices":[]}));
     Ok(DevicePayload {
         usb: vec![
             row(
@@ -1235,18 +1237,9 @@ fn get_devices(include_history: Option<bool>) -> Result<DevicePayload, String> {
                 "unknown",
             ),
         ],
-        recovery: vec![
-            recovery_row,
-            semantic_row(
-                "devices.recovery.evidence",
-                "OBSERVED",
-                "devices.recovery.evidenceCopy",
-                "protected",
-            ),
-        ],
+        tpm: collect_tpm_capability(),
+        tpm_guide_read: tpm_guide_read(),
         device_history,
-        recovery_v1,
-        backup,
     })
 }
 #[tauri::command(async)]
@@ -1269,6 +1262,7 @@ fn get_evidence() -> Result<EvidencePayload, String> {
                 recommendation_key: presentation.recommendation_key.into(),
                 copy_values: presentation.values,
                 accepted_deviation: check.reason_code == "accepted-deviation",
+                can_ignore: check.requiredness == greyward_security_domain::Requiredness::Recommended,
                 evidence_count: check.evidence.len(),
                 remediation: presentation
                     .remediation
@@ -2062,7 +2056,8 @@ fn get_filesecurity() -> Result<serde_json::Value, String> {
         "clamav": file_security.get("clamav").cloned().unwrap_or(serde_json::Value::Null),
         "active_scan": file_security.get("active_scan").cloned().unwrap_or(serde_json::Value::Null),
         "latest_scan": file_security.get("latest_scan").cloned().unwrap_or(serde_json::Value::Null),
-        "detections": file_security.get("detections").cloned().unwrap_or_else(|| serde_json::json!([])),
+        "detections": file_security.get("detections").cloned().unwrap_or(Value::Null),
+        "detections_state": file_security.get("detections_state").cloned().or_else(|| file_security.get("state").cloned()).unwrap_or_else(|| json!("UNAVAILABLE")),
         "state": file_security.get("state").cloned().unwrap_or_else(|| serde_json::json!("UNAVAILABLE")),
         "activity": file_security.get("activity").cloned().unwrap_or_else(|| serde_json::json!([])),
     }))
@@ -2329,18 +2324,6 @@ fn row(label: &str, value: &str, detail: &str, tone: &str) -> StatusRow {
         value_key: None,
         detail: detail.into(),
         detail_key: None,
-        copy_values: BTreeMap::new(),
-        tone: tone.into(),
-    }
-}
-fn semantic_row(label_key: &str, value: &str, detail_key: &str, tone: &str) -> StatusRow {
-    StatusRow {
-        label: String::new(),
-        label_key: Some(label_key.into()),
-        value: value.into(),
-        value_key: None,
-        detail: String::new(),
-        detail_key: Some(detail_key.into()),
         copy_values: BTreeMap::new(),
         tone: tone.into(),
     }
@@ -2613,6 +2596,7 @@ pub fn run() {
             pick_file_security_source,
             open_software,
             set_deviation,
+            mark_tpm_guide_read,
             get_network,
             get_network_protection,
             get_threat_protection,
@@ -2656,6 +2640,7 @@ pub fn run() {
             get_application_security_operation,
             cancel_application_security_operation,
             get_devices,
+            get_recovery_workspace,
             get_recovery,
             create_recovery_point,
             cleanup_recovery_points,

@@ -7,9 +7,36 @@ existing ISO and ten companions have complete readback verification.
 No ISO was rebuilt for upload. Composition and publication remain separate
 from full clean-install, encrypted-root/recovery and hardware acceptance.
 
+# 0.5.6 Sophon internal candidate
+
+Build from the reviewed Fedora 44 Everything/netinst medium (44-1.7).
+Verify the upstream checksum signature before passing its SHA-256 to the factory.
+Use the three-entry installer menu on both BIOS and UEFI. The media verification
+entry checks the ISO checksum. The diagnostic entry exposes kernel and
+installer logs and retains normal graphics driver selection. Both proceed to
+native Anaconda.
+
+The first screen confirms a single keyboard. Anaconda opens the storage screens after
+confirmation and still owns encrypted partitioning and passphrase entry.
+The build rejects a changed upstream GTK entry point until it has been reviewed.
+The installer aborts before the storage UI if its keyboard overlay is absent.
+It checks the console keymap and each boot and rescue initramfs before the
+reboot step. The rescue image is rebuilt once the installed keymap and theme
+are available. English (US), French (AZERTY Latin-9 without dead keys), and German
+(QWERTZ without dead keys) are explicit supported choices.
+
+Use separate fresh disks to validate each layout. In each run, enter a
+layout-sensitive passphrase by physical key position, then repeat the same
+physical keystrokes at GREYWARD's Plymouth prompt. Test punctuation and
+language-specific characters where the chosen layout provides them. Record
+which firmware mode, boot-menu entry, and exact ISO hash were exercised.
+Media checks and test fixtures are separate from acceptance of the composed
+candidate. Bare-metal graphics, storage and Wi-Fi coverage requires separate
+hardware checks.
+
 # 0.5.5 Sophon source — 6 November 2026
 
-The current source includes Center/Context 137 (Live refresh and mixed process
+The archived 0.5.5 source includes Center/Context 137 (Live refresh and mixed process
 attribution), local GeoIP flags, evidence-based network risk, Branding 22's boot
 theme guards, Files 24's desktop mount-error fix, and the prepared Polkit focus
 handoff in Runtime 88 / Enrollment 91. The selected Office generation is 16.

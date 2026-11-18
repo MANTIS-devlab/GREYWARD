@@ -911,6 +911,8 @@ def serve():
         raise RuntimeError("unable to bind OpenSnitch control socket")
     server.start()
     os.chmod(SOCKET_PATH, 0o600)
+    from systemd.daemon import notify
+    notify("READY=1")
     server.wait_for_termination()
 
 

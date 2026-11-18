@@ -1,11 +1,13 @@
 #!/usr/bin/python3
 """Fixed privileged update transaction for the GREYWARD Update Center."""
 import argparse
+import fcntl
 import json
 import os
 import re
 import subprocess
 import sys
+import time
 import socket
 import struct
 from pathlib import Path
@@ -19,9 +21,11 @@ SYSTEM_UPDATE_LINK = Path("/system-update")
 OPTIONAL_REPO = "fedora-cisco-openh264"
 OPTIONAL_PACKAGES = ("openh264", "mozilla-openh264")
 PROVIDER_TIMEOUT = 1800
+WORKER_RUNTIME_LIMIT = 110 * 60
 RPM_QUERY_TIMEOUT = 30
 PACKAGE_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9+_.:-]*$")
-OPERATION_ID = re.compile(r"^dnf5-[0-9]{1,20}$")
+OPERATION_ID = re.compile(r"^dnf5-[0-9]{1,39}$")
+PREPARATION_LOCK = Path("/run/lock/greyward-offline-prepare.lock")
 MAX_DRIVER_PACKAGES = 32
 HELPER = "/usr/libexec/greyward-update-action"
 WORKER_SOCKET = "/run/greyward-update-worker.sock"
@@ -85,11 +89,12 @@ def load_recovery_create():
     return create
 
 
-def prepare_dnf(driver_packages):
+def prepare_dnf(driver_packages, operation_id):
     for path in (Path('/usr/lib/greyward-security-context'), Path(__file__).resolve().parents[1]):
         if str(path) not in sys.path:
             sys.path.insert(0, str(path))
     from greyward_security_context.dms_compatibility import dnf_options
+    from greyward_security_context.update_center import offline_comment_option
     policy_options = dnf_options()
     if driver_packages:
         # DNF5's `do` command combines unlike actions in one transaction.  A
@@ -102,12 +107,15 @@ def prepare_dnf(driver_packages):
         ]
     else:
         command = [DNF, "upgrade", "--offline", "--assumeyes"]
-    command.extend(policy_options)
+    command.extend([offline_comment_option(operation_id), *policy_options])
+    deadline = time.monotonic() + PROVIDER_TIMEOUT
     result = run(command, timeout=PROVIDER_TIMEOUT)
     optional_repo_skipped = False
     if result.returncode != 0 and optional_repo_failure(result):
-        result = run([*command, f"--disablerepo={OPTIONAL_REPO}"], timeout=PROVIDER_TIMEOUT)
-        optional_repo_skipped = result.returncode == 0
+        remaining = deadline - time.monotonic()
+        if remaining > 0:
+            result = run([*command, f"--disablerepo={OPTIONAL_REPO}"], timeout=remaining)
+            optional_repo_skipped = result.returncode == 0
     if result.returncode != 0:
         return result.returncode, optional_repo_skipped
 
@@ -141,17 +149,30 @@ def apply(args):
     results = []
     recovery_point = None
     optional_repo_skipped = False
+    restart_marker = None
     if args.system:
-        emit("phase", phase="CHECKPOINTING", message="Creating a local recovery point before the system update.")
-        recovery_point = load_recovery_create()("pre-update", args.operation_id)
-        if not recovery_point.get("id") or recovery_point.get("status") != "valid":
-            raise RuntimeError("The recovery helper did not create a valid safety point.")
-        emit("recovery", recovery_point={"id": recovery_point["id"], "status": recovery_point["status"]})
-        emit("phase", phase="PREPARING_RESTART", message="Downloading and preparing the system update for the next restart.")
-        returncode, optional_repo_skipped = prepare_dnf(driver_packages)
-        if returncode != 0:
-            emit("provider", provider="DNF5", state="DEGRADED", reason="DNF5 could not prepare the offline update.")
-            return returncode
+        with PREPARATION_LOCK.open("a", encoding="ascii") as lock:
+            try:
+                fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError as error:
+                raise RuntimeError("Another system update is being prepared.") from error
+            if SYSTEM_UPDATE_LINK.exists() or SYSTEM_UPDATE_LINK.is_symlink():
+                raise RuntimeError("An offline update is already scheduled. Restart or cancel it first.")
+            emit("phase", phase="CHECKPOINTING", message="Creating a local recovery point before the system update.")
+            recovery_point = load_recovery_create()("pre-update", args.operation_id)
+            if not recovery_point.get("id") or recovery_point.get("status") != "valid":
+                raise RuntimeError("The recovery helper did not create a valid safety point.")
+            emit("recovery", recovery_point={"id": recovery_point["id"], "status": recovery_point["status"]})
+            emit("phase", phase="PREPARING_RESTART", message="Downloading and preparing the system update for the next restart.")
+            returncode, optional_repo_skipped = prepare_dnf(driver_packages, args.operation_id)
+            if returncode != 0:
+                emit("provider", provider="DNF5", state="DEGRADED", reason="DNF5 could not prepare the offline update.")
+                return returncode
+            from greyward_security_context.update_center import offline_marker_identity
+            restart_marker = offline_marker_identity(SYSTEM_UPDATE_LINK, OFFLINE_DIR)
+            if restart_marker is None:
+                emit("provider", provider="DNF5", state="DEGRADED", reason="The prepared offline restart marker is unavailable.")
+                return 1
         results.append({"provider": "DNF5", "state": "SUCCESS", "reason": "The native offline system update is prepared."})
         emit("provider", **results[-1])
 
@@ -176,6 +197,7 @@ def apply(args):
         recovery_point={"id": recovery_point["id"], "status": recovery_point["status"]} if recovery_point else None,
         optional_repo_skipped=optional_repo_skipped,
         provider_results=results,
+        restart_marker=restart_marker,
     )
     return 0
 
@@ -220,7 +242,7 @@ def privileged_worker(args):
             command.extend(("--driver-package", package))
     result = None
     with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as worker:
-        worker.settimeout(PROVIDER_TIMEOUT * 3 + 660)
+        worker.settimeout(WORKER_RUNTIME_LIMIT + 30)
         worker.connect(WORKER_SOCKET)
         worker.sendall(json.dumps(command).encode('utf-8') + b'\n')
         worker.shutdown(socket.SHUT_WR)

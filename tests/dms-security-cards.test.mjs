@@ -72,12 +72,29 @@ test('reviewed exceptions, unknown text and negative substrings never become gre
 });
 test('updates never inherit overall protection or invent idle update counts', () => {
     const result=model.card('updates',healthy(),true,true);
-    assert.equal(result.tone,'warning'); assert.equal(result.value,'Check updates');
+    assert.equal(result.tone,'warning'); assert.equal(result.signal,'unknown'); assert.equal(result.value,'Check updates');
     assert.ok(!JSON.stringify(result).includes('Up to date'));
     const busy=model.card('updates',{...healthy(),activity:[{kind:'update',title:'Updating your system',detail:'42% completed'}]},true,true);
-    assert.equal(busy.detail,'42% completed'); assert.equal(busy.tone,'warning');
+    assert.equal(busy.detail,'42% completed'); assert.equal(busy.signal,'busy');
     const failed=model.card('updates',{...healthy(),notification_items:[{id:'update-failed',route:'updates',severity:'WARNING',title:'Update could not finish'}]},true,true);
-    assert.equal(failed.tone,'critical');
+    assert.equal(failed.signal,'critical');
+    const pending=model.card('updates',{...healthy(),notices:[{id:'updates-security',route:'updates',severity:'INFO',title:'Security updates available'}]},true,true);
+    assert.equal(pending.signal,'warning'); assert.equal(pending.value,'Updates available');
+    const restart=model.card('updates',{...healthy(),notices:[{id:'updates-restart',route:'updates',severity:'INFO',title:'Restart required'}]},true,true);
+    assert.equal(restart.signal,'warning'); assert.equal(restart.value,'Restart required');
+});
+test('live findings drive the cards even when their notifications are quiet', () => {
+    const firewall={id:'firewall-unavailable',route:'network',severity:'WARNING',detail:'Firewall status unavailable'};
+    const snapshot={...healthy(),items:[firewall],notification_items:[]};
+    const network=model.card('network',snapshot,true,true);
+    assert.equal(network.signal,'warning');
+    assert.equal(network.value,'Review needed');
+    const protection=model.card('protection',{...snapshot,notification_items:[firewall]},true,true);
+    assert.equal(protection.signal,'warning');
+    assert.equal(protection.value,'Review needed');
+    assert.equal(protection.rows[1].value,'1 to review');
+    const stale={...healthy(),items:[{...firewall,stale:true}],notification_items:[]};
+    assert.equal(model.card('network',stale,true,true).signal,'positive');
 });
 test('stale or unavailable integration clears all formerly positive rows', () => {
     for (const section of ['protection','network','updates']) {

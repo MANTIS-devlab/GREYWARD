@@ -1,6 +1,6 @@
 Name:           greyward-security-center
 Version:        0.1.0
-Release:        137%{?dist}
+Release:        141%{?dist}
 Summary:        GREYWARD local security posture and control application
 License:        GPL-3.0-only AND Apache-2.0 AND OFL-1.1 AND CC0-1.0 AND MIT
 Source0:        %{name}-%{version}.tar.gz
@@ -23,6 +23,7 @@ Requires:       libnotify
 Requires:       nautilus
 Requires:       python3-gobject-base
 Requires:       gtk4
+Requires:       zenity
 
 %description
 Unprivileged Tauri 2 application for the GREYWARD Security Center, with a
@@ -126,6 +127,12 @@ install -Dm0755 greyward-safe-open.so \
 %postun
 /usr/bin/fc-cache -f >/dev/null 2>&1 || :
 %changelog
+* Sat Nov 07 2026 MANTIS SYSTEMS - 0.1.0-139
+- Repair recovery actions and scanning, history, network and TPM navigation states.
+
+* Sat Nov 07 2026 MANTIS SYSTEMS - 0.1.0-138
+- Separate optional TPM guidance from posture; harden personal backup and recovery.
+
 * Fri Nov 06 2026 MANTIS SYSTEMS - 0.1.0-137
 - Keep application/UID pattern evidence across partial process attribution.
 

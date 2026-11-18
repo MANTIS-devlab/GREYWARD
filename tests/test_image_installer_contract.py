@@ -13,15 +13,23 @@ spec.loader.exec_module(contract)
 class InstallerContractTests(unittest.TestCase):
     def setUp(self):
         self.installer = (ROOT / 'environment/image/installer.ks.tmpl').read_text()
-        self.configs = {'EFI/BOOT/grub.cfg': '''set default="0"
-menuentry 'Install GREYWARD OS' {
-linux /images/pxeboot/vmlinuz inst.stage2=hd:LABEL=GREYWARD-INSTALLER-44 quiet inst.profile=greyward inst.ks=hd:LABEL=GREYWARD-INSTALLER-44:/installer.ks inst.updates=hd:LABEL=GREYWARD-INSTALLER-44:/updates.img
-}
-'''}
+        labels = f'hd:LABEL={contract.LABEL}'
+        args = (f'inst.stage2={labels} inst.profile=greyward '
+                f'inst.ks={labels}:/installer.ks inst.updates={labels}:/updates.img')
+        entries = [
+            f"menuentry '{title}' {{\nlinux /images/pxeboot/vmlinuz {args} "
+            + ' '.join(sorted(flags)) + '\ninitrd /images/pxeboot/initrd.img\n}\n'
+            for title, flags in contract.MENU_ENTRIES
+        ]
+        self.configs = {'EFI/BOOT/grub.cfg': 'set default="0"\n' + ''.join(entries)}
         self.branding = {
             contract.BRANDING[0]: (ROOT / 'packaging/greyward-branding/SOURCES/greyward-anaconda.conf').read_bytes(),
             contract.BRANDING[1]: b'known-good-stylesheet',
             contract.BRANDING[2]: b'known-good-logo',
+            contract.INSTALLER_UI[0]: b'known-good-gui-hook',
+            contract.INSTALLER_UI[1]: b'known-good-keyboard-selector',
+            contract.INSTALLER_UI[2]: b'known-good-text-mode-guard',
+            contract.INSTALLER_UI[3]: b'known-good-startup-banner',
         }
         self.expected = copy.deepcopy(self.branding)
         self.packages = '%packages --exclude-weakdeps\nbash\n-openssh-server\n%end\n'
@@ -32,6 +40,17 @@ linux /images/pxeboot/vmlinuz inst.stage2=hd:LABEL=GREYWARD-INSTALLER-44 quiet i
 
     def test_native_interactive_contract_passes(self):
         self.assertEqual(self.check()['state'], 'PASS')
+
+    def test_extra_live_entry_rejected(self):
+        self.configs['EFI/BOOT/grub.cfg'] += "menuentry 'Try GREYWARD' {\n}\n"
+        with self.assertRaisesRegex(ValueError, 'Unexpected boot menu entries'):
+            self.check()
+
+    def test_diagnostic_logs_are_distinct_from_default(self):
+        self.configs['EFI/BOOT/grub.cfg'] = self.configs['EFI/BOOT/grub.cfg'].replace(
+            ' inst.loglevel=debug', '')
+        with self.assertRaisesRegex(ValueError, 'Incorrect boot mode'):
+            self.check()
 
     def test_non_english_default_rejected(self):
         self.installer = self.installer.replace('lang en_US.UTF-8', 'lang fr_FR.UTF-8')
@@ -68,8 +87,8 @@ linux /images/pxeboot/vmlinuz inst.stage2=hd:LABEL=GREYWARD-INSTALLER-44 quiet i
                 with self.assertRaisesRegex(ValueError, 'explicit nonempty ISO-local packages'):
                     self.check()
 
-    def test_hiding_keyboard_or_language_page_rejected(self):
-        for setting, extra in ((b'hidden_spokes =', b'KeyboardSpoke'),
+    def test_changing_keyboard_gate_or_hiding_language_page_rejected(self):
+        for setting, extra in ((b'hidden_spokes =', b'WelcomeLanguageSpoke'),
                                (b'hidden_webui_pages =', b'anaconda-screen-language')):
             with self.subTest(extra=extra):
                 original = self.branding[contract.BRANDING[0]]
@@ -119,6 +138,16 @@ linux /images/pxeboot/vmlinuz inst.stage2=hd:LABEL=GREYWARD-INSTALLER-44 quiet i
         with self.assertRaisesRegex(ValueError, 'Wrong inst.ks'):
             self.check()
 
+    def test_missing_keyboard_startup_guard_rejected(self):
+        self.installer = self.installer.replace('test -s "$gui/greyward_keyboard.py"', 'true')
+        with self.assertRaisesRegex(ValueError, 'installer keyboard guard'):
+            self.check()
+
+    def test_tampered_keyboard_overlay_rejected(self):
+        self.branding[contract.INSTALLER_UI[1]] = b'stale-keyboard-selector'
+        with self.assertRaisesRegex(ValueError, 'differs from selected build input'):
+            self.check()
+
     def test_missing_updates_on_one_boot_path_rejected(self):
         self.configs['boot/grub2/grub.cfg'] = self.configs['EFI/BOOT/grub.cfg'].replace(
             ' inst.updates=hd:LABEL=GREYWARD-INSTALLER-44:/updates.img', '')
@@ -139,7 +168,7 @@ linux /images/pxeboot/vmlinuz inst.stage2=hd:LABEL=GREYWARD-INSTALLER-44 quiet i
 
     def test_stale_or_missing_branding_rejected(self):
         self.branding[contract.BRANDING[2]] = b'stale-logo'
-        with self.assertRaisesRegex(ValueError, 'differs from selected branding RPM'):
+        with self.assertRaisesRegex(ValueError, 'differs from selected build input'):
             self.check()
         del self.branding[contract.BRANDING[2]]
         with self.assertRaisesRegex(ValueError, 'Missing or unexpected'):

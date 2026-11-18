@@ -2,8 +2,7 @@
 Description=Refresh GREYWARD Feodo recommended threat snapshot
 
 [Timer]
-OnBootSec=2min
-OnUnitActiveSec=15min
+OnCalendar=*-*-* *:00,15,30,45:00
 RandomizedDelaySec=90s
 Persistent=true
 

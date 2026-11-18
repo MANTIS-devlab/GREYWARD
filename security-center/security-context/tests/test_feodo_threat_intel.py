@@ -1,6 +1,7 @@
 import json
 import tempfile
 import unittest
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -43,7 +44,7 @@ class FeodoSnapshotTests(unittest.TestCase):
                 "schema": feodo.SNAPSHOT_SCHEMA,
                 "provider": feodo.FEODO_PROVIDER,
                 "state": "READY",
-                "last_successful_update": "2026-09-06T10:00:00Z",
+                "last_successful_update": datetime.now(timezone.utc).isoformat(),
                 "indicators": [{"ip": "203.0.113.10", "port": 443, "malware": "QakBot"}],
             }), encoding="utf-8")
             stale = feodo.update_feed(lambda: (_ for _ in ()).throw(OSError("offline")), path)
@@ -52,6 +53,17 @@ class FeodoSnapshotTests(unittest.TestCase):
             empty = feodo.update_feed(lambda: b"[]", path)
             self.assertEqual(empty["state"], "EMPTY")
             self.assertEqual(empty["indicator_count"], 0)
+
+
+    def test_expired_snapshot_is_neither_used_nor_reported_ready(self):
+        address = "203.0.113.10"
+        connection = SimpleNamespace(dst_ip=address, dst_port=443)
+        snapshot = {"state": "READY", "indicators": [{"ip": address, "port": 443}]}
+        for seconds in (-10, feodo.MAX_SNAPSHOT_AGE_SECONDS + 10):
+            snapshot["last_successful_update"] = (datetime.now(timezone.utc) - timedelta(seconds=seconds)).isoformat()
+            self.assertIsNone(feodo.matching_indicator(connection, snapshot))
+            with patch.object(feodo, "load_snapshot", return_value=snapshot):
+                self.assertEqual(feodo.threat_status({})["state"], "STALE")
 
 
 @unittest.skipIf(NetworkState is None, "OpenSnitch runtime dependencies are unavailable on this host")
@@ -81,7 +93,7 @@ class FeodoPolicyTests(unittest.TestCase):
             }), encoding="utf-8")
             snapshot.write_text(json.dumps({
                 "schema": feodo.SNAPSHOT_SCHEMA, "provider": feodo.FEODO_PROVIDER, "state": "READY",
-                "last_successful_update": "2026-09-06T10:00:00Z", "indicators": [{"ip": "203.0.113.10", "port": 443, "malware": "QakBot"}],
+                "last_successful_update": datetime.now(timezone.utc).isoformat(), "indicators": [{"ip": "203.0.113.10", "port": 443, "malware": "QakBot"}],
             }), encoding="utf-8")
             with patch("greyward_security_context.control_plane.POLICY_PATH", policy), patch("greyward_security_context.feodo.SNAPSHOT_PATH", snapshot):
                 action, _, selected = select_policy_rule(self.connection())
@@ -120,7 +132,7 @@ class FeodoPolicyTests(unittest.TestCase):
             }), encoding="utf-8")
             snapshot.write_text(json.dumps({
                 "schema": feodo.SNAPSHOT_SCHEMA, "provider": feodo.FEODO_PROVIDER, "state": "READY",
-                "last_successful_update": "2026-09-06T10:00:00Z", "indicators": [{"ip": "203.0.113.10", "port": 443}],
+                "last_successful_update": datetime.now(timezone.utc).isoformat(), "indicators": [{"ip": "203.0.113.10", "port": 443}],
             }), encoding="utf-8")
             with patch("greyward_security_context.control_plane.POLICY_PATH", policy), patch("greyward_security_context.feodo.SNAPSHOT_PATH", snapshot):
                 action, _duration, selected = select_policy_rule(self.connection())

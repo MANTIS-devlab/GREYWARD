@@ -11,4 +11,6 @@ UMask=0077
 StandardInput=socket
 StandardOutput=socket
 StandardError=inherit
-TimeoutStartSec=6000
+TimeoutStartSec=15s
+# Type=exec only counts process launch towards TimeoutStartSec.
+RuntimeMaxSec=110min

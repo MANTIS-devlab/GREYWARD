@@ -14,8 +14,8 @@ mod profiles;
 mod provider_process;
 mod rpm_metadata;
 pub use adapters::{
-    collect_core_facts, collect_device_facts, collect_flatpak_facts, collect_network_facts,
-    collect_portal_facts, collect_recovery_facts, collect_usb_facts,
+    collect_core_facts, collect_flatpak_facts, collect_network_facts, collect_portal_facts,
+    collect_tpm_capability, collect_usb_facts,
 };
 pub use application_reads::{
     ApplicationPageQuery, ApplicationReadError, MAX_APPLICATION_READ_BYTES,
@@ -31,7 +31,7 @@ pub use control::{TrustZoneError, change_active_trust_zone, rollback_active_trus
 pub use facts::{
     AdapterFacts, BootFacts, EffectiveFlatpakAccess, FirmwareFacts, FlatpakAccessCategory,
     FlatpakApp, FlatpakAvailability, FlatpakFacts, NetworkFacts, PortalFacts, PortalHealth,
-    RecoveryFacts, RecoveryReadiness, SecurityUpdatesFacts, SelinuxFacts, StorageFacts, TpmFacts,
+    SecurityUpdatesFacts, SelinuxFacts, StorageFacts, TpmCapability,
     TrustZone, UsbFacts, UsbGuardAvailability, UsbGuardPolicy, resolve_flatpak_access,
 };
 pub use framework::{CollectionGeneration, Collector, collect_concurrently};
@@ -85,25 +85,6 @@ pub fn collect_core_collection() -> CoreCollection {
     CoreCollection { snapshot: s, usb }
 }
 
-pub fn collect_device_snapshot() -> CoreCollection {
-    let facts = collect_device_facts();
-    let snapshot = evaluate_facts_with_deviations(&facts, &load_accepted_deviations());
-    let usb = facts
-        .iter()
-        .find_map(|item| match item {
-            AdapterFacts::Usb(value) => Some(value.clone()),
-            _ => None,
-        })
-        .unwrap_or(UsbFacts {
-            availability: UsbGuardAvailability::Unknown,
-            policy: UsbGuardPolicy::Unknown,
-            connected_devices: 0,
-            authorized_devices: 0,
-            unknown_devices: 0,
-        });
-    CoreCollection { snapshot, usb }
-}
-
 pub fn collect_core_snapshot() -> PostureSnapshot {
     collect_core_collection().snapshot
 }
@@ -116,7 +97,7 @@ mod tests {
         assert_eq!(collect_core_snapshot().domains.len(), 6);
     }
     #[test]
-    fn unavailable_tpm_and_plain_root_are_distinct() {
+    fn plain_root_remains_a_review_without_optional_setup_findings() {
         let s = evaluate_facts(&[
             AdapterFacts::Selinux(SelinuxFacts {
                 mode: SelinuxMode::Enforcing,
@@ -131,9 +112,6 @@ mod tests {
                 home: EncryptionState::Plain,
                 swap: EncryptionState::Unknown,
             }),
-            AdapterFacts::Tpm(TpmFacts {
-                capability: TpmCapability::Missing,
-            }),
         ]);
         assert_eq!(
             s.checks
@@ -143,14 +121,9 @@ mod tests {
                 .state,
             greyward_security_domain::PostureState::ReviewNeeded
         );
-        assert_eq!(
-            s.checks
-                .iter()
-                .find(|c| c.check_id.as_str() == "devices.tpm.presence")
-                .unwrap()
-                .state,
-            greyward_security_domain::PostureState::Unavailable
-        );
+        assert!(s.checks.iter().all(|check| !matches!(
+            check.check_id.as_str(), "devices.tpm.presence" | "recovery.readiness"
+        )));
     }
     #[test]
     fn firmware_and_updates_preserve_unavailable_and_actionable_states() {
@@ -310,7 +283,7 @@ mod tests {
         );
     }
     #[test]
-    fn usbguard_unavailable_and_recovery_partial_are_honest() {
+    fn usbguard_unavailable_remains_visible() {
         let snapshot = evaluate_facts(&[
             AdapterFacts::Usb(UsbFacts {
                 availability: UsbGuardAvailability::Unavailable,
@@ -318,15 +291,6 @@ mod tests {
                 connected_devices: 0,
                 authorized_devices: 0,
                 unknown_devices: 0,
-            }),
-            AdapterFacts::Recovery(RecoveryFacts {
-                readiness: RecoveryReadiness::Partial,
-                rescue_kernel: true,
-                uefi: true,
-                secure_boot: SecureBootState::Enabled,
-                encryption: EncryptionState::Plain,
-                firmware_updates: FirmwareUpdateState::NoneKnown,
-                tpm: TpmCapability::Missing,
             }),
         ]);
         assert_eq!(
@@ -337,15 +301,6 @@ mod tests {
                 .unwrap()
                 .state,
             greyward_security_domain::PostureState::Unavailable
-        );
-        assert_eq!(
-            snapshot
-                .checks
-                .iter()
-                .find(|c| c.check_id.as_str() == "recovery.readiness")
-                .unwrap()
-                .state,
-            greyward_security_domain::PostureState::ReviewNeeded
         );
     }
 
@@ -370,7 +325,7 @@ mod tests {
     }
 
     #[test]
-    fn accepted_deviation_resolves_required_secure_boot_failure() {
+    fn legacy_waiver_cannot_mask_required_secure_boot_failure() {
         let snapshot = evaluate_facts_with_deviations(
             &[AdapterFacts::Boot(BootFacts {
                 firmware: FirmwareMode::Uefi,
@@ -387,15 +342,34 @@ mod tests {
             check.state,
             greyward_security_domain::PostureState::ActionRequired
         );
-        assert_eq!(check.reason_code, "accepted-deviation");
-        assert_eq!(
-            snapshot.accepted_deviations,
-            vec!["system.boot.secure-boot"]
-        );
+        assert_ne!(check.reason_code, "accepted-deviation");
+        assert!(snapshot.accepted_deviations.is_empty());
+        assert!(set_accepted_deviation("system.boot.secure-boot", true).is_err());
+        assert!(set_accepted_deviation("system.selinux.mode", true).is_err());
     }
 
     #[test]
-    fn posture_projection_keeps_evaluated_checks_and_accepted_deviation() {
+    fn optional_recommendations_can_still_be_ignored() {
+        let snapshot = evaluate_facts_with_deviations(
+            &[AdapterFacts::Firmware(FirmwareFacts {
+                fwupd_available: true,
+                security: FirmwareSecurityState::Insecure,
+                security_attributes: Vec::new(),
+                updates: FirmwareUpdateState::NoneKnown,
+            })],
+            &["system.firmware.hsi".into()],
+        );
+        let check = snapshot
+            .checks
+            .iter()
+            .find(|check| check.check_id.as_str() == "system.firmware.hsi")
+            .expect("firmware recommendation");
+        assert_eq!(check.reason_code, "accepted-deviation");
+        assert_eq!(snapshot.accepted_deviations, vec!["system.firmware.hsi"]);
+    }
+
+    #[test]
+    fn posture_projection_counts_required_failures_with_legacy_waivers() {
         let snapshot = evaluate_facts_with_deviations(
             &[AdapterFacts::Boot(BootFacts {
                 firmware: FirmwareMode::Uefi,
@@ -411,53 +385,9 @@ mod tests {
             .find(|check| check["check_id"] == "system.boot.secure-boot")
             .unwrap();
         assert_eq!(check["state"], "ACTION_REQUIRED");
-        assert_eq!(check["accepted_deviation"], true);
-        assert_eq!(projection["metrics"]["review_needed"], 0);
+        assert_eq!(check["accepted_deviation"], false);
+        assert!(projection["metrics"]["review_needed"].as_u64().unwrap() > 0);
+        assert_eq!(projection["posture"]["state"], "REVIEW NEEDED");
     }
 
-    #[test]
-    fn ignored_missing_tpm_resolves_unavailable_recommendation() {
-        let snapshot = evaluate_facts_with_deviations(
-            &[AdapterFacts::Tpm(TpmFacts {
-                capability: TpmCapability::Missing,
-            })],
-            &["devices.tpm.presence".into()],
-        );
-        let check = snapshot
-            .checks
-            .iter()
-            .find(|check| check.check_id.as_str() == "devices.tpm.presence")
-            .expect("TPM presence check");
-        assert_eq!(
-            check.state,
-            greyward_security_domain::PostureState::Unavailable
-        );
-        assert_eq!(check.reason_code, "accepted-deviation");
-    }
-
-    #[test]
-    fn ignored_unavailable_recovery_resolves_recovery_card() {
-        let snapshot = evaluate_facts_with_deviations(
-            &[AdapterFacts::Recovery(RecoveryFacts {
-                readiness: RecoveryReadiness::Unavailable,
-                rescue_kernel: false,
-                uefi: true,
-                secure_boot: SecureBootState::Enabled,
-                encryption: EncryptionState::Encrypted,
-                firmware_updates: FirmwareUpdateState::NoneKnown,
-                tpm: TpmCapability::Missing,
-            })],
-            &["recovery.readiness".into()],
-        );
-        let check = snapshot
-            .checks
-            .iter()
-            .find(|check| check.check_id.as_str() == "recovery.readiness")
-            .expect("recovery readiness check");
-        assert_eq!(
-            check.state,
-            greyward_security_domain::PostureState::ReviewNeeded
-        );
-        assert_eq!(check.reason_code, "accepted-deviation");
-    }
 }

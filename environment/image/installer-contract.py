@@ -17,8 +17,20 @@ BRANDING = (
     'usr/share/anaconda/pixmaps/greyward-anaconda.css',
     'usr/share/anaconda/pixmaps/greyward-anaconda-logo.png',
 )
+INSTALLER_UI = (
+    'usr/lib64/python3.14/site-packages/pyanaconda/ui/gui/__init__.py',
+    'usr/lib64/python3.14/site-packages/pyanaconda/ui/gui/greyward_keyboard.py',
+    'usr/lib64/python3.14/site-packages/pyanaconda/ui/tui/__init__.py',
+    'usr/lib64/python3.14/site-packages/pyanaconda/startup_utils.py',
+)
+UPDATES = BRANDING + INSTALLER_UI
 BOOT_CONFIGS = ('EFI/BOOT/grub.cfg', 'EFI/BOOT/BOOT.conf', 'boot/grub2/grub.cfg')
 LABEL = 'GREYWARD-INSTALLER-44'
+MENU_ENTRIES = (
+    ('Install GREYWARD', {'quiet'}),
+    ('Verify media and install GREYWARD', {'rd.live.check', 'quiet'}),
+    ('Install GREYWARD with diagnostic logs', {'loglevel=7', 'inst.loglevel=debug'}),
+)
 PACKAGE_SELECTION = 'greyward/production/offline/installer-packages.ks'
 
 
@@ -61,7 +73,18 @@ def validate(installer, configs, branding, expected, package_selection):
     # The native Anaconda preamble owns the interactive pages. No replacement
     # account or storage implementation is introduced here.
     commands = []
-    for line in installer.splitlines():
+    preamble, _, scripts = installer.partition('%pre --erroronfail\n')
+    if not scripts.startswith(
+        "# Abort before storage UI if the installer overlay did not apply.\n"
+        "set -eu\n"
+        "gui=/usr/lib64/python3.14/site-packages/pyanaconda/ui/gui\n"
+        "test -s \"$gui/greyward_keyboard.py\"\n"
+        "grep -Fq 'if not confirm_keyboard(self.mainWindow._stack):' \"$gui/__init__.py\"\n"
+        "grep -Fq 'GREYWARD requires the graphical keyboard confirmation' \"$gui/../tui/__init__.py\"\n"
+        "%end\n"
+    ) or installer.count('%pre ') != 1:
+        failures.append('Missing or changed installer keyboard guard')
+    for line in preamble.splitlines():
         line = line.strip()
         if line.startswith('%post'):
             break
@@ -94,10 +117,26 @@ def validate(installer, configs, branding, expected, package_selection):
             or any(p.startswith(('%', '@')) for p in selection[1:-1])):
         failures.append('Hidden software page requires explicit nonempty ISO-local packages')
     for name, config in configs.items():
-        kernels = [shlex.split(line) for line in config.splitlines()
-                   if re.match(r'^\s*linux(?:efi)?\s', line)]
-        if not kernels:
-            failures.append('No installer kernel entry in ' + name)
+        entries = re.findall(r"^menuentry '([^']+)' \{\n(.*?)^}", config, re.M | re.S)
+        declared_entries = re.findall(r'^\s*(?:menuentry|submenu)\s', config, re.M)
+        if ([title for title, _ in entries] != [title for title, _ in MENU_ENTRIES]
+                or len(declared_entries) != len(MENU_ENTRIES)):
+            failures.append('Unexpected boot menu entries in ' + name)
+        kernels = []
+        for (_, body), (_, expected_flags) in zip(entries, MENU_ENTRIES):
+            commands = [shlex.split(line) for line in body.splitlines() if line.strip()]
+            if (len(commands) != 2
+                    or commands[0][:2] != ['linux', '/images/pxeboot/vmlinuz']
+                    or commands[1] != ['initrd', '/images/pxeboot/initrd.img']):
+                failures.append('Invalid kernel or initramfs entry in ' + name)
+                continue
+            actual_flags = set(commands[0]) & {
+                'quiet', 'rd.live.check', 'loglevel=7', 'inst.loglevel=debug',
+                'nomodeset', 'inst.rescue', 'inst.text', 'inst.cmdline',
+            }
+            if actual_flags != expected_flags:
+                failures.append('Incorrect boot mode in ' + name)
+            kernels.append(commands[0])
         if not re.search(r'set\s+default=["\']?0["\']?', config):
             failures.append('Default installer entry changed in ' + name)
         for args in kernels:
@@ -115,11 +154,11 @@ def validate(installer, configs, branding, expected, package_selection):
                     failures.append('Wrong ' + key + ' routing in ' + name)
             if 'rd.plymouth=0' in args or 'plymouth.enable=0' in args:
                 failures.append('GREYWARD LUKS presentation disabled in ' + name)
-    if set(branding) != set(BRANDING):
+    if set(branding) != set(UPDATES):
         failures.append('Missing or unexpected Anaconda customization members')
-    for name in BRANDING:
+    for name in UPDATES:
         if name not in branding or branding[name] != expected.get(name):
-            failures.append('Anaconda customization differs from selected branding RPM: ' + name)
+            failures.append('Anaconda customization differs from selected build input: ' + name)
     if BRANDING[0] in branding:
         profile = configparser.ConfigParser()
         profile.read_string(branding[BRANDING[0]].decode('utf-8'))
@@ -128,9 +167,9 @@ def validate(installer, configs, branding, expected, package_selection):
         if profile.get('Profile', 'base_profile', fallback='') != 'fedora':
             failures.append('Native Fedora installer profile changed')
         for setting, allowed in (
-                ('hidden_spokes', 'SoftwareSelectionSpoke'),
-                ('hidden_webui_pages', 'anaconda-screen-software-selection')):
-            if profile.get('User Interface', setting, fallback='').split() != [allowed]:
+                ('hidden_spokes', ['SoftwareSelectionSpoke', 'KeyboardSpoke']),
+                ('hidden_webui_pages', ['anaconda-screen-software-selection'])):
+            if profile.get('User Interface', setting, fallback='').split() != allowed:
                 failures.append('Unexpected native interactive pages suppressed: ' + setting)
         if profile.getboolean('Localization', 'use_geolocation', fallback=True):
             failures.append('Installer language/layout must not be inferred from GeoIP')
@@ -140,7 +179,7 @@ def validate(installer, configs, branding, expected, package_selection):
         'state': 'PASS',
         'scope': 'Composed-media contract; actual interactive/install acceptance remains separate.',
         'boot_configs': sorted(configs),
-        'branding_sha256': {p: hashlib.sha256(branding[p]).hexdigest() for p in BRANDING},
+        'updates_sha256': {p: hashlib.sha256(branding[p]).hexdigest() for p in UPDATES},
     }
 
 
@@ -159,25 +198,29 @@ def inspect_iso(iso, branding_root):
             text=True, stderr=subprocess.DEVNULL,
         )
         entries = [line.split() for line in report.splitlines()
-                   if line.startswith('El Torito boot img :') and ' UEFI ' in line]
-        if len(entries) != 1:
-            raise ValueError('Expected one bootable EFI image')
+                   if line.startswith('El Torito boot img :')]
+        if sorted(entry[6:8] for entry in entries) != [['BIOS', 'y'], ['UEFI', 'y']]:
+            raise ValueError('Expected one bootable BIOS image and one bootable UEFI image')
         # Fedora's EFI FAT image is an appended partition, outside the ISO tree.
         # Inspect its real boot configuration as well as the Rock Ridge copies.
-        lba = int(entries[0][-1])
+        lba = int(next(entry[-1] for entry in entries if entry[6] == 'UEFI'))
         efi_config = root / 'embedded-efi-grub.cfg'
         subprocess.run(
             ['mcopy', '-i', str(iso) + '@@' + str(lba * 2048),
              '::/EFI/BOOT/grub.cfg', str(efi_config)], check=True,
             stdout=subprocess.DEVNULL, stderr=subprocess.PIPE,
         )
-        configs = {p: (root / p).read_text() for p in BOOT_CONFIGS}
-        configs['embedded-efi/grub.cfg'] = efi_config.read_text()
+        config_paths = {name: root / name for name in BOOT_CONFIGS}
+        config_paths['embedded-efi/grub.cfg'] = efi_config
+        configs = {}
+        for name, path in config_paths.items():
+            subprocess.run(['grub2-script-check', str(path)], check=True)
+            configs[name] = path.read_text()
         return validate(
             (root / 'installer.ks').read_text(),
             configs,
             archive_files((root / 'updates.img').read_bytes()),
-            {p: (branding_root / p).read_bytes() for p in BRANDING},
+            {p: (branding_root / p).read_bytes() for p in UPDATES},
             (root / PACKAGE_SELECTION).read_text(),
         )
 

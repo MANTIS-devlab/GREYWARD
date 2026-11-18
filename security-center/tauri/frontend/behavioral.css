@@ -17,21 +17,34 @@
 .network-activity-details .intel-badge{display:inline-flex}
 .network-activity-details .intel-badge strong,.network-activity-details .intel-badge span{display:inline;color:inherit;margin:0;letter-spacing:0;text-transform:none}
 .network-activity-details .behavioral-chain span{letter-spacing:0;text-transform:none}
-@media(max-width:1100px){
-.network-activity-workspace{--activity-columns:minmax(95px,1fr) minmax(100px,1fr) 77px 140px 16px}
-.network-activity-workspace .network-activity-row-main,.network-activity-workspace .network-activity-legend{gap:8px}
-.network-activity-row-main>.network-activity-meta,.network-activity-row-main>time,.network-activity-legend>span:nth-child(5),.network-activity-legend>span:nth-child(6){display:none}
-.network-activity-workspace .network-activity-row-main>*{grid-row:auto;grid-column:auto}
-.network-activity-workspace .network-activity-row-main>.network-activity-expand{grid-column:5}
+@media(max-width:1200px){
+.network-activity-workspace{--activity-columns:minmax(0,1fr) minmax(0,1.15fr) minmax(74px,.5fr) minmax(107px,.72fr) 16px}
+.network-activity-workspace .network-activity-row-main,.network-activity-workspace .network-activity-legend{gap:3px 8px}
+.network-activity-legend>span:nth-child(5),.network-activity-legend>span:nth-child(6){display:none}
+.network-activity-workspace .network-activity-row-main>*{grid-row:1;grid-column:auto}
+.network-activity-workspace .network-activity-row-main>.network-activity-meta{display:block;grid-column:1;grid-row:2}
+.network-activity-workspace .network-activity-row-main>time{display:block;grid-column:2 / span 2;grid-row:2;justify-self:start}
+.network-activity-workspace .network-activity-row-main>.network-activity-expand{grid-column:5;grid-row:1 / span 2}
 }
 @media(max-width:720px){
-.network-activity-workspace{--activity-columns:minmax(80px,1fr) minmax(90px,1fr) 75px 16px}
+.network-activity-workspace{--activity-columns:minmax(0,1fr) minmax(0,1fr) minmax(70px,.65fr) 16px}
 .network-activity-legend{display:none}
 .network-activity-workspace .network-activity-row-main>.network-activity-application{grid-column:1;grid-row:1}
 .network-activity-workspace .network-activity-row-main>.network-activity-destination{grid-column:2;grid-row:1}
 .network-activity-workspace .network-activity-row-main>.network-decision{grid-column:3;grid-row:1}
-.network-activity-workspace .network-activity-row-main>.intel-badge{grid-column:1 / span 3;grid-row:2}
-.network-activity-workspace .network-activity-row-main>.network-activity-expand{grid-column:4;grid-row:1 / span 2}
+.network-activity-workspace .network-activity-row-main>.intel-badge{grid-column:1 / span 3;grid-row:3}
+.network-activity-workspace .network-activity-row-main>.network-activity-expand{grid-column:4;grid-row:1 / span 3}
+}
+@media(max-height:760px){
+.page-header:has(+.network-activity-summary){margin-bottom:15px}
+.network-activity-summary>article{padding:10px 12px}
+.network-activity-summary>.network-activity-chart{display:none}
+.network-activity-health h2,.network-summary-card strong{font-size:22px}
+.network-activity-health p,.network-summary-card small{font-size:11px}
+.network-activity-workspace{margin-top:12px}
+.network-activity-toolbar{padding-bottom:5px}
+.network-activity-workspace .behavioral-status{margin:7px 0;padding:7px 10px}
+.network-activity-workspace .network-activity-legend-note{margin:0}
 }
 
 /* Long localized timestamps must never overlap the disclosure control. */

@@ -15,92 +15,210 @@ DashCardComponent {
     readonly property var presentation: provider?.presentation ?? ({})
     readonly property var assessment: Status.card(section, presentation, fresh, provider !== null)
     readonly property string stateTone: assessment.tone
-    readonly property color stateColor: Palette.color(stateTone, Theme.isLightMode)
+    readonly property string signalState: assessment.signal
+    readonly property bool confirmedSignal: signalState !== "unknown"
+    readonly property color stateColor: signalState === "unknown" ? Theme.surfaceVariantText
+        : signalState === "busy" ? (Theme.isLightMode ? "#315F85" : "#95C9F6")
+        : Palette.color(signalState, Theme.isLightMode)
+    readonly property string signalIcon: ({
+        positive: "check",
+        warning: "warning",
+        critical: "error",
+        busy: "hourglass_top",
+        unknown: "help_outline"
+    })[signalState]
     readonly property string value: assessment.value
     readonly property string detail: assessment.detail
     readonly property var rows: assessment.rows
-    readonly property bool compact: height < 200
     readonly property string route: section === "protection" ? "overview" : section
     readonly property string heading: section === "protection" ? qsTr("Protection") : section === "network" ? qsTr("Network security") : qsTr("Updates")
     readonly property string emblem: section === "protection" ? "shield_lock" : section === "network" ? "hub" : "system_update"
+    readonly property string destinationLabel: section === "updates" ? qsTr("Open Update Center") : section === "network" ? qsTr("Network details") : qsTr("Protection details")
+    readonly property int rowHeight: Math.ceil(dataFont.height)
+    readonly property int medallionSize: width >= 230 && height >= 180 ? 53 : height >= 140 ? 42 : 32
+    readonly property int visibleRowCount: section === "updates" ? 0 : Math.max(0, Math.min(rows.length, height >= 225 ? 3 : 2, Math.floor(
+        (height - 2 * pad - hero.implicitHeight - (supportingText.visible ? supportingText.implicitHeight : 0)
+        - footer.implicitHeight - divider.implicitHeight - content.spacing * 5 + metadata.spacing)
+        / (rowHeight + metadata.spacing))))
 
-    pad: root.height < 220 ? 14 : Theme.spacingL
+    pad: height < 188 ? 11 : 14
     clipContent: true
     clickable: true
+    showFocusRing: true
     color: Theme.surfaceContainer
-    border.color: Qt.alpha(Theme.surfaceText, Theme.isLightMode ? 0.10 : 0.08)
+    border.color: Qt.alpha(root.stateColor, root.confirmedSignal ? (hover.hovered ? 0.65 : 0.38) : 0.22)
     onClicked: Quickshell.execDetached(["/usr/bin/greyward-security-center-route", root.route])
     Accessible.role: Accessible.Button
     Accessible.name: heading + ": " + value
     Accessible.description: detail + ". " + rows.map(row => row.label + ": " + row.value).join(". ")
 
-    // State accents belong to the functional header, assessment and footer.
-    // Keep the reading surface clear at every size and in both color schemes.
+    HoverHandler { id: hover }
+    FontMetrics { id: dataFont; font: supportingText.font }
+
+    // The light is strongest in the status area and falls into the evidence area.
+    Rectangle {
+        anchors.fill: parent
+        anchors.margins: root.border.width - root.pad
+        radius: Math.max(0, root.bodyRadius - root.border.width)
+        gradient: Gradient {
+            GradientStop {
+                position: 0
+                color: Qt.tint(root.color, Qt.alpha(root.stateColor, root.confirmedSignal
+                    ? (Theme.isLightMode ? 0.13 : 0.24) : (Theme.isLightMode ? 0.045 : 0.065)))
+            }
+            GradientStop {
+                position: 0.55
+                color: Qt.tint(root.color, Qt.alpha(root.stateColor, root.confirmedSignal ? 0.05 : 0.012))
+            }
+            GradientStop { position: 1; color: root.color }
+        }
+    }
+
     ColumnLayout {
+        id: content
         objectName: "greywardStatusContent"
         anchors.fill: parent
-        spacing: root.height < 220 ? 5 : 8
+        spacing: root.height >= 186 ? 6 : 5
+
         RowLayout {
-            Layout.fillWidth: true; spacing: 10
-            Rectangle {
-                Layout.preferredWidth: 32; Layout.preferredHeight: 32
-                radius: 9; color: Qt.alpha(root.stateColor, Theme.isLightMode ? 0.10 : 0.13)
-                DIcon { anchors.centerIn: parent; name: root.emblem; size: 22; color: root.stateColor }
-            }
-            StyledText {
-                text: root.heading; Layout.fillWidth: true; Layout.minimumWidth: 0
-                font.pixelSize: Theme.fontSizeSmall; font.weight: Font.DemiBold; color: Theme.surfaceText
-                elide: Text.ElideRight; maximumLineCount: 1
-            }
-            DIcon { name: root.stateTone === "positive" ? "check_circle" : root.stateTone === "critical" ? "error" : "info"; size: 16; color: root.stateColor }
-        }
-        StyledText {
-            Layout.fillWidth: true; Layout.minimumWidth: 0
-            text: root.value; color: root.stateColor
-            font.pixelSize: Theme.fontSizeXLarge; font.weight: Font.DemiBold
-            maximumLineCount: 2; wrapMode: Text.Wrap; elide: Text.ElideRight
-        }
-        StyledText {
-            Layout.fillWidth: true; Layout.minimumWidth: 0; visible: root.height >= 170
-            text: root.detail; color: Theme.surfaceVariantText; font.pixelSize: Theme.fontSizeSmall
-            maximumLineCount: root.section === "updates" ? (root.height < 220 ? 3 : 4) : root.height < 240 ? 1 : 2; wrapMode: Text.Wrap; elide: Text.ElideRight
-        }
-        ColumnLayout {
-            Layout.fillWidth: true; spacing: 4; visible: root.height >= 195 && root.section !== "updates"
-            Repeater {
-                model: root.rows.slice(0, root.height >= 240 ? 3 : 2)
+            id: hero
+            Layout.fillWidth: true
+            spacing: root.width >= 230 ? 12 : 8
+
+            ColumnLayout {
+                Layout.fillWidth: true
+                Layout.minimumWidth: 0
+                spacing: 5
+
                 RowLayout {
-                    required property var modelData
-                    Layout.fillWidth: true; spacing: 8
+                    Layout.fillWidth: true
+                    spacing: 6
+                    DIcon { name: root.emblem; size: 15; color: Theme.surfaceVariantText }
                     StyledText {
-                        text: modelData.label; Layout.fillWidth: true; Layout.minimumWidth: 0
-                        font.pixelSize: Theme.fontSizeSmall; color: Theme.surfaceVariantText
-                        maximumLineCount: 1; elide: Text.ElideRight
-                    }
-                    StyledText {
-                        text: modelData.value
-                        Layout.preferredWidth: (root.width - root.pad * 2) * 0.50
-                        Layout.maximumWidth: (root.width - root.pad * 2) * 0.50
+                        Layout.fillWidth: true
                         Layout.minimumWidth: 0
+                        text: root.heading
                         font.pixelSize: Theme.fontSizeSmall
-                        color: modelData.tone === "info" ? Theme.surfaceVariantText : Palette.color(modelData.tone, Theme.isLightMode)
-                        horizontalAlignment: Text.AlignRight; maximumLineCount: 1; elide: Text.ElideRight
+                        font.weight: Font.DemiBold
+                        color: Theme.surfaceText
+                        wrapMode: Text.NoWrap
+                        elide: Text.ElideRight
+                    }
+                }
+
+                StyledText {
+                    Layout.fillWidth: true
+                    Layout.minimumWidth: 0
+                    text: root.value
+                    color: root.confirmedSignal ? root.stateColor : Theme.surfaceText
+                    font.pixelSize: Theme.fontSizeXLarge + (root.width >= 244 ? 2 : 0)
+                    font.weight: Font.DemiBold
+                    maximumLineCount: root.height >= 140 ? 2 : 1
+                    wrapMode: Text.Wrap
+                    elide: Text.ElideRight
+                }
+            }
+
+            Rectangle {
+                Layout.preferredWidth: root.medallionSize
+                Layout.preferredHeight: root.medallionSize
+                Layout.alignment: Qt.AlignVCenter
+                radius: width / 2
+                color: Qt.alpha(root.stateColor, root.confirmedSignal ? (Theme.isLightMode ? 0.13 : 0.19) : 0.08)
+                border.width: 1
+                border.color: Qt.alpha(root.stateColor, root.confirmedSignal ? 0.68 : 0.30)
+
+                Rectangle {
+                    anchors.fill: parent
+                    anchors.margins: 4
+                    radius: width / 2
+                    color: Qt.tint(root.color, Qt.alpha(root.stateColor, root.confirmedSignal ? 0.12 : 0.035))
+
+                    DIcon {
+                        anchors.centerIn: parent
+                        name: root.signalIcon
+                        size: Math.round(root.medallionSize * 0.56)
+                        color: root.stateColor
                     }
                 }
             }
         }
-        Item { Layout.fillHeight: true; Layout.minimumHeight: 0 }
-        Rectangle { Layout.fillWidth: true; height: 1; color: Qt.alpha(root.stateColor, 0.18) }
-        RowLayout {
-            Layout.fillWidth: true; spacing: 6
-            Rectangle { width: 5; height: 5; radius: 2.5; color: root.stateColor }
-            StyledText {
-                Layout.fillWidth: true; Layout.minimumWidth: 0
-                text: !root.fresh ? qsTr("Evidence unavailable") : root.section === "updates" ? qsTr("Open Update Center") : qsTr("Protection details")
-                font.pixelSize: Theme.fontSizeSmall - 1; color: Theme.surfaceVariantText
-                elide: Text.ElideRight; maximumLineCount: 1
+
+        StyledText {
+            id: supportingText
+            Layout.fillWidth: true
+            Layout.minimumWidth: 0
+            visible: root.height >= 146 && text.length > 0
+            text: root.detail
+            color: Theme.surfaceVariantText
+            font.pixelSize: Theme.fontSizeSmall
+            maximumLineCount: root.section === "updates" && root.height >= 185 ? 3 : root.height >= 198 ? 2 : 1
+            wrapMode: Text.Wrap
+            elide: Text.ElideRight
+        }
+
+        ColumnLayout {
+            id: metadata
+            Layout.fillWidth: true
+            visible: root.visibleRowCount > 0
+            spacing: 3
+            Repeater {
+                model: root.rows.slice(0, root.visibleRowCount)
+                RowLayout {
+                    required property var modelData
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: root.rowHeight
+                    spacing: 8
+
+                    StyledText {
+                        Layout.fillWidth: true
+                        Layout.minimumWidth: 0
+                        text: modelData.label
+                        font.pixelSize: supportingText.font.pixelSize
+                        color: Theme.surfaceVariantText
+                        wrapMode: Text.NoWrap
+                        elide: Text.ElideRight
+                    }
+                    StyledText {
+                        Layout.maximumWidth: (root.width - 2 * root.pad) * 0.53
+                        Layout.minimumWidth: 0
+                        text: modelData.value
+                        font.pixelSize: supportingText.font.pixelSize
+                        font.weight: Font.Medium
+                        color: modelData.tone === "info" ? Theme.surfaceText : Palette.color(modelData.tone, Theme.isLightMode)
+                        horizontalAlignment: Text.AlignRight
+                        wrapMode: Text.NoWrap
+                        elide: Text.ElideRight
+                    }
+                }
             }
-            DIcon { name: "arrow_forward"; size: 15; color: root.stateColor }
+        }
+
+        Item { Layout.fillHeight: true; Layout.minimumHeight: 0 }
+
+        Rectangle {
+            id: divider
+            Layout.fillWidth: true
+            implicitHeight: 1
+            color: Qt.alpha(root.stateColor, root.confirmedSignal ? 0.26 : 0.18)
+        }
+
+        RowLayout {
+            id: footer
+            Layout.fillWidth: true
+            spacing: 8
+
+            StyledText {
+                Layout.fillWidth: true
+                Layout.minimumWidth: 0
+                text: root.destinationLabel
+                color: hover.hovered ? Theme.surfaceText : Theme.surfaceVariantText
+                font.pixelSize: Theme.fontSizeSmall
+                font.weight: Font.Medium
+                wrapMode: Text.NoWrap
+                elide: Text.ElideRight
+            }
+            DIcon { name: "arrow_forward"; size: 16; color: root.stateColor }
         }
     }
 }

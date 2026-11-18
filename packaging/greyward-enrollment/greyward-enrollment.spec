@@ -1,6 +1,6 @@
 Name: greyward-application-enrollment
 Version: 0.1.0
-Release: 91%{?dist}
+Release: 94%{?dist}
 Summary: GREYWARD protected-session installation inputs
 License: GPL-2.0-only AND GPL-3.0-only AND MIT
 Source0: %{name}-%{version}.tar.gz
@@ -29,7 +29,7 @@ BuildRequires: pkgconfig(libsfdo-desktop)
 BuildRequires: pkgconfig(libsfdo-icon)
 BuildRequires: gettext
 BuildRequires: pkgconfig(cmocka)
-Requires: greyward-application-security-experimental = 0.1.0-88%{?dist}
+Requires: greyward-application-security-experimental = 0.1.0-89%{?dist}
 %{!?greyward_dms_dependency:%global greyward_dms_dependency 1.6.2-26}
 Requires: greyward-dms = %{greyward_dms_dependency}%{?dist}
 Requires: greyward-session >= 0.1.0-10
@@ -56,6 +56,7 @@ tar -xf %{SOURCE1} -C compositor
 patch --batch --fuzz=0 -d compositor -p1 < security-center/packaging/application-security/desktop/labwc-protected-input.patch
 patch --batch --fuzz=0 -d compositor -p1 < security-center/packaging/application-security/desktop/labwc-administration-indicator.patch
 patch --batch --fuzz=0 -d compositor -p1 < security-center/packaging/application-security/desktop/labwc-screenshot.patch
+patch --batch --fuzz=0 -d compositor -p1 < security-center/packaging/application-security/desktop/labwc-session-lock-output-focus.patch
 
 %build
 meson setup compositor/build compositor --buildtype=release --wrap-mode=nofallback -Dman-pages=disabled -Dtest=enabled
@@ -75,7 +76,8 @@ pathlib.Path('inputs.json').write_text(json.dumps({'schema':'greyward.enrollment
  'labwcCommit':'12987307a5de32db5acbb3f59d41277373ab969e',
  'labwcSourceSha256':'67fe996c4e5afd855fdbfbc3af0b05245667ec97666f463472a1961b46047f48',
  'labwcSha256':hashlib.sha256(binary.read_bytes()).hexdigest(),
- 'screenshotPatchSha256':hashlib.sha256(pathlib.Path('security-center/packaging/application-security/desktop/labwc-screenshot.patch').read_bytes()).hexdigest()},indent=2)+'\n')
+ 'screenshotPatchSha256':hashlib.sha256(pathlib.Path('security-center/packaging/application-security/desktop/labwc-screenshot.patch').read_bytes()).hexdigest(),
+ 'lockFocusPatchSha256':hashlib.sha256(pathlib.Path('security-center/packaging/application-security/desktop/labwc-session-lock-output-focus.patch').read_bytes()).hexdigest()},indent=2)+'\n')
 PY
 
 %check
@@ -91,6 +93,7 @@ install -d "$base/policy"
 # Retain the exact public compiler inputs for source-aware ISO staging.
 install -m0444 policy/*.te policy/*.fc "$base/policy/"
 install -Dm0444 security-center/packaging/application-security/desktop/labwc-screenshot.patch "$base/patches/labwc-screenshot.patch"
+install -Dm0444 security-center/packaging/application-security/desktop/labwc-session-lock-output-focus.patch "$base/patches/labwc-session-lock-output-focus.patch"
 install -Dm0755 packaging/greyward-enrollment/migrate-screenshot.py %{buildroot}/usr/libexec/greyward-migrate-screenshot
 install -m0444 policy/*.pp environment/production/selinux/greyward-application-auth.cil environment/production/selinux/greyward-application-metadata.cil environment/production/selinux/greyward-administration.cil packaging/greyward-enrollment/runtime-boundary.cil "$base/policy/"
 install -m0444 inputs.json "$base/"
@@ -114,6 +117,9 @@ install -Dm0644 security-center/packaging/application-security/greyward-maintena
 %{_unitdir}/greyward-maintenance-console.service
 
 %changelog
+* Sat Nov 07 2026 MANTIS SYSTEMS - 0.1.0-92
+- Keep protected keyboard focus on an enabled lock output after output power changes.
+
 * Fri Nov 06 2026 MANTIS SYSTEMS - 0.1.0-91
 - Require the matching protected authorization handoff runtime.
 
