@@ -389,8 +389,16 @@ if ($uwsmLabwcPatch -notmatch 'XDG_CONFIG_HOME' -or
 
 if (Test-Path -LiteralPath $portalConfigPath) {
     $portalConfig = Get-Content -Raw -LiteralPath $portalConfigPath
-    foreach ($requiredPortalMapping in @('default=gtk', 'ScreenCast=wlr', 'Screenshot=wlr', 'RemoteDesktop=none', 'GlobalShortcuts=none')) {
-        if ($portalConfig -notmatch [regex]::Escape($requiredPortalMapping)) {
+    $requiredPortalMappings = @(
+        'default=gtk',
+        'org.freedesktop.impl.portal.ScreenCast=none',
+        'org.freedesktop.impl.portal.Screenshot=none',
+        'org.freedesktop.impl.portal.RemoteDesktop=none',
+        'org.freedesktop.impl.portal.GlobalShortcuts=none'
+    )
+    foreach ($requiredPortalMapping in $requiredPortalMappings) {
+        $mappingPattern = '(?m)^' + [regex]::Escape($requiredPortalMapping) + '[ \t]*\r?$'
+        if ($portalConfig -notmatch $mappingPattern) {
             $errors.Add("Labwc portal routing is missing: $requiredPortalMapping")
         }
     }
@@ -699,11 +707,11 @@ if (-not (Test-Path -LiteralPath $anacondaCssPath) -or -not (Test-Path -LiteralP
         $anacondaConf -match '(?im)^\s*variant_id\s*=\s*workstation\s*$' -or
         $anacondaConf -match '(?im)^\s*hidden_spokes\s*=.*UserSpoke' -or
         $anacondaConf -match '(?im)^\s*hidden_webui_pages\s*=.*anaconda-screen-accounts' -or
-        $anacondaConf -notmatch '(?m)^hidden_spokes\s*=\s*SoftwareSelectionSpoke\s*$' -or
+        $anacondaConf -notmatch '(?m)^hidden_spokes[ \t]*=[ \t]*SoftwareSelectionSpoke[ \t]+KeyboardSpoke[ \t]*\r?$' -or
         $anacondaConf -notmatch '(?m)^hidden_webui_pages\s*=\s*anaconda-screen-software-selection\s*$' -or
         $anacondaConf -notmatch '(?m)^use_geolocation\s*=\s*False\s*$' -or
         $anacondaConf -notmatch '(?m)^custom_stylesheet\s*=\s*/usr/share/anaconda/pixmaps/greyward-anaconda\.css\s*$') {
-        $errors.Add('The Anaconda GREYWARD profile must inherit Fedora, keep account creation visible, and use the supported stylesheet hook.')
+        $errors.Add('The Anaconda GREYWARD profile must inherit Fedora, keep accounts visible, use the supported stylesheet hook, and hide the later keyboard spoke.')
     }
 }
 $imageBuilderText = if (Test-Path -LiteralPath $imageEntryPoint) { Get-Content -Raw -LiteralPath $imageEntryPoint } else { '' }

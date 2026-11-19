@@ -31,8 +31,8 @@ pub use control::{TrustZoneError, change_active_trust_zone, rollback_active_trus
 pub use facts::{
     AdapterFacts, BootFacts, EffectiveFlatpakAccess, FirmwareFacts, FlatpakAccessCategory,
     FlatpakApp, FlatpakAvailability, FlatpakFacts, NetworkFacts, PortalFacts, PortalHealth,
-    SecurityUpdatesFacts, SelinuxFacts, StorageFacts, TpmCapability,
-    TrustZone, UsbFacts, UsbGuardAvailability, UsbGuardPolicy, resolve_flatpak_access,
+    SecurityUpdatesFacts, SelinuxFacts, StorageFacts, TpmCapability, TrustZone, UsbFacts,
+    UsbGuardAvailability, UsbGuardPolicy, resolve_flatpak_access,
 };
 pub use framework::{CollectionGeneration, Collector, collect_concurrently};
 use greyward_security_domain::{CURRENT_EVALUATOR_VERSION, PostureSnapshot, SNAPSHOT_V1_SCHEMA};
@@ -122,7 +122,8 @@ mod tests {
             greyward_security_domain::PostureState::ReviewNeeded
         );
         assert!(s.checks.iter().all(|check| !matches!(
-            check.check_id.as_str(), "devices.tpm.presence" | "recovery.readiness"
+            check.check_id.as_str(),
+            "devices.tpm.presence" | "recovery.readiness"
         )));
     }
     #[test]
@@ -284,15 +285,13 @@ mod tests {
     }
     #[test]
     fn usbguard_unavailable_remains_visible() {
-        let snapshot = evaluate_facts(&[
-            AdapterFacts::Usb(UsbFacts {
-                availability: UsbGuardAvailability::Unavailable,
-                policy: UsbGuardPolicy::Unknown,
-                connected_devices: 0,
-                authorized_devices: 0,
-                unknown_devices: 0,
-            }),
-        ]);
+        let snapshot = evaluate_facts(&[AdapterFacts::Usb(UsbFacts {
+            availability: UsbGuardAvailability::Unavailable,
+            policy: UsbGuardPolicy::Unknown,
+            connected_devices: 0,
+            authorized_devices: 0,
+            unknown_devices: 0,
+        })]);
         assert_eq!(
             snapshot
                 .checks
@@ -389,5 +388,4 @@ mod tests {
         assert!(projection["metrics"]["review_needed"].as_u64().unwrap() > 0);
         assert_eq!(projection["posture"]["state"], "REVIEW NEEDED");
     }
-
 }

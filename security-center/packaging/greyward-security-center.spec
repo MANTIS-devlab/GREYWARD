@@ -127,6 +127,9 @@ install -Dm0755 greyward-safe-open.so \
 %postun
 /usr/bin/fc-cache -f >/dev/null 2>&1 || :
 %changelog
+* Wed Nov 18 2026 MANTIS SYSTEMS - 0.1.0-141
+- Surface actionable backup, recovery and posture states in Security Center.
+
 * Sat Nov 07 2026 MANTIS SYSTEMS - 0.1.0-139
 - Repair recovery actions and scanning, history, network and TPM navigation states.
 

@@ -108,6 +108,9 @@ fi
 %license %{_licensedir}/%{name}/GREYWARD-Branding-NOTICE
 
 %changelog
+* Wed Nov 18 2026 MANTIS SYSTEMS - 0.1.0-24
+- Brand Anaconda and Plymouth and integrate pre-storage keyboard confirmation.
+
 * Sun Nov 15 2026 MANTIS SYSTEMS - 0.1.0-23
 - Recenter Plymouth sprites when the early-boot display canvas changes.
 

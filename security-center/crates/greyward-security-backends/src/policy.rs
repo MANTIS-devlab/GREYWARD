@@ -73,7 +73,8 @@ pub fn set_accepted_deviation(check_id: &str, accepted: bool) -> Result<Vec<Stri
     Ok(values)
 }
 fn optional_recommendation_ids(checks: &[CheckResult]) -> Vec<String> {
-    checks.iter()
+    checks
+        .iter()
         .filter(|check| check.requiredness == Requiredness::Recommended)
         .map(|check| check.check_id.to_string())
         .collect()
@@ -407,7 +408,8 @@ pub fn evaluate_facts_with_deviations(
         )),
     ));
     let recommendations = optional_recommendation_ids(&checks);
-    let accepted_deviations: Vec<String> = accepted_deviations.iter()
+    let accepted_deviations: Vec<String> = accepted_deviations
+        .iter()
         .filter(|id| recommendations.contains(id))
         .take(MAX_ACCEPTED_DEVIATIONS)
         .cloned()

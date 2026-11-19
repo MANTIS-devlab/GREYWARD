@@ -348,7 +348,6 @@ fn evidence_field<'a>(evidence: &'a str, key: &str) -> Option<&'a str> {
     })
 }
 
-
 #[cfg(test)]
 mod tests {
     use chrono::{Duration, Utc};
@@ -460,5 +459,4 @@ mod tests {
             "evidence.finding.firmwareSecurity.secure"
         );
     }
-
 }

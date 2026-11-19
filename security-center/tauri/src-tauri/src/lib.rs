@@ -5,12 +5,13 @@ use greyward_security_backends::{
     ActivityCategory, ActivityItem, ActivitySeverity, ApplicationPageQuery, CoreCollection,
     FlatpakAvailability, MAX_APPLICATION_READ_BYTES, ProtectedResourcePageQuery, TrustZone,
     change_active_trust_zone, choose_overall_posture, clear_activity, collect_core_collection,
-    collect_core_snapshot, collect_flatpak_facts, collect_network_facts, collect_tpm_capability, collect_usb_facts,
-    collect_portal_facts, decode_application_coverage, decode_application_detail,
-    decode_application_page, decode_protected_resource_lookup, decode_protected_resource_page,
-    evidence_domain_key, evidence_domain_route, evidence_presentation, external_service_manifest,
-    load_activity, load_opensnitch_context_summary, read_actual_state, record_activity,
-    resolve_flatpak_access, set_accepted_deviation, write_safe_export,
+    collect_core_snapshot, collect_flatpak_facts, collect_network_facts, collect_portal_facts,
+    collect_tpm_capability, collect_usb_facts, decode_application_coverage,
+    decode_application_detail, decode_application_page, decode_protected_resource_lookup,
+    decode_protected_resource_page, evidence_domain_key, evidence_domain_route,
+    evidence_presentation, external_service_manifest, load_activity,
+    load_opensnitch_context_summary, read_actual_state, record_activity, resolve_flatpak_access,
+    set_accepted_deviation, write_safe_export,
 };
 use greyward_security_domain::{
     AccessGrant, ApplicationCoverage, ApplicationInventoryPage, ApplicationLookup,
@@ -480,7 +481,11 @@ fn mark_tpm_guide_read() -> Result<(), String> {
     if let Some(directory) = path.parent() {
         std::fs::create_dir_all(directory).map_err(|error| error.to_string())?;
     }
-    match std::fs::OpenOptions::new().write(true).create_new(true).open(&path) {
+    match std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&path)
+    {
         Ok(_) => Ok(()),
         Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists && path.is_file() => Ok(()),
         Err(error) => Err(error.to_string()),
@@ -1262,7 +1267,8 @@ fn get_evidence() -> Result<EvidencePayload, String> {
                 recommendation_key: presentation.recommendation_key.into(),
                 copy_values: presentation.values,
                 accepted_deviation: check.reason_code == "accepted-deviation",
-                can_ignore: check.requiredness == greyward_security_domain::Requiredness::Recommended,
+                can_ignore: check.requiredness
+                    == greyward_security_domain::Requiredness::Recommended,
                 evidence_count: check.evidence.len(),
                 remediation: presentation
                     .remediation

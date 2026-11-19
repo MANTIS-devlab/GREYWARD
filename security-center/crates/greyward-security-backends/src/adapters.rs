@@ -107,7 +107,9 @@ pub fn collect_tpm_capability() -> TpmCapability {
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
             match fs::metadata("/sys/class/tpm/tpm0") {
                 Ok(_) => TpmCapability::Unusable,
-                Err(error) if error.kind() == std::io::ErrorKind::NotFound => TpmCapability::Missing,
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                    TpmCapability::Missing
+                }
                 Err(_) => TpmCapability::Unknown,
             }
         }

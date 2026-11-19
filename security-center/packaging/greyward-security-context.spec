@@ -220,6 +220,9 @@ done
 
 
 %changelog
+* Wed Nov 18 2026 MANTIS SYSTEMS - 0.1.0-143
+- Tighten backup, recovery, DNS and offline-update state handling.
+
 * Sat Nov 07 2026 MANTIS SYSTEMS - 0.1.0-139
 - Persist detection ownership and guard DNS, backup and offline update boundaries.
 
