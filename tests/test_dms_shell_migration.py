@@ -281,7 +281,8 @@ class DmsShellMigrationTests(unittest.TestCase):
 
     def test_verifier_only_migration_is_quiescent_and_updates_linked_receipts(self):
         source = SOURCE.read_text()
-        self.assertIn("parser.add_argument('--refresh-verifier-only'", source)
+        self.assertIn('modes = parser.add_mutually_exclusive_group()', source)
+        self.assertIn("modes.add_argument('--refresh-verifier-only'", source)
         self.assertIn('def migrate_verifier_only(', source)
         self.assertIn('ensure_quiescent(accounts)', source)
         self.assertIn("verifier_source = desktop_source / 'verify.py'", source)

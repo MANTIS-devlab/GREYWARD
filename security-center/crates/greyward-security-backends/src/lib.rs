@@ -342,7 +342,7 @@ mod tests {
             greyward_security_domain::PostureState::ActionRequired
         );
         assert_ne!(check.reason_code, "accepted-deviation");
-        assert!(snapshot.accepted_deviations.is_empty());
+        assert_eq!(snapshot.accepted_deviations, Vec::<String>::new());
         assert!(set_accepted_deviation("system.boot.secure-boot", true).is_err());
         assert!(set_accepted_deviation("system.selinux.mode", true).is_err());
     }
