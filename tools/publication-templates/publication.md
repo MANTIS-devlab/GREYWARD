@@ -1,5 +1,16 @@
 # Public source maintenance
 
+## Sophon 0.5.6 publication — 19 November 2026
+
+The [0.5.6 Sophon ISO](https://github.com/MANTIS-devlab/GREYWARD/blob/main/docs/patch-notes/0.5.6-sophon.md) is the current SourceForge download.
+The uploaded image contains 5,407,571,968 bytes. The local ISO was verified
+against SHA-256 `952c3e3b9bf2b12b1cc15e1c4486dba6db73f9ef306c6f9de419cf2021f02c3f`. A public mirror returned the expected total
+size and matching samples from the beginning and end of the image.
+
+The [frozen build source](https://sourceforge.net/projects/greyward/files/v0.5.6-sophon/GREYWARD-0.5.6-Sophon-source.tar.gz/download)
+comes from the exact build snapshot `cf6c13e17576020166a067224ae3c4ec78aed885`. The release folder
+includes checksums and links to the unchanged Office source RPMs.
+
 ## Sophon 0.5.5 publication — 6 November 2026
 
 The existing [0.5.5 Sophon ISO](https://github.com/MANTIS-devlab/GREYWARD/blob/main/docs/patch-notes/0.5.5-sophon.md) and ten companions

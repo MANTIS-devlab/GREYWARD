@@ -1,7 +1,10 @@
 # GREYWARD repository map
 
-[0.5.5 Sophon notes](patch-notes/0.5.5-sophon.md) own the current download,
-frozen sources, selected package tuple, checksums and acceptance limits.
+[0.5.6 Sophon notes](patch-notes/0.5.6-sophon.md) own the current download,
+frozen sources, selected package versions, checksums and validation results.
+`environment/image/installer-keyboard.py` owns keyboard confirmation ahead
+of storage. `installer-menu.py` owns the boot entries and `installer-contract.py`
+checks the BIOS, UEFI and embedded EFI configurations.
 [Publication](PUBLICATION.md) records the verified upload. Public main can
 contain changes newer than the image's frozen input.
 

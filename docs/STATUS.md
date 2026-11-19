@@ -1,6 +1,16 @@
 # GREYWARD current status
 
-## Sophon 0.5.5 public release — 6 November 2026
+## Sophon 0.5.6 public release — 19 November 2026
+
+The [0.5.6 Sophon installer](patch-notes/0.5.6-sophon.md) is the current
+SourceForge download. It confirms the keyboard layout before LUKS entry and
+preserves it in the installed normal and rescue initramfs. The ISO contains
+DMS 8.2, Center 141, Context 143, Branding 24, Session 46, and Runtime 89
+with Enrollment 94. The four Office packages remain at release 16.
+The release notes distinguish final ISO boot checks from earlier complete
+installation and unlock tests.
+
+## Previous Sophon 0.5.5 release — 6 November 2026
 
 The [0.5.5 Sophon installer](patch-notes/0.5.5-sophon.md), frozen corresponding
 source and four signed Office generation-16 source RPMs are published on
