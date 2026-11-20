@@ -1,13 +1,13 @@
-# Current published installer — 6 November 2026
+# Current published installer — 21 November 2026
 
-The current download is [0.5.5 Sophon](https://sourceforge.net/projects/greyward/files/v0.5.5-sophon/).
-Use its [release notes](../../docs/patch-notes/0.5.5-sophon.md), checksums and
-frozen corresponding-source archive for the exact runtime/build inputs. The
-existing ISO and ten companions have complete readback verification.
-No ISO was rebuilt for upload. Composition and publication remain separate
-from full clean-install, encrypted-root/recovery and hardware acceptance.
+Use the [0.5.7 Sophon download](https://sourceforge.net/projects/greyward/files/v0.5.7-sophon/) and its
+[release notes](../patch-notes/0.5.7-sophon.md) for the exact ISO and frozen
+corresponding source. The installer confirms the keyboard layout before
+disk encryption and embeds the Fedora package closure for offline
+installation. The ISO reached keyboard confirmation on Hyper-V Generation 2
+with Secure Boot enabled.
 
-# 0.5.6 Sophon internal candidate
+# 0.5.6 Sophon installer design
 
 Build from the reviewed Fedora 44 Everything/netinst medium (44-1.7).
 Verify the upstream checksum signature before passing its SHA-256 to the factory.
@@ -61,7 +61,7 @@ The preceding guide below describes the previous public source baseline.
 
 # Previous published installer — 28 October 2026
 
-The current release is **0.5.3 Sophon**. Its exact component tuple, checksums,
+The historical release was **0.5.3 Sophon**. Its exact component tuple, checksums,
 frozen source archive, four Office source RPMs and acceptance limits are in the
 [Sophon notes](../../docs/patch-notes/0.5.3-sophon.md). Use the frozen source
 inputs for this ISO; current main can contain later documentation or source.

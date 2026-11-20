@@ -1,8 +1,16 @@
 # GREYWARD current status
 
-## Sophon 0.5.6 public release — 19 November 2026
+## Sophon 0.5.7 public release — 21 November 2026
 
-The [0.5.6 Sophon installer](patch-notes/0.5.6-sophon.md) is the current
+The [0.5.7 Sophon installer](patch-notes/0.5.7-sophon.md) includes Mail, refreshed network history,
+the new disk-unlock theme and installer compatibility improvements. The exact
+image reached keyboard selection in Hyper-V Generation 2 with Secure Boot
+enabled. Composition checks verified the offline package closure, boot
+configuration, and static driver and firmware inventory.
+
+## Previous Sophon 0.5.6 public release — 19 November 2026
+
+The [0.5.6 Sophon installer](patch-notes/0.5.6-sophon.md) was the preceding
 SourceForge download. It confirms the keyboard layout before LUKS entry and
 preserves it in the installed normal and rescue initramfs. The ISO contains
 DMS 8.2, Center 141, Context 143, Branding 24, Session 46, and Runtime 89

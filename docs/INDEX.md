@@ -1,10 +1,10 @@
 # GREYWARD documentation index
 
-[0.5.6 Sophon](patch-notes/0.5.6-sophon.md) is the current SourceForge
+[0.5.7 Sophon](patch-notes/0.5.7-sophon.md) is the current SourceForge
 installer. Its notes list the ISO, checksums, frozen build sources, package
 versions and installer test results.
 
-[0.5.5 Sophon](patch-notes/0.5.5-sophon.md) records the previous release.
+[0.5.6 Sophon](patch-notes/0.5.6-sophon.md) and [0.5.5 Sophon](patch-notes/0.5.5-sophon.md) record previous releases.
 
 [0.5.4 Sophon](patch-notes/0.5.4-sophon.md) is an earlier SourceForge
 installer. Its notes own downloads, checksums, the frozen corresponding-source

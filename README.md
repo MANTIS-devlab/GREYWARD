@@ -20,13 +20,13 @@
 </p>
 
 <p align="center">
-  <a href="https://sourceforge.net/projects/greyward/files/v0.5.6-sophon/GREYWARD-0.5.6-Sophon-x86_64.iso/download">
-    <img alt="Download GREYWARD 0.5.6 Sophon" src="https://img.shields.io/badge/Download-0.5.6%20Sophon-C9CCD1?style=for-the-badge&labelColor=24262A">
+  <a href="https://sourceforge.net/projects/greyward/files/v0.5.7-sophon/GREYWARD-0.5.7-Sophon-x86_64.iso/download">
+    <img alt="Download GREYWARD 0.5.7 Sophon" src="https://img.shields.io/badge/Download-0.5.7%20Sophon-C9CCD1?style=for-the-badge&labelColor=24262A">
   </a>
 </p>
 
 <p align="center">
-  <sub>Latest public download: 0.5.6 Sophon prerelease. The installer confirms the keyboard layout before disk encryption. See the <a href="docs/patch-notes/0.5.6-sophon.md">release notes</a> for checksums, frozen sources and tested configurations.</sub>
+  <sub>Latest public download: 0.5.7 Sophon prerelease. Includes Mail, updated network history and installer compatibility improvements. See the <a href="docs/patch-notes/0.5.7-sophon.md">release notes</a> for checksums, frozen sources and tested configurations.</sub>
 </p>
 
 <p align="center">

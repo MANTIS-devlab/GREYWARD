@@ -1,8 +1,14 @@
 # Public source maintenance
 
-## Sophon 0.5.6 publication — 19 November 2026
+## Sophon 0.5.7 publication — 21 November 2026
 
-The [0.5.6 Sophon ISO](patch-notes/0.5.6-sophon.md) is the current SourceForge download.
+The [0.5.7 Sophon installer](patch-notes/0.5.7-sophon.md) is available on SourceForge with its
+SHA-256 checksum, static media validation manifest, and frozen corresponding
+source. The ISO SHA-256 is `a5aa5535de5c241bfea22815e098519487ad1ef7d50942d8cba1b616e13f580e`.
+
+## Previous Sophon 0.5.6 publication — 19 November 2026
+
+The [0.5.6 Sophon ISO](patch-notes/0.5.6-sophon.md) was the preceding SourceForge download.
 The uploaded image contains 5,407,571,968 bytes. The local ISO was verified
 against SHA-256 `952c3e3b9bf2b12b1cc15e1c4486dba6db73f9ef306c6f9de419cf2021f02c3f`. A public mirror returned the expected total
 size and matching samples from the beginning and end of the image.
