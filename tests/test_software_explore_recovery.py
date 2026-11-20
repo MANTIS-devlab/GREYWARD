@@ -31,6 +31,9 @@ class StartupTests(unittest.TestCase):
         self.env = {
             **os.environ, "HOME": str(self.root / "home"),
             "XDG_CACHE_HOME": str(self.root / "cache with spaces"),
+            # Startup fixtures exercise the launch contract without a live
+            # session bus or a background retry shared with the CI runner.
+            "XDG_RUNTIME_DIR": "",
             "PATH": str(self.bin) + os.pathsep + os.environ["PATH"],
             "TRACE": str(self.trace),
         }

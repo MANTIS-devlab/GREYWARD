@@ -63,7 +63,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install Python system bindings
-        run: sudo apt-get update && sudo apt-get install -y python3-dbus python3-gi python3-grpcio python3-protobuf
+        run: sudo apt-get update && sudo apt-get install -y python3-cryptography python3-dbus python3-gi python3-grpcio python3-protobuf
       - name: Security Context tests
         working-directory: security-center
         env:
@@ -72,8 +72,8 @@ jobs:
       - name: Image source tests
         run: >-
           /usr/bin/python3 -m unittest
-          tests.test_image_baseline tests.test_image_offline tests.test_image_stage_text
-          tests.test_software_explore_recovery
+          tests.test_image_baseline tests.test_image_offline tests.test_image_stage_text tests.test_image_hardware_inputs
+          tests.test_software_explore_recovery tests.test_mailcraft
           tests.test_office_integration tests.test_office_upstream tests.test_office_channel tests.test_office_automation
           tests.test_firstboot_login_boundary tests.test_installed_rpm_import
           tests.test_component_cache tests.test_file_icon_family
