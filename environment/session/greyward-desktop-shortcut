@@ -1,5 +1,5 @@
 #!/usr/bin/python3 -I
-"""Create user-owned shortcuts from verified, installed desktop entries only."""
+"""Copy installed desktop entries without changing how the desktop trusts them."""
 import argparse
 import configparser
 import json
@@ -8,30 +8,34 @@ from pathlib import Path
 import re
 import stat
 
-ROOTS = (Path('/usr/share/applications'), Path('/usr/local/share/applications'),
+ROOTS = (Path('/usr/local/share/applications'), Path('/usr/share/applications'),
          Path('/var/lib/flatpak/exports/share/applications'))
 LIMIT = 262144
 
 
-def installed_launcher(identifier, roots=ROOTS):
+def launcher_name(identifier):
     if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._-]{0,254}', identifier):
         raise ValueError('No verified installed launcher matches this application.')
-    name = identifier if identifier.endswith('.desktop') else identifier + '.desktop'
-    for root in roots:
-        candidate = root / name
+    return identifier if identifier.endswith('.desktop') else identifier + '.desktop'
+
+
+def read_launcher(name, candidates):
+    for directory, owner, boundary in candidates:
+        candidate = directory / name
         if not candidate.exists():
             continue
         resolved = candidate.resolve(strict=True)
-        # Root-controlled export symlinks are supported. User-writable launchers
-        # never gain trust by supplying an application ID or copying a filename.
-        for parent in (resolved.parent, *resolved.parents):
+        if boundary is not None and not resolved.is_relative_to(boundary):
+            raise ValueError('The launcher is outside its application directory.')
+        # Support Flatpak export symlinks while rejecting shared writable paths.
+        for parent in resolved.parents:
             info = parent.stat()
-            if info.st_uid != 0 or info.st_mode & 0o022:
+            if info.st_uid not in (0, owner) or info.st_mode & 0o022:
                 raise ValueError('The launcher location is not trusted.')
-        descriptor = os.open(resolved, os.O_RDONLY | getattr(os, 'O_NOFOLLOW', 0))
+        descriptor = os.open(resolved, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
         try:
             info = os.fstat(descriptor)
-            if (not stat.S_ISREG(info.st_mode) or info.st_uid != 0 or
+            if (not stat.S_ISREG(info.st_mode) or info.st_uid != owner or
                     info.st_mode & 0o022 or info.st_size > LIMIT):
                 raise ValueError('The installed launcher is not trusted.')
             content = os.read(descriptor, LIMIT + 1)
@@ -44,8 +48,31 @@ def installed_launcher(identifier, roots=ROOTS):
         if (entry.get('Type') != 'Application' or not entry.get('Exec') or
                 entry.get('Hidden', 'false').lower() == 'true'):
             raise ValueError('This entry cannot launch an application.')
-        return name, entry.get('Name', identifier), content
+        return name, entry.get('Name', name.removesuffix('.desktop')), content
     raise ValueError('No verified installed launcher matches this application.')
+
+
+def installed_launcher(identifier, roots=ROOTS):
+    # Defaults use only system-owned launchers. User entries use a separate path.
+    return read_launcher(launcher_name(identifier), [(root, 0, None) for root in roots])
+
+
+def shortcut_launcher(identifier):
+    import pwd
+    uid = os.getuid()
+    home = Path(pwd.getpwuid(uid).pw_dir)
+    data = Path(os.environ.get('XDG_DATA_HOME') or home / '.local/share')
+    user_entries = []
+    if data.is_absolute():
+        data = data.resolve()
+        user_entries.append((data / 'applications', uid, data / 'applications'))
+    flatpak = (home / '.local/share/flatpak').resolve()
+    return read_launcher(launcher_name(identifier), [
+        *user_entries,
+        *((root, 0, None) for root in ROOTS[:-1]),
+        (flatpak / 'exports/share/applications', uid, flatpak),
+        (ROOTS[-1], 0, None),
+    ])
 
 
 def desktop_directory():
@@ -80,7 +107,7 @@ def create_shortcut(name, content, desktop):
                 # Reuse an unchanged user-owned shortcut. Never follow or
                 # overwrite an existing symlink or a different file.
                 try:
-                    old = os.open(candidate, os.O_RDONLY | getattr(os, 'O_NOFOLLOW', 0),
+                    old = os.open(candidate, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK,
                                   dir_fd=directory)
                     try:
                         existing = os.fstat(old)
@@ -114,7 +141,7 @@ def main():
     try:
         if os.getuid() == 0:
             raise ValueError('Desktop shortcuts must be created by the desktop user.')
-        name, display, content = installed_launcher(args.identifier)
+        name, display, content = shortcut_launcher(args.identifier)
         result = {'available': True, 'name': display}
         if args.operation == 'create':
             destination, created = create_shortcut(name, content, desktop_directory())

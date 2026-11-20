@@ -36,7 +36,7 @@
       const actionKey = `history.action.${event.action}`;
       const title = event.event_type === "SENSITIVE_ACCESS_BLOCKED" && !authoritativeBlock ? copy("guard.event.sensitiveUnconfirmed")
         : authoritativeBlock ? copy(actionKey) : local?.title || (copy(titleKey) !== titleKey ? copy(titleKey) : copy(`history.category.${domain}`));
-      const outcome = authoritativeBlock ? "blocked" : ({SUCCESS:"completed", COMPLETED:"completed", FAILURE:"failed", FAILED:"failed", STARTED:"started", CANCELLED:"cancelled"}[event.outcome] || "unknown");
+      const outcome = authoritativeBlock ? "blocked" : ({SUCCESS:"completed", COMPLETED:"completed", FAILURE:"failed", FAILED:"failed", PARTIAL:"partial", STARTED:"started", CANCELLED:"cancelled"}[event.outcome] || "unknown");
       const reason = authoritativeBlock ? copy("history.reason.denied")
         : event.source === "root-broker-operation-readback" && details.verified_readback === true && event.outcome === "COMPLETED" ? copy("history.reason.policyVerified")
         : local ? (Array.isArray(local.detail_parts) ? local.detail_parts.filter(v => typeof v === "string").slice(0, 2).join(" ") : copy("history.reason.local"))

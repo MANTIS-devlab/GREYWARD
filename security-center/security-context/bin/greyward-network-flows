@@ -1,0 +1,6 @@
+import sys
+
+sys.path.insert(0, "/usr/lib/greyward-security-context")
+from greyward_security_context.network_flows import main
+
+main()

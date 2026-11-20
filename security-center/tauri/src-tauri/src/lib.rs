@@ -1163,12 +1163,28 @@ fn verify_backup() -> Result<Value, String> {
 }
 
 #[tauri::command(async)]
-fn list_backup_files(snapshot: Option<String>) -> Result<Value, String> {
-    let args = if let Some(snapshot) = snapshot {
-        vec!["--snapshot".into(), snapshot]
-    } else {
-        Vec::new()
-    };
+fn list_backup_files(
+    snapshot: Option<String>,
+    search: Option<String>,
+    folder: Option<String>,
+    offset: Option<u32>,
+) -> Result<Value, String> {
+    let mut args = Vec::new();
+    for (flag, value, limit) in [
+        ("--snapshot", snapshot, 64),
+        ("--search", search, 640),
+        ("--folder", folder, 4096),
+    ] {
+        if let Some(value) = value {
+            if value.len() > limit {
+                return Err("The backup browser query is too long.".into());
+            }
+            args.push(format!("{flag}={value}"));
+        }
+    }
+    if let Some(offset) = offset {
+        args.push(format!("--offset={offset}"));
+    }
     backup_operation("list-files", &args)
 }
 
@@ -2063,6 +2079,7 @@ fn get_filesecurity() -> Result<serde_json::Value, String> {
         "active_scan": file_security.get("active_scan").cloned().unwrap_or(serde_json::Value::Null),
         "latest_scan": file_security.get("latest_scan").cloned().unwrap_or(serde_json::Value::Null),
         "detections": file_security.get("detections").cloned().unwrap_or(Value::Null),
+        "detection_review_count": file_security.get("detection_review_count").cloned().unwrap_or(Value::Null),
         "detections_state": file_security.get("detections_state").cloned().or_else(|| file_security.get("state").cloned()).unwrap_or_else(|| json!("UNAVAILABLE")),
         "state": file_security.get("state").cloned().unwrap_or_else(|| serde_json::json!("UNAVAILABLE")),
         "activity": file_security.get("activity").cloned().unwrap_or_else(|| serde_json::json!([])),

@@ -219,6 +219,7 @@ for required in \
   "$repo_root/packaging/greyward-enrollment/installer-accounts.py" \
   "$production/packages.txt" "$production/repositories.txt" \
   "$production/external-rpms.txt" \
+  "$production/mailcraft/install.sh" "$branding/source/greyward-mailcraft.svg" \
   "$production/install-dms.sh" "$production/provision.sh" \
   "$production/configure-zsh.sh" "$production/zsh/sources.env" \
   "$production/zsh/zshrc" "$production/zsh/p10k.zsh" \
@@ -485,6 +486,8 @@ for rpm in "${production_rpms[@]}"; do
     echo "Unexpected production dependency RPM name: $rpm_name" >&2
     exit 2
   fi
+  expected_hash=$(awk -F'|' -v name="$rpm_name" '$1 == name {print $3}' "$production/external-rpms.txt")
+  printf '%s  %s\n' "$expected_hash" "$rpm" | sha256sum -c -
 done
 if $require_complete; then
   if ((${#production_rpms[@]} != ${#expected_production_rpms[@]})); then
@@ -512,6 +515,8 @@ cp -a "$production/packages.txt" "$production/repositories.txt" "$production/ins
   "$production/manifest.json" \
   "$production/artifact-policy.json" "$production/security-center-contract.tsv" "$output/"
 cp -a "$release_manifest" "$output/dms-release.json"
+mkdir -p "$output/mailcraft"
+cp -a "$production/mailcraft/"{install.sh,launch.py,refresh.py,io.github.billsecond.mailcraft.desktop,greyward-mailcraft.repo,greyward-mailcraft-refresh.service,greyward-mailcraft-refresh.timer} "$output/mailcraft/"
 cp -a "$production/dms-greeter-ui" "$output/dms-greeter-ui"
 mkdir -p "$output/desktop-entry-overrides"
 cp -a "$production/desktop-entry-overrides/rygel-preferences.desktop" \

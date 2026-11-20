@@ -1,3 +1,4 @@
 # Production RPM inputs that are not available from Fedora or the GREYWARD
 # COPRs. Format: filename|source URL|sha256.
 opensnitch-1.8.0-1.x86_64.rpm|https://github.com/evilsocket/opensnitch/releases/download/v1.8.0/opensnitch-1.8.0-1.x86_64.rpm|e06e9119daf764e56455b61c319e496274c0274bb53bb94a0ff1ab72967fea7d
+mailcraft-0.14.0-linux-x86_64.rpm|https://github.com/UCS-Care-Group/mailcraft/releases/download/v0.14.0/mailcraft-0.14.0-linux-x86_64.rpm|a4d27cf39b1f0b5155523294395010d9ad35c77697c4fccaf1b3fd52b10b7d57

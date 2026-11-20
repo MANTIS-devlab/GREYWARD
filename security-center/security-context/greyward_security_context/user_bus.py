@@ -34,7 +34,8 @@ from greyward_security_context.safe_open import SafeOpenError, launch as launch_
 from greyward_security_context.notification_router import scan_context
 from greyward_security_context.shell_summary import build_shell_summary
 from greyward_security_context.privacy_capsule import PrivacyCapsule
-from greyward_security_context.telemetry import QUERY_SCHEMA, TelemetryError, TelemetryStore, derive_device_identity, event as telemetry_event, import_root_spool, record_event, user_store
+from greyward_security_context.network_flows import match_opensnitch, running_opensnitch_activity
+from greyward_security_context.telemetry import FLOW_SPOOL_PATH, FLOW_STATUS_PATH, INBOUND_SPOOL_PATH, QUERY_SCHEMA, TelemetryError, TelemetryStore, derive_device_identity, event as telemetry_event, import_root_spool, record_event, user_store
 from greyward_security_context.aggregation import build_security_digest
 from greyward_security_context.file_security import FileSecurityManager, _open_readonly_nofollow, _unlink_verified_source, file_activity_items
 from greyward_security_context.network_location import country_resolution_for_destination, _public_address as network_location_public
@@ -321,14 +322,54 @@ def network_activity(since_sequence=0,limit=256):
  except (TypeError,ValueError): limit=256
  events=value.get("activity") if isinstance(value.get("activity"),list) else []
  events=[event for event in events if isinstance(event,dict) and isinstance(event.get("sequence"),int)]
- ordered=events
+ ordered=sorted(events,key=lambda event:event["sequence"])
  oldest=min((event["sequence"] for event in events),default=0)
- reset=since == 0 or bool(oldest and since < oldest - 1)
- selected=ordered[:limit] if reset else [event for event in ordered if event["sequence"] > since][:limit]
+ high_water=int(value.get("activity_next_sequence",0) or 0)
+ gap=bool(since and (since>high_water or (oldest and since<oldest-1)))
+ reset=since == 0 or gap
+ pending=[event for event in ordered if event["sequence"]>since] if not reset else []
+ has_more=len(pending)>limit
+ selected=list(reversed(ordered[-limit:] if reset else pending[:limit]))
+ next_sequence=selected[0]["sequence"] if has_more else high_water
  selected=assess_network([_with_network_location(event) for event in selected],observations=events,context_partial=len(events)>=4096)
  summary=value.get("activity_summary") if isinstance(value.get("activity_summary"),dict) else {"window_seconds":1800,"total":len(events),"allowed":0,"blocked":0,"unknown":0,"buckets":[]}
  opensnitch=value.get("opensnitch") or {}
- return {"schema":"greyward.security.network.activity/v1","state":opensnitch.get("state","UNAVAILABLE"),"detail":opensnitch.get("detail","Application activity is unavailable."),"session_id":value.get("activity_session_id"),"generated_at":value.get("generated_at",stamp(now())),"fresh_until":value.get("fresh_until",stamp(now())),"next_sequence":int(value.get("activity_next_sequence",0) or 0),"reset":reset,"summary":summary,"rule_mutation":(opensnitch.get("capabilities") or {}).get("rule_mutation","UNAVAILABLE"),"events":selected}
+ return {"schema":"greyward.security.network.activity/v1","state":opensnitch.get("state","UNAVAILABLE"),"detail":opensnitch.get("detail","Application activity is unavailable."),"session_id":value.get("activity_session_id"),"generated_at":value.get("generated_at",stamp(now())),"fresh_until":value.get("fresh_until",stamp(now())),"next_sequence":next_sequence,"reset":reset,"gap":gap,"has_more":has_more,"summary":summary,"rule_mutation":(opensnitch.get("capabilities") or {}).get("rule_mutation","UNAVAILABLE"),"events":selected}
+def unified_network_activity(since_sequence, limit):
+ # Retain the existing stream for installations where the host observer has
+ # never started. Once active, display the same canonical rows as History.
+ try:
+  status=json.loads(FLOW_STATUS_PATH.read_text(encoding="utf-8"))
+ except (OSError, ValueError):
+  return network_activity(since_sequence,limit)
+ try:
+  size=max(1,min(120,int(limit)))
+  store=user_store()
+  start=stamp(now()-dt.timedelta(minutes=30))
+  result=store.query({"category":"NETWORK","from":start,"limit":size},read_only=True)
+  summary=store.network_window_summary(start)
+  live=network_summary()
+  details={item["event_id"]:item for item in live.get("activity",[]) if isinstance(item,dict) and item.get("event_id")}
+  events=[]
+  for value in result["events"]:
+   event=_with_network_location(value)
+   source=details.get((event.get("details") or {}).get("application_event_id") or event["event_id"])
+   if source and source.get("executable"):
+    event["executable"]=source["executable"]
+    event["pid"]=source.get("pid")
+   events.append(event)
+  checked=event_time(status.get("at"))
+  available=checked is not None and 0 <= now().timestamp()-checked <= 20 and status.get("state")=="OPERATING"
+  return {"schema":"greyward.security.network.activity/v1","state":"OPERATING" if available else "DEGRADED",
+          "detail":"Host flow and decision history is available." if available else "Host flow evidence is delayed or incomplete.",
+          "session_id":"unified-network-history","next_sequence":0,"reset":True,"unified_snapshot":True,
+          "gap":bool(status.get("missed")),"has_more":False,"events":assess_network(events),
+          "rule_mutation":((live.get("opensnitch") or {}).get("capabilities") or {}).get("rule_mutation","UNAVAILABLE"),
+          "summary":summary}
+ except (OSError,ValueError,TypeError,sqlite3.Error,TelemetryError):
+  return network_activity(since_sequence,limit)
+
+
 def telemetry_query(payload):
  try:
   filters=json.loads(payload) if isinstance(payload,str) else payload
@@ -984,6 +1025,21 @@ class SecurityContext(dbus.service.Object):
   # Historical projections never create/migrate storage or derive findings.
   try:
    store=user_store(); imported=import_root_spool(store); migration=store.reconcile_findings()
+   versions=getattr(self,"_network_spool_versions",{})
+   for path in (INBOUND_SPOOL_PATH,FLOW_SPOOL_PATH):
+    try:
+     info=path.stat()
+    except (FileNotFoundError,PermissionError):
+     continue
+    version=(info.st_ino,info.st_size,info.st_mtime_ns)
+    if versions.get(path)==version: continue
+    result=import_root_spool(store,path)
+    if result["state"]=="AVAILABLE" and result["invalid"]==0: versions[path]=version
+   self._network_spool_versions=versions
+   store.reconcile_network_verdicts()
+   if time.monotonic()-getattr(self,"_network_deduplicated_at",0) >= 10:
+    store.reconcile_network_duplicates(running_opensnitch_activity(),match_opensnitch)
+    self._network_deduplicated_at=time.monotonic()
    try: local=local_activity.migrate(store)
    except (TelemetryError,OSError,ValueError): local={"complete":False,"state":"UNAVAILABLE"}
    return {"state":"AVAILABLE","import":imported,"migration":migration,"local_activity":local}
@@ -1067,7 +1123,7 @@ class SecurityContext(dbus.service.Object):
   self._network_policy_async("SetThreatIntelEnabled",payload,reply)
  @dbus.service.method(BUS_NAME,in_signature="tu",out_signature="s")
  def GetNetworkActivity(self,since_sequence,limit):
-  return json.dumps(network_activity(since_sequence,limit),sort_keys=True,separators=(",",":"))
+  return json.dumps(unified_network_activity(since_sequence,limit),sort_keys=True,separators=(",",":"))
  @dbus.service.method(BUS_NAME,in_signature="s",out_signature="s")
  def GetSecurityCenterDigest(self,payload):
   try: options=json.loads(payload) if isinstance(payload,str) and payload else {}
@@ -1178,7 +1234,7 @@ class SecurityContext(dbus.service.Object):
    scans=self.file_security.reconcile_interrupted_scans(32,owner_uid=os.getuid())
    detections=self.file_security.detections(limit=128,owner_uid=os.getuid())
    active=next((item for item in scans if item.get("state") in {"QUEUED","SCANNING","FINALIZING"}),None)
-   return json.dumps(self._merge_file_activity({"schema":"greyward.file-security/v1","state":"UNAVAILABLE","detections_state":"AVAILABLE","active_scan":None,"latest_scan":scans[0] if scans else None,"detections":detections,"clamav":clamav_status()}),sort_keys=True,separators=(",",":"))
+   return json.dumps(self._merge_file_activity({"schema":"greyward.file-security/v1","state":"UNAVAILABLE","detections_state":"AVAILABLE","active_scan":None,"latest_scan":scans[0] if scans else None,"detections":detections,"detection_review_count":self.file_security.store.count_file_detections_for_review(os.getuid()),"clamav":clamav_status()}),sort_keys=True,separators=(",",":"))
   except (TelemetryError,OSError,TypeError,ValueError,json.JSONDecodeError) as error:
    return json.dumps({"schema":"greyward.file-security/v1","state":"UNAVAILABLE","active_scan":None,"latest_scan":None,"detections":[],"detail":str(error)[:240]},separators=(",",":"))
  @dbus.service.method(BUS_NAME,in_signature="s",out_signature="s")

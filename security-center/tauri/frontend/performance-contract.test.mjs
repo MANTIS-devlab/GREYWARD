@@ -55,11 +55,22 @@ test('Live polling is rearmed after entering a page in History and switching bac
  assert.match(binding,/startNetworkActivityPolling\(\)/);
 });
 
-test('retained connection scores are refreshed after late process evidence without a new sequence',async()=>{
- let cursor;
- const c=extract('async function refreshNetworkActivity()','function startNetworkActivityPolling(',{networkActivityState:{mode:'live',requestBusy:false,nextSequence:900,assessmentRefreshAt:1},currentPage:'activity',requestSequence:3,document:{hidden:false},Date:{now:()=>20000},readNetworkActivity:async value=>{cursor=value;return {};},syncNetworkActivityData:()=>{},renderNetworkActivityView:()=>{},actionError:()=>'',copy:x=>x});
- await c.refreshNetworkActivity();assert.equal(cursor,0);assert.equal(c.networkActivityState.assessmentRefreshAt,20000);
- c.Date.now=()=>21000;await c.refreshNetworkActivity();assert.equal(cursor,900);
+test('reassessment keeps retained rows and waits for paginated deltas',async()=>{
+ const cursors=[];
+ const state={mode:'live',requestBusy:false,nextSequence:900,sessionId:'s',assessmentRefreshAt:1,
+  events:[{event_id:'kept',behavioral:{score:1}},{event_id:'older'}]};
+ let backlog=true;
+ const c=extract('async function refreshNetworkActivity()','function startNetworkActivityPolling(',{
+  networkActivityState:state,currentPage:'activity',requestSequence:3,document:{hidden:false},Date:{now:()=>20000},
+  readNetworkActivity:async value=>{cursors.push(value);return value===0
+   ? {session_id:'s',events:[{event_id:'kept',behavioral:{score:35}}]}
+   : {session_id:'s',has_more:backlog};},
+  syncNetworkActivityData:()=>{},renderNetworkActivityView:()=>{},actionError:()=>'',copy:x=>x,
+ });
+ await c.refreshNetworkActivity();assert.deepEqual(cursors,[900]);
+ backlog=false;await c.refreshNetworkActivity();assert.deepEqual(cursors,[900,900,0]);
+ assert.equal(state.assessmentRefreshAt,20000);assert.equal(state.nextSequence,900);
+ assert.equal(state.events[0].behavioral.score,35);assert.equal(state.events.length,2);
 });
 
 test('reassessment snapshots do not count existing paused rows as new activity',()=>{

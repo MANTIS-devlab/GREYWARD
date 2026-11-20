@@ -1,0 +1,32 @@
+[Unit]
+Description=GREYWARD host network flow observer
+After=systemd-tmpfiles-setup.service network-pre.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 -I -B /usr/lib/greyward-security-context/greyward-network-flows
+Restart=on-failure
+RestartSec=4s
+User=root
+Group=root
+UMask=0077
+NoNewPrivileges=yes
+CapabilityBoundingSet=CAP_NET_ADMIN CAP_CHOWN
+ProtectSystem=strict
+ReadWritePaths=/run/greyward-flow-evidence
+ProtectHome=yes
+PrivateDevices=yes
+PrivateTmp=yes
+ProtectClock=yes
+ProtectControlGroups=yes
+ProtectKernelLogs=yes
+ProtectKernelModules=yes
+ProtectKernelTunables=yes
+RestrictAddressFamilies=AF_NETLINK AF_UNIX
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+MemoryMax=128M
+
+[Install]
+WantedBy=multi-user.target

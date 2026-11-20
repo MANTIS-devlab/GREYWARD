@@ -11,6 +11,7 @@ import binascii
 import datetime as dt
 import hashlib
 import hmac
+import ipaddress
 import json
 import os
 import re
@@ -21,6 +22,10 @@ from pathlib import Path
 from typing import Any, Mapping
 
 from greyward_security_context.findings import device_finding, event_finding
+from greyward_security_context.network_merge import (
+    FILTER_STAGES, OPEN, OPEN_STATISTICS, collect_duplicate,
+    merge as merge_network_flow, previous_kernel_verdict, transport_protocol,
+)
 
 try:
     import grp
@@ -39,6 +44,9 @@ DEFAULT_DB_PATH = Path("/var/lib/greyward/telemetry/events.sqlite3")
 DEFAULT_USER_DB_ROOT = Path(os.environ.get("XDG_STATE_HOME", Path.home() / ".local/state")) / "greyward" / "telemetry"
 DEFAULT_USER_DB_PATH = DEFAULT_USER_DB_ROOT / "events.sqlite3"
 DEFAULT_ROOT_SPOOL_PATH = Path("/run/greyward-security-context/telemetry-events.jsonl")
+INBOUND_SPOOL_PATH = DEFAULT_ROOT_SPOOL_PATH.with_name("inbound-network.jsonl")
+FLOW_SPOOL_PATH = Path("/run/greyward-flow-evidence/flows.jsonl")
+FLOW_STATUS_PATH = FLOW_SPOOL_PATH.with_suffix(".status.json")
 
 
 def _wheel_gid():
@@ -158,7 +166,18 @@ def event(
     detail_value = _safe_value(details or {})
     if category.upper() == "NETWORK" and isinstance(detail_value, dict):
         process_key = detail_value.get("process_key")
-        detail_value = {key: detail_value.get(key) for key in ("rule_name", "control", "network_event_type") if key in detail_value}
+        allowed_details = ("rule_name", "control", "network_event_type", "flow_key", "direction")
+        if source in OPEN:
+            connection_key = detail_value.get("connection_key")
+            if isinstance(connection_key, str) and re.fullmatch(r"[0-9a-f]{40}", connection_key):
+                allowed_details += ("connection_key",)
+        if source == "sshd":
+            detail_value["direction"] = "INBOUND"
+        if source in {"conntrack", "firewalld", "sshd"}:
+            allowed_details += ("peer_port", "local_ip", "interface", "origin_ip", "origin_port",
+                                "target_ip", "target_port", "transport_state", "snapshot", "transport_observed_at",
+                                "reply_seen", "tracking_ended", "filter_evidence", "filter_stage")
+        detail_value = {key: detail_value[key] for key in allowed_details if key in detail_value}
         if isinstance(process_key, str) and re.fullmatch(r"[0-9a-f]{40}", process_key):
             detail_value["process_key"] = process_key
     result = {
@@ -237,24 +256,37 @@ def spool_event(value: Mapping[str, Any], path: Path | str | None = None) -> boo
             except (ImportError, OSError):
                 pass
             try:
-                existing = target.read_bytes()[-MAX_ROOT_SPOOL_BYTES:] if target.exists() else b""
-                lines = [line for line in existing.decode("utf-8", "replace").splitlines() if line]
-                lines.append(payload)
-                retained: list[str] = []
-                size = 0
-                for line in reversed(lines[-MAX_ROOT_SPOOL_EVENTS:]):
-                    line_size = len(line.encode("utf-8")) + 1
-                    if retained and size + line_size > MAX_ROOT_SPOOL_BYTES:
-                        break
-                    retained.append(line)
-                    size += line_size
-                temporary = target.with_name(target.name + ".new")
-                temporary.write_text("\n".join(reversed(retained)) + "\n", encoding="utf-8")
-                os.chmod(temporary, 0o640)
-                _chown_wheel(temporary)
-                os.replace(temporary, target)
-                os.chmod(target, 0o640)
-                _chown_wheel(target)
+                encoded = payload.encode("utf-8") + b"\n"
+                if len(encoded) > MAX_ROOT_SPOOL_BYTES:
+                    return False
+                if target.exists() and target.stat().st_size + len(encoded) + 1 <= MAX_ROOT_SPOOL_BYTES:
+                    # Keep the stable lock shared with older writers during an
+                    # RPM update. Most events append without copying the spool.
+                    with target.open("a+b") as stream:
+                        if stream.tell():
+                            stream.seek(-1, os.SEEK_END)
+                            if stream.read(1) != b"\n":
+                                stream.write(b"\n")
+                        stream.write(encoded)
+                else:
+                    old = target.read_bytes() if target.exists() else b""
+                    # Reserve room for subsequent appends. Retain complete
+                    # JSON lines and bound the reader to the newest records.
+                    retained = old[:old.rfind(b"\n") + 1].splitlines(keepends=True)
+                    retained = retained[-(MAX_ROOT_SPOOL_EVENTS - 1):]
+                    budget = MAX_ROOT_SPOOL_BYTES * 3 // 4
+                    selected = [encoded]
+                    size = len(encoded)
+                    for line in reversed(retained):
+                        if size + len(line) > budget:
+                            break
+                        selected.append(line)
+                        size += len(line)
+                    temporary = target.with_name(target.name + ".new")
+                    temporary.write_bytes(b"".join(reversed(selected)))
+                    os.chmod(temporary, 0o640)
+                    _chown_wheel(temporary)
+                    os.replace(temporary, target)
             finally:
                 try:
                     import fcntl
@@ -283,7 +315,10 @@ def import_root_spool(store: "TelemetryStore" | None = None, path: Path | str | 
     imported = 0
     invalid = 0
     values = []
-    for line in raw.decode("utf-8", "replace").splitlines()[-MAX_ROOT_SPOOL_EVENTS:]:
+    # A read concurrent with append may end on an incomplete record. Retry
+    # that record on the next import instead of classifying it as malformed.
+    complete = raw[:raw.rfind(b"\n") + 1]
+    for line in complete.decode("utf-8", "replace").splitlines()[-MAX_ROOT_SPOOL_EVENTS:]:
         try:
             value = json.loads(line)
             if not isinstance(value, Mapping) or value.get("schema") != SCHEMA or not value.get("event_id"):
@@ -472,6 +507,12 @@ class TelemetryStore:
                 occurred_at TEXT NOT NULL,
                 detail TEXT
             );
+            CREATE TABLE IF NOT EXISTS network_flow_aliases (alias_id TEXT PRIMARY KEY, event_id TEXT NOT NULL);
+            CREATE INDEX IF NOT EXISTS network_flow_alias_target ON network_flow_aliases(event_id);
+            CREATE TRIGGER IF NOT EXISTS network_flow_delete_aliases AFTER DELETE ON events
+            BEGIN DELETE FROM network_flow_aliases WHERE event_id = OLD.event_id; END;
+            CREATE INDEX IF NOT EXISTS network_flow_key_time ON events(category,json_extract(details_json,'$.flow_key'),occurred_at);
+            CREATE INDEX IF NOT EXISTS network_open_key_time ON events(category,json_extract(details_json,'$.connection_key'),occurred_at);
             CREATE INDEX IF NOT EXISTS events_time ON events(occurred_at DESC, event_id DESC);
             CREATE INDEX IF NOT EXISTS events_category_time ON events(category, occurred_at DESC, event_id DESC);
             CREATE INDEX IF NOT EXISTS events_category_decision_time ON events(category, decision, occurred_at DESC, event_id DESC);
@@ -532,6 +573,9 @@ class TelemetryStore:
 
     @staticmethod
     def _record_value(connection: sqlite3.Connection, value: Mapping[str, Any]) -> None:
+        value = previous_kernel_verdict(value)
+        if merge_network_flow(connection, value, _safe_value):
+            return
         details = json.dumps(_safe_value(value.get("details", {})), sort_keys=True, separators=(",", ":"))
         cursor = connection.execute(
                     """INSERT OR IGNORE INTO events
@@ -558,6 +602,21 @@ class TelemetryStore:
                         _text(value["retention_class"], 24), _text(value["expires_at"], 64), stamp(),
                     ),
                 )
+        port = value.get("port")
+        if (not cursor.rowcount and value.get("source") == "sshd"
+                and value.get("event_type") == "SSH_SESSION_ACCEPTED"
+                and type(port) is int and 1 <= port <= 65535
+                and (value.get("details") or {}).get("port_evidence") == "sshd-listener"):
+            # Read the old receipt by its journal-derived ID. Enrich only a
+            # missing field, leaving its identity and original evidence intact.
+            connection.execute(
+                """UPDATE events SET port = ?,
+                       destination_json = json_set(destination_json, '$.port', ?),
+                       details_json = json_set(details_json, '$.port_evidence', 'sshd-listener')
+                   WHERE event_id = ? AND source = 'sshd' AND event_type = 'SSH_SESSION_ACCEPTED'
+                       AND port IS NULL""",
+                (port, port, _text(value["event_id"], 96)),
+            )
         # Deduplication and findings commit together; replay cannot reopen a
         # resolved finding simply because history is inspected/imported again.
         finding = event_finding(value) if cursor.rowcount and value["expires_at"] >= stamp() else None
@@ -597,6 +656,93 @@ class TelemetryStore:
             connection.close()
         self.prune()
         return len(prepared)
+
+    def reconcile_network_duplicates(self, activity, match_runtime, *, limit: int = 1024) -> int:
+        """Join persisted rows against precise witnesses from the active provider."""
+        if not activity:
+            return 0
+        since = stamp(dt.datetime.now(dt.timezone.utc) - dt.timedelta(minutes=31))
+        connection = self._connect()
+        try:
+            with connection:
+                candidates = {}
+                for record in activity:
+                    if not isinstance(record, dict) or record.get("source") not in OPEN:
+                        continue
+                    peer = record.get("destination")
+                    if not isinstance(peer, dict):
+                        continue
+                    try:
+                        address = ipaddress.ip_address(peer.get("ip"))
+                    except (ValueError, TypeError):
+                        continue
+                    address = str(getattr(address, "ipv4_mapped", None) or address)
+                    candidates.setdefault((transport_protocol(record.get("protocol")), address, peer.get("port")), []).append(record)
+                duplicates = connection.execute(
+                    """SELECT * FROM events WHERE category='NETWORK' AND occurred_at>=?
+                       AND (source IN ('conntrack','firewalld','greyward-policy','opensnitch','opensnitch-notification'))
+                       AND json_extract(details_json,'$.flow_key') IS NOT NULL
+                       AND COALESCE(json_extract(details_json,'$.snapshot'),0)=0
+                       ORDER BY occurred_at DESC,event_id DESC LIMIT ?""", (since, max(1, min(int(limit),1024))),
+                ).fetchall()
+                matches = {}
+                for row in duplicates:
+                    value = self._row_value(row)
+                    details = value["details"]
+                    pair = candidates.get((transport_protocol(value["protocol"]), details.get("target_ip"), details.get("target_port")), ())
+                    record = match_runtime(value, pair)
+                    if not record or record["event_id"] == row["event_id"]:
+                        continue
+                    if row["source"] in OPEN and record["source"] not in OPEN_STATISTICS:
+                        continue
+                    matches.setdefault(record["event_id"], []).append(row)
+                if not matches:
+                    return 0
+                connection.execute("BEGIN IMMEDIATE")
+                count = 0
+                for kept_id, rows in matches.items():
+                    # Multiple observations from one provider can be distinct
+                    # flows. Do not collapse them on a non-unique assignment.
+                    if len({row["source"] for row in rows}) != len(rows):
+                        continue
+                    for row in rows:
+                        preferred = connection.execute(
+                            "SELECT * FROM events WHERE category='NETWORK' AND event_id=?", (kept_id,)).fetchone()
+                        alternate = connection.execute(
+                            "SELECT * FROM events WHERE category='NETWORK' AND event_id=?", (row["event_id"],)).fetchone()
+                        if not preferred or not alternate or preferred["boot_id"] != alternate["boot_id"]:
+                            continue
+                        count += collect_duplicate(connection, preferred, alternate, self._row_value, _safe_value)
+                return count
+        except sqlite3.Error as error:
+            raise TelemetryError("Network duplicates cannot be reconciled") from error
+        finally:
+            connection.close()
+
+    def reconcile_network_verdicts(self, *, limit: int = 256) -> None:
+        marker = "conntrack-verdict-v1"
+        connection = self._connect()
+        try:
+            with connection:
+                if connection.execute("SELECT 1 FROM metadata WHERE key=?", (marker,)).fetchone():
+                    return
+                converted = 0
+                for direction, stage in FILTER_STAGES.items():
+                    updated = connection.execute(
+                        """UPDATE events SET decision='ALLOWED', outcome='ALLOWED',
+                                 details_json=json_set(details_json,'$.filter_evidence','conntrack-legacy','$.filter_stage',?)
+                           WHERE event_id IN (SELECT event_id FROM events WHERE category='NETWORK'
+                                 AND source='conntrack' AND event_type='TRACKED_FLOW' AND decision='UNKNOWN'
+                                 AND json_type(details_json,'$.snapshot')='false'
+                                 AND json_extract(details_json,'$.transport_observed_at') IS NULL
+                                 AND json_extract(details_json,'$.direction')=? LIMIT ?)""",
+                        (stage, direction, limit),
+                    )
+                    converted += updated.rowcount
+                if converted < limit:
+                    connection.execute("INSERT OR IGNORE INTO metadata(key,value) VALUES(?,?)", (marker, stamp()))
+        finally:
+            connection.close()
 
     def reconcile_findings(self, *, limit: int = 64) -> dict[str, Any]:
         """One-time bounded backfill at reconciliation, never inside a projection.
@@ -778,6 +924,22 @@ class TelemetryStore:
             if value:
                 clauses.append(f"{key} = ?")
                 params.append(_text(value, 160))
+        origin = filters.get("network_origin")
+        if origin:
+            if origin == "application":
+                clauses.append("source NOT IN ('firewalld', 'sshd', 'conntrack')")
+            elif origin in {"firewalld", "sshd", "conntrack"}:
+                clauses.append("source = ?")
+                params.append(origin)
+            else:
+                raise TelemetryError("Invalid network source")
+        direction = filters.get("direction")
+        if direction:
+            if direction not in {"INBOUND", "OUTBOUND", "FORWARDED", "LOCAL", "UNKNOWN"}:
+                raise TelemetryError("Invalid network direction")
+            clauses.append("""COALESCE(json_extract(details_json,'$.direction'),
+                              CASE WHEN source IN ('firewalld','sshd') THEN 'INBOUND' ELSE 'OUTBOUND' END)=?""")
+            params.append(direction)
         if filters.get("session_id"):
             clauses.append("session_id = ?")
             params.append(_text(filters["session_id"], 96))
@@ -798,13 +960,39 @@ class TelemetryStore:
             except (TypeError, ValueError) as error:
                 raise TelemetryError("Invalid telemetry port") from error
         if filters.get("destination"):
-            host = _text(filters["destination"], 240).lower().replace("%", "")
-            clauses.append("lower(destination_json) LIKE ?")
-            params.append("%\"host\":\"" + host + "%")
+            destination = _text(filters["destination"], 240).lower()
+            clauses.append("(instr(lower(json_extract(destination_json,'$.host')), ?) > 0 OR "
+                           "instr(lower(json_extract(destination_json,'$.ip')), ?) > 0)")
+            params.extend([destination, destination])
+        if filters.get("pid") not in (None, ""):
+            try:
+                pid = int(filters["pid"])
+            except (TypeError, ValueError) as error:
+                raise TelemetryError("Invalid process ID") from error
+            if not 1 <= pid <= 2**31 - 1:
+                raise TelemetryError("Invalid process ID")
+            clauses.append("json_extract(details_json,'$.pid') = ?")
+            params.append(pid)
+        for key, expression in (("destination_ip", "json_extract(destination_json,'$.ip')"),
+                                ("destination_host", "lower(json_extract(destination_json,'$.host'))"),
+                                ("process_key", "json_extract(details_json,'$.process_key')"),
+                                ("rule_name", "json_extract(details_json,'$.rule_name')")):
+            if filters.get(key):
+                value = _text(filters[key], 512)
+                clauses.append(f"{expression} = ?")
+                params.append(value.lower() if key == "destination_host" else value)
         if filters.get("search"):
-            search = _text(filters["search"], 160).lower().replace("%", "")
-            clauses.append("(lower(COALESCE(application, '')) LIKE ? OR lower(destination_json) LIKE ?)")
-            params.extend(["%" + search + "%", "%" + search + "%"])
+            search = _text(filters["search"], 160).lower()
+            clauses.append("""instr(lower(COALESCE(application, '') || ' ' ||
+                COALESCE(json_extract(destination_json,'$.host'), '') || ' ' ||
+                COALESCE(json_extract(destination_json,'$.ip'), '') || ' ' ||
+                COALESCE(json_extract(details_json,'$.origin_ip'), '') || ' ' ||
+                COALESCE(json_extract(details_json,'$.target_ip'), '') || ' ' ||
+                COALESCE(json_extract(details_json,'$.executable'), '') || ' ' ||
+                COALESCE(json_extract(details_json,'$.rule_name'), '') || ' ' ||
+                COALESCE(rule_id, '') || ' ' || COALESCE(protocol, '') || ' ' ||
+                source || ' ' || event_id), ?) > 0""")
+            params.append(search)
         for key, operator in (("from", ">="), ("to", "<=")):
             value = filters.get(key)
             if value:
@@ -829,21 +1017,54 @@ class TelemetryStore:
                 "next_cursor": self._make_cursor(rows[-1]) if truncated and rows else None,
                 "source_state": self.status(connection),
             }
-            encoded = json.dumps(result, sort_keys=True, separators=(",", ":"))
-            if len(encoded.encode("utf-8")) > MAX_QUERY_BYTES:
-                result["events"] = events[: max(1, len(events) // 2)]
+            while len(result["events"]) > 1 and len(json.dumps(
+                    result, sort_keys=True, separators=(",", ":")).encode("utf-8")) > MAX_QUERY_BYTES:
+                result["events"] = result["events"][:max(1, len(result["events"]) // 2)]
                 result["truncated"] = True
                 result["size_limited"] = True
+                result["next_cursor"] = self._make_cursor(rows[len(result["events"]) - 1])
             return result
         except sqlite3.Error as error:
             raise TelemetryError("Telemetry history cannot be read") from error
         finally:
             connection.close()
 
+    def network_window_summary(self, since: str) -> dict[str, Any]:
+        connection = self._connect_readonly()
+        try:
+            rows = connection.execute(
+                """SELECT CAST(strftime('%s',occurred_at) AS INTEGER)/60 AS minute,
+                          decision, count(*) AS total FROM events
+                   WHERE category='NETWORK' AND occurred_at>=? GROUP BY minute,decision""", (since,))
+            first = int(dt.datetime.fromisoformat(since.replace("Z", "+00:00")).timestamp()) // 60
+            totals = {"total": 0, "allowed": 0, "blocked": 0, "unknown": 0}
+            buckets = [dict(totals) for _ in range(31)]
+            for row in rows:
+                index = row["minute"] - first if row["minute"] is not None else -1
+                if not 0 <= index < len(buckets):
+                    continue
+                decision = str(row["decision"]).lower()
+                key = decision if decision in {"allowed", "blocked"} else "unknown"
+                bucket = buckets[index]
+                bucket["total"] += row["total"]
+                bucket[key] += row["total"]
+                totals["total"] += row["total"]
+                totals[key] += row["total"]
+            return {**totals, "buckets": buckets}
+        finally:
+            connection.close()
+
     def related(self, event_id: str, limit: int = 128, *, read_only: bool = False) -> dict[str, Any]:
         connection = self._connect_readonly() if read_only else self._connect()
         try:
-            root = connection.execute("SELECT * FROM events WHERE event_id = ?", (_text(event_id, 96),)).fetchone()
+            limit = max(1, min(MAX_QUERY_EVENTS - 1, int(limit)))
+            key = _text(event_id, 96)
+            root = connection.execute("SELECT * FROM events WHERE event_id = ?", (key,)).fetchone()
+            if root is None:
+                root = connection.execute(
+                    "SELECT e.* FROM network_flow_aliases a JOIN events e ON e.event_id=a.event_id WHERE a.alias_id=?",
+                    (key,),
+                ).fetchone()
             if root is None:
                 return {"schema": QUERY_SCHEMA, "generated_at": stamp(), "events": [], "source_state": self.status(connection)}
             related = connection.execute(
@@ -851,11 +1072,30 @@ class TelemetryStore:
                    ON (r.related_event_id=e.event_id AND r.event_id=?)
                    OR (r.event_id=e.event_id AND r.related_event_id=?)
                    ORDER BY e.occurred_at DESC LIMIT ?""",
-                (_text(event_id, 96), _text(event_id, 96), max(1, min(MAX_QUERY_EVENTS, int(limit)))),
+                (root["event_id"], root["event_id"], limit),
             ).fetchall()
-            values = [self._row_value(root)] + [self._row_value(row) for row in related if row["event_id"] != root["event_id"]]
+            seed = self._row_value(root)
+            values = [seed] + [self._row_value(row) for row in related if row["event_id"] != root["event_id"]]
+            related_ids = {item["event_id"] for item in values}
+            correlated = []
+            process_key = seed.get("details", {}).get("process_key")
+            if seed["category"] == "NETWORK" and process_key and len(values) <= limit:
+                rows = connection.execute(
+                    """SELECT * FROM events WHERE category = 'NETWORK'
+                       AND json_extract(details_json, '$.process_key') = ?
+                       ORDER BY occurred_at DESC, event_id DESC LIMIT ?""",
+                    (process_key, limit + len(related_ids)),
+                ).fetchall()
+                correlated = [self._row_value(row) for row in rows if row["event_id"] not in related_ids]
+                correlated = correlated[:limit + 1 - len(values)]
+                values.extend(correlated)
             values = self._attach_relations(connection, values)
-            return {"schema": QUERY_SCHEMA, "generated_at": stamp(), "seed_event_id": event_id, "events": values[:MAX_QUERY_EVENTS], "source_state": self.status(connection)}
+            for other in correlated:
+                seed.setdefault("relations", []).append({
+                    "event_id": other["event_id"], "relation": "SAME_PROCESS_INSTANCE",
+                    "confidence": "EXACT", "basis": "Matching recorded process instance ID",
+                })
+            return {"schema": QUERY_SCHEMA, "generated_at": stamp(), "seed_event_id": root["event_id"], "events": values[:MAX_QUERY_EVENTS], "source_state": self.status(connection)}
         except sqlite3.Error as error:
             raise TelemetryError("Telemetry related history cannot be read") from error
         finally:
@@ -989,8 +1229,18 @@ class TelemetryStore:
                     clauses.append(column + " = ?")
                     params.append(_text(value, 96))
             where = " WHERE " + " AND ".join(clauses) if clauses else ""
-            rows = connection.execute("SELECT d.detection_id FROM file_detections d" + where + " ORDER BY CASE WHEN d.state IN ('RESTORED','DELETED') THEN 1 ELSE 0 END, d.updated_at DESC LIMIT ?", (*params, max(1, min(256, int(limit))))).fetchall()
+            rows = connection.execute("SELECT d.detection_id FROM file_detections d" + where + " ORDER BY CASE WHEN d.state IN ('QUARANTINED','DELETED') THEN 1 ELSE 0 END, d.updated_at DESC, d.detection_id DESC LIMIT ?", (*params, max(1, min(256, int(limit))))).fetchall()
             return [value for row in rows if (value := self.get_file_detection(row["detection_id"]))]
+        finally:
+            connection.close()
+
+    def count_file_detections_for_review(self, owner_uid: int) -> int:
+        connection = self._connect()
+        try:
+            return connection.execute(
+                "SELECT count(*) FROM file_detections WHERE owner_uid = ? AND state NOT IN ('QUARANTINED','DELETED')",
+                (int(owner_uid),),
+            ).fetchone()[0]
         finally:
             connection.close()
 

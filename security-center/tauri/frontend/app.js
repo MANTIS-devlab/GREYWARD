@@ -95,9 +95,19 @@ const privacyState = {feedback: "", exportPath: "", profilePending: null, localA
 const updateListState = {limit: UPDATE_PAGE_SIZE};
 const fileSecurityState = {operationId: null, polling: null, pollDelayMs: 900, requestBusy: false, feedback: ""};
 const deviationState = {feedback: "", acknowledged: new Set()};
-const DEFAULT_NETWORK_ACTIVITY_FILTERS = Object.freeze({search: "", decision: "ALL", protocol: "ALL", port: "", window: "30m"});
+const DEFAULT_NETWORK_ACTIVITY_FILTERS = Object.freeze({
+  search: "", decision: "ALL", protocol: "ALL", port: "", window: "30m",
+  start: "", end: "", pid: "", application: "", destination: "", rule: "",
+  destinationIp: "", destinationHost: "", processKey: "", origin: "", direction: "",
+});
 function networkActivityDefaultFilters() { return {...DEFAULT_NETWORK_ACTIVITY_FILTERS}; }
 const networkActivityState = {
+  historyLoading: false,
+  historyError: "",
+  historyQuery: null,
+  historyPages: [null],
+  liveGap: false,
+  liveBacklog: false,
   sessionId: null,
   nextSequence: 0,
   events: [],
@@ -611,21 +621,24 @@ function networkDestinationIdentity(host) {
   const destination = host && typeof host === "object" ? host : {host};
   return `${networkIdentityMark("destination", destination.host)}${networkCountryFlag(destination)}`;
 }
+function isInboundNetworkEvent(item) {
+  return item?.details?.direction === "INBOUND"
+    || (!item?.details?.direction && (item?.source === "firewalld" || item?.source === "sshd"));
+}
 function networkActivityMeta(item) {
   const destination = networkActivityDestination(item);
   const protocol = String(item?.protocol || "").trim().toUpperCase();
   const meta = [];
+  const direction = item.details?.direction || (isInboundNetworkEvent(item) ? "INBOUND" : "");
+  const directionKey = {INBOUND: "incoming", OUTBOUND: "outgoing", FORWARDED: "forwarded", LOCAL: "local", UNKNOWN: "directionUnknown"}[direction];
+  if (directionKey) meta.push(copy(`network.history.${directionKey}`));
   if (protocol) meta.push(protocol);
   if (destination.port) meta.push(copy("network.activity.portValue", {port: destination.port}));
   return meta.join(" \u00b7 ") || copy("network.activity.detailsUnavailable");
 }
 function networkActivityFiltersAreDefault() {
   const filters = networkActivityState.filters;
-  return filters.search === DEFAULT_NETWORK_ACTIVITY_FILTERS.search
-    && filters.decision === DEFAULT_NETWORK_ACTIVITY_FILTERS.decision
-    && filters.protocol === DEFAULT_NETWORK_ACTIVITY_FILTERS.protocol
-    && filters.port === DEFAULT_NETWORK_ACTIVITY_FILTERS.port
-    && filters.window === DEFAULT_NETWORK_ACTIVITY_FILTERS.window;
+  return Object.entries(DEFAULT_NETWORK_ACTIVITY_FILTERS).every(([key, value]) => filters[key] === value);
 }
 function pruneNetworkExpansions() {
   const ids = new Set(networkActivityState.events.map(event => event.event_id));
@@ -639,22 +652,95 @@ async function readNetworkActivity(sinceSequence=0) {
 }
 function networkActivityProtocols() {
   const protocols = new Set(networkActivitySource().map((item) => String(item.protocol || "").toUpperCase()).filter(Boolean));
+  if (networkActivityState.mode === "history") ["TCP", "UDP", "ICMP", "ICMPV6"].forEach(protocol => protocols.add(protocol));
   if (networkActivityState.filters.protocol !== "ALL") protocols.add(networkActivityState.filters.protocol);
   return [...protocols].sort();
 }
 function networkActivityStatusText() {
-  if (networkActivityState.mode === "history") return copy("network.activity.boundedHistory");
-  const status = networkActivityState.paused ? copy("network.activity.updatesPaused") : copy("network.activity.updating");
-  return networkActivityState.pending ? `${status} \u00b7 ${copy("network.activity.newEvents", {count: networkActivityState.pending})}` : status;
+  if (networkActivityState.mode === "history") {
+    if (networkActivityState.historyLoading) return copy("network.history.searching");
+    if (networkActivityState.historyError) return networkActivityState.historyError;
+    return copy("network.history.loaded", {count: networkActivityState.historyEvents.length});
+  }
+  const status = networkActivityState.paused ? copy("network.activity.updatesPaused")
+    : networkActivityState.state === "UNAVAILABLE" ? copy("network.activity.state.unavailable")
+    : copy("network.activity.updating");
+  return [
+    status,
+    networkActivityState.pending ? copy("network.activity.newEvents", {count: networkActivityState.pending}) : "",
+    networkActivityState.liveBacklog ? copy("network.history.catchUp") : "",
+    networkActivityState.liveGap ? copy("network.history.gap") : "",
+  ].filter(Boolean).join(" · ");
 }
 function networkActivityProtocolOptionsMarkup(protocols) {
   return `<option value="ALL">${esc(copy("network.activity.protocol.all"))}</option>${protocols.map((protocol) => `<option value="${esc(protocol)}"${networkActivityState.filters.protocol === protocol ? " selected" : ""}>${esc(protocol)}</option>`).join("")}`;
 }
+function networkHistoryFiltersMarkup() {
+  if (networkActivityState.mode !== "history") return "";
+  const filters = networkActivityState.filters;
+  const origins = [["", "anySource"], ["application", "applicationSource"], ["firewalld", "firewallSource"], ["sshd", "sshSource"], ["conntrack", "kernelSource"]];
+  const origin = `<label><span>${esc(copy("network.history.source"))}</span><select data-activity-history-field="origin">${origins.map(([key,label]) =>
+    `<option value="${key}"${filters.origin === key ? " selected" : ""}>${esc(copy(`network.history.${label}`))}</option>`).join("")}</select></label>`;
+  const directions = [["", "anyDirection"], ["INBOUND","incoming"], ["OUTBOUND","outgoing"], ["FORWARDED","forwarded"], ["LOCAL","local"], ["UNKNOWN","directionUnknown"]];
+  const direction = `<label><span>${esc(copy("network.history.direction"))}</span><select data-activity-history-field="direction">${directions.map(([key,label]) =>
+    `<option value="${key}"${filters.direction === key ? " selected" : ""}>${esc(copy(`network.history.${label}`))}</option>`).join("")}</select></label>`;
+  const input = (key, label, type = "text", attributes = "") =>
+    `<label><span>${esc(copy(label))}</span><input data-activity-history-field="${key}" type="${type}" value="${esc(filters[key])}" ${attributes}></label>`;
+  return `<details class="network-history-filters" data-activity-advanced${Object.entries(DEFAULT_NETWORK_ACTIVITY_FILTERS).slice(5).some(([key, value]) => filters[key] !== value) ? " open" : ""}><summary>${esc(copy("network.history.filters"))}</summary><div class="network-history-fields">
+    ${input("start", "network.history.from", "datetime-local")}
+    ${input("end", "network.history.to", "datetime-local")}
+    ${origin}
+    ${direction}
+    ${input("application", "network.history.application", "text", 'maxlength="160"')}
+    ${input("destination", "network.history.destination", "text", 'maxlength="240"')}
+    ${input("pid", "network.history.pid", "text", 'inputmode="numeric" maxlength="10"')}
+    ${input("rule", "network.history.rule", "text", 'maxlength="160"')}
+    ${input("destinationIp", "network.history.exactIp", "text", 'maxlength="64"')}
+    ${input("destinationHost", "network.history.exactHost", "text", 'maxlength="240"')}
+    ${input("processKey", "network.history.processKey", "text", 'maxlength="160"')}
+  </div><small>${esc(copy("network.history.retention"))}</small></details>`;
+}
+function networkForensicEvidence(item, destination) {
+  const id = String(item.event_id || "");
+  if (!id) return "";
+  const field = (key, value) => value == null || value === "" ? "" :
+    `<div><dt>${esc(copy(key))}</dt><dd>${esc(value)}</dd></div>`;
+  const pivot = (key, value, label) => !value ? "" :
+    `<button class="text-button" type="button" data-activity-pivot="${key}" data-pivot-value="${esc(value)}" data-pivot-time="${esc(item.occurred_at || "")}">${esc(copy(label))}</button>`;
+  const processKey = item.process_key || item.details?.process_key;
+  const inbound = isInboundNetworkEvent(item);
+  const details = item.details || {};
+  const stages = {INGRESS: "filterIngress", EGRESS: "filterEgress", FORWARD: "filterForward", LOCAL_EGRESS: "filterLocalEgress"};
+  const phase = {SYN_SENT: "tcpHandshake", SYN_SENT2: "tcpHandshake", SYN_RECV: "tcpHandshake",
+    ESTABLISHED: "tcpEstablished", FIN_WAIT: "tcpClosing", CLOSE_WAIT: "tcpClosing",
+    TIME_WAIT: "tcpClosing", LAST_ACK: "tcpClosing", CLOSE: "tcpClosed"}[details.transport_state];
+  const stage = stages[details.filter_stage];
+  const ingressDetails = (inbound ? field("network.history.peerPort", details.peer_port) : "") +
+    field("network.history.localIp", details.local_ip) + field("network.history.interface", details.interface) +
+    field("network.history.flowFrom", details.origin_ip) + field("network.history.flowTo", details.target_ip) +
+    field("network.history.filterStage", stage ? copy(`network.history.${stage}`) : null) +
+    field("network.history.transportState", phase ? copy(`network.history.${phase}`) : details.transport_state) +
+    field("network.history.peerResponse", typeof details.reply_seen === "boolean"
+      ? copy(details.reply_seen ? "network.history.replySeen" : "network.history.replyNotSeen") : null) +
+    field("network.history.trackingEnded", details.tracking_ended ? copy("network.history.trackingEndedCopy") : null) +
+    field("network.history.transportTime", details.transport_observed_at ? localizedTime(details.transport_observed_at, "") : null) +
+    field("network.history.evidenceSources", Array.isArray(details.evidence_sources) ? details.evidence_sources.join(", ") : null);
+  return `<section class="network-forensic"><h4>${esc(copy("network.history.evidence"))}</h4>
+    <dl>${field("network.history.eventId", id)}${field("network.history.recordedTime", item.occurred_at)}
+    ${field("network.history.executable", item.executable)}${field("network.history.pid", item.pid || item.details?.pid)}
+    ${field("network.history.processKey", processKey)}${field("network.history.session", item.session_id)}${ingressDetails}</dl>
+    <div class="inline-actions">
+      ${pivot("application", item.application, "network.history.pivotApp")}
+      ${destination.ip ? pivot("destinationIp", destination.ip, "network.history.pivotEndpoint") : pivot("destinationHost", destination.host, "network.history.pivotDestination")}
+      ${pivot("processKey", processKey, "network.history.pivotProcess")}
+      ${networkActivityState.mode === "history" ? `<button class="text-button" type="button" data-activity-related="${esc(id)}">${esc(copy("network.history.related"))}</button>` : ""}
+    </div><div data-activity-related-results role="status"></div></section>`;
+}
 function networkActivityToolbarMarkup() {
   const filters = networkActivityState.filters;
-  const windowControl = networkActivityState.mode === "history" ? `<label><span class="sr-only">${esc(copy("network.activity.historyRange"))}</span><select data-activity-window><option value="30m"${filters.window === "30m" ? " selected" : ""}>${esc(copy("network.activity.range.thirtyMinutes"))}</option><option value="6h"${filters.window === "6h" ? " selected" : ""}>${esc(copy("network.activity.range.sixHours"))}</option><option value="24h"${filters.window === "24h" ? " selected" : ""}>${esc(copy("network.activity.range.twentyFourHours"))}</option><option value="7d"${filters.window === "7d" ? " selected" : ""}>${esc(copy("network.activity.range.sevenDays"))}</option></select></label>` : "";
+  const windowControl = networkActivityState.mode === "history" ? `<label><span class="sr-only">${esc(copy("network.activity.historyRange"))}</span><select data-activity-window><option value="30m"${filters.window === "30m" ? " selected" : ""}>${esc(copy("network.activity.range.thirtyMinutes"))}</option><option value="6h"${filters.window === "6h" ? " selected" : ""}>${esc(copy("network.activity.range.sixHours"))}</option><option value="24h"${filters.window === "24h" ? " selected" : ""}>${esc(copy("network.activity.range.twentyFourHours"))}</option><option value="7d"${filters.window === "7d" ? " selected" : ""}>${esc(copy("network.activity.range.sevenDays"))}</option><option value="custom"${filters.window === "custom" ? " selected" : ""}>${esc(copy("network.history.custom"))}</option></select></label>` : "";
   const mode = `<div class="activity-mode" role="group" aria-label="${esc(copy("network.activity.mode"))}"><button class="text-button ${networkActivityState.mode === "live" ? "active" : ""}" data-activity-mode="live" aria-pressed="${networkActivityState.mode === "live" ? "true" : "false"}">${esc(copy("network.activity.live"))}</button><button class="text-button ${networkActivityState.mode === "history" ? "active" : ""}" data-activity-mode="history" aria-pressed="${networkActivityState.mode === "history" ? "true" : "false"}">${esc(copy("network.activity.history"))}</button></div>`;
-  return `<div class="network-activity-toolbar" data-activity-toolbar data-activity-mode-state="${esc(networkActivityState.mode)}">${mode}<label class="network-activity-search"><span class="sr-only">${esc(copy("network.activity.search"))}</span><input type="search" data-activity-search placeholder="${esc(copy("network.activity.searchPlaceholder"))}" value="${esc(filters.search)}"></label><label><span class="sr-only">${esc(copy("network.activity.decision"))}</span><select data-activity-decision><option value="ALL">${esc(copy("network.activity.decision.all"))}</option><option value="ALLOWED"${filters.decision === "ALLOWED" ? " selected" : ""}>${esc(copy("network.activity.decision.allowed"))}</option><option value="BLOCKED"${filters.decision === "BLOCKED" ? " selected" : ""}>${esc(copy("network.activity.decision.blocked"))}</option><option value="UNKNOWN"${filters.decision === "UNKNOWN" ? " selected" : ""}>${esc(copy("network.activity.decision.unknown"))}</option></select></label><label><span class="sr-only">${esc(copy("network.activity.protocol"))}</span><select data-activity-protocol>${networkActivityProtocolOptionsMarkup(networkActivityProtocols())}</select></label><label><span class="sr-only">${esc(copy("network.activity.detail.port"))}</span><input inputmode="numeric" data-activity-port placeholder="${esc(copy("network.activity.detail.port"))}" value="${esc(filters.port)}"></label>${windowControl}<button class="text-button" type="button" data-activity-clear${networkActivityFiltersAreDefault() ? " disabled" : ""}>${esc(copy("network.activity.clearFilters"))}</button><span class="network-activity-toolbar-status" data-activity-status role="status" aria-live="polite" aria-atomic="true">${esc(networkActivityStatusText())}</span></div>`;
+  return `<div class="network-activity-toolbar" data-activity-toolbar data-activity-mode-state="${esc(networkActivityState.mode)}">${mode}<label class="network-activity-search"><span class="sr-only">${esc(copy("network.activity.search"))}</span><input type="search" data-activity-search placeholder="${esc(copy("network.activity.searchPlaceholder"))}" value="${esc(filters.search)}"></label><label><span class="sr-only">${esc(copy("network.activity.decision"))}</span><select data-activity-decision><option value="ALL">${esc(copy("network.activity.decision.all"))}</option><option value="ALLOWED"${filters.decision === "ALLOWED" ? " selected" : ""}>${esc(copy("network.activity.decision.allowed"))}</option><option value="BLOCKED"${filters.decision === "BLOCKED" ? " selected" : ""}>${esc(copy("network.activity.decision.blocked"))}</option><option value="UNKNOWN"${filters.decision === "UNKNOWN" ? " selected" : ""}>${esc(copy("network.activity.decision.unknown"))}</option></select></label><label><span class="sr-only">${esc(copy("network.activity.protocol"))}</span><select data-activity-protocol>${networkActivityProtocolOptionsMarkup(networkActivityProtocols())}</select></label><label><span class="sr-only">${esc(copy("network.activity.detail.port"))}</span><input inputmode="numeric" data-activity-port placeholder="${esc(copy("network.activity.detail.port"))}" value="${esc(filters.port)}"></label>${windowControl}<button class="text-button" type="button" data-activity-clear${networkActivityFiltersAreDefault() ? " disabled" : ""}>${esc(copy("network.activity.clearFilters"))}</button><span class="network-activity-toolbar-status" data-activity-status role="status" aria-live="polite" aria-atomic="true">${esc(networkActivityStatusText())}</span>${networkHistoryFiltersMarkup()}${networkActivityState.mode === "history" ? `<small class="network-activity-window-note" style="grid-column:1/-1">${esc(copy("network.history.sourcesCopy"))}</small>` : ""}</div>`;
 }
 function syncNetworkActivityControls() {
   if (currentPage !== "activity") return;
@@ -693,6 +779,10 @@ function syncNetworkActivityControls() {
   }
   if (port && port.value !== filters.port) port.value = filters.port;
   if (windowControl && windowControl.value !== filters.window) windowControl.value = filters.window;
+  toolbar.querySelectorAll("[data-activity-history-field]").forEach(input => {
+    const value = filters[input.dataset.activityHistoryField] || "";
+    if (input.value !== value) input.value = value;
+  });
   toolbar.querySelectorAll("[data-activity-mode]").forEach((button) => {
     const active = button.dataset.activityMode === networkActivityState.mode;
     button.classList.toggle("active", active);
@@ -708,6 +798,9 @@ function networkActivityMatches(item) {
     const seconds=networkActivityState.mode!=="history"?1800:({"30m":1800,"6h":21600,"24h":86400,"7d":604800}[networkActivityState.filters.window]||1800);
     if(Date.parse(item.occurred_at)<Date.now()-seconds*1000)return false;
   }
+  // Persisted History rows already match the server query. Applying a
+  // second textual search would hide fields only present in saved evidence.
+  if (networkActivityState.mode === "history" && !item.observed_attempt) return true;
   const destination = networkActivityDestination(item);
   const search = networkActivityState.filters.search.trim().toLowerCase();
   const haystack = [item.application, item.executable, destination.host, destination.ip, item.protocol, item.rule_name, item.source].join(" ").toLowerCase();
@@ -729,24 +822,47 @@ function networkActivityRowMarkup(item) {
   const expanded = networkActivityState.expanded.has(eventId) || Boolean(behavioral.focus() && item.behavioral?.incident_id===behavioral.focus());
   const destination = networkActivityDestination(item);
   const decision = String(item.decision || "UNKNOWN").toUpperCase();
-  const mutationAvailable = !item.observed_attempt && networkActivityState.mutationAvailable && Boolean(item.executable);
+  const kernelVerdict = item.source === "conntrack" && decision === "ALLOWED";
+  const localEgress = kernelVerdict && item.details?.filter_stage === "LOCAL_EGRESS";
+  const decisionLabel = localEgress ? copy("network.history.localEgressPassed") :
+    item.source === "conntrack" && decision === "UNKNOWN" && item.details?.snapshot
+      ? copy("network.history.tableEntry") : networkActivityDecisionLabel(decision);
+  const decisionInfo = kernelVerdict
+    ? copy(localEgress ? "network.history.localEgressHint" : "network.history.kernelAllowedHint") : "";
+  const inbound = isInboundNetworkEvent(item);
+  const unscored = ["conntrack", "sshd", "firewalld"].includes(item.source);
+  const mutationAvailable = !inbound && !unscored && !item.observed_attempt && networkActivityState.mutationAvailable && Boolean(item.executable);
   const dnsBypass = mutationAvailable && [53, 853].includes(Number(destination.port));
   const actions = mutationAvailable && (destination.host || destination.ip) ? `<div class="network-activity-actions"><button class="text-button" data-network-set data-application="${esc(item.executable)}" data-network-host="${esc(destination.host || "")}" data-network-ip="${esc(destination.ip || "")}" data-network-port="${esc(destination.port || "")}" data-network-protocol="${esc(item.protocol || "")}" data-network-action="allow">${esc(copy("network.protection.alwaysAllow"))} ${icon("arrow")}</button>${dnsBypass ? `<button class="text-button" data-network-set data-network-dns-bypass="true" data-application="${esc(item.executable)}" data-network-port="${esc(destination.port || "")}" data-network-protocol="${esc(item.protocol || "")}" data-network-action="allow">${esc(copy("network.protection.allowDnsBypass"))} ${icon("arrow")}</button>` : ""}<button class="text-button" data-network-set data-application="${esc(item.executable)}" data-network-host="${esc(destination.host || "")}" data-network-ip="${esc(destination.ip || "")}" data-network-port="${esc(destination.port || "")}" data-network-protocol="${esc(item.protocol || "")}" data-network-action="deny">${esc(copy("network.protection.alwaysBlock"))} ${icon("arrow")}</button></div>` : "";
   const occurredAt = localizedTime(item.occurred_at, copy("network.activity.unknownTime"));
   const destinationDetail = `<span class="network-activity-destination-detail">${networkCountryFlag(destination)}<span>${esc(destination.host)}${destination.ip && destination.host !== destination.ip ? ` \u00b7 ${esc(destination.ip)}` : ""}</span></span>`;
-  const details = `<div class="network-activity-details"${expanded ? "" : " hidden"}><div><span>${esc(copy("network.activity.detail.destination"))}</span><strong>${destinationDetail}</strong></div><div><span>${esc(copy("network.activity.detail.protocol"))}</span><strong>${esc(String(item.protocol || copy("network.activity.unknown")).toUpperCase())}</strong></div><div><span>${esc(copy("network.activity.detail.port"))}</span><strong>${esc(destination.port || copy("network.activity.unknown"))}</strong></div><div><span>${esc(copy("network.activity.detail.rule"))}</span><strong>${esc(item.rule_name || copy("network.activity.noMatchedRule"))}</strong></div><div><span>${esc(copy("network.activity.detail.source"))}</span><strong>${esc(item.source || copy("network.activity.unknown"))}</strong></div><div><span>${esc(copy("network.activity.detail.observed"))}</span><strong>${esc(occurredAt)}</strong></div>${item.behavioral ? behavioral.inspection(item.behavioral,item.behavioral_case) : ""}${actions}</div>`;
-  return `<article class="network-activity-row${expanded ? " is-expanded" : ""}" data-activity-event="${esc(eventId)}"><button class="network-activity-row-main" type="button" data-activity-toggle="${esc(eventId)}" aria-expanded="${expanded ? "true" : "false"}"><span class="network-activity-identity network-activity-application">${networkIdentityMark("application", [item.application, item.executable])}<strong>${esc(item.application || copy("network.protection.unknownApplication"))}</strong></span><span class="network-activity-identity network-activity-destination">${networkDestinationIdentity(destination)}<strong>${esc(destination.host)}</strong></span><span class="network-decision ${activityDecisionClass(decision)}">${esc(networkActivityDecisionLabel(decision))}</span>${behavioral.networkBadge(item.behavioral)}<span class="network-activity-meta">${esc(networkActivityMeta(item))}</span><time>${esc(occurredAt)}</time><span class="network-activity-expand" aria-hidden="true">${icon("chevron")}</span></button>${details}</article>`;
+  const details = `<div class="network-activity-details"${expanded ? "" : " hidden"}><div><span>${esc(copy(inbound ? "network.history.peer" : "network.activity.detail.destination"))}</span><strong>${destinationDetail}</strong></div><div><span>${esc(copy("network.activity.detail.protocol"))}</span><strong>${esc(String(item.protocol || copy("network.activity.unknown")).toUpperCase())}</strong></div><div><span>${esc(copy("network.activity.detail.port"))}</span><strong>${esc(destination.port || copy("network.activity.unknown"))}</strong></div><div><span>${esc(copy("network.activity.detail.rule"))}</span><strong>${esc(item.rule_name || item.details?.rule_name || item.rule_id || copy("network.activity.noMatchedRule"))}</strong></div><div><span>${esc(copy("network.activity.detail.source"))}</span><strong>${esc(item.source || copy("network.activity.unknown"))}</strong></div><div><span>${esc(copy("network.activity.detail.observed"))}</span><strong>${esc(occurredAt)}</strong></div>${networkForensicEvidence(item, destination)}${item.behavioral && !unscored ? behavioral.inspection(item.behavioral,item.behavioral_case) : ""}${actions}</div>`;
+  return `<article class="network-activity-row${expanded ? " is-expanded" : ""}" data-activity-event="${esc(eventId)}"><button class="network-activity-row-main" type="button" data-activity-toggle="${esc(eventId)}" aria-expanded="${expanded ? "true" : "false"}"><span class="network-activity-identity network-activity-application">${networkIdentityMark("application", [item.application, item.executable])}<strong>${esc(item.application || copy(item.source === "conntrack" ? "network.history.kernelFlow" : "network.protection.unknownApplication"))}</strong></span><span class="network-activity-identity network-activity-destination">${networkDestinationIdentity(destination)}<strong>${esc(destination.host)}</strong></span><span class="network-decision ${activityDecisionClass(decision)}"${decisionInfo ? ` title="${esc(decisionInfo)}"` : ""}>${esc(decisionLabel)}</span>${unscored ? `<span title="${esc(copy("network.history.inboundUnscored"))}">—</span>` : behavioral.networkBadge(item.behavioral)}<span class="network-activity-meta">${esc(networkActivityMeta(item))}</span><time>${esc(occurredAt)}</time><span class="network-activity-expand" aria-hidden="true">${icon("chevron")}</span></button>${details}</article>`;
 }
 function networkActivityRowsMarkup() {
   const source = networkActivitySource();
   const events = source.filter(networkActivityMatches);
   events.sort((a,b)=>networkSeveritySort?(b.behavioral?.score??-1)-(a.behavioral?.score??-1):Date.parse(b.occurred_at||0)-Date.parse(a.occurred_at||0));
-  if (networkActivityState.mode === "history" && networkActivityState.historyState !== "AVAILABLE" && !events.length) return emptyState(copy("network.activity.historyUnavailable"), copy("network.activity.historyUnavailableCopy"), "activity");
-  if (!events.length) return emptyState(source.length ? copy("network.activity.noMatch") : networkActivityState.mode === "history" ? copy("network.activity.noHistory") : copy("network.activity.noRecent"), source.length ? copy("network.activity.noMatchCopy") : copy("network.activity.noRecentCopy"), "activity");
+  if (networkActivityState.mode === "history" && !events.length && networkActivityState.historyLoading) return `<p class="network-activity-window-note">${esc(copy("network.history.searching"))}</p>`;
+  if (networkActivityState.mode === "history" && networkActivityState.historyState !== "AVAILABLE" && !events.length) return emptyState(copy("network.activity.historyUnavailable"), networkActivityState.historyError || copy("network.activity.historyUnavailableCopy"), "activity");
+  if (!events.length) {
+    const history = networkActivityState.mode === "history";
+    const view = networkActivityState.frozen || networkActivityState;
+    if (!history && !source.length && view.state === "UNAVAILABLE") {
+      return emptyState(copy("network.activity.state.unavailable"), view.detail || copy("network.activity.detail.unavailable"), "activity");
+    }
+    if (source.length || (history && !networkActivityFiltersAreDefault())) {
+      return emptyState(copy("network.activity.noMatch"), copy("network.activity.noMatchCopy"), "activity");
+    }
+    return emptyState(copy(history ? "network.activity.noHistory" : "network.activity.noRecent"), copy("network.activity.noRecentCopy"), "activity");
+  }
   const visible = networkActivityState.mode === "history" ? events : events.slice(0, 120);
   const note = networkActivityState.mode === "live" && events.length > visible.length ? `<p class="network-activity-window-note">${esc(copy("network.activity.newestCount", {shown: visible.length, total: events.length}))}</p>` : "";
-  const more = networkActivityState.mode === "history" && networkActivityState.historyCursor
-    ? `<div class="network-activity-more">${actionButton(copy("network.activity.loadOlder"), copy("network.activity.loadOlderDetail"), "secondary", "data-activity-load-more", "arrow")}</div>`
+  const more = networkActivityState.mode === "history"
+    ? `<div class="network-activity-more">${networkActivityState.historyPages.length > 1
+      ? `<button class="text-button" type="button" data-activity-newer>${esc(copy("network.history.newer"))}</button>` : ""}
+      ${networkActivityState.historyCursor
+        ? actionButton(copy("network.history.older"), copy("network.activity.loadOlderDetail"), "secondary", "data-activity-load-more", "arrow") : ""}</div>`
     : "";
   return visible.map(networkActivityRowMarkup).join("") + note + more;
 }
@@ -758,17 +874,33 @@ function networkActivitySummaryMarkup() {
   const bars = buckets.slice(-30).map((bucket) => `<span style="height:${Math.max(8, Math.round((Number(bucket.total || 0) / peak) * 100))}%" title="${esc(copy("network.activity.observedEvents", {count: bucket.total || 0}))}"></span>`).join("");
   const state = String(view.state || "UNAVAILABLE").toUpperCase();
   const headline = state === "OPERATING" ? copy("network.activity.state.active") : state === "DEGRADED" ? copy("network.activity.state.delayed") : copy("network.activity.state.unavailable");
-  const detail = state === "OPERATING" ? copy("network.activity.detail.operating") : view.detail || copy("network.activity.detail.unavailable");
-  return `<section class="network-activity-summary" data-state="${esc(state)}"><article class="network-activity-health"><div class="eyebrow">${esc(copy("network.activity.observation"))}</div><h2>${esc(headline)}</h2><p>${esc(detail)}</p>${status(headline, state === "OPERATING" ? "positive" : state === "DEGRADED" ? "review" : "unknown")}</article><article class="network-summary-card"><span>${esc(copy("network.activity.observed"))}</span><strong>${esc(summary.total || 0)}</strong><small>${esc(copy("network.activity.lastThirtyMinutes"))}</small></article><article class="network-summary-card is-allowed"><span>${esc(copy("network.activity.decision.allowed"))}</span><strong>${esc(summary.allowed || 0)}</strong><small>${esc(copy("network.activity.observedDecisions"))}</small></article><article class="network-summary-card${Number(summary.blocked) > 0 ? " is-blocked" : ""}"><span>${esc(copy("network.activity.decision.blocked"))}</span><strong>${esc(summary.blocked || 0)}</strong><small>${esc(copy("network.activity.observedDecisions"))}</small></article><article class="network-activity-chart"><div><span>${esc(copy("network.activity.rhythm"))}</span><small>${esc(copy("network.activity.boundedWindow"))}</small></div><div class="network-activity-sparkline" aria-label="${esc(copy("network.activity.chartLabel"))}">${bars || "<span style=\"height:8%\"></span>"}</div></article></section>`;
+  const detail = view.unifiedSnapshot ? copy(state === "OPERATING" ? "network.history.unifiedActive" : "network.history.unifiedLimited") : state === "OPERATING" ? copy("network.activity.detail.operating") : view.detail || copy("network.activity.detail.unavailable");
+  const count = (value) => state === "UNAVAILABLE" ? "—" : (value || 0);
+  return `<section class="network-activity-summary"${networkActivityState.mode === "history" ? " hidden" : ""} data-state="${esc(state)}"><article class="network-activity-health"><div class="eyebrow">${esc(copy("network.activity.observation"))}</div><h2>${esc(headline)}</h2><p>${esc(detail)}</p>${status(headline, state === "OPERATING" ? "positive" : state === "DEGRADED" ? "review" : "unknown")}</article><article class="network-summary-card"><span>${esc(copy("network.activity.observed"))}</span><strong>${esc(count(summary.total))}</strong><small>${esc(copy("network.activity.lastThirtyMinutes"))}</small></article><article class="network-summary-card is-allowed"><span>${esc(copy("network.activity.decision.allowed"))}</span><strong>${esc(count(summary.allowed))}</strong><small>${esc(copy("network.activity.observedDecisions"))}</small></article><article class="network-summary-card${Number(summary.blocked) > 0 ? " is-blocked" : ""}"><span>${esc(copy("network.activity.decision.blocked"))}</span><strong>${esc(count(summary.blocked))}</strong><small>${esc(copy("network.activity.observedDecisions"))}</small></article><article class="network-activity-chart"${state === "UNAVAILABLE" ? " hidden" : ""}><div><span>${esc(copy("network.activity.rhythm"))}</span><small>${esc(copy("network.activity.boundedWindow"))}</small></div><div class="network-activity-sparkline" aria-label="${esc(copy("network.activity.chartLabel"))}">${bars || "<span style=\"height:8%\"></span>"}</div></article></section>`;
+}
+function networkSeveritySortLabel() {
+  return `${copy("network.activity.legend.risk")} ${networkSeveritySort ? "↓" : "↕"}`;
 }
 function networkActivityLegendMarkup() {
-  return `<div class="network-activity-legend" aria-label="${esc(copy("network.activity.legend"))}"><span>Application</span><span>Destination</span><span>Decision</span><button class="network-intelligence-sort" data-network-severity-sort aria-pressed="${networkSeveritySort}" title="Sort by risk; expand a row for reasons">Risk /6 ${networkSeveritySort?'↓':'↕'}</button><span>Connection</span><span>Time</span><span></span></div>`;
+  return `<div class="network-activity-legend" aria-label="${esc(copy("network.activity.legend"))}">
+  <span>${esc(copy("network.activity.legend.application"))}</span><span>${esc(copy("network.activity.legend.destination"))}</span>
+  <span>${esc(copy("network.activity.legend.decision"))}</span><button class="network-intelligence-sort" type="button" data-network-severity-sort aria-pressed="${networkSeveritySort}" title="${esc(copy("network.activity.legend.sortRisk"))}">${esc(networkSeveritySortLabel())}</button>
+  <span>${esc(copy("network.activity.legend.connection"))}</span><span>${esc(copy("network.activity.legend.time"))}</span><span></span></div>`;
 }
 function syncNetworkActivityData(payload, {trackPending = false} = {}) {
   if (!payload || typeof payload !== "object") return;
   const sessionId = payload.session_id || null;
   const hadSession = Boolean(networkActivityState.sessionId);
   const sessionChanged = Boolean(networkActivityState.sessionId && sessionId && networkActivityState.sessionId !== sessionId);
+  if (payload.state === "UNAVAILABLE" && !sessionId) {
+    // Keep the current cursor and rows across a transient read failure.
+    networkActivityState.state = "UNAVAILABLE";
+    networkActivityState.detail = payload.detail || copy("network.activity.detail.unavailable");
+    networkActivityState.mutationAvailable = false;
+    return 0;
+  }
+  networkActivityState.liveBacklog = payload.has_more === true;
+  networkActivityState.liveGap ||= payload.gap === true || sessionChanged;
   const incoming = Array.isArray(payload.events) ? payload.events.filter((event) => event && event.event_id) : [];
   let addedCount = 0;
   if (!networkActivityState.sessionId || sessionChanged || payload.reset) {
@@ -787,7 +919,8 @@ function syncNetworkActivityData(payload, {trackPending = false} = {}) {
     if (trackPending && networkActivityState.paused) networkActivityState.pending += addedCount;
   }
   networkActivityState.sessionId = sessionId;
-  networkActivityState.nextSequence = Number(payload.next_sequence || networkActivityState.nextSequence || 0);
+  networkActivityState.unifiedSnapshot = payload.unified_snapshot === true;
+  networkActivityState.nextSequence = Number(payload.next_sequence ?? networkActivityState.nextSequence ?? 0);
   networkActivityState.summary = payload.summary || networkActivityState.summary;
   networkActivityState.state = payload.state || "UNAVAILABLE";
   networkActivityState.detail = payload.detail || copy("network.activity.detail.unavailable");
@@ -834,11 +967,25 @@ async function refreshNetworkActivity() {
   try {
     // Process evidence can arrive after its connection record. Refresh the
     // bounded current window periodically even when no new sequence exists.
-    const snapshotDue = !networkActivityState.assessmentRefreshAt || Date.now() - networkActivityState.assessmentRefreshAt >= 15000;
-    const result = await readNetworkActivity(snapshotDue ? 0 : networkActivityState.nextSequence);
+    let result = await readNetworkActivity(networkActivityState.nextSequence);
     if (!isCurrent()) return;
-    if (snapshotDue) networkActivityState.assessmentRefreshAt = Date.now();
+    if (networkActivityState.sessionId && result.session_id
+        && networkActivityState.sessionId !== result.session_id && !result.reset) {
+      result = await readNetworkActivity(0);
+      if (!isCurrent()) return;
+    }
     syncNetworkActivityData(result, {trackPending: true});
+    const snapshotDue = !networkActivityState.assessmentRefreshAt || Date.now() - networkActivityState.assessmentRefreshAt >= 15000;
+    if (!result.has_more && result.session_id && snapshotDue) {
+      networkActivityState.assessmentRefreshAt = Date.now();
+      const snapshot = result.reset ? result : await readNetworkActivity(0);
+      if (!isCurrent()) return;
+      if (snapshot.session_id === networkActivityState.sessionId) {
+        const assessed = new Map((snapshot.events || []).map(item => [item.event_id, item.behavioral]));
+        networkActivityState.events = networkActivityState.events.map(item =>
+          assessed.has(item.event_id) ? {...item, behavioral: assessed.get(item.event_id)} : item);
+      }
+    }
     renderNetworkActivityView({renderRows: !networkActivityState.paused});
   } catch (error) {
     if (!isCurrent()) return;
@@ -857,39 +1004,75 @@ function startNetworkActivityPolling() {
   updatePoll = window.setInterval(refreshNetworkActivity, 2000);
   void refreshNetworkActivity();
 }
-async function loadNetworkHistory(expectedSequence = null, append = false) {
-  const querySequence = expectedSequence ?? ++historyQuerySequence;
-  const filters = networkActivityState.filters;
-  const queryFilters = {...filters};
-  const seconds = queryFilters.window === "7d" ? 604800 : queryFilters.window === "24h" ? 86400 : queryFilters.window === "6h" ? 21600 : 1800;
-  const from = new Date(Date.now() - seconds * 1000).toISOString();
-  try {
-    const cursor = append ? networkActivityState.historyCursor : null;
-    if (append && !cursor) return;
-    const filters = {from, limit: NETWORK_HISTORY_PAGE_SIZE, cursor: cursor || undefined, decision: queryFilters.decision === "ALL" ? undefined : queryFilters.decision, protocol: queryFilters.protocol === "ALL" ? undefined : queryFilters.protocol, port: queryFilters.port || undefined, search: queryFilters.search || undefined};
-    const result=await invokeBounded("get_network_history", {filters}, 12000);
-    if (querySequence !== historyQuerySequence || currentPage !== "activity" || networkActivityState.mode !== "history") return;
-    const incoming = Array.isArray(result?.events) ? result.events : [];
-    if (append) {
-      const events = new Map(networkActivityState.historyEvents.map((event) => [event.event_id, event]));
-      incoming.forEach((event) => events.set(event.event_id, event));
-      networkActivityState.historyEvents = [...events.values()];
-    } else {
-      networkActivityState.historyEvents = incoming;
-    }
-    networkActivityState.historyCursor = result?.next_cursor || null;
-    networkActivityState.historyState = result?.source_state?.state || "AVAILABLE";
-  } catch (error) {
-    if (querySequence !== historyQuerySequence || currentPage !== "activity" || networkActivityState.mode !== "history") return;
-    if (append) {
-      networkActivityState.historyCursor = null;
-    } else {
-      networkActivityState.historyEvents = [];
-      networkActivityState.historyCursor = null;
-      networkActivityState.historyState = "UNAVAILABLE";
-    }
+function buildNetworkHistoryQuery(filters, now) {
+  const iso = value => new Date(Math.floor(value / 1000) * 1000).toISOString().replace(".000Z", "Z");
+  const seconds = {"30m": 1800, "6h": 21600, "24h": 86400, "7d": 604800}[filters.window] || 1800;
+  const to = filters.window === "custom" && filters.end ? Date.parse(filters.end) : now;
+  const from = filters.window === "custom" && filters.start ? Date.parse(filters.start) : to - seconds * 1000;
+  if (!Number.isFinite(from) || !Number.isFinite(to) || from > to) throw new Error(copy("network.history.dateError"));
+  if (filters.port && (+filters.port < 1 || +filters.port > 65535)) throw new Error(copy("network.history.portError"));
+  if (filters.pid && (+filters.pid < 1 || +filters.pid > 2147483647)) throw new Error(copy("network.history.pidError"));
+  return {
+    from: iso(from), to: iso(to), limit: NETWORK_HISTORY_PAGE_SIZE,
+    decision: filters.decision === "ALL" ? undefined : filters.decision,
+    protocol: filters.protocol === "ALL" ? undefined : filters.protocol,
+    port: filters.port || undefined, search: filters.search.trim() || undefined,
+    application: filters.application.trim() || undefined,
+    destination: filters.destination.trim() || undefined,
+    pid: filters.pid || undefined, rule_name: filters.rule.trim() || undefined,
+    destination_ip: filters.destinationIp.trim() || undefined,
+    destination_host: filters.destinationHost.trim() || undefined,
+    process_key: filters.processKey.trim() || undefined,
+    network_origin: filters.origin || undefined,
+    direction: filters.direction || undefined,
+  };
+}
+async function loadNetworkHistory(expectedSequence = null, direction = "") {
+  if (direction && (historyQueryTimer || networkActivityState.historyLoading || !networkActivityState.historyQuery)) return;
+  if (expectedSequence !== null && expectedSequence !== historyQuerySequence) return;
+  const querySequence = ++historyQuerySequence;
+  const isCurrent = () => querySequence === historyQuerySequence && currentPage === "activity" && networkActivityState.mode === "history";
+  networkActivityState.historyLoading = true;
+  networkActivityState.historyError = "";
+  if (!direction) {
+    networkActivityState.historyCursor = null;
+    networkActivityState.historyEvents = [];
+    networkActivityState.historyPages = [null];
+    networkActivityState.historyQuery = null;
   }
   renderNetworkActivityView();
+  try {
+    const pages = networkActivityState.historyPages;
+    const cursor = direction === "older" ? networkActivityState.historyCursor :
+      direction === "newer" ? pages.at(-2) : null;
+    if ((direction === "older" && !cursor) || (direction === "newer" && pages.length < 2)) return;
+    const query = direction ? networkActivityState.historyQuery : buildNetworkHistoryQuery(networkActivityState.filters, Date.now());
+    const result = await invokeBounded("get_network_history", {filters: {...query, cursor: cursor || undefined}}, 12000);
+    if (!isCurrent()) return;
+    if (result?.source_state?.state !== "AVAILABLE" || !Array.isArray(result.events)) {
+      throw new Error(copy("network.activity.historyUnavailableCopy"));
+    }
+    if (direction === "older") pages.push(cursor);
+    else if (direction === "newer") pages.pop();
+    networkActivityState.historyQuery = query;
+    networkActivityState.historyEvents = result.events;
+    networkActivityState.historyCursor = result?.next_cursor || null;
+    networkActivityState.historyState = "AVAILABLE";
+    networkActivityState.expanded.clear();
+  } catch (error) {
+    if (isCurrent()) {
+      networkActivityState.historyError = error.message || copy("network.activity.historyUnavailableCopy");
+      if (!direction) networkActivityState.historyState = "UNAVAILABLE";
+    }
+  } finally {
+    if (isCurrent()) {
+      networkActivityState.historyLoading = false;
+      renderNetworkActivityView();
+      if (direction && !networkActivityState.historyError) {
+        app.querySelector("[data-activity-toggle]")?.focus({preventScroll: false});
+      }
+    }
+  }
 }
 function scheduleNetworkHistoryLoad() {
   if (historyQueryTimer) window.clearTimeout(historyQueryTimer);
@@ -899,15 +1082,64 @@ function scheduleNetworkHistoryLoad() {
     loadNetworkHistory(querySequence);
   }, HISTORY_QUERY_DEBOUNCE_MS);
 }
+function pivotNetworkHistory(button) {
+  const key = button.dataset.activityPivot;
+  if (!["application", "destinationIp", "destinationHost", "processKey"].includes(key)) return;
+  const timestamp = Date.parse(button.dataset.pivotTime);
+  if (!Number.isFinite(timestamp)) return;
+  const localTime = value => new Date(value - new Date(value).getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+  networkActivityState.filters = {
+    ...networkActivityDefaultFilters(), window: "custom",
+    start: localTime(timestamp - 300000), end: localTime(timestamp + 360000),
+    [key]: button.dataset.pivotValue,
+  };
+  networkActivityState.mode = "history";
+  behavioral.focus("");
+  cancelNetworkHistoryLoad();
+  startNetworkActivityPolling();
+  void loadNetworkHistory();
+  const advanced = app.querySelector("[data-activity-advanced]");
+  if (advanced) advanced.open = true;
+}
+async function showRelatedNetworkEvidence(button) {
+  const id = button.dataset.activityRelated;
+  const box = button.closest(".network-forensic")?.querySelector("[data-activity-related-results]");
+  if (!box || !id) return;
+  button.disabled = true;
+  box.textContent = copy("network.history.searching");
+  try {
+    const data = await invokeBounded("get_related_telemetry", {eventId: id, options: {limit: 12}}, 12000);
+    if (!box.isConnected) return;
+    if (data?.source_state?.state !== "AVAILABLE") throw new Error(copy("network.activity.historyUnavailableCopy"));
+    const seed = data.events.find(event => event.event_id === id);
+    const related = data.events.filter(event => event.event_id !== id);
+    box.innerHTML = related.length ? `<ul>${related.map(event => {
+      const relation = seed?.relations?.find(value => value.event_id === event.event_id);
+      return `<li><strong>${esc(event.event_type || event.category)} · ${esc(event.event_id)}</strong>
+        <span>${esc(event.occurred_at)} · ${esc(event.source || "")}</span>
+        <span>${esc([relation?.relation, relation?.confidence, relation?.basis].filter(Boolean).join(" · "))}</span></li>`;
+    }).join("")}</ul>` : esc(copy("network.history.noRelated"));
+  } catch (error) {
+    if (box.isConnected) box.textContent = error.message || copy("network.activity.historyUnavailableCopy");
+  } finally {
+    button.disabled = false;
+  }
+}
 function cancelNetworkHistoryLoad() {
   if (historyQueryTimer) window.clearTimeout(historyQueryTimer);
   historyQueryTimer = null;
   historyQuerySequence += 1;
+  networkActivityState.historyLoading = false;
 }
 function bindNetworkActivityContent() {
   behavioral.bind(app);
   const severitySort = app.querySelector('[data-network-severity-sort]');
-  if (severitySort) severitySort.onclick = () => {networkSeveritySort=!networkSeveritySort;behavioral.reset("NETWORK");loadPage("activity",{force:true}); severitySort.textContent='Intelligence '+(networkSeveritySort?'↓':'↕'); severitySort.setAttribute('aria-pressed', String(networkSeveritySort)); renderNetworkActivityView();};
+  if (severitySort) severitySort.onclick = () => {
+    networkSeveritySort = !networkSeveritySort;
+    severitySort.textContent = networkSeveritySortLabel();
+    severitySort.setAttribute("aria-pressed", String(networkSeveritySort));
+    renderNetworkActivityView();
+  };
   const bindOnce = (element, event, handler) => {
     if (!element || element.dataset.activityBound === "true") return;
     element.dataset.activityBound = "true";
@@ -917,14 +1149,29 @@ function bindNetworkActivityContent() {
   bindOnce(app.querySelector("[data-activity-decision]"), "change", (event) => { networkActivityState.filters.decision = event.currentTarget.value; if (networkActivityState.mode === "history") loadNetworkHistory(); else renderNetworkActivityView(); });
   bindOnce(app.querySelector("[data-activity-protocol]"), "change", (event) => { networkActivityState.filters.protocol = event.currentTarget.value; if (networkActivityState.mode === "history") loadNetworkHistory(); else renderNetworkActivityView(); });
   bindOnce(app.querySelector("[data-activity-port]"), "input", (event) => { networkActivityState.filters.port = event.currentTarget.value.replace(/[^0-9]/g, ""); event.currentTarget.value = networkActivityState.filters.port; if (networkActivityState.mode === "history") scheduleNetworkHistoryLoad(); else renderNetworkActivityView(); });
-  bindOnce(app.querySelector("[data-activity-window]"), "change", (event) => { networkActivityState.filters.window = event.currentTarget.value; loadNetworkHistory(); });
+  bindOnce(app.querySelector("[data-activity-window]"), "change", (event) => {
+    networkActivityState.filters.window = event.currentTarget.value;
+    const advanced = app.querySelector("[data-activity-advanced]");
+    if (advanced && event.currentTarget.value === "custom") advanced.open = true;
+    loadNetworkHistory();
+  });
+  app.querySelectorAll("[data-activity-history-field]").forEach(input => bindOnce(input, "change", () => {
+    const key = input.dataset.activityHistoryField;
+    if (key === "pid") input.value = input.value.replace(/[^0-9]/g, "");
+    networkActivityState.filters[key] = input.value;
+    if (["start", "end"].includes(key)) networkActivityState.filters.window = "custom";
+    loadNetworkHistory();
+  }));
   bindOnce(app.querySelector("[data-activity-clear]"), "click", () => { networkActivityState.filters = networkActivityDefaultFilters(); if (networkActivityState.mode === "history") loadNetworkHistory(); else renderNetworkActivityView(); });
   app.querySelectorAll("[data-activity-mode]").forEach((button) => bindOnce(button, "click", async (event) => { networkActivityState.mode = event.currentTarget.dataset.activityMode; startNetworkActivityPolling(); if (networkActivityState.mode === "history") await loadNetworkHistory(); else { cancelNetworkHistoryLoad(); renderNetworkActivityView(); } }));
-  bindOnce(app.querySelector("[data-activity-load-more]"), "click", () => loadNetworkHistory(historyQuerySequence, true));
+  bindOnce(app.querySelector("[data-activity-load-more]"), "click", () => loadNetworkHistory(historyQuerySequence, "older"));
+  bindOnce(app.querySelector("[data-activity-newer]"), "click", () => loadNetworkHistory(historyQuerySequence, "newer"));
+  app.querySelectorAll("[data-activity-pivot]").forEach(button => bindOnce(button, "click", () => pivotNetworkHistory(button)));
+  app.querySelectorAll("[data-activity-related]").forEach(button => bindOnce(button, "click", () => showRelatedNetworkEvidence(button)));
   bindOnce(app.querySelector("[data-activity-pause]"), "click", () => { networkActivityState.paused = !networkActivityState.paused;
     if (networkActivityState.paused) {
-      const {events, summary, state, detail} = networkActivityState;
-      networkActivityState.frozen = {events: events.slice(), summary, state, detail};
+      const {events, summary, state, detail, unifiedSnapshot} = networkActivityState;
+      networkActivityState.frozen = {events: events.slice(), summary, state, detail, unifiedSnapshot};
     } else {
       networkActivityState.frozen = null;
       networkActivityState.pending = 0;
@@ -1261,7 +1508,7 @@ function recoveryMarkup(data) {
   const backupNowDetail = copy("backup.panel.nowDetail");
   const backupVerifyAttrs = backupReady ? "data-backup-verify" : 'disabled aria-disabled="true"';
   const backupRestoreAttrs = backupReady ? "data-backup-restore" : 'disabled aria-disabled="true"';
-  const restorePanel = `<div id="recovery-restore-picker" class="recovery-restore-picker" hidden><div class="eyebrow">${esc(copy("backup.restore.eyebrow"))}</div><label for="recovery-restore-version" hidden id="recovery-restore-version-label">${esc(copy("backup.restore.version"))} <select id="recovery-restore-version"></select></label><p id="recovery-restore-summary" class="section-meta"></p><p id="recovery-restore-count" class="section-meta"></p><div id="recovery-file-list" class="recovery-file-list"></div><div class="inline-actions">${actionButton(copy("backup.restore.selectedAction"), copy("backup.restore.selectedAction.detail"), "primary", "data-recovery-restore-confirm", "arrow")}<button class="text-button" data-recovery-restore-cancel>${esc(copy("ui.cancel"))}</button></div></div>`;
+  const restorePanel = `<div id="recovery-restore-picker" class="recovery-restore-picker" hidden><div class="eyebrow">${esc(copy("backup.restore.eyebrow"))}</div><label for="recovery-restore-version" hidden id="recovery-restore-version-label">${esc(copy("backup.restore.version"))} <select id="recovery-restore-version"></select></label><form id="recovery-restore-search" class="inline-actions"><input id="recovery-restore-query" type="search" maxlength="160" aria-label="${esc(copy("backup.restore.search"))}" placeholder="${esc(copy("backup.restore.search"))}"><button class="text-button" type="submit">${esc(copy("backup.restore.searchAction"))}</button><button class="text-button" type="button" data-restore-up hidden>${esc(copy("backup.restore.up"))}</button></form><p id="recovery-restore-folder" class="section-meta"></p><p id="recovery-restore-summary" class="section-meta"></p><p id="recovery-restore-count" class="section-meta"></p><button class="text-button" type="button" data-restore-clear-selection disabled>${esc(copy("backup.restore.clearSelection"))}</button><div id="recovery-file-list" class="recovery-file-list"></div><div class="inline-actions"><button class="text-button" type="button" data-restore-prev hidden>${esc(copy("backup.restore.previous"))}</button><button class="text-button" type="button" data-restore-next hidden>${esc(copy("backup.restore.next"))}</button>${actionButton(copy("backup.restore.selectedAction"), copy("backup.restore.selectedAction.detail"), "primary", "data-recovery-restore-confirm", "arrow")}<button class="text-button" data-recovery-restore-cancel>${esc(copy("ui.cancel"))}</button></div></div>`;
   const integrityLabel = backupUnavailable ? copy("backup.verify.unavailable") : backup.last_check_status === "VERIFIED" ? copy("backup.verify.lastPassed", {time: recoveryTime(backup.last_check_at)}) : backup.last_check_status === "FAILED" ? copy("backup.verify.failed") : copy("backup.verify.notVerified");
   const backupDestination = backupUnavailable ? copy("backup.verify.unavailable") : backup.destination || copy("backup.panel.notConfigured");
   const backupActionStatus = backup.operation?.problem === "INTERRUPTED" ? backupProblemCopy("INTERRUPTED") : backupUnavailable ? copy("backup.configure.unavailable") : !backup.configured ? copy("backup.status.choose") : backupDestinationUnavailable ? backupProblemCopy(backup.destination_problem) : repositoryMissing ? backupProblemCopy("REPOSITORY_UNAVAILABLE") : backup.last_backup_status === "SUCCESSFUL" ? backup.last_retention_status === "FAILED" ? copy("backup.status.retentionRetry") : copy("backup.status.completed") : ["FAILED", "PARTIAL"].includes(backup.last_backup_status) ? backupProblemCopy(backup.last_backup_problem) : copy("backup.status.notRun");
@@ -1343,25 +1590,31 @@ function filesMarkup(data) {
       : state.endsWith("FAILED") ? ` \u00b7 ${copy("file.action.notCompleted")}` : "";
     return `<article class="quarantine-row file-detection-row"><div><strong>${esc(item.detection_name || copy("file.detection.unnamed"))}</strong><p>${esc(item.original_path || copy("file.detection.pathUnavailable"))}</p><small>${esc(copy("file.detection.detectedAt", {time: localizedTime(item.detected_at)}))} \u00b7 ${esc(item.scanner_version || "ClamAV")}${esc(durableDetail)}</small></div>${status(state, state === "DETECTED" || state === "QUARANTINED" ? "review" : state.endsWith("FAILED") ? "critical" : "muted", {canonical:true})}<div class="file-detection-actions">${action}</div></article>`;
   };
-  const handled = (item) => ["QUARANTINED", "DELETED"].includes(String(item.state || "").toUpperCase()) || (item.state === "DETECTED" && item.source_status === "MISSING");
+  const missing = (item) => item.state === "DETECTED" && item.source_status === "MISSING";
+  const handled = (item) => ["QUARANTINED", "DELETED"].includes(String(item.state || "").toUpperCase()) || missing(item);
   const pendingDetections = detections.filter((item) => !handled(item));
   const resolvedDetections = detections.filter(handled);
+  const reviewCount = Number.isSafeInteger(data.detection_review_count)
+    ? Math.max(data.detection_review_count - detections.filter(missing).length, pendingDetections.length)
+    : pendingDetections.length;
   const detectionRows = !detectionsAvailable
     ? emptyState(copy(loading ? "file.detections.loading" : "file.detections.unavailable"), copy("file.detections.unavailableCopy"), "file")
-    : pendingDetections.length ? pendingDetections.map(renderDetection).join("") : emptyState(copy("file.detections.none"), copy("file.detections.noneCopy"), "file");
+    : reviewCount ? pendingDetections.map(renderDetection).join("") + (reviewCount > pendingDetections.length
+      ? `<p class="section-meta">${esc(copy("file.detections.additional", {count: reviewCount - pendingDetections.length}))}</p>` : "")
+      : emptyState(copy("file.detections.none"), copy("file.detections.noneCopy"), "file");
   const active = data.active_scan || null;
   const latest = data.latest_scan || null;
   const operation = active || latest ? fileSecurityOperationMarkup(active || latest) : emptyState(copy("file.scan.none"), copy("file.scan.noneCopy"), "activity");
   const activity = (data.activity || []).filter((item) => /threat|scan|quarantine|restore|delete|safe open|sanit/i.test(`${item.title || ""} ${item.detail || ""}`));
   const safeOpen = `<div class="safe-open-controls"><input id="safe-open-path" type="text" placeholder="${esc(copy("file.safeOpen.placeholder"))}" aria-label="${esc(copy("file.safeOpen.pathLabel"))}">${actionButton(copy("file.safeOpen.choose"), copy("file.safeOpen.chooseDetail"), "secondary", "data-safe-open-pick", "folder")}${actionButton(copy("file.safeOpen.open"), copy("file.safeOpen.openDetail"), "primary", "data-safe-open", "lock")}</div><div class="workflow-feedback"><div id="safe-open-status" class="action-status" role="status" aria-live="polite">${esc(copy("file.safeOpen.noneSelected"))}</div><div class="inline-actions"><button class="text-button" data-provenance>${esc(copy("file.safeOpen.details"))} ${icon("arrow")}</button><button class="text-button" data-sanitize>${esc(copy("file.safeOpen.sanitize"))} ${icon("arrow")}</button></div><div id="provenance-status" class="action-status" role="status" aria-live="polite"></div></div>`;
-  const protectionState = loading ? copy("file.protection.checking") : pendingDetections.length ? copy("file.protection.review") : clamavState === "INITIALIZING" ? copy("file.protection.initializing") : clamavState === "UPDATING" ? copy("file.protection.updating") : !scanAvailable ? copy("file.protection.unavailable") : copy("file.protection.ready");
-  const protectionCopy = loading ? copy("file.protection.checkingCopy") : pendingDetections.length ? copy("file.protection.reviewCopy") : clamavState === "INITIALIZING" ? copy("file.protection.initializingCopy") : clamavState === "UPDATING" ? copy("file.protection.updatingCopy") : !scanAvailable ? (data.state === "UNAVAILABLE" ? copy("file.protection.unavailableState") : copy("file.protection.updateRequired")) : copy("file.protection.readyCopy");
+  const protectionState = loading ? copy("file.protection.checking") : reviewCount ? copy("file.protection.review") : clamavState === "INITIALIZING" ? copy("file.protection.initializing") : clamavState === "UPDATING" ? copy("file.protection.updating") : !scanAvailable ? copy("file.protection.unavailable") : copy("file.protection.ready");
+  const protectionCopy = loading ? copy("file.protection.checkingCopy") : reviewCount ? copy("file.protection.reviewCopy") : clamavState === "INITIALIZING" ? copy("file.protection.initializingCopy") : clamavState === "UPDATING" ? copy("file.protection.updatingCopy") : !scanAvailable ? (data.state === "UNAVAILABLE" ? copy("file.protection.unavailableState") : copy("file.protection.updateRequired")) : copy("file.protection.readyCopy");
   const scanAttrs = scanAvailable ? "" : 'disabled aria-disabled="true"';
   const unavailableHint = scanAvailable ? "" : `<p class="action-status" role="status">${esc(copy("file.protection.disabledHint"))}</p>`;
   const scanActions = `<div class="file-scan-actions">${actionButton(copy("files.scanFile"), copy("file.scan.fileDetail"), "primary", `${scanAttrs} data-file-scan-file`, "file")}${actionButton(copy("files.scanFolder"), copy("file.scan.folderDetail"), "secondary", `${scanAttrs} data-file-scan-folder`, "folder")}${actionButton(copy("files.scanSystem"), copy("file.scan.systemDetail"), "secondary", `${scanAttrs} data-file-scan-system`, "shield")}</div>`;
   const scanFeedback = `<div id="file-security-action-status" class="action-status" role="status" aria-live="polite">${esc(fileSecurityState.feedback)}</div>${unavailableHint}`;
   const scanSurface = `<section class="plain-section file-scan-surface"><div id="file-security-operation">${operation}</div></section>`;
-  return `${pageHeader(copy("file.eyebrow"), copy("file.title"), copy("file.copy"), actionButton(copy("ui.refresh"), copy("file.refresh.detail"), "secondary", "data-refresh", "refresh"))}${scanActions}${scanFeedback}${active ? scanSurface : ""}<section class="file-security-hero"><div><div class="eyebrow">${esc(copy("file.protection.eyebrow"))}</div><h2>${esc(protectionState)}</h2><p>${esc(protectionCopy)}</p></div><div class="file-security-definitions">${clamav}</div></section><section class="plain-section"><div class="section-heading"><div><div class="eyebrow">${esc(copy("file.detections.eyebrow"))}</div><h2>${esc(copy("file.detections.title"))}</h2></div>${detectionsAvailable ? `<span class="section-meta">${esc(pendingDetections.length)}</span>` : ""}</div><div class="file-detection-list">${detectionRows}</div>${resolvedDetections.length ? technicalDisclosure(copy("design.files.resolved"), resolvedDetections.length, resolvedDetections.map(renderDetection).join("")) : ""}</section>${active ? "" : scanSurface}${technicalDisclosure(copy("file.tools.title"), "", `<div class="workflow-step"><div><div class="eyebrow">${esc(copy("file.tools.eyebrow"))}</div><h2>${esc(copy("file.tools.heading"))}</h2><p>${esc(copy("file.tools.copy"))}</p></div>${safeOpen}</div>`)}${technicalDisclosure(copy("file.activity.title"), activity.length, activity.length ? `<div class="activity-list">${activity.map(activityMarkup).join("")}</div>` : emptyState(copy("file.activity.none"), copy("file.activity.noneCopy"), "activity"))}`;
+  return `${pageHeader(copy("file.eyebrow"), copy("file.title"), copy("file.copy"), actionButton(copy("ui.refresh"), copy("file.refresh.detail"), "secondary", "data-refresh", "refresh"))}${scanActions}${scanFeedback}${active ? scanSurface : ""}<section class="file-security-hero"><div><div class="eyebrow">${esc(copy("file.protection.eyebrow"))}</div><h2>${esc(protectionState)}</h2><p>${esc(protectionCopy)}</p></div><div class="file-security-definitions">${clamav}</div></section><section class="plain-section"><div class="section-heading"><div><div class="eyebrow">${esc(copy("file.detections.eyebrow"))}</div><h2>${esc(copy("file.detections.title"))}</h2></div>${detectionsAvailable ? `<span class="section-meta">${esc(reviewCount)}</span>` : ""}</div><div class="file-detection-list">${detectionRows}</div>${resolvedDetections.length ? technicalDisclosure(copy("design.files.resolved"), resolvedDetections.length, resolvedDetections.map(renderDetection).join("")) : ""}</section>${active ? "" : scanSurface}${technicalDisclosure(copy("file.tools.title"), "", `<div class="workflow-step"><div><div class="eyebrow">${esc(copy("file.tools.eyebrow"))}</div><h2>${esc(copy("file.tools.heading"))}</h2><p>${esc(copy("file.tools.copy"))}</p></div>${safeOpen}</div>`)}${technicalDisclosure(copy("file.activity.title"), activity.length, activity.length ? `<div class="activity-list">${activity.map(activityMarkup).join("")}</div>` : emptyState(copy("file.activity.none"), copy("file.activity.noneCopy"), "activity"))}`;
 }
 
 function privacyHistoryLabel(data) {
@@ -1422,11 +1675,12 @@ function updatePresentation(data) {
   else if (UPDATE_ACTIVE_PHASES.includes(phase)) state = phase;
   else if (phase === "READY_TO_RESTART") state = "READY_TO_RESTART";
   else if (phase === "FAILED" || transaction.error) state = "FAILED";
-  else if (transactionProviderFailure) state = "DEGRADED";
   else if (available.length) state = phase === "RESOLVED" ? "RESOLVED" : "AVAILABLE";
+  else if (data?.snapshot_error || transactionProviderFailure || ["DEGRADED", "UNAVAILABLE"].includes(providerState)) {
+    state = providerState === "UNAVAILABLE" ? "UNAVAILABLE" : "DEGRADED";
+  }
   else if (phase === "COMPLETE") state = "COMPLETE";
   else if (phase === "CANCELLED") state = "CANCELLED";
-  else if (["DEGRADED", "UNAVAILABLE"].includes(providerState)) state = providerState;
   else if (phase === "IDLE") state = "CURRENT";
   const presentation = UPDATE_PHASE_PRESENTATION[state] || UPDATE_PHASE_PRESENTATION.IDLE;
   const action = state === "FAILED" && transaction.restart_required === "REQUIRED"
@@ -1886,7 +2140,10 @@ async function loadPage(page = currentPage, options = {}) {
       }).catch(() => {});
     }
     if (currentPage === "updates" && updatePresentation(data).busy) startUpdatePolling();
-    if (currentPage === "activity") startNetworkActivityPolling();
+    if (currentPage === "activity") {
+      if (networkActivityState.mode === "history" && !networkActivityState.historyQuery) void loadNetworkHistory();
+      else startNetworkActivityPolling();
+    }
   } catch (error) {
     if (request !== requestSequence) return;
     if (refreshInPlace) {
@@ -2028,6 +2285,30 @@ function bindContent() {
   app.querySelector("[data-backup-verify]")?.addEventListener("click", (event) => runRecoveryAction("verify_backup", event.currentTarget, copy("backup.action.verifying"), "#backup-action-status", copy("backup.action.verificationName"), 14760000));
   app.querySelector("[data-backup-restore]")?.addEventListener("click", showBackupFiles);
   app.querySelector("#recovery-restore-version")?.addEventListener("change", (event) => showBackupFiles(event, event.currentTarget.value));
+  app.querySelector("#recovery-restore-search")?.addEventListener("submit", event => {
+    event.preventDefault();
+    const panel = event.currentTarget.closest("#recovery-restore-picker");
+    void browseBackupFiles(event, {search: panel.querySelector("#recovery-restore-query").value, offset: 0});
+  });
+  app.querySelector("[data-restore-up]")?.addEventListener("click", event => {
+    const panel = event.currentTarget.closest("#recovery-restore-picker");
+    const folder = panel.restoreView?.folder || "";
+    const home = panel.restoreView?.home || "";
+    const parent = folder.slice(0, folder.lastIndexOf("/"));
+    void browseBackupFiles(event, {folder: parent === home ? "" : parent, search: "", offset: 0});
+  });
+  app.querySelector("[data-restore-prev]")?.addEventListener("click", event => {
+    const view = event.currentTarget.closest("#recovery-restore-picker").restoreView;
+    if (Number.isSafeInteger(view?.previous)) void browseBackupFiles(event, {offset: view.previous});
+  });
+  app.querySelector("[data-restore-next]")?.addEventListener("click", event => {
+    const view = event.currentTarget.closest("#recovery-restore-picker").restoreView;
+    if (Number.isSafeInteger(view?.next)) void browseBackupFiles(event, {offset: view.next});
+  });
+  app.querySelector("[data-restore-clear-selection]")?.addEventListener("click", event => {
+    event.currentTarget.closest("#recovery-restore-picker").restoreSelection?.clear();
+    syncRestoreSelectionLimit();
+  });
   app.querySelector("[data-recovery-restore-confirm]")?.addEventListener("click", restoreSelectedFiles);
   app.querySelector("[data-recovery-restore-cancel]")?.addEventListener("click", () => resetRestorePicker());
   app.querySelector("[data-safe-open]")?.addEventListener("click", safeOpen);
@@ -2106,25 +2387,39 @@ async function runRecoveryAction(command, button, label, selector, name, timeout
     } finally { recoveryActionInFlight = false; }
   }
 }
-function syncRestoreSelectionLimit() {
+function syncRestoreSelectionLimit(event) {
+  const panel = app.querySelector("#recovery-restore-picker");
+  if (!panel) return;
   const inputs = [...app.querySelectorAll("#recovery-file-list input")];
-  const selected = inputs.filter((input) => input.checked);
-  const limit = Number(app.querySelector("#recovery-restore-picker")?.dataset.selectionLimit || 100);
-  inputs.forEach((input) => { input.disabled = !input.checked && selected.length >= limit; });
+  const selected = panel.restoreSelection ??= new Set();
+  const limit = Number(panel.dataset.selectionLimit || 100);
+  const changed = event?.currentTarget;
+  if (changed?.checked && selected.size < limit) selected.add(changed.value);
+  else if (changed && !changed.checked) selected.delete(changed.value);
+  inputs.forEach((input) => {
+    input.checked = selected.has(input.value);
+    input.disabled = !input.checked && selected.size >= limit;
+  });
   const count = app.querySelector("#recovery-restore-count");
-  if (count) count.textContent = copy("backup.restore.selected", {count: selected.length, limit});
+  if (count) count.textContent = copy("backup.restore.selected", {count: selected.size, limit});
+  const clear = panel.querySelector("[data-restore-clear-selection]");
+  if (clear) clear.disabled = selected.size === 0;
 }
 function resetRestorePicker() {
   const panel = app.querySelector("#recovery-restore-picker");
   const list = app.querySelector("#recovery-file-list");
   const summary = app.querySelector("#recovery-restore-summary");
   const count = app.querySelector("#recovery-restore-count");
-  if (panel) { panel.hidden = true; delete panel.dataset.selectionLimit; delete panel.dataset.snapshot; }
+  if (panel) { panel.hidden = true; delete panel.dataset.selectionLimit; delete panel.dataset.snapshot; delete panel.restoreSelection; delete panel.restoreView; }
   if (list) list.replaceChildren();
   if (summary) summary.textContent = "";
   if (count) count.textContent = "";
 }
-async function showBackupFiles(event, snapshot = null) {
+function browseBackupFiles(event, changes) {
+  const panel = app.querySelector("#recovery-restore-picker");
+  return showBackupFiles(event, panel.dataset.snapshot, {...panel.restoreView, ...changes});
+}
+async function showBackupFiles(event, snapshot = null, query = {}) {
   if (recoveryActionInFlight) return;
   const button = event.currentTarget;
   const panel = app.querySelector("#recovery-restore-picker");
@@ -2136,7 +2431,8 @@ async function showBackupFiles(event, snapshot = null) {
   beginButton(loadButton || button, copy("backup.restore.loading"));
   setStatus("#backup-action-status", copy("backup.restore.reading"));
   try {
-    const result = await invokeBounded("list_backup_files", {snapshot}, 460000);
+    const {search = "", folder = "", offset = 0} = query;
+    const result = await invokeBounded("list_backup_files", {snapshot, search, folder, offset}, 460000);
     if (!panel.isConnected) return;
     if (result?.cancelled) {
       setStatus("#backup-action-status", copy("feedback.cancelled"));
@@ -2156,20 +2452,32 @@ async function showBackupFiles(event, snapshot = null) {
     const list = panel.querySelector("#recovery-file-list");
     version.innerHTML = versions.map((item) => `<option value="${esc(item.id)}">${esc(recoveryTime(item.time))} · ${esc(item.id.slice(0, 8))}</option>`).join("");
     panel.querySelector("#recovery-restore-version-label").hidden = versions.length < 2;
+    if (panel.dataset.snapshot !== result.snapshot) panel.restoreSelection = new Set();
     panel.dataset.snapshot = result.snapshot;
+    panel.restoreView = {search, folder: result.folder || "", home: result.home,
+      offset: result.offset || 0, next: result.next_offset, previous: result.previous_offset};
+    panel.querySelector("#recovery-restore-query").value = search;
+    panel.querySelector("#recovery-restore-folder").textContent = panel.restoreView.folder;
+    panel.querySelector("[data-restore-up]").hidden = !panel.restoreView.folder;
+    panel.querySelector("[data-restore-prev]").hidden = !Number.isSafeInteger(result.previous_offset);
+    panel.querySelector("[data-restore-next]").hidden = !Number.isSafeInteger(result.next_offset);
     list.innerHTML = candidates.map((candidate) => {
       const kind = String(candidate.kind || "UNKNOWN").toUpperCase();
       const kindKey = kind === "DIRECTORY" ? "backup.restore.directory" : kind === "FILE" ? "backup.restore.file" : "backup.restore.unknown";
-      return `<label class="recovery-file-option"><input type="checkbox" value="${esc(candidate.path)}"><span><strong>${esc(candidate.path)}</strong><small>${esc(copy(kindKey))}</small></span></label>`;
+      return `<div class="recovery-file-item"><label class="recovery-file-option"><input type="checkbox" value="${esc(candidate.path)}"><span><strong>${esc(candidate.path)}</strong><small>${esc(copy(kindKey))}</small></span></label>
+        ${kind === "DIRECTORY" ? `<button class="text-button" type="button" data-restore-folder="${esc(candidate.path)}" aria-label="${esc(copy("backup.restore.browseNamed", {path: candidate.path}))}">${esc(copy("backup.restore.browse"))}</button>` : ""}</div>`;
     }).join("");
     panel.dataset.selectionLimit = String(result.selection_limit || 100);
     const visible = Number(result.shown_count ?? candidates.length);
     const total = Number(result.available_count ?? candidates.length);
-    panel.querySelector("#recovery-restore-summary").textContent = copy("backup.restore.available", {visible, total});
+    panel.querySelector("#recovery-restore-summary").textContent = visible
+      ? copy("backup.restore.resultsRange", {first: offset + 1, last: offset + visible, total}) : "";
     list.querySelectorAll("input").forEach((input) => input.addEventListener("change", syncRestoreSelectionLimit));
+    list.querySelectorAll("[data-restore-folder]").forEach(button => button.addEventListener("click", event =>
+      browseBackupFiles(event, {folder: button.dataset.restoreFolder, search: "", offset: 0})));
     panel.hidden = false;
     syncRestoreSelectionLimit();
-    setStatus("#backup-action-status", !visible ? copy("backup.restore.empty") : visible < total ? copy("backup.restore.limitedCandidates", {shown: visible, total}) : copy("backup.restore.choose"));
+    setStatus("#backup-action-status", !visible ? copy("backup.restore.empty") : copy("backup.restore.choose"));
   } catch (error) {
     if (panel.isConnected) setStatus("#backup-action-status", actionError(error, copy("backup.restore.listAction")));
   } finally {
@@ -2184,7 +2492,7 @@ async function restoreSelectedFiles(event) {
   const button = event.currentTarget;
   const panel = app.querySelector("#recovery-restore-picker");
   const snapshot = panel.dataset.snapshot;
-  const paths = [...panel.querySelectorAll("#recovery-file-list input:checked")].map((input) => input.value);
+  const paths = [...(panel.restoreSelection || [])];
   const limit = Number(panel.dataset.selectionLimit || 100);
   if (!snapshot || !paths.length) { setStatus("#backup-action-status", copy("backup.restore.required")); return; }
   if (paths.length > limit) { setStatus("#backup-action-status", copy("backup.restore.limit", {limit})); return; }

@@ -1,0 +1,14 @@
+[Desktop Entry]
+Type=Application
+Name=Mail
+GenericName=Mail Client
+Comment=Read and write mail, keep a calendar, contacts and tasks
+Exec=/usr/libexec/greyward-mailcraft-launch %U
+TryExec=/usr/bin/mailcraft
+Icon=greyward-mailcraft
+Terminal=false
+StartupNotify=true
+StartupWMClass=io.github.billsecond.mailcraft
+Categories=Office;Email;Calendar;ContactManagement;
+Keywords=mail;email;e-mail;inbox;calendar;contacts;tasks;imap;smtp;
+MimeType=message/rfc822;application/mbox;text/calendar;text/vcard;x-scheme-handler/mailto;

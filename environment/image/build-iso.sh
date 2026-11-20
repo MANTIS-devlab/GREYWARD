@@ -331,9 +331,11 @@ else
   sudo -n python3 "$repo_root/environment/image/build-offline.py" --verify-media-repo "$iso_tree"
 fi
 
-awk -v stage="$stage" '
+payload_manifest_sha256=$(sha256sum "$stage/production/payload.sha256" | awk '{print $1}')
+awk -v stage="$stage" -v digest="$payload_manifest_sha256" '
   {
     gsub("__GREYWARD_STAGE__", stage)
+    gsub("__GREYWARD_PAYLOAD_MANIFEST_SHA256__", digest)
     print
   }
 ' "$repo_root/environment/image/installer.ks.tmpl" > "$iso_tree/installer.ks"
@@ -365,6 +367,11 @@ python3 "$repo_root/environment/image/installer-contract.py" \
 xorriso -osirrox on -indev "$publication/image.iso" \
   -extract /greyward/production "$publication/production"
 (cd "$publication/production" && sha256sum --quiet -c payload.sha256)
+xorriso -osirrox on -indev "$publication/image.iso" \
+  -extract /images/pxeboot/initrd.img "$publication/installer-initrd.img"
+python3 "$repo_root/environment/image/verify-hardware-inputs.py" \
+  --initramfs "$publication/installer-initrd.img" \
+  --rpm-dir "$publication/production/offline/rpm" | tee "$publication/hardware-contract.json"
 bash "$stage_validator" "$publication/production"
 python3 "$repo_root/environment/image/verify-software-inputs.py" \
   --repo "$repo_root" --stage "$publication/production"
@@ -406,6 +413,7 @@ json.dump({'schema': 'greyward.iso-provenance/v1', 'iso_sha256': sha(root/'image
            'payload_manifest_sha256': sha(root/'production/payload.sha256'),
            'offline_payload_sha256': sha(root/'production/offline/manifest.json'),
            'installer_contract': json.loads((root/'installer-contract.json').read_text()),
+           'hardware_contract': json.loads((root/'hardware-contract.json').read_text()),
            'installation_requires_network': False,
            'installer_dependency_resolution_tested': True,
            'installed_system_tested': False}, open(root/'manifest.json', 'w'), indent=2)

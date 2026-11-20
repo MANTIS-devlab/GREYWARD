@@ -371,6 +371,23 @@ class ResticBackupTests(unittest.TestCase):
             self.assertEqual(value["files"], [f"{home}/Documents", f"{home}/Documents/report.txt"])
             self.assertEqual([item["kind"] for item in value["candidates"]], ["DIRECTORY", "FILE"])
 
+    def test_backup_search_and_pages_find_objects_beyond_first_limit(self):
+        snapshot = "a" * 64
+        folder = (Path.home() / "Documents").as_posix()
+        manifests = json.dumps([{"id": snapshot, "time": "2026-11-02T12:00:00Z", "paths": [folder]}])
+        listing = "\n".join(json.dumps({"struct_type": "node", "type": "file", "path": f"{folder}/file-{i:03}"})
+                            for i in range(610))
+        with patch.object(restic_backup, "ensure_repository_identity"), patch.object(restic_backup, "restic") as run:
+            run.side_effect = [self._result(manifests), self._result(listing)] * 3
+            first = restic_backup.list_files("secret", snapshot)
+            second = restic_backup.list_files("secret", snapshot, offset=first["next_offset"])
+            match = restic_backup.list_files("secret", snapshot, search="FILE-609", folder=folder)
+            self.assertEqual(len(first["files"]), 500)
+            self.assertEqual(second["files"][0], f"{folder}/file-500")
+            self.assertEqual(second["previous_offset"], 0)
+            self.assertEqual(match["files"], [f"{folder}/file-609"])
+            self.assertEqual(run.call_args.args[0], ["ls", snapshot, "--json", "--recursive", "--", folder])
+
     @unittest.skipUnless(os.name == "posix", "Native restore uses absolute Linux paths")
     def test_missing_repository_does_not_reuse_historical_check_as_availability(self):
         with tempfile.TemporaryDirectory() as root:

@@ -10,6 +10,17 @@ from greyward_security_context.telemetry import TelemetryStore
 
 
 class ScanOwnershipTests(unittest.TestCase):
+    def test_unresolved_detections_precede_large_quarantine_history(self):
+        self.store.upsert_file_detection(
+            {"detection_id": "open", "operation_id": "mine", "state": "DETECTED",
+             "updated_at": "2026-11-01T01:00:00Z"})
+        with self.store._connect() as db:
+            db.execute("UPDATE file_detections SET updated_at = '2026-11-01T01:00:00Z' WHERE detection_id = 'open'")
+            db.execute("UPDATE file_detections SET updated_at = '2026-11-02T01:00:00Z' WHERE detection_id = 'det-mine'")
+        self.assertEqual(self.store.list_file_detections(owner_uid=1000, limit=1)[0]["detection_id"], "open")
+        self.assertEqual(self.store.count_file_detections_for_review(1000), 1)
+        self.assertEqual(self.store.count_file_detections_for_review(1001), 0)
+
     def setUp(self):
         self.directory = tempfile.TemporaryDirectory()
         self.addCleanup(self.directory.cleanup)

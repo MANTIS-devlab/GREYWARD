@@ -3,6 +3,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from greyward_security_context.telemetry import TelemetryError, TelemetryStore, derive_device_identity, event, import_root_spool, spool_event
 
@@ -28,6 +29,48 @@ def make_event(index, *, retention="investigation", occurred=None, details=None)
 
 
 class TelemetryStoreTests(unittest.TestCase):
+    def test_forensic_filters_and_size_limited_pages_keep_every_matching_row(self):
+        with tempfile.TemporaryDirectory() as directory:
+            store = TelemetryStore(Path(directory) / "events.sqlite3")
+            for i in range(8):
+                value = make_event(i, details={"pid": 42, "process_key": f"k-{i % 2}", "rule_name": "Office_Allow"})
+                value.update(category="NETWORK", port=443, destination={"ip": "2001:db8::1", "host": "example.test"})
+                store.record(value)
+            filters = {"category": "NETWORK", "port": 443, "pid": 42, "process_key": "k-0",
+                       "destination_ip": "2001:db8::1", "search": "office_allow", "limit": 4}
+            with patch("greyward_security_context.telemetry.MAX_QUERY_BYTES", 2300):
+                first = store.query(filters, read_only=True)
+                self.assertTrue(first["size_limited"])
+                found = [item["event_id"] for item in first["events"]]
+                while first["next_cursor"]:
+                    first = store.query({**filters, "cursor": first["next_cursor"]}, read_only=True)
+                    found.extend(item["event_id"] for item in first["events"])
+            self.assertEqual(found, ["event-6", "event-4", "event-2", "event-0"])
+            self.assertEqual(store.query({**filters, "search": "office%allow"})["events"], [])
+            related = store.related("event-0", 2, read_only=True)
+            self.assertEqual([item["event_id"] for item in related["events"]], ["event-0", "event-6", "event-4"])
+            self.assertEqual({rel["relation"] for rel in related["events"][0]["relations"]}, {"SAME_PROCESS_INSTANCE"})
+
+    def test_spool_appends_before_rotation_and_imports_complete_lines(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            spool = root / "events.jsonl"
+            self.assertTrue(spool_event(make_event(1), spool))
+            original = spool.read_bytes()
+            before = spool.stat().st_ino
+            with spool.open("ab") as stream:
+                stream.write(b'{"interrupted"')
+            store = TelemetryStore(root / "db.sqlite3")
+            self.assertEqual(import_root_spool(store, spool)["invalid"], 0)
+            self.assertTrue(spool_event(make_event(2), spool))
+            self.assertEqual(spool.stat().st_ino, before)
+            self.assertTrue(spool.read_bytes().startswith(original))
+            with patch("greyward_security_context.telemetry.MAX_ROOT_SPOOL_BYTES", len(original) * 4):
+                for i in range(3, 16):
+                    self.assertTrue(spool_event(make_event(i), spool))
+                self.assertLessEqual(spool.stat().st_size, len(original) * 4)
+            self.assertEqual(json.loads(spool.read_bytes().splitlines()[-1])["event_id"], "event-15")
+
     def test_security_scope_filters_network_before_limit_and_preserves_pagination(self):
         with tempfile.TemporaryDirectory() as directory:
             store = TelemetryStore(Path(directory) / "events.sqlite3")

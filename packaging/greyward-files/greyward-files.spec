@@ -1,6 +1,6 @@
 Name: greyward-files
 Version: 1.0.0
-Release: 24%{?dist}
+Release: 25%{?dist}
 Summary: GREYWARD Strata file manager and transparent desktop integration
 License: MIT AND GPL-3.0-only AND GPL-2.0-or-later AND Apache-2.0 AND OFL-1.1 AND ISC AND LGPL-2.0-or-later AND LicenseRef-UnRAR AND LicenseRef-GREYWARD-Branding
 URL: https://github.com/lgse/strata

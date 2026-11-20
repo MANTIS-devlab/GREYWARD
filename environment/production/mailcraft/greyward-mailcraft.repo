@@ -1,0 +1,10 @@
+[greyward-mailcraft]
+name=MailCraft official releases verified by GREYWARD
+baseurl=file:///var/lib/greyward/mailcraft/repo
+enabled=1
+includepkgs=mailcraft
+skip_if_unavailable=1
+metadata_expire=0
+# The upstream RPM is unsigned. The root-only local publisher admits only RPMs
+# covered by MailCraft's pinned Ed25519 signature over SHA256SUMS.txt.
+gpgcheck=0

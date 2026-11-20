@@ -574,7 +574,7 @@ def _home_path(value: str, home: PurePosixPath) -> bool:
     return path != home and ".." not in path.parts and home in path.parents
 
 
-def list_files(password: str, snapshot: str | None = None) -> dict:
+def list_files(password: str, snapshot: str | None = None, *, search: str = "", folder: str = "", offset: int = 0) -> dict:
     ensure_repository_identity(password)
     home = PurePosixPath(Path.home().resolve().as_posix())
     try:
@@ -596,11 +596,22 @@ def list_files(password: str, snapshot: str | None = None) -> dict:
         snapshot = versions[0]["id"]
     if snapshot is not None and not any(item["id"] == snapshot for item in versions):
         raise BackupError("The selected backup version is no longer available")
-    result = restic(["ls", snapshot, "--json"], password) if snapshot else None
+    search = search.strip().casefold()
+    if len(search) > 160 or not 0 <= offset <= 1_000_000_000:
+        raise BackupError("Invalid backup browser query")
+    if folder and (len(folder) > 4096 or not _home_path(folder, home) or ".." in PurePosixPath(folder).parts):
+        raise BackupError("Choose a backed-up folder in the user home")
+    directory = PurePosixPath(folder) if folder else None
+    command = ["ls", snapshot, "--json"]
+    if directory is not None:
+        if search:
+            command.append("--recursive")
+        command.extend(["--", str(directory)])
+    result = restic(command, password, timeout=120) if snapshot else None
     candidates_by_path = {}
     scope = {str(home / relative) for relative in PERSONAL_DIRS + SETTING_DIRS}
     scope_candidates = {}
-    available_count = 0
+    ordinary_count = 0
     for line in result.stdout.splitlines() if result else ():
         try:
             value = json.loads(line)
@@ -609,24 +620,41 @@ def list_files(password: str, snapshot: str | None = None) -> dict:
         path = value.get("path") if isinstance(value, dict) else None
         if not isinstance(path, str) or not _home_path(path, home):
             continue
+        if search and search not in path.casefold():
+            continue
+        if directory is not None and (path == str(directory) or not PurePosixPath(path).is_relative_to(directory)):
+            continue
         kind = _restore_candidate_kind(value)
         if kind == "UNKNOWN":
             continue
-        available_count += 1
-        if path in scope:
+        if directory is None and not search and path in scope:
             scope_candidates[path] = {"path": path, "kind": kind}
-        elif len(candidates_by_path) < MAX_RESTORE_CANDIDATES:
-            candidates_by_path[path] = {"path": path, "kind": kind}
+        else:
+            # Scope rows occupy at most len(scope) slots at the start. Keep a
+            # bounded overlap so later pages preserve the same traversal order.
+            first = max(0, offset - len(scope))
+            if first <= ordinary_count < offset + MAX_RESTORE_CANDIDATES:
+                candidates_by_path[path] = {"path": path, "kind": kind}
+            ordinary_count += 1
     # Keep every backed top-level folder selectable even when an earlier
     # directory alone contains more than the display limit.
-    shown = [scope_candidates[path] for path in sorted(scope_candidates)]
-    shown += [candidates_by_path[path] for path in sorted(candidates_by_path)[:MAX_RESTORE_CANDIDATES - len(shown)]]
+    roots = [scope_candidates[path] for path in sorted(scope_candidates)]
+    first = max(0, offset - len(scope))
+    start = max(0, offset - len(roots)) - first
+    shown = roots[offset:offset + MAX_RESTORE_CANDIDATES]
+    shown.extend(list(candidates_by_path.values())[start:start + MAX_RESTORE_CANDIDATES - len(shown)])
+    available_count = len(roots) + ordinary_count
     return {
         "ok": True,
         "files": [candidate["path"] for candidate in shown],
         "candidates": shown,
         "available_count": available_count,
         "shown_count": len(shown),
+        "offset": offset,
+        "next_offset": offset + len(shown) if shown and offset + len(shown) < available_count else None,
+        "previous_offset": max(0, offset - MAX_RESTORE_CANDIDATES) if offset else None,
+        "folder": str(directory) if directory is not None else "",
+        "home": str(home),
         "selection_limit": MAX_RESTORE_SELECTION,
         "snapshot": snapshot,
         "versions": versions,
@@ -687,6 +715,10 @@ def command_line(argv: list[str] | None = None) -> int:
         operation.add_argument("--password-stdin", action="store_true")
         if name in {"list-files", "restore"}:
             operation.add_argument("--snapshot", required=name == "restore")
+        if name == "list-files":
+            operation.add_argument("--search", default="")
+            operation.add_argument("--folder", default="")
+            operation.add_argument("--offset", type=int, default=0)
         if name == "restore":
             operation.add_argument("paths", nargs="+")
     args = parser.parse_args(argv)
@@ -707,7 +739,7 @@ def command_line(argv: list[str] | None = None) -> int:
             with operation_lock():
                 password = sys.stdin.readline().rstrip("\n") if args.password_stdin else getpass.getpass("Restic passphrase: ")
                 if args.command == "list-files":
-                    value = list_files(password, args.snapshot)
+                    value = list_files(password, args.snapshot, search=args.search, folder=args.folder, offset=args.offset)
                 elif args.command == "restore":
                     value = restore(password, args.snapshot, args.paths)
                 else:

@@ -4,8 +4,8 @@
 // receives typed characters. The only credential-adjacent input used here
 // is the masked bullet count passed by Plymouth's display callback.
 
-Window.SetBackgroundTopColor(0.0, 0.0, 0.0);
-Window.SetBackgroundBottomColor(0.0, 0.0, 0.0);
+Window.SetBackgroundTopColor(0.016, 0.016, 0.022);
+Window.SetBackgroundBottomColor(0.016, 0.016, 0.022);
 
 screen.width = Window.GetWidth();
 screen.height = Window.GetHeight();
@@ -17,22 +17,34 @@ screen.center_y = Math.Int(screen.height / 2);
 state.name = "boot";
 state.password_was_visible = 0;
 state.ticks = 0;
-state.seed = 4217;
+state.last_bullets = -1;
+reel.frame = -1;
+contour.pulse = -1;
 update.progress = 0;
 update.progress_known = 0;
 
 palette.primary_r = 0.92; palette.primary_g = 0.93; palette.primary_b = 0.94;
-palette.secondary_r = 0.45; palette.secondary_g = 0.48; palette.secondary_b = 0.52;
+palette.secondary_r = 0.55; palette.secondary_g = 0.56; palette.secondary_b = 0.62;
 palette.platinum_r = 0.79; palette.platinum_g = 0.82; palette.platinum_b = 0.85;
-palette.error_r = 0.53; palette.error_g = 0.31; palette.error_b = 0.32;
+palette.error_r = 0.96; palette.error_g = 0.63; palette.error_b = 0.60;
 
 logo.image = Image("greyward-symbol-256.png");
+logo.unlock = logo.image.Scale(118, 118);
 logo.sprite = Sprite(logo.image);
+segment = Image("greyward-signal.png");
+contour.image[0] = segment.Rotate(0.52);
+contour.image[1] = segment.Rotate(1.57);
+contour.image[2] = segment.Rotate(-0.52);
+contour.x[0] = 0; contour.x[1] = 56; contour.x[2] = 56; contour.x[3] = 0;
+contour.x[4] = -56; contour.x[5] = -56; contour.x[6] = 0;
+contour.y[0] = -64; contour.y[1] = -32; contour.y[2] = 32; contour.y[3] = 64;
+contour.y[4] = 32; contour.y[5] = -32; contour.y[6] = -64;
+field.line = Sprite(segment.Scale(342, 9));
+field.line.SetOpacity(0);
+field.enter = Sprite();
 title.sprite = Sprite();
 support.sprite = Sprite();
-baseline.sprite = Sprite();
 bullets.sprite = Sprite();
-state_label.sprite = Sprite();
 message.sprite = Sprite();
 update_bar.sprite = Sprite();
 update_percent.sprite = Sprite();
@@ -41,21 +53,6 @@ glyphs[0] = "0"; glyphs[1] = "1"; glyphs[2] = "2"; glyphs[3] = "3";
 glyphs[4] = "4"; glyphs[5] = "5"; glyphs[6] = "6"; glyphs[7] = "7";
 glyphs[8] = "8"; glyphs[9] = "9"; glyphs[10] = "A"; glyphs[11] = "B";
 glyphs[12] = "C"; glyphs[13] = "D"; glyphs[14] = "E"; glyphs[15] = "F";
-
-// Keep the work bounded for early framebuffer renderers. The actual grid
-// adapts to the display while remaining below 252 glyph sprites.
-grid.columns = Math.Int(screen.width / 72);
-if (grid.columns < 14) grid.columns = 14;
-if (grid.columns > 28) grid.columns = 28;
-grid.rows = Math.Int(screen.height / 118);
-if (grid.rows < 7) grid.rows = 7;
-if (grid.rows > 9) grid.rows = 9;
-grid.spacing_x = 19;
-grid.spacing_y = 24;
-grid.width = grid.columns * grid.spacing_x;
-grid.height = grid.rows * grid.spacing_y;
-grid.origin_x = screen.center_x - grid.width / 2;
-grid.origin_y = screen.center_y - grid.height / 2 + 34;
 
 fun set_centered(sprite, image, y) {
   sprite.SetImage(image);
@@ -68,22 +65,50 @@ fun set_text(sprite, text, r, g, b, y) {
   set_centered(sprite, image, y);
 }
 
-fun set_idle_copy(error) {
-  set_text(title.sprite, "Unlock GREYWARD", palette.primary_r, palette.primary_g, palette.primary_b, screen.center_y - 54);
-  if (error) set_text(support.sprite, "Passphrase incorrect", palette.error_r, palette.error_g, palette.error_b, screen.center_y - 11);
-  else set_text(support.sprite, "Enter your passphrase to continue", palette.secondary_r, palette.secondary_g, palette.secondary_b, screen.center_y - 11);
-  set_text(baseline.sprite, "--------------------", palette.platinum_r, palette.platinum_g, palette.platinum_b, screen.center_y + 48);
-  title.sprite.SetOpacity(1);
-  support.sprite.SetOpacity(1);
-  baseline.sprite.SetOpacity(0.72);
-  state_label.sprite.SetOpacity(0);
+fun typed_text(sprite, text, r, g, b, x, y, font, centered) {
+  image = Image.Text(text, r, g, b, 1, font);
+  sprite.SetImage(image);
+  if (centered) x -= image.GetWidth() / 2;
+  sprite.SetPosition(x, screen.center_y + y, 0);
+  sprite.SetOpacity(1);
 }
 
-fun hide_idle_copy() {
-  title.sprite.SetOpacity(0);
-  support.sprite.SetOpacity(0);
+fun unlock_text(sprite, text, r, g, b, y, font) {
+  typed_text(sprite, text, r, g, b, screen.center_x, y, font, 1);
+}
+
+fun draw_contour(pulse, base, intensity) {
+  // Six sides follow the geometry of the GREYWARD emblem.
+  for (index = 0; index < 18; index++) {
+    side = Math.Int(index / 3);
+    fraction = ((index % 3) + 1) / 4;
+    image = contour.image[side % 3];
+    if (!contour.sprite[index]) contour.sprite[index] = Sprite(image);
+    x = contour.x[side] + (contour.x[side + 1] - contour.x[side]) * fraction;
+    y = contour.y[side] + (contour.y[side + 1] - contour.y[side]) * fraction;
+    contour.sprite[index].SetPosition(screen.center_x + x - image.GetWidth() / 2,
+                                      screen.center_y - 107 + y - image.GetHeight() / 2, -1);
+    distance = (pulse - index + 18) % 18;
+    opacity = base;
+    if (distance < 5) opacity += intensity * (5 - distance) / 5;
+    contour.sprite[index].SetOpacity(opacity);
+  }
+}
+
+fun hide_reel() {
+  for (index = 0; index < 8; index++) {
+    if (reel.front[index]) reel.front[index].SetOpacity(0);
+    if (reel.back[index]) reel.back[index].SetOpacity(0);
+  }
+}
+
+fun hide_unlock() {
+  for (index = 0; contour.sprite[index]; index++) contour.sprite[index].SetOpacity(0);
+  hide_reel();
+  field.line.SetOpacity(0);
+  field.enter.SetOpacity(0);
   bullets.sprite.SetOpacity(0);
-  baseline.sprite.SetOpacity(0.35);
+  logo.sprite.SetImage(logo.image);
 }
 
 fun hide_update_copy() {
@@ -91,37 +116,42 @@ fun hide_update_copy() {
   update_percent.sprite.SetOpacity(0);
 }
 
-fun hide_grid() {
-  for (index = 0; grid.sprite[index]; index++) grid.sprite[index].SetOpacity(0);
-}
-
 fun show_idle(error) {
   state.name = "password";
-  hide_grid();
+  state.last_bullets = -1;
   hide_update_copy();
-  set_idle_copy(error);
-  logo.sprite.SetX(screen.center_x - logo.image.GetWidth() / 2);
-  logo.sprite.SetY(screen.center_y - 268);
+  hide_reel();
+  logo.sprite.SetImage(logo.unlock);
+  logo.sprite.SetPosition(screen.center_x - logo.unlock.GetWidth() / 2, screen.center_y - 166, 0);
   logo.sprite.SetOpacity(1);
+  draw_contour(0, 0.23, 0);
   message.sprite.SetOpacity(0);
+  unlock_text(title.sprite, "Unlock disk", palette.primary_r, palette.primary_g, palette.primary_b, -20, "Sans 28");
+  if (error) unlock_text(support.sprite, "Incorrect passphrase. Try again.", palette.error_r, palette.error_g, palette.error_b, 29, "Sans 14");
+  else unlock_text(support.sprite, "Your system drive is encrypted.", palette.secondary_r, palette.secondary_g, palette.secondary_b, 29, "Sans 14");
+  field.line.SetPosition(screen.center_x - 171, screen.center_y + 101, 0);
+  field.line.SetOpacity(0.55);
+  typed_text(field.enter, "↵", palette.primary_r, palette.primary_g, palette.primary_b, screen.center_x + 129, 73, "Sans 17", 0);
 }
 
 fun show_verifying() {
   state.name = "verifying";
-  hide_idle_copy();
-  hide_update_copy();
-  logo.sprite.SetOpacity(0.18);
-  set_text(state_label.sprite, "VERIFYING KEY", palette.primary_r, palette.primary_g, palette.primary_b, grid.origin_y - 56);
-  state_label.sprite.SetOpacity(1);
-  baseline.sprite.SetOpacity(0.62);
-  message.sprite.SetOpacity(0);
+  state.verify_start = state.ticks;
+  reel.frame = -1;
+  field.line.SetOpacity(0);
+  field.enter.SetOpacity(0);
+  bullets.sprite.SetOpacity(0);
+  unlock_text(support.sprite, "Verifying passphrase…", palette.secondary_r, palette.secondary_g, palette.secondary_b, 29, "Sans 14");
 }
 
 fun show_success() {
   state.name = "success";
-  set_text(state_label.sprite, "SECURE STORAGE UNLOCKED", palette.primary_r, palette.primary_g, palette.primary_b, grid.origin_y - 56);
-  state_label.sprite.SetOpacity(1);
+  hide_reel();
+  draw_contour(0, 0.72, 0);
+  unlock_text(title.sprite, "Disk unlocked", palette.primary_r, palette.primary_g, palette.primary_b, -20, "Sans 28");
+  unlock_text(support.sprite, "Starting GREYWARD…", palette.secondary_r, palette.secondary_g, palette.secondary_b, 29, "Sans 14");
 }
+
 
 fun update_progress_bar(progress) {
   if (progress < 0) progress = 0;
@@ -145,10 +175,7 @@ fun update_progress_bar(progress) {
 
 fun show_update(progress_known) {
   state.name = "update";
-  hide_grid();
-  bullets.sprite.SetOpacity(0);
-  baseline.sprite.SetOpacity(0);
-  state_label.sprite.SetOpacity(0);
+  hide_unlock();
   message.sprite.SetOpacity(0);
 
   logo.sprite.SetX(screen.center_x - logo.image.GetWidth() / 2);
@@ -175,44 +202,57 @@ fun system_update_callback(progress) {
 }
 
 fun update_bullets(count) {
-  state.bullet_text = "";
-  visible = count;
-  if (visible > 24) visible = 24;
-  for (index = 0; index < visible; index++) state.bullet_text += "* ";
-  set_text(bullets.sprite, state.bullet_text, palette.primary_r, palette.primary_g, palette.primary_b, screen.center_y + 20);
-  bullets.sprite.SetOpacity(1);
-}
-
-fun next_glyph(row, column) {
-  // Decorative state only: no prompt, bullet, password, cryptsetup, or
-  // key material enters the animation.
-  state.seed = (state.seed * 97 + 37) % 9973;
-  phase = Math.Int(state.ticks / 3 + row * 5 + column * 3 + state.seed);
-  return glyphs[phase % 16];
-}
-
-fun update_verification_grid() {
-  if (state.name != "verifying" && state.name != "success") return;
-  for (row = 0; row < grid.rows; row++) {
-    for (column = 0; column < grid.columns; column++) {
-      index = row * grid.columns + column;
-      if (!grid.sprite[index]) grid.sprite[index] = Sprite();
-      wave = (state.ticks / 5 + row * 3 + column * 2) % 17;
-      if (state.name == "success") {
-        glyph = glyphs[(row + column) % 16];
-        opacity = 0.24 + ((row + column) % 4) * 0.08;
-      } else {
-        glyph = next_glyph(row, column);
-        opacity = 0.20 + wave * 0.028;
-      }
-      image = Image.Text(glyph, palette.platinum_r, palette.platinum_g, palette.platinum_b);
-      grid.sprite[index].SetImage(image);
-      grid.sprite[index].SetX(grid.origin_x + column * grid.spacing_x);
-      grid.sprite[index].SetY(grid.origin_y + row * grid.spacing_y);
-      grid.sprite[index].SetOpacity(opacity);
-    }
+  if (count > 24) count = 24;
+  if (count == state.last_bullets) return;
+  state.last_bullets = count;
+  x = screen.center_x - 145;
+  if (count == 0) {
+    typed_text(bullets.sprite, "Passphrase", palette.secondary_r, palette.secondary_g, palette.secondary_b, x, 74, "Sans 15", 0);
+  } else {
+    mask = "";
+    for (index = 0; index < count; index++) mask += "•";
+    typed_text(bullets.sprite, mask, palette.primary_r, palette.primary_g, palette.primary_b, x, 74, "Monospace 13", 0);
   }
 }
+
+fun reel_glyph(value) {
+  if (!reel.image[value]) reel.image[value] = Image.Text(glyphs[value], 0.83, 0.83, 0.96, 1, "Monospace 16");
+  return reel.image[value];
+}
+
+fun draw_reel() {
+  // Decorative hexadecimal characters are derived only from time and column.
+  // The paired sprites slide and fade through each character cell.
+  frame = Math.Int((state.ticks - state.verify_start) / 2);
+  if (frame == reel.frame) return;
+  reel.frame = frame;
+  for (index = 0; index < 8; index++) {
+    tick = frame + index * 2;
+    cycle = Math.Int(tick / 6);
+    travel = (tick % 6) / 6;
+    smooth = travel * travel * (3 - 2 * travel);
+    value = (cycle * (2 * index + 3) + index * 7) % 16;
+    next = (value + 2 * index + 3) % 16;
+    first = reel_glyph(value);
+    second = reel_glyph(next);
+    if (!reel.front[index]) reel.front[index] = Sprite();
+    if (!reel.back[index]) reel.back[index] = Sprite();
+    x = screen.center_x + (index - 3.5) * 28;
+    y = screen.center_y + 77;
+    reel.front[index].SetImage(first);
+    reel.front[index].SetPosition(x - first.GetWidth() / 2, y - smooth * 18, 0);
+    reel.front[index].SetOpacity((1 - smooth) * (1 - smooth) * 0.95);
+    reel.back[index].SetImage(second);
+    reel.back[index].SetPosition(x - second.GetWidth() / 2, y + (1 - smooth) * 18, 0);
+    reel.back[index].SetOpacity(smooth * smooth * 0.95);
+  }
+  pulse = Math.Int(frame / 2) % 18;
+  if (pulse != contour.pulse) {
+    contour.pulse = pulse;
+    draw_contour(pulse, 0.19, 0.61);
+  }
+}
+
 
 fun move_sprite(sprite, dx, dy) {
   sprite.SetX(sprite.GetX() + dx);
@@ -233,20 +273,20 @@ fun refresh_callback() {
       move_sprite(logo.sprite, dx, dy);
       move_sprite(title.sprite, dx, dy);
       move_sprite(support.sprite, dx, dy);
-      move_sprite(baseline.sprite, dx, dy);
+      move_sprite(field.line, dx, dy);
+      move_sprite(field.enter, dx, dy);
       move_sprite(bullets.sprite, dx, dy);
-      move_sprite(state_label.sprite, dx, dy);
       move_sprite(message.sprite, dx, dy);
       move_sprite(update_bar.sprite, dx, dy);
       move_sprite(update_percent.sprite, dx, dy);
-      grid.origin_x += dx;
-      grid.origin_y += dy;
+      for (index = 0; contour.sprite[index]; index++) move_sprite(contour.sprite[index], dx, dy);
+      reel.frame = -1;
       screen.center_x = x;
       screen.center_y = y;
     }
   }
   state.ticks++;
-  update_verification_grid();
+  if (state.name == "verifying") draw_reel();
 }
 
 fun display_normal_callback() {
@@ -265,7 +305,8 @@ fun display_password_callback(prompt, bullet_count) {
 }
 
 fun display_question_callback(prompt, entry) {
-  hide_grid();
+  state.name = "question";
+  hide_unlock();
   hide_update_copy();
   set_text(title.sprite, prompt, palette.primary_r, palette.primary_g, palette.primary_b, screen.center_y - 28);
   set_text(support.sprite, entry, palette.secondary_r, palette.secondary_g, palette.secondary_b, screen.center_y + 18);

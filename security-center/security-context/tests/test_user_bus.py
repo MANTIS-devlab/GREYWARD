@@ -3,7 +3,7 @@ import unittest
 import json
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 from greyward_security_context.application_security import SCHEMA as APPLICATION_SECURITY_SCHEMA
 
 try:
@@ -17,6 +17,44 @@ except ModuleNotFoundError as error:
 
 @unittest.skipIf(user_bus is None, "Security Context runtime dependencies are unavailable on this host")
 class UsbSummaryTests(unittest.TestCase):
+    def test_host_flow_snapshot_uses_the_canonical_history_and_counts_unknowns(self):
+        with tempfile.TemporaryDirectory() as d:
+            folder = Path(d)
+            store = user_bus.TelemetryStore(folder / "sample.sqlite")
+            status_path = folder / "status.json"
+            status_path.write_text(json.dumps({"state": "OPERATING", "at": user_bus.stamp(user_bus.now()), "missed": 0}))
+            value = user_bus.telemetry_event(component="network-flow", source="conntrack", category="NETWORK",
+                                              event_type="TRACKED_FLOW", action="OBSERVE", outcome="UNKNOWN",
+                                              decision="UNKNOWN", details={"direction": "FORWARDED"})
+            store.record(value)
+            with patch.object(user_bus, "FLOW_STATUS_PATH", status_path), \
+                    patch.object(user_bus, "user_store", return_value=store), \
+                    patch.object(user_bus, "network_summary", return_value={"activity": []}), \
+                    patch.object(user_bus, "assess_network", side_effect=lambda rows: rows):
+                result = user_bus.unified_network_activity(0, 120)
+            self.assertTrue(result["unified_snapshot"])
+            self.assertEqual(result["summary"]["unknown"], 1)
+            self.assertEqual(result["events"][0]["event_id"], value["event_id"])
+
+    def test_network_delta_advances_only_through_delivered_events(self):
+        events = [{"sequence": i, "event_id": str(i)} for i in range(700, 100, -1)]
+        snapshot = {"schema": user_bus.NETWORK_SCHEMA, "activity": events,
+                    "opensnitch": {"state": "OPERATING"}, "activity_next_sequence": 700}
+        with patch.object(user_bus, "network_summary", return_value=snapshot), \
+             patch.object(user_bus, "_with_network_location", side_effect=lambda item: item), \
+             patch.object(user_bus, "assess_network", side_effect=lambda selected, **_: selected):
+            first = user_bus.network_activity(100, 256)
+            second = user_bus.network_activity(first["next_sequence"], 256)
+            third = user_bus.network_activity(second["next_sequence"], 256)
+            self.assertTrue(first["has_more"] and second["has_more"])
+            self.assertFalse(third["has_more"])
+            self.assertEqual([first["next_sequence"], second["next_sequence"], third["next_sequence"]],
+                             [356, 612, 700])
+            self.assertEqual(sorted(e["sequence"] for part in (first, second, third) for e in part["events"]),
+                             list(range(101, 701)))
+            self.assertTrue(user_bus.network_activity(80)["gap"])
+            self.assertTrue(user_bus.network_activity(701)["gap"])
+
     def test_shell_collection_compares_vpn_at_completion_without_renewing_posture(self):
         import datetime as dt
         sample = dt.datetime(2026, 8, 24, 12, 0, tzinfo=dt.timezone.utc)
@@ -151,8 +189,11 @@ class BoundedProbeCacheTests(unittest.TestCase):
 
     def test_history_reconciliation_migrates_only_the_existing_store(self):
         calls = []
-        store = SimpleNamespace(reconcile_findings=lambda: calls.append("migrate") or {"complete": True, "processed": 0})
+        store = SimpleNamespace(reconcile_findings=lambda: calls.append("migrate") or {"complete": True, "processed": 0},
+                                reconcile_network_verdicts=lambda: None, reconcile_network_duplicates=lambda *_: 0)
         with patch.object(user_bus, "user_store", return_value=store), \
+                patch.object(user_bus, "INBOUND_SPOOL_PATH", Mock(stat=Mock(side_effect=FileNotFoundError))), \
+                patch.object(user_bus, "FLOW_SPOOL_PATH", Mock(stat=Mock(side_effect=FileNotFoundError))), \
                 patch.object(user_bus, "import_root_spool", side_effect=lambda selected: calls.append("import") or {}), \
                 patch.object(user_bus.local_activity, "migrate", return_value={"complete": True, "processed": 0}):
             context = object.__new__(user_bus.SecurityContext)

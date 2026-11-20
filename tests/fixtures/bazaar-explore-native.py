@@ -114,6 +114,76 @@ os.execvp('sh',['sh',sys.argv[1],'--no-window-refresh'])
     return result, cache.read_bytes() if cache.exists() else None
 
 
+def run_recovery_case(root, helper, seed, *, delayed=False):
+    name = "delayed" if delayed else "running"
+    case = root / name
+    for subdir in ("cache", "config", "data"):
+        (case / subdir).mkdir(parents=True, mode=0o700)
+    cache = case / "cache/io.github.kolunmi.Bazaar/core/flathub-cache"
+    shutil.copytree(seed, case / "cache", dirs_exist_ok=True)
+    cache.unlink()
+    env = {**os.environ, "XDG_CACHE_HOME": str(case / "cache"),
+           "XDG_CONFIG_HOME": str(case / "config"), "XDG_DATA_HOME": str(case / "data"),
+           "GSETTINGS_BACKEND": "keyfile", "G_MESSAGES_DEBUG": "BAZAAR::FLATHUB"}
+    child = """
+import os
+from pathlib import Path
+import subprocess
+import sys
+import time
+
+cache = Path(sys.argv[2])
+delayed = sys.argv[3] == 'delayed'
+subprocess.run(['gsettings', 'set', 'io.github.kolunmi.Bazaar',
+                'last-refresh-time', str(int(time.time()))], check=True)
+if delayed:
+    # Leave a recent timestamp so the real app skips its initial refresh.
+    # Only the launcher's settings write is stubbed; the retry talks to Bazaar.
+    shim = Path(sys.argv[4]) / 'gsettings'
+    shim.write_text('#!/bin/sh\\nexit 0\\n')
+    shim.chmod(0o700)
+    daemon = subprocess.Popen(['sh', sys.argv[1]],
+                              env={**os.environ, 'PATH': str(shim.parent) + ':' + os.environ['PATH']})
+else:
+    daemon = subprocess.Popen(['bazaar-daemon'])
+try:
+    check_owner = ['gdbus', 'call', '--session', '--timeout', '1',
+                   '--dest', 'org.freedesktop.DBus',
+                   '--object-path', '/org/freedesktop/DBus',
+                   '--method', 'org.freedesktop.DBus.NameHasOwner',
+                   'io.github.kolunmi.Bazaar']
+    deadline = time.monotonic() + 15
+    while subprocess.check_output(check_owner, text=True).strip() != '(true,)':
+        assert daemon.poll() is None, 'initial daemon exited'
+        assert time.monotonic() < deadline, 'initial daemon did not claim its bus name'
+        time.sleep(.1)
+    if not delayed:
+        subprocess.run(['bazaar-daemon'], check=True, timeout=5)
+        time.sleep(2)
+        assert not cache.exists(), 'a plain reopen unexpectedly filled Explore'
+        subprocess.run(['sh', sys.argv[1]], check=True, timeout=10)
+    deadline = time.monotonic() + (55 if delayed else 35)
+    while not cache.is_file():
+        assert daemon.poll() is None, 'daemon was restarted'
+        assert time.monotonic() < deadline, 'recovery did not fill Explore'
+        time.sleep(.1)
+finally:
+    daemon.terminate()
+    daemon.wait(timeout=5)
+"""
+    with private_display(env) as env:
+        process = subprocess.run(
+            ["dbus-run-session", "--", "python3", "-c", child,
+             str(helper), str(cache), name, str(case)],
+            env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+            timeout=80,
+        )
+    assert process.returncode == 0, process.stdout[-6000:]
+    state = cache_state(cache)
+    assert state and state["categories"] > 0, state
+    print(json.dumps({"case": name, "state": state}), flush=True)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--helper", type=Path, required=True)
@@ -128,6 +198,8 @@ def main():
         assert after["sync_done"] and after["state"]["categories"] > 0, after
         warm, unchanged = run_case(root, helper, "warm", root / "after/cache")
         assert not warm["sync_started"] and unchanged == saved, warm
+        run_recovery_case(root, helper, root / "after/cache")
+        run_recovery_case(root, helper, root / "after/cache", delayed=True)
     print("BAZAAR_EXPLORE_NATIVE=PASS", flush=True)
 
 

@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 LOADER = importlib.machinery.SourceFileLoader('desktop_shortcut', str(ROOT / 'environment/session/greyward-desktop-shortcut'))
@@ -23,6 +24,18 @@ class DesktopShortcutTests(unittest.TestCase):
     def test_missing_installed_launcher_is_unavailable(self):
         with self.assertRaisesRegex(ValueError, 'verified installed launcher'):
             MODULE.installed_launcher('io.example.Missing', ())
+
+    @unittest.skipUnless(os.name == 'posix', 'Linux desktop entry search paths')
+    def test_user_entries_are_available_and_greyward_overrides_precede_upstream(self):
+        with patch.dict(os.environ, {'XDG_DATA_HOME': '/home/example/data'}), \
+                patch.object(MODULE, 'read_launcher') as read:
+            MODULE.shortcut_launcher('io.example.App.desktop')
+            name, candidates = read.call_args.args
+        self.assertEqual(name, 'io.example.App.desktop')
+        self.assertEqual(candidates[0], (
+            Path('/home/example/data/applications'), os.getuid(), Path('/home/example/data/applications')))
+        self.assertEqual([candidate[0] for candidate in candidates[1:3]], [
+            Path('/usr/local/share/applications'), Path('/usr/share/applications')])
 
     @unittest.skipUnless(os.name == 'posix', 'directory descriptor creation requires Linux')
     def test_unchanged_shortcut_is_reused_without_duplication(self):

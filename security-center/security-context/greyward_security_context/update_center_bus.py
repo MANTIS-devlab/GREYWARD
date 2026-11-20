@@ -30,6 +30,11 @@ DNF_DBUS_TIMEOUT = 60
 DBUS_CANCEL_TIMEOUT = 10
 LOGIN1_DBUS_TIMEOUT = 30
 DNF_CLI = "/usr/bin/dnf5"
+ACTIVE_PHASES = {
+    "RESOLVING", "AUTHENTICATING", "DOWNLOADING", "INSTALLING", "VERIFYING",
+    "CHECKPOINTING", "PREPARING_RESTART", "UPDATING_APPLICATIONS",
+    "UPDATING_FIRMWARE", "UPDATING_SECURITY", "RESTARTING",
+}
 
 
 def stamp():
@@ -151,38 +156,30 @@ def native_restart_verified(transaction):
 
 
 def reconcile_transaction(value):
-    """Close transactions left behind by a reboot without deleting history."""
+    """Reconcile disk state when a new service process starts."""
     phase = value.get("phase")
-    if phase not in {
-        "AUTHENTICATING",
-        "RESOLVING",
-        "DOWNLOADING",
-        "INSTALLING",
-        "VERIFYING",
-        "CHECKPOINTING",
-        "PREPARING_RESTART",
-        "RESTARTING",
-        "READY_TO_RESTART",
-    }:
+    if phase not in ACTIVE_PHASES and phase != "READY_TO_RESTART":
         return value
     stored_boot = value.get("boot_id")
     boot_changed = bool(stored_boot and current_boot_id() and stored_boot != current_boot_id())
-    try:
-        age = time.time() - datetime.fromisoformat(str(value.get("updated_at", "")).replace("Z", "+00:00")).timestamp()
-    except (TypeError, ValueError, OverflowError):
-        age = 0
     if phase in {"RESTARTING", "READY_TO_RESTART"} and boot_changed:
-        value = reconcile_completed_restart(value)
-    elif phase == "RESTARTING" and age > 900:
-        ready = native_restart_verified(value)
-        value.update({"phase": "READY_TO_RESTART" if ready else "FAILED",
-                      "current_item": "The requested restart did not occur.",
-                      "restart_required": "REQUIRED" if ready else "UNKNOWN",
-                      "error": "The system did not restart to install the prepared update.",
-                      "details": "The verified restart can be retried." if ready else RESTART_NOT_READY,
-                      "finished_at": stamp(), "updated_at": stamp(), "cancellable": False})
-    elif boot_changed:
-        value.update({"phase":"FAILED", "current_item":"The interrupted update was reset after restart.", "restart_required":"UNKNOWN", "error":"The update was interrupted before it completed.", "details":"GREYWARD found no active update worker after the system restarted and closed the stale transaction.", "finished_at":stamp(), "updated_at":stamp(), "cancellable":False, "boot_id":current_boot_id()})
+        return reconcile_completed_restart(value)
+    if native_restart_verified(value):
+        if phase != "READY_TO_RESTART":
+            value.update(phase="READY_TO_RESTART", error=None, details=None,
+                         current_item=None, progress=None, cancellable=False,
+                         finished_at=stamp(), updated_at=stamp())
+        return value
+    # This process has no worker for a transaction loaded from disk. An
+    # independently running system provider still owns its own native lock.
+    message = {
+        "RESOLVING": "The update check was interrupted. Check for updates again.",
+        "RESTARTING": "The system did not restart to apply the prepared update. Check for updates again.",
+        "READY_TO_RESTART": RESTART_NOT_READY,
+    }.get(phase, "The update was interrupted before it could be verified. Check for updates again.")
+    value.update(phase="FAILED", error=message, details=None, progress=None,
+                 current_item=None, restart_required="UNKNOWN", cancellable=False,
+                 finished_at=stamp(), updated_at=stamp(), boot_id=current_boot_id())
     return value
 
 
@@ -196,22 +193,23 @@ def load_transaction():
         result = reconcile_transaction(result)
         after_reconcile = (result.get("phase"), result.get("finished_at"), result.get("current_item"))
         if after_reconcile != before_reconcile:
-            try:
-                TRANSACTION_PATH.write_text(json.dumps(result, sort_keys=True, separators=(",", ":")), encoding="utf-8")
-            except OSError:
-                pass
+            persist_transaction(result)
         if result.get("error") and result.get("finished_at") and result.get("phase") not in {"FAILED", "CANCELLED", "COMPLETE", "READY_TO_RESTART"}:
             result["phase"] = "FAILED"
             result["progress"] = None
-        if result.get("phase") == "RESOLVING":
-            # A new service process cannot own the previous process's worker.
-            # Otherwise a crashed metadata check permanently blocks all actions.
-            result.update(phase="FAILED", progress=None, cancellable=False,
-                          current_item=None, error="The update check was interrupted. Check for updates again.",
-                          finished_at=stamp(), updated_at=stamp())
         return result
     except (OSError, json.JSONDecodeError):
         return default_transaction()
+
+
+def persist_transaction(value):
+    try:
+        TRANSACTION_PATH.parent.mkdir(parents=True, exist_ok=True)
+        temporary = TRANSACTION_PATH.with_suffix(".new")
+        temporary.write_text(json.dumps(value, sort_keys=True, separators=(",", ":")), encoding="utf-8")
+        temporary.replace(TRANSACTION_PATH)
+    except OSError:
+        pass
 
 
 _transaction = load_transaction()
@@ -229,19 +227,10 @@ _snapshot_refreshing = False
 _snapshot_refreshed_at = 0.0
 SNAPSHOT_TTL = 30.0
 TERMINAL_PHASES = {"COMPLETE", "CANCELLED", "FAILED", "READY_TO_RESTART"}
-ACTIVE_PHASES = {
-    "RESOLVING", "AUTHENTICATING", "DOWNLOADING", "INSTALLING", "VERIFYING",
-    "CHECKPOINTING", "PREPARING_RESTART", "UPDATING_APPLICATIONS",
-    "UPDATING_FIRMWARE", "UPDATING_SECURITY", "RESTARTING",
-}
 
 
 def save_transaction():
-    try:
-        TRANSACTION_PATH.parent.mkdir(parents=True, exist_ok=True)
-        TRANSACTION_PATH.write_text(json.dumps(_transaction, sort_keys=True, separators=(",", ":")), encoding="utf-8")
-    except OSError:
-        pass
+    persist_transaction(_transaction)
 
 
 def transaction_copy():
@@ -265,7 +254,16 @@ def set_transaction(**values):
         save_transaction()
     if value.get("phase") != previous_phase and value.get("id"):
         phase = str(value.get("phase") or "UNKNOWN").upper()
-        outcome = "FAILURE" if phase == "FAILED" else ("SUCCESS" if phase == "COMPLETE" else ("CANCELLED" if phase == "CANCELLED" else "IN_PROGRESS"))
+        partial = phase == "COMPLETE" and any(
+            isinstance(item, dict) and item.get("state") in {"DEGRADED", "UNAVAILABLE"}
+            for item in value.get("provider_results") or []
+        )
+        outcome = "PARTIAL" if partial else (
+            "FAILURE" if phase == "FAILED" else "SUCCESS" if phase == "COMPLETE" else
+            "CANCELLED" if phase == "CANCELLED" else "IN_PROGRESS"
+        )
+        assessment = {"FAILURE": "FAILED", "PARTIAL": "DEGRADED",
+                      "SUCCESS": "NOTEWORTHY", "CANCELLED": "NOTEWORTHY"}.get(outcome, "NORMAL")
         record_event(telemetry_event(
             event_id=f"update-{value['id']}-{phase}-{value['updated_at']}",
             occurred_at=value["updated_at"],
@@ -275,8 +273,8 @@ def set_transaction(**values):
             event_type="UPDATE_PHASE",
             action="UPDATE",
             outcome=outcome,
-            severity="ERROR" if outcome == "FAILURE" else "INFO",
-            assessment="FAILED" if outcome == "FAILURE" else ("NOTEWORTHY" if outcome in {"SUCCESS", "CANCELLED"} else "NORMAL"),
+            severity="ERROR" if outcome == "FAILURE" else "WARNING" if partial else "INFO",
+            assessment=assessment,
             correlation={"operation_id": value.get("id"), "transaction_id": value.get("id"), "boot_id": value.get("boot_id")},
             details={"phase": phase, "recovery_point_id": value.get("recovery_point_id"), "recovery_point_status": value.get("recovery_point_status"), "restart_required": value.get("restart_required")},
             quality={"source_state": "AVAILABLE", "attribution": "EXACT", "confidence": "EXACT"},
@@ -662,26 +660,28 @@ def run_optional_provider_updates(data, initial_results=None, privileged_plan=No
         readback = snapshot()
     except Exception:
         readback = None
-    if readback is None:
-        for result in results:
-            # DNF5 readiness has its own authenticated marker readback below.
-            if result.get("state") == "SUCCESS" and result.get("provider") != "DNF5":
-                result.update({"state": "DEGRADED", "reason": "Provider completion could not be verified."})
-    else:
+    if readback is not None:
         cache_snapshot(readback)
-        for result in results:
-            if result.get("state") != "SUCCESS":
-                continue
-            if result["provider"] == "Flatpak (user)":
-                still_available = provider_has_actionable_update(readback.get("records", []), "application", "user")
-            elif result["provider"] == "Flatpak (system)":
-                still_available = provider_has_actionable_update(readback.get("records", []), "application", "system")
-            elif result["provider"] == "fwupd":
-                still_available = provider_has_actionable_update(readback.get("records", []), "firmware", None)
-            else:
-                still_available = False
-            if still_available:
-                result.update({"state": "DEGRADED", "reason": "The provider still reports an available update after the operation."})
+    checked_providers = {
+        "Flatpak (user)": ("Flatpak", "application", "user"),
+        "Flatpak (system)": ("Flatpak", "application", "system"),
+        "fwupd": ("fwupd", "firmware", None),
+    }
+    for result in results:
+        check = checked_providers.get(result.get("provider"))
+        if result.get("state") != "SUCCESS" or not check:
+            continue
+        provider, category, scope = check
+        result["execution"] = "SUCCESS"
+        health = (readback or {}).get("providers", {}).get(provider, {})
+        if health.get("state") != "AVAILABLE":
+            result.update(state="DEGRADED", verification="UNAVAILABLE",
+                          reason="The provider completed, but its result could not be verified.")
+        elif provider_has_actionable_update(readback.get("records", []), category, scope):
+            result.update(state="DEGRADED", verification="UPDATES_REMAIN",
+                          reason="The provider still reports an available update after the operation.")
+        else:
+            result["verification"] = "VERIFIED"
     current = transaction_copy()
     dnf_ready = native_restart_verified({**current, "provider_results": results})
     if current.get("restart_required") == "REQUIRED" and not dnf_ready:

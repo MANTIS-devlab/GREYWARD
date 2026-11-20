@@ -1,0 +1,10 @@
+[Unit]
+Description=Collect incoming network evidence for GREYWARD History
+
+[Timer]
+OnBootSec=25s
+OnUnitInactiveSec=15s
+AccuracySec=3s
+
+[Install]
+WantedBy=timers.target

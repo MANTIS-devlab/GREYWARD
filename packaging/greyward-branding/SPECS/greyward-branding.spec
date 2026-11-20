@@ -1,6 +1,6 @@
 Name:           greyward-branding
 Version:        0.1.0
-Release:        24%{?dist}
+Release:        25%{?dist}
 Summary:        GREYWARD-owned shell, Anaconda, wallpaper, and Plymouth branding assets
 License:        GPL-3.0-only AND LicenseRef-GREYWARD-Branding
 BuildArch:      noarch
@@ -28,6 +28,7 @@ Source13:       software-runtime.desktop
 Source14:       greyward-screenshot.svg
 Source15:       verify-boot-theme.py
 Source16:       greyward-plymouth-module.sh
+Source17:       greyward-signal.svg
 
 %description
 Canonical GREYWARD presentation assets. This package does not replace Fedora
@@ -37,6 +38,7 @@ rebuilds initramfs; removal restores the prior theme when one was recorded.
 %prep
 
 %build
+rsvg-convert %{SOURCE17} -o greyward-signal.png
 for item in software image-viewer settings screenshot; do
   case "$item" in software) source=%{SOURCE9} ;; image-viewer) source=%{SOURCE10} ;; settings) source=%{SOURCE11} ;; screenshot) source=%{SOURCE14} ;; esac
   for size in 24 32 48 64 128 256; do
@@ -54,6 +56,7 @@ install -d %{buildroot}%{_unitdir}/system-update.target.wants
 install -m 0644 %{SOURCE0} %{buildroot}%{_datadir}/plymouth/themes/greyward/greyward.plymouth
 install -m 0644 %{SOURCE1} %{buildroot}%{_datadir}/plymouth/themes/greyward/greyward.script
 install -m 0644 %{SOURCE2} %{buildroot}%{_datadir}/plymouth/themes/greyward/greyward-symbol-256.png
+install -m 0644 greyward-signal.png %{buildroot}%{_datadir}/plymouth/themes/greyward/greyward-signal.png
 install -m 0644 %{SOURCE2} %{buildroot}%{_datadir}/greyward/branding/greyward-symbol-256.png
 install -m 0644 %{SOURCE3} %{buildroot}%{_unitdir}/greyward-update-status.service
 install -Dm0755 %{SOURCE15} %{buildroot}%{_libexecdir}/greyward/verify-boot-theme
@@ -108,6 +111,9 @@ fi
 %license %{_licensedir}/%{name}/GREYWARD-Branding-NOTICE
 
 %changelog
+* Fri Nov 20 2026 MANTIS SYSTEMS - 0.1.0-25
+- Refine disk unlock and show a scrolling hexadecimal verification animation.
+
 * Wed Nov 18 2026 MANTIS SYSTEMS - 0.1.0-24
 - Brand Anaconda and Plymouth and integrate pre-storage keyboard confirmation.
 

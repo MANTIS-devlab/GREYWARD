@@ -1,6 +1,6 @@
 Name:           greyward-security-center
 Version:        0.1.0
-Release:        141%{?dist}
+Release:        146%{?dist}
 Summary:        GREYWARD local security posture and control application
 License:        GPL-3.0-only AND Apache-2.0 AND OFL-1.1 AND CC0-1.0 AND MIT
 Source0:        %{name}-%{version}.tar.gz
@@ -127,6 +127,21 @@ install -Dm0755 greyward-safe-open.so \
 %postun
 /usr/bin/fc-cache -f >/dev/null 2>&1 || :
 %changelog
+* Fri Nov 20 2026 MANTIS SYSTEMS - 0.1.0-146
+- Build the reviewed network and recovery sources for Sophon 0.5.7.
+
+* Thu Nov 19 2026 MANTIS SYSTEMS - 0.1.0-145
+- Explain locally allowed traffic and transport lifecycle evidence.
+
+* Thu Nov 19 2026 MANTIS SYSTEMS - 0.1.0-144
+- Present all available host flow evidence in the existing network connection rows.
+
+* Thu Nov 19 2026 MANTIS SYSTEMS - 0.1.0-143
+- Show incoming Firewall and SSH records alongside application history.
+
+* Thu Nov 19 2026 MANTIS SYSTEMS - 0.1.0-142
+- Add network history investigation and searchable restore browsing.
+- Display update verification and detection review independently of page limits.
 * Wed Nov 18 2026 MANTIS SYSTEMS - 0.1.0-141
 - Surface actionable backup, recovery and posture states in Security Center.
 

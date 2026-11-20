@@ -199,6 +199,37 @@ class UpdateCenterBusTests(unittest.TestCase):
         self.assertEqual(result["id"], "interrupted-check")
         self.assertFalse(result["cancellable"])
 
+    def test_startup_reconciles_each_active_phase_in_the_same_boot(self):
+        service = update_center_bus
+        marker = {"transaction": "staged"}
+        for phase in service.ACTIVE_PHASES:
+            for verified in (False, True):
+                with self.subTest(phase=phase, verified=verified):
+                    value = dict(service.default_transaction(), phase=phase, boot_id="same-boot",
+                                 id="staged-id", operation="apply_all", restart_marker=marker,
+                                 restart_required="REQUIRED", provider_results=[{"provider": "DNF5", "state": "SUCCESS"}])
+                    service.TRANSACTION_PATH.write_text(json.dumps(value))
+                    with patch.object(service, "current_boot_id", return_value="same-boot"), \
+                         patch.object(service, "offline_marker_identity", return_value=marker if verified else None):
+                        actual = service.load_transaction()
+                    expected = "READY_TO_RESTART" if verified else "FAILED"
+                    self.assertEqual(actual["phase"], expected)
+                    self.assertEqual(json.loads(service.TRANSACTION_PATH.read_text())["phase"], expected)
+
+    def test_failed_flatpak_readback_is_not_verified_success(self):
+        service = update_center_bus
+        readback = {"providers": {"Flatpak": {"state": "DEGRADED"}}, "records": []}
+        with patch.object(service, "snapshot", return_value=readback), \
+             patch.object(service, "cache_snapshot"), patch.object(service, "request_snapshot_refresh"), \
+             patch.object(service, "transaction_copy", return_value={}), \
+             patch.object(service, "set_transaction", side_effect=lambda **value: value):
+            result = service.run_optional_provider_updates(
+                {"records": []}, initial_results=[{"provider": "Flatpak (system)", "state": "SUCCESS"}])
+        flatpak = result["provider_results"][0]
+        self.assertEqual(flatpak["execution"], "SUCCESS")
+        self.assertEqual(flatpak["verification"], "UNAVAILABLE")
+        self.assertEqual(flatpak["state"], "DEGRADED")
+
     def test_native_resolver_excludes_the_same_desktop_tuple_as_apply(self):
         root = FakeRoot()
         bus = types.SimpleNamespace(get_object=lambda name, path: root if path == update_center_bus.DNF_ROOT else object())
@@ -638,7 +669,11 @@ class UpdateCenterBusTests(unittest.TestCase):
         create = lambda reason, operation_id: order.append(("recovery", reason, operation_id)) or {"id": "point-1", "status": "valid"}
         prepare = lambda packages, operation_id: order.append(("dnf", packages, operation_id)) or (0, False)
         args = types.SimpleNamespace(operation_id="dnf5-123", system=True, system_flatpak=False, firmware=False, driver_package=["kernel-modules-extra"])
-        with patch.object(helper, "load_recovery_create", return_value=create), patch.object(helper, "prepare_dnf", side_effect=prepare), patch("greyward_security_context.update_center.offline_marker_identity", return_value=[1, 2, 3]), patch.object(helper, "emit") as emit:
+        with patch.object(helper, "PREPARATION_LOCK", update_center_bus.TRANSACTION_PATH.with_name("prepare.lock")), \
+             patch.object(helper, "load_recovery_create", return_value=create), \
+             patch.object(helper, "prepare_dnf", side_effect=prepare), \
+             patch("greyward_security_context.update_center.offline_marker_identity", return_value=[1, 2, 3]), \
+             patch.object(helper, "emit") as emit:
             self.assertEqual(helper.apply(args), 0)
             self.assertEqual(emit.call_args.kwargs["restart_marker"], [1, 2, 3])
 

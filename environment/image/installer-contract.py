@@ -186,7 +186,8 @@ def validate(installer, configs, branding, expected, package_selection):
 def inspect_iso(iso, branding_root):
     with tempfile.TemporaryDirectory(prefix='greyward-installer-contract-') as directory:
         root = Path(directory)
-        sources = ('installer.ks', 'updates.img', PACKAGE_SELECTION) + BOOT_CONFIGS
+        digest_path = 'greyward/production/payload.sha256'
+        sources = ('installer.ks', 'updates.img', PACKAGE_SELECTION, digest_path) + BOOT_CONFIGS
         command = ['xorriso', '-osirrox', 'on', '-indev', str(iso)]
         for source in sources:
             destination = root / source
@@ -216,8 +217,12 @@ def inspect_iso(iso, branding_root):
         for name, path in config_paths.items():
             subprocess.run(['grub2-script-check', str(path)], check=True)
             configs[name] = path.read_text()
+        installer = (root / 'installer.ks').read_text()
+        payload_sha = hashlib.sha256((root / digest_path).read_bytes()).hexdigest()
+        if re.findall(r"^expected_payload='([^']+)'$", installer, re.M) != [payload_sha]:
+            raise ValueError('Installer media recovery digest does not match the embedded payload')
         return validate(
-            (root / 'installer.ks').read_text(),
+            installer,
             configs,
             archive_files((root / 'updates.img').read_bytes()),
             {p: (branding_root / p).read_bytes() for p in UPDATES},

@@ -5,15 +5,56 @@ set -eu
 
 cache_root=${XDG_CACHE_HOME:-"$HOME/.cache"}
 explore_cache="$cache_root/io.github.kolunmi.Bazaar/core/flathub-cache"
+bazaar_id=io.github.kolunmi.Bazaar
+
+bazaar_running() {
+    [ "$(gdbus call --session --timeout 2 --dest org.freedesktop.DBus \
+        --object-path /org/freedesktop/DBus --method org.freedesktop.DBus.NameHasOwner \
+        "$bazaar_id" 2>/dev/null)" = '(true,)' ]
+}
+
+refresh_explore() {
+    # The same action as Reconnect. Bazaar coalesces an in-flight sync.
+    gdbus call --session --timeout 2 --dest "$bazaar_id" \
+        --object-path /io/github/kolunmi/Bazaar --method org.gtk.Actions.Activate \
+        sync-remotes '[]' '{}' >/dev/null 2>&1 || :
+}
+
+retry_cold_start() (
+    flock -n 9 || exit 0
+    for delay in 20 40; do
+        sleep "$delay"
+        [ ! -s "$explore_cache" ] && bazaar_running || break
+        refresh_explore
+    done
+)
 
 # Bazaar 0.9.7 applies its three-hour startup interval even without Explore
 # state. Allow a cold-cache launch to fetch immediately; never delete a cache
 # or reset the interval when cached content is already available.
 if [ ! -s "$explore_cache" ]; then
-    if ! gsettings set io.github.kolunmi.Bazaar last-refresh-time 0; then
+    if ! gsettings set "$bazaar_id" last-refresh-time 0; then
         printf '%s\n' 'GREYWARD Software: could not enable cold-cache Explore refresh.' >&2
         # Existing store/install functionality must remain available if an
         # upstream settings schema changes or its backend cannot be written.
+    fi
+
+    # The background updater already has its own lifecycle. Keep retries tied
+    # to interactive launches, and keep the previous usable catalogue intact.
+    for argument in "$@"; do
+        case "$argument" in
+            --no-window|--no-window-refresh|--help) exec bazaar-daemon "$@" ;;
+        esac
+    done
+    if [ -n "${XDG_RUNTIME_DIR:-}" ]; then
+        retry_lock="$XDG_RUNTIME_DIR/greyward-bazaar-explore.lock"
+        if bazaar_running; then
+            # Resetting the timestamp cannot re-run initialization in the
+            # primary process. Ask it to refresh before forwarding the launch.
+            (flock -n 9 && refresh_explore) 9>"$retry_lock" || :
+        else
+            retry_cold_start 9>"$retry_lock" </dev/null >/dev/null 2>&1 &
+        fi
     fi
 fi
 

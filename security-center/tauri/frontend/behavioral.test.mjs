@@ -24,6 +24,16 @@ test('failed refresh retains rows and known gaps but marks evidence historical',
  assert.equal(failed.sensor.state,'UNAVAILABLE');assert.equal(failed.sensor.dropped,3);assert.equal(failed.events.length,1);
  assert.match(view.status(failed,'SYSTEM'),/3 reported gaps/);
 });
+test('filter changes never reuse observations from a different query on failure',async()=>{
+ const view=ui.create({request:async(_,arg)=>{
+  if(arg.filters.classification)throw new Error('offline');
+  return {schema:'greyward.intelligence/v1',sensor:{state:'ACTIVE'},events:[{event_id:'normal'}]};
+ }});
+ await view.read('SYSTEM');
+ const failed=await view.read('SYSTEM',{classification:'HIGH_THREAT'});
+ assert.equal(failed.sensor.state,'UNAVAILABLE');
+ assert.equal(failed.events.length,0);
+});
 test('legacy Intelligence workspace is removed and log inspection is the presentation boundary',()=>{
  const app=readFileSync(new URL('./app.js',import.meta.url),'utf8');
  assert.doesNotMatch(app,/GREYWARD_INTELLIGENCE|intelligence\.(markup|summary|load)|\["intelligence",/);

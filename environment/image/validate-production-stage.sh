@@ -57,6 +57,15 @@ for package in greyward-intelligence swappy greyward-security-center greyward-se
   fi
 done
 
+if [[ -r "$stage/external-rpms.txt" ]]; then
+  while IFS='|' read -r name _url hash; do
+    [[ -n "$name" && "$name" != \#* ]] || continue
+    if ! printf '%s  %s\n' "$hash" "$stage/rpms/$name" | sha256sum -c --status; then
+      missing+=("rpms/$name is missing or differs from the external RPM lock")
+    fi
+  done < "$stage/external-rpms.txt"
+fi
+
 require_file office-source/packaging/greyward-office/source.json
 if [[ -r "$stage/office-source/packaging/greyward-office/verify-inputs.py" ]]; then
   python3 "$stage/office-source/packaging/greyward-office/verify-inputs.py" \

@@ -609,6 +609,9 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .recovery-file-option input { accent-color: var(--accent); }
 .recovery-file-option span { display: grid; gap: 2px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .recovery-file-option small { color: var(--faint); font: 10px ui-sans-serif, system-ui, sans-serif; letter-spacing: .04em; text-transform: uppercase; }
+.recovery-file-item { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 12px; }
+.recovery-file-item strong { overflow: hidden; text-overflow: ellipsis; }
+#recovery-restore-query { min-width: 12rem; flex: 1 1 12rem; }
 .recovery-v1-panel .technical-disclosure { margin-top: 20px; }
 
 @media (max-width: 700px) {
@@ -933,6 +936,19 @@ input::placeholder { color: #9aaab5; }
 .network-activity-toolbar input:focus, .network-activity-toolbar select:focus { outline: 2px solid rgba(169, 217, 238, .45); outline-offset: 2px; }
 .network-activity-toolbar select { min-width: 140px; padding-right: 32px; }
 .network-activity-toolbar-status { flex: 1 0 100%; color: var(--subtle); font-size: 12px; text-align: right; }
+.network-activity-summary[hidden] { display: none; }
+.network-history-filters { flex: 1 0 100%; grid-column: 1 / -1; padding: 8px 12px; border: 1px solid var(--line); border-radius: 6px; }
+.network-history-filters summary { cursor: pointer; font-weight: 600; }
+.network-history-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr)); gap: 10px 14px; margin: 10px 0; }
+.network-history-fields label { display: grid; min-width: 0; gap: 4px; font-size: 12px; }
+.network-history-filters small { color: var(--muted); }
+.network-forensic { grid-column: 1 / -1; padding-top: 10px; border-top: 1px solid var(--line); }
+.network-forensic h4 { margin: 0 0 8px; font-size: 13px; }
+.network-forensic dl { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr)); gap: 9px 16px; margin: 0 0 10px; }
+.network-forensic dt, .network-forensic [data-activity-related-results] { color: var(--muted); font-size: 12px; }
+.network-forensic dd { margin: 0; overflow-wrap: anywhere; font: 12px ui-monospace, monospace; }
+.network-forensic ul { padding-left: 18px; }
+.network-forensic li span { text-transform: none; letter-spacing: normal; overflow-wrap: anywhere; }
 .network-activity-pending { color: var(--accent); }
 .network-activity-row { display: block; padding: 0; }
 .network-activity-row-main { display: grid; grid-template-columns: minmax(190px, 1fr) minmax(230px, 1.2fr) minmax(86px, auto) minmax(118px, .6fr) minmax(150px, .75fr) 20px; gap: 14px; width: 100%; min-height: 68px; align-items: center; padding: 12px 14px; border: 0; border-bottom: 1px solid var(--line); background: transparent; color: inherit; cursor: pointer; text-align: left; }

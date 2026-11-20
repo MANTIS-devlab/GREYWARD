@@ -1,6 +1,6 @@
 Name:           greyward-security-context
 Version:        0.1.0
-Release:        143%{?dist}
+Release:        152%{?dist}
 Summary:        GREYWARD OpenSnitch control plane and Security Context session bus
 License:        GPL-3.0-only
 Source0:        %{name}-%{version}.tar.gz
@@ -9,6 +9,7 @@ BuildArch:      noarch
 BuildRequires:  python3
 Requires:       opensnitch
 Requires:       iproute
+Requires:       conntrack-tools
 Recommends:     libmaxminddb-utils
 Requires:       python3-dbus
 Requires:       python3-gobject-base
@@ -79,6 +80,11 @@ install -Dm0755 security-context/bin/greyward-secure-dns %{buildroot}%{_libexecd
 install -Dm0755 security-context/bin/greyward-feodo-update %{buildroot}%{_libexecdir}/greyward-feodo-update
 install -Dm0755 security-context/bin/greyward-geoip-update %{buildroot}%{_libexecdir}/greyward-geoip-update
 install -Dm0644 security-context/systemd/greyward-geoip-update.service %{buildroot}%{_unitdir}/greyward-geoip-update.service
+install -Dm0644 security-context/bin/greyward-network-flows %{buildroot}%{_prefix}/lib/greyward-security-context/greyward-network-flows
+install -Dm0644 security-context/systemd/greyward-network-flows.service %{buildroot}%{_unitdir}/greyward-network-flows.service
+install -Dm0644 security-context/bin/greyward-inbound-network %{buildroot}%{_prefix}/lib/greyward-security-context/greyward-inbound-network
+install -Dm0644 security-context/systemd/greyward-inbound-network.service %{buildroot}%{_unitdir}/greyward-inbound-network.service
+install -Dm0644 security-context/systemd/greyward-inbound-network.timer %{buildroot}%{_unitdir}/greyward-inbound-network.timer
 install -Dm0644 security-context/systemd/greyward-geoip-update.timer %{buildroot}%{_unitdir}/greyward-geoip-update.timer
 install -Dm0644 security-context/config/greyward-geoip.sysusers %{buildroot}%{_sysusersdir}/greyward-geoip.conf
 install -Dm0600 security-context/config/opensnitch-policy.json %{buildroot}%{_sysconfdir}/greyward/opensnitch-policy.json
@@ -118,6 +124,8 @@ install -Dm0644 security-context/tmpfiles.d/greyward-secure-dns.conf %{buildroot
 %systemd_post greyward-opensnitch-control-plane.service
 %systemd_post greyward-opensnitch-policy.service
 %systemd_post greyward-feodo-update.timer
+%systemd_post greyward-network-flows.service
+%systemd_post greyward-inbound-network.timer
 %systemd_post greyward-geoip-update.timer
 %systemd_post greyward-auto-update.timer
 %systemd_post greyward-clamav-scan.service
@@ -140,6 +148,8 @@ done
 %systemd_preun greyward-opensnitch-control-plane.service
 %systemd_preun greyward-opensnitch-policy.service
 %systemd_preun greyward-feodo-update.timer
+%systemd_preun greyward-network-flows.service
+%systemd_preun greyward-inbound-network.timer
 %systemd_preun greyward-geoip-update.timer
 %systemd_preun greyward-auto-update.timer
 %systemd_preun greyward-clamav-scan.service
@@ -152,6 +162,8 @@ done
 %systemd_postun greyward-opensnitch-control-plane.service
 %systemd_postun greyward-opensnitch-policy.service
 %systemd_postun greyward-feodo-update.timer
+%systemd_postun_with_restart greyward-network-flows.service
+%systemd_postun greyward-inbound-network.timer
 %systemd_postun greyward-geoip-update.timer
 %systemd_postun greyward-auto-update.timer
 %systemd_postun_with_restart greyward-clamav-scan.service
@@ -187,6 +199,11 @@ done
 %{_libexecdir}/greyward-geoip-update
 %{_sysusersdir}/greyward-geoip.conf
 %{_unitdir}/greyward-geoip-update.service
+%{_prefix}/lib/greyward-security-context/greyward-network-flows
+%{_unitdir}/greyward-network-flows.service
+%{_prefix}/lib/greyward-security-context/greyward-inbound-network
+%{_unitdir}/greyward-inbound-network.service
+%{_unitdir}/greyward-inbound-network.timer
 %{_unitdir}/greyward-geoip-update.timer
 %config(noreplace) %attr(0600,root,root) %{_sysconfdir}/greyward/opensnitch-policy.json
 %{_unitdir}/greyward-opensnitch-control-plane.service
@@ -220,6 +237,33 @@ done
 
 
 %changelog
+* Fri Nov 20 2026 MANTIS SYSTEMS - 0.1.0-152
+- Build the reviewed network and recovery sources for Sophon 0.5.7.
+
+* Thu Nov 19 2026 MANTIS SYSTEMS - 0.1.0-151
+- Match IPv6 OpenSnitch protocol spelling against the same kernel flow.
+
+* Thu Nov 19 2026 MANTIS SYSTEMS - 0.1.0-150
+- Keep native OpenSnitch records when verified flow observations overlap.
+
+* Thu Nov 19 2026 MANTIS SYSTEMS - 0.1.0-149
+- Distinguish kernel-confirmed filtering from peer response and tracking state.
+
+* Thu Nov 19 2026 MANTIS SYSTEMS - 0.1.0-148
+- Collect native IPv4 and IPv6 host flow evidence for Network Activity.
+
+* Thu Nov 19 2026 MANTIS SYSTEMS - 0.1.0-147
+- Continue authenticated SSH backfill from the last completed batch.
+
+* Thu Nov 19 2026 MANTIS SYSTEMS - 0.1.0-146
+- Recover SSH server ports from the matching listener journal records.
+
+* Thu Nov 19 2026 MANTIS SYSTEMS - 0.1.0-145
+- Import selected trusted ingress records through the bounded history pipeline.
+
+* Thu Nov 19 2026 MANTIS SYSTEMS - 0.1.0-144
+- Reconcile interrupted updates and verify provider readbacks.
+- Preserve live and historical cursors, prioritize detection review, and batch spool rotation.
 * Wed Nov 18 2026 MANTIS SYSTEMS - 0.1.0-143
 - Tighten backup, recovery, DNS and offline-update state handling.
 

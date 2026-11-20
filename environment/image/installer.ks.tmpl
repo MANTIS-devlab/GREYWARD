@@ -47,41 +47,48 @@ set -euxo pipefail
 # has been found; otherwise a later first-boot failure hides an install-time
 # media/copy failure.
 media_root=''
-for candidate in \
-  /run/install/repo \
-  /run/install/source \
-  /run/install/isodir \
-  /run/media \
-  /media \
-  /mnt; do
-  if [[ -r "$candidate/greyward/production/payload.sha256" ]]; then
+expected_payload='__GREYWARD_PAYLOAD_MANIFEST_SHA256__'
+payload_matches() {
+  local marker="$1/greyward/production/payload.sha256"
+  [[ -r "$marker" ]] &&
+    printf '%s  %s\n' "$expected_payload" "$marker" | sha256sum --status -c -
+}
+for candidate in /run/install/repo /run/install/source /run/install/isodir \
+  /run/media /media /mnt; do
+  if payload_matches "$candidate"; then
     media_root="$candidate"
     break
   fi
 done
 if [[ -z "$media_root" ]]; then
-  media_marker=$(find /run/install /run/media /media /mnt -xdev -type f \
-    -path '*/greyward/production/payload.sha256' -print -quit 2>/dev/null || true)
-  if [[ -n "$media_marker" ]]; then
-    media_root="${media_marker%/greyward/production/payload.sha256}"
-  fi
+  while IFS= read -r -d '' media_marker; do
+    candidate=${media_marker%/greyward/production/payload.sha256}
+    if payload_matches "$candidate"; then
+      media_root="$candidate"
+      break
+    fi
+  done < <(find /run/install /run/media /media /mnt -xdev -type f \
+    -path '*/greyward/production/payload.sha256' -print0 2>/dev/null || true)
 fi
-# Last-resort recovery for optical media whose mount was released before
-# %post. This is deliberately read-only and only accepts the same marker.
+# Recover the exact payload when Anaconda has released the USB or DVD mount.
 temporary_media_mount=''
 if [[ -z "$media_root" ]]; then
-  temporary_media_mount=/run/install/greyward-media
-  install -d -m 0755 "$temporary_media_mount"
-  for device in /dev/sr* /dev/cdrom; do
-    [[ -e "$device" ]] || continue
-    if mount -o ro "$device" "$temporary_media_mount" 2>/dev/null; then
-      if [[ -r "$temporary_media_mount/greyward/production/payload.sha256" ]]; then
+  temporary_media_mount=$(mktemp -d /run/install/greyward-media.XXXXXX)
+  trap 'if [[ -n "$temporary_media_mount" ]]; then
+    if ! mountpoint -q "$temporary_media_mount" || umount "$temporary_media_mount"; then
+      rmdir "$temporary_media_mount"
+    fi
+  fi' EXIT
+  while IFS= read -r device; do
+    [[ -b "$device" ]] || continue
+    if mount -t iso9660 -o ro,nodev,nosuid,noexec "$device" "$temporary_media_mount"; then
+      if payload_matches "$temporary_media_mount"; then
         media_root="$temporary_media_mount"
         break
       fi
-      umount "$temporary_media_mount" 2>/dev/null || true
+      umount "$temporary_media_mount"
     fi
-  done
+  done < <(blkid -c /dev/null -t LABEL=GREYWARD-INSTALLER-44 -o device)
 fi
 if [[ -z "$media_root" ]]; then
   echo 'GREYWARD production payload is not available from the installer media.' >&2
@@ -116,7 +123,9 @@ if ! (cd "$target_stage" && \
 fi
 rm -f "$payload_check"
 if [[ -n "$temporary_media_mount" ]]; then
-  umount "$temporary_media_mount" 2>/dev/null || true
+  umount "$temporary_media_mount"
+  rmdir "$temporary_media_mount"
+  temporary_media_mount=''
 fi
 # Anaconda writes the confirmed console map during its localization task.
 # Abort instead of rebooting if the selected layout was lost.
@@ -166,16 +175,35 @@ override.replace(root / "etc/os-release")
 for entry in (root / "boot/loader/entries").glob("*.conf"):
     data = entry.read_text()
     version = re.search(r"^version (.+)$", data, re.M)
-    if version and not any(line.startswith("title GREYWARD ") for line in data.splitlines()):
-        label = "rescue" if version[1].startswith("0-rescue-") else version[1]
-        entry.write_text(re.sub(r"^title .+$", lambda _: f"title {name} ({label})",
-                                data, count=1, flags=re.M))
+    if version:
+        rescue = version[1].startswith("0-rescue-")
+        label = "rescue console" if rescue else version[1]
+        if not any(line.startswith("title GREYWARD ") for line in data.splitlines()):
+            data = re.sub(r"^title .+$", lambda _: f"title {name} ({label})",
+                          data, count=1, flags=re.M)
+        if rescue:
+            options = re.search(r"^options (.+)$", data, re.M)
+            if not options:
+                raise ValueError(f"No kernel options in rescue entry {entry.name}")
+            arguments = options[1].split()
+            for value in ("nomodeset", "systemd.unit=multi-user.target"):
+                if value not in arguments:
+                    arguments.append(value)
+            data = data[:options.start(1)] + " ".join(arguments) + data[options.end(1):]
+        if entry.read_text() != data:
+            entry.write_text(data)
 PY_BRANDING
 install -D -m0644 \
   /mnt/sysroot/usr/share/plymouth/themes/greyward/greyward-symbol-256.png \
   /mnt/sysroot/usr/share/icons/hicolor/256x256/apps/greyward-symbol.png
 # The installer runs an older kernel than the baseline-checked target. Plymouth's
 # -R helper uses uname -r even inside chroot; rebuild the installed kernels instead.
+install -d -m 0755 /mnt/sysroot/usr/lib/dracut/dracut.conf.d
+cat > /mnt/sysroot/usr/lib/dracut/dracut.conf.d/91-greyward-hardware.conf <<'DRACUT_CONFIG'
+hostonly_mode="sloppy"
+# Keep common storage and keyboard modules if present for this Fedora kernel.
+add_drivers+=" vmd nvme virtio_scsi hv_storvsc usb-storage uas i2c-hid-acpi "
+DRACUT_CONFIG
 chroot /mnt/sysroot /usr/bin/dracut --regenerate-all --force
 # Check the actual boot artifacts. Fedora's generic rescue initramfs is
 # created earlier and needs its own rebuild to embed the confirmed keymap.

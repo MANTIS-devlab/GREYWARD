@@ -23,6 +23,7 @@ import grpc
 from greyward_security_context.proto.v1_8_0 import ui_pb2
 from greyward_security_context.proto.v1_8_0 import ui_pb2_grpc
 from greyward_security_context.telemetry import event as telemetry_event
+from greyward_security_context.network_flows import flow_key
 from greyward_security_context.telemetry import record_event
 from greyward_security_context.network_location import country_resolution_for_destination
 from greyward_security_context.feodo import matching_indicator, threat_status
@@ -404,7 +405,10 @@ class NetworkState:
             port=destination["port"],
             decision=decision,
             correlation={"session_id": self.activity_session_id},
-            details={"rule_name": event["rule_name"], "network_event_type": "CONNECTION_ATTEMPT", "process_key": process_key, "pid": process_id or None},
+            details={"rule_name": event["rule_name"], "network_event_type": "CONNECTION_ATTEMPT", "process_key": process_key,
+                     "pid": process_id or None, "connection_key": connection_key, "direction": "OUTBOUND",
+                     "flow_key": flow_key(protocol, getattr(connection, "src_ip", ""), getattr(connection, "src_port", None),
+                                          destination["ip"], destination["port"])},
             quality={"source_state": "AVAILABLE", "attribution": "EXACT" if process_path else "UNKNOWN", "confidence": "EXACT" if process_path else "UNKNOWN"},
             relations=[],
             retention_class="investigation",

@@ -1,6 +1,6 @@
 Name: greyward-session
 Version: 0.1.0
-Release: 46%{?dist}
+Release: 47%{?dist}
 Summary: GREYWARD static desktop session policy and factory defaults
 License: GPL-3.0-only
 BuildArch: noarch
@@ -107,6 +107,9 @@ ln -s /usr/share/xdg-desktop-portal/portals/gtk.portal %{buildroot}/etc/xdg-desk
 /usr/share/greyward/dms/greyward-obsidian.json
 
 %changelog
+* Thu Nov 19 2026 MANTIS SYSTEMS - 0.1.0-47
+- Add the Mail launcher to default desktop shortcuts.
+
 * Mon Nov 02 2026 MANTIS SYSTEMS - 0.1.0-45
 - Package canonical LF compositor assets with the 180-percent taskbar defaults.
 

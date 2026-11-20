@@ -1,0 +1,10 @@
+[Unit]
+Description=Check for new official MailCraft releases
+
+[Timer]
+OnBootSec=2min
+OnUnitInactiveSec=6h
+RandomizedDelaySec=3min
+
+[Install]
+WantedBy=timers.target

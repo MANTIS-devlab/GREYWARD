@@ -164,7 +164,7 @@ class ClamAvScan(dbus.service.Object):
         try:
             scans = self.manager.reconcile_interrupted_scans(32, owner_uid=uid)
             active = next((item for item in scans if item.get('state') in {'QUEUED', 'SCANNING', 'FINALIZING'}), None)
-            value = {'schema': 'greyward.file-security/v1', 'state': 'AVAILABLE', 'active_scan': active, 'latest_scan': scans[0] if scans else None, 'recent_scans': scans[:8], 'detections': self.manager.detections(limit=128, owner_uid=uid), 'activity': self.manager.activity(128, owner_uid=uid), 'clamav': clamav_status()}
+            value = {'schema': 'greyward.file-security/v1', 'state': 'AVAILABLE', 'active_scan': active, 'latest_scan': scans[0] if scans else None, 'recent_scans': scans[:8], 'detections': self.manager.detections(limit=128, owner_uid=uid), 'detection_review_count': self.manager.store.count_file_detections_for_review(uid), 'activity': self.manager.activity(128, owner_uid=uid), 'clamav': clamav_status()}
         except (OSError, TelemetryError) as error:
             value = {'schema': 'greyward.file-security/v1', 'state': 'UNAVAILABLE', 'active_scan': None, 'latest_scan': None, 'detections': [], 'activity': [], 'detail': str(error)[:240]}
         return value

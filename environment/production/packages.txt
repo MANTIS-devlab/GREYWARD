@@ -109,6 +109,10 @@ greyward-writer
 greyward-sheets
 greyward-pdf
 greyward-slides
+mailcraft
+# MailCraft's signature verifier and local DNF metadata generator.
+python3-cryptography
+createrepo_c
 loupe
 file-roller
 

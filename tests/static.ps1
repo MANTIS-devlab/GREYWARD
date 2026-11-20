@@ -756,6 +756,8 @@ $mutableInputRoots = @(
     (Join-Path $repo 'environment\image'),
     (Join-Path $repo 'security-center\packaging')
 )
+$mailcraftReleaseSelector = 'API = f"https://api.github.com/repos/{PROJECT}/releases/latest"'
+$mailcraftUpdaterPath = Join-Path $repo 'environment/production/mailcraft/refresh.py'
 foreach ($mutableRoot in $mutableInputRoots) {
     if (-not (Test-Path -LiteralPath $mutableRoot)) { continue }
     Get-ChildItem -LiteralPath $mutableRoot -Recurse -File | Where-Object { $_.Extension -notin @('.md', '.png', '.svg', '.ttf', '.otf', '.woff', '.woff2', '.jpg', '.jpeg', '.webp', '.ico', '.gif', '.bin') } | ForEach-Object {
@@ -765,6 +767,8 @@ foreach ($mutableRoot in $mutableInputRoots) {
             if ($line.TrimStart().StartsWith('#')) { continue }
             # A unified patch header is metadata, not a mutable source selector.
             if ($_.Extension -eq '.patch' -and $line -match '^diff --git a/\S+ b/\S+$') { continue }
+            # Runtime release discovery is signature-verified and separate from the pinned ISO RPM.
+            if ($_.FullName -eq $mailcraftUpdaterPath -and $line -ceq $mailcraftReleaseSelector) { continue }
             $activeLine = ($line -split '#', 2)[0]
             if ($activeLine -match '(?i)\blatest\b|\bmaster\b|(?:^|[^A-Za-z0-9])[^\s/]+-git(?:[^A-Za-z0-9]|$)') {
                 $errors.Add("Mutable build input selector in $($_.FullName):$lineNumber")
@@ -1241,7 +1245,7 @@ if ((Test-Path -LiteralPath $plymouthScriptPath) -and (Test-Path -LiteralPath $p
     $plymouthSpec = Get-Content -Raw -LiteralPath $plymouthSpecPath
     $plymouthUpdateStatus = Get-Content -Raw -LiteralPath $plymouthUpdateStatusPath
     $brandingManifest = Get-Content -Raw -LiteralPath $brandingManifestPath
-    foreach ($required in @('Plymouth.SetDisplayPasswordFunction', 'Plymouth.SetDisplayNormalFunction', 'Plymouth.SetRootMountedFunction', 'Plymouth.SetSystemUpdateFunction', 'Installing system updates', 'Keep this computer powered on', '% complete', 'Preparing update...', 'VERIFYING KEY', 'SECURE STORAGE UNLOCKED', 'Passphrase incorrect', 'greyward-symbol-256.png')) {
+    foreach ($required in @('Plymouth.SetDisplayPasswordFunction', 'Plymouth.SetDisplayNormalFunction', 'Plymouth.SetRootMountedFunction', 'Plymouth.SetSystemUpdateFunction', 'Installing system updates', 'Keep this computer powered on', '% complete', 'Preparing update...', 'Verifying passphrase', 'Disk unlocked', 'Incorrect passphrase', 'greyward-symbol-256.png')) {
         if ($plymouthScript -notmatch [regex]::Escape($required)) { $errors.Add("Plymouth unlock theme is missing required behavior: $required") }
     }
     if ($plymouthScript -match 'Plymouth\.SetKeyboardInputFunction') { $errors.Add('Plymouth unlock theme must not receive raw keyboard input.') }

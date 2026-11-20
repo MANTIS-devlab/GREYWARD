@@ -47,6 +47,14 @@ phase 'Validating the staged offline production payload'
 test -r "$packages_file"
 test -r "$repositories_file"
 test -r "$stage/external-rpms.txt"
+test -r "$stage/mailcraft/install.sh"
+test -r "$stage/mailcraft/launch.py"
+test -r "$stage/mailcraft/refresh.py"
+test -r "$stage/mailcraft/io.github.billsecond.mailcraft.desktop"
+test -r "$stage/mailcraft/greyward-mailcraft.repo"
+test -r "$stage/mailcraft/greyward-mailcraft-refresh.service"
+test -r "$stage/mailcraft/greyward-mailcraft-refresh.timer"
+test -r "$stage/branding/source/greyward-mailcraft.svg"
 test -r "$stage/install-dms.sh"
 test -r "$stage/dms-release.json"
 test -r "$stage/production-acceptance.sh"
@@ -94,24 +102,15 @@ if [[ "$target_install" == 1 || "${GREYWARD_LOCAL_FINALIZE:-0}" != 1 ]]; then
     done
   fi
 
-  # OpenSnitch is not packaged by Fedora or by one of the GREYWARD COPRs. The
-  # image factory stages its hash-verified upstream RPM as a production input.
-  # Install it without RPM scriptlets because this helper may run
-  # inside an offline Anaconda root where systemd is not running; the final root
-  # enables services below.
-  shopt -s nullglob
-  external_rpm_prefixes=(opensnitch-)
+  # External packages enter Anaconda through the hash-verified media repo.
+  # Skip scriptlets here for provisioning inside an offline root.
   phase 'Installing external production RPMs'
-  for prefix in "${external_rpm_prefixes[@]}"; do
-    external_rpms=("$stage/rpms/${prefix}"*.rpm)
-    test "${#external_rpms[@]}" -eq 1
-    external_name=$(basename "${external_rpms[0]}")
-    external_hash=$(awk -F'|' -v name="$external_name" '$1 == name { print $3 }' "$stage/external-rpms.txt")
-    test -n "$external_hash"
-    printf '%s  %s\n' "$external_hash" "${external_rpms[0]}" | sha256sum -c -
-    dnf -y --setopt=tsflags=noscripts install "${external_rpms[0]}"
-  done
-  shopt -u nullglob
+  while IFS='|' read -r name _url hash; do
+    [[ -n "$name" && "$name" != \#* ]] || continue
+    rpm_file="$stage/rpms/$name"
+    printf '%s  %s\n' "$hash" "$rpm_file" | sha256sum -c -
+    dnf -y --setopt=tsflags=noscripts install "$rpm_file"
+  done < "$stage/external-rpms.txt"
 
   # Upgrades from the former development image may still have the old Tabby
   # RPM. Remove only that exact package; do not touch the user's old config.
@@ -314,6 +313,9 @@ labwc="$stage/labwc"
 dms="$stage/dankmaterialshell"
 flatpak="$stage/flatpak"
 branding="$stage/branding"
+if rpm -q --quiet mailcraft; then
+  bash "$stage/mailcraft/install.sh" "$stage/mailcraft" "$branding/source/greyward-mailcraft.svg"
+fi
 wallpaper_variants="$branding/wallpaper"
 desktop_wallpaper=/usr/share/backgrounds/greyward/greyward-wallpaper-black-art-4k.jpg
 test -d "$session"

@@ -2,7 +2,7 @@
   "schema": "greyward.production-system/v1",
   "status": "active-development",
   "release": {
-    "version": "0.5.6",
+    "version": "0.5.7",
     "codename": "Sophon"
   },
   "runtime": {
@@ -28,6 +28,7 @@
     "dmsRuntimePackage": "greyward-dms",
     "sessionPolicyPackage": "greyward-session",
     "officeSourceManifest": "office-source/packaging/greyward-office/source.json",
+    "mailcraftIntegration": "mailcraft/",
     "intelligencePackage": "greyward-intelligence",
     "officePackages": ["greyward-writer", "greyward-sheets", "greyward-pdf", "greyward-slides"]
   },

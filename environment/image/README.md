@@ -129,7 +129,7 @@ environment/image/build-iso.sh --dms-candidate \
   --security-build-manifest "$security_build_manifest" \
   --office-rpm "$writer_rpm" --office-rpm "$sheets_rpm" \
   --office-rpm "$slides_rpm" --office-rpm "$pdf_rpm" \
-  --production-rpm "$opensnitch_rpm"
+  --production-rpm "$opensnitch_rpm" --production-rpm "$mailcraft_rpm"
 ```
 
 Place the checkout, `GREYWARD_ISO_WORK_ROOT`, and output on Linux filesystems

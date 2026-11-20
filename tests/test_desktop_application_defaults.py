@@ -81,6 +81,27 @@ class DesktopApplicationDefaults(unittest.TestCase):
             self.assertEqual(chosen.read_bytes(), b'custom shortcut')
             self.assertEqual(settings.read_bytes(), b'[Desktop]\nDesktopShortcuts=\nDesktopIconSize=72\n')
 
+    @unittest.skipUnless(os.name == 'posix', 'Linux launcher ownership and metadata')
+    def test_mail_is_seeded_for_existing_users_and_deletion_survives_trust_retry(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            config, state, desktop = (base / name for name in ('config', 'state', 'Desktop'))
+            settings = config / 'pcmanfm-qt/greyward/settings.conf'
+            settings.parent.mkdir(parents=True)
+            settings.write_text('existing settings')
+            defaults.seed_defaults(config, state, desktop, Launchers())
+            name, _, content = Launchers().installed_launcher(defaults.MAIL)
+            path = desktop / name
+            def unavailable(_path):
+                raise OSError('metadata unavailable')
+            with self.assertRaises(OSError):
+                defaults.seed_mail(state, desktop, Launchers(), unavailable)
+            self.assertEqual(path.read_bytes(), content)
+            path.unlink()
+            defaults.seed_mail(state, desktop, Launchers(), self.fail)
+            self.assertFalse(path.exists())
+            self.assertEqual(settings.read_text(), 'existing settings')
+
     def test_missing_application_does_not_create_a_broken_launcher_or_finish_seed(self):
         class Missing:
             def installed_launcher(self, identifier):

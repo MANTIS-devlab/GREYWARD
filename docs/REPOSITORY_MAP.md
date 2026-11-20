@@ -8,6 +8,10 @@ checks the BIOS, UEFI and embedded EFI configurations.
 [Publication](PUBLICATION.md) records the verified upload. Public main can
 contain changes newer than the image's frozen input.
 
+[MailCraft integration](../environment/production/mailcraft/README.md) owns the
+launcher, dark defaults, signed GitHub release ingestion and local DNF5 feed.
+The installer pins the initial upstream RPM in the external package lock.
+
 Network country data and risk priority: Context's `network_location.py` and
 `geoip_update.py`, its fixed updater/timer/sysuser and Context RPM own local
 DB-IP MMDB reads and monthly-data recovery. Production enables the timer; the
@@ -983,3 +987,8 @@ Bazaar's 2 November installed recurrence and bounded recovery are recorded in
 [Software integration](software/FLATPAK_BAZAAR_INTEGRATION_PLAN.md#054-installed-recurrence--2-november-2026).
 This is not a permanent-fix or clean-install acceptance claim; the canonical
 startup helper and media inclusion gates remain unchanged.
+
+The ISO hardware inventory belongs to `environment/image/verify-hardware-inputs.py`.
+The composed-image step inspects its installer initramfs and the exact selected
+Fedora kernel and firmware RPMs. The Kickstart owns media rediscovery, the
+confirmed keyboard and the installed console recovery entry.

@@ -36,7 +36,7 @@
         if(value?.schema!=='greyward.intelligence/v1'||!value.sensor)throw new Error('Unavailable observation');
         if(!['ACTIVE','DEGRADED'].includes(value.sensor.state))value={...value,historical:true};
       }catch{
-        const previous=views.get(channel)||{};
+        const previous=hit?.value||{};
         value={...previous,schema:'greyward.intelligence/v1',historical:true,sensor:{...(previous.sensor||{}),state:'UNAVAILABLE',detail:'Observation unavailable; retained rows are historical.'},events:previous.events||[],incidents:(previous.incidents||[]).map(i=>({...i,state:'HISTORICAL'}))};
       }
       views.set(channel,value);cache.set(key,{at:performance.now(),value});return value;

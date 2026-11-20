@@ -12,6 +12,8 @@ import sys
 
 
 THEME = Path('/usr/share/plymouth/themes/greyward')
+SIGNAL = 'greyward-signal.png'
+SIGNAL_HEADER = b'\x89PNG\r\n\x1a\n\x00\x00\x00\x0dIHDR\x00\x00\x00\x12\x00\x00\x00\x12'
 
 
 def validate_script(path):
@@ -34,6 +36,13 @@ def validate_script(path):
     return plugin
 
 
+def validate_signal(directory):
+    signal = directory / SIGNAL
+    with signal.open('rb') as image:
+        if image.read(len(SIGNAL_HEADER)) != SIGNAL_HEADER:
+            raise ValueError(f'{signal}: missing or invalid Plymouth signal sprite')
+
+
 def read_image(image, name):
     return subprocess.check_output(['lsinitrd', '-f', name.lstrip('/'), str(image)])
 
@@ -50,7 +59,7 @@ def validate_image(image, plugin):
         if not any(line.endswith(' ' + required) or (' ' + required + ' -> ') in line
                    for line in listing.splitlines()):
             raise ValueError(f'{image.name}: missing Plymouth dependency {required}')
-    for name in ('greyward.script', 'greyward.plymouth', 'greyward-symbol-256.png'):
+    for name in ('greyward.script', 'greyward.plymouth', 'greyward-symbol-256.png', SIGNAL):
         source = THEME / name
         if read_image(image, str(source)) != source.read_bytes():
             raise ValueError(f'{image.name}: stale or invalid {name}; rebuild this initramfs')
@@ -70,6 +79,7 @@ def main():
     args = parser.parse_args()
     try:
         plugin = validate_script(args.script)
+        validate_signal(args.script.parent)
         print(f'OK Plymouth parser: {hashlib.sha256(args.script.read_bytes()).hexdigest()}')
         for image in args.initramfs:
             validate_image(image, plugin)

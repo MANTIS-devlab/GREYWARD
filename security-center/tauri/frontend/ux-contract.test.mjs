@@ -491,16 +491,17 @@ test("keeps Network Activity focused on app, destination, and decision", () => {
 });
 
 test("network protocol and port use a clean Unicode separator", () => {
-  const start = source.indexOf("function networkActivityMeta(");
+  const start = source.indexOf("function isInboundNetworkEvent(");
   const end = source.indexOf("function networkActivityFiltersAreDefault", start);
   const context = {
     networkActivityDestination: item => item.destination || {},
-    copy: (key, values = {}) => key === "network.activity.portValue" ? `Port ${values.port}` : "Details unavailable",
+    copy: (key, values = {}) => key === "network.activity.portValue" ? `Port ${values.port}` : key === "network.history.incoming" ? "Incoming" : "Details unavailable",
   };
   vm.runInNewContext(source.slice(start, end), context);
   assert.equal(context.networkActivityMeta({protocol:"udp", destination:{port:53}}), "UDP \u00b7 Port 53");
   assert.equal(context.networkActivityMeta({protocol:"TCP", destination:{port:443}}), "TCP \u00b7 Port 443");
   assert.equal(context.networkActivityMeta({protocol:"UDP"}), "UDP");
+  assert.equal(context.networkActivityMeta({source:"sshd", protocol:"TCP"}), "Incoming \u00b7 TCP");
   assert.equal(context.networkActivityMeta({}), "Details unavailable");
   assert.doesNotMatch(source, /\u00c3\u201a\u00c2\u00b7|\u00c3\u00a2\u00e2\u20ac/);
 });
@@ -565,7 +566,7 @@ test("keeps historical activity in the existing page and uses bounded backend qu
   assert.match(source, /network\.activity\.range\.sevenDays/);
   assert.match(source, /HISTORY_QUERY_DEBOUNCE_MS = 250/);
   assert.match(source, /scheduleNetworkHistoryLoad/);
-  assert.match(source, /querySequence !== historyQuerySequence/);
+  assert.match(source, /querySequence === historyQuerySequence/);
   assert.match(source, /NETWORK_HISTORY_PAGE_SIZE = 120/);
   assert.match(source, /historyCursor/);
   assert.match(source, /network\.activity\.loadOlder/);
@@ -613,8 +614,8 @@ test("keeps Network Activity filters as one model across mode and clear transiti
 });
 
 test("matches the Tauri argument names for network rules and history", () => {
-  assert.match(source, /const filters = \{from, limit: NETWORK_HISTORY_PAGE_SIZE/);
-  assert.match(source, /invokeBounded\("get_network_history", \{filters\}, 12000\)/);
+  assert.match(source, /from: iso\(from\), to: iso\(to\), limit: NETWORK_HISTORY_PAGE_SIZE/);
+  assert.match(source, /invokeBounded\("get_network_history", \{filters: \{\.\.\.query, cursor: cursor \|\| undefined\}\}, 12000\)/);
   assert.match(source, /networkRules\.begin\(/);
   assert.match(source, /await loadPage\("network-rules", \{force: true\}\)/);
   assert.match(source, /operation: "delete", id: button\.dataset\.ruleId/);
@@ -633,6 +634,51 @@ test("refreshes GREYWARD-owned rules from the typed policy service", () => {
   assert.match(policy, /def ListRules\(self\):/);
   const busPolicy = readFileSync(new URL("../../security-context/dbus/systems.mantis.greyward.OpenSnitchPolicy1.conf", import.meta.url), "utf8");
   assert.match(busPolicy, /send_member="ListRules"/);
+});
+
+test("network investigation keeps the same time range when retrying another page", async () => {
+  const calls = [];
+  const state = {mode: "history", filters: {window: "7d", decision: "BLOCKED", protocol: "TCP", port: "443",
+    search: "office", application: "", destination: "", pid: "42", rule: "", destinationIp: "", destinationHost: "", processKey: ""}, expanded: new Set()};
+  let fail = true;
+  const context = {
+    networkActivityState: state, historyQuerySequence: 0, historyQueryTimer: null,
+    currentPage: "activity", NETWORK_HISTORY_PAGE_SIZE: 120, copy: String,
+    renderNetworkActivityView: () => {}, app: {querySelector: () => null},
+    invokeBounded: async (command, {filters}) => {
+      assert.equal(command, "get_network_history");
+      calls.push(filters);
+      if (filters.cursor && fail) throw new Error("provider unavailable");
+      return {source_state: {state: "AVAILABLE"}, events: [{event_id: filters.cursor || "first"}],
+        next_cursor: filters.cursor ? null : "second"};
+    },
+  };
+  vm.runInNewContext(source.slice(source.indexOf("function buildNetworkHistoryQuery("), source.indexOf("function scheduleNetworkHistoryLoad(")), context);
+  await context.loadNetworkHistory();
+  assert.equal(state.historyCursor, "second");
+  await context.loadNetworkHistory(null, "older");
+  assert.equal(state.historyCursor, "second");
+  assert.equal(state.historyEvents[0].event_id, "first");
+  fail = false;
+  await context.loadNetworkHistory(null, "older");
+  assert.equal(state.historyEvents[0].event_id, "second");
+  await context.loadNetworkHistory(null, "newer");
+  assert.equal(state.historyEvents[0].event_id, "first");
+  assert.ok(calls.every(value => value.from === calls[0].from && value.to === calls[0].to && value.pid === "42"));
+});
+
+test("failed update checks and readback never imply current state", () => {
+  const context = {};
+  const start = source.indexOf("const UPDATE_ACTIVE_PHASES");
+  const end = source.indexOf("});", start) + 3;
+  const functions = source.slice(source.indexOf("function updateProviderAvailability("), source.indexOf("function overviewActivitySection("));
+  vm.runInNewContext(source.slice(start, end) + "\n" + functions, context);
+  assert.equal(context.updatePresentation({
+    snapshot_error: "timed out", providers: {DNF5: {state: "CHECKING"}}, records: [],
+  }).state, "DEGRADED");
+  assert.equal(context.updatePresentation({
+    transaction: {phase: "COMPLETE"}, providers: {Flatpak: {state: "DEGRADED"}}, records: [],
+  }).state, "DEGRADED");
 });
 
 test("uses typed D-Bus values for Security Context JSON instead of gdbus display text", () => {
@@ -1414,4 +1460,37 @@ test("VPN ownership UI describes observations without a verified security tone",
   assert.match(html,/have not been verified/);
   assert.match(html,/tone-neutral/);
   assert.doesNotMatch(html,/tone-positive|VPNProtected|Measured by VPN/);
+});
+
+test("network observation identifies unavailable evidence and keeps real zeroes distinct", () => {
+  const english = i18nFor("en-US");
+  const state = {mode: "live", state: "UNAVAILABLE", summary: {total: 5}, events: []};
+  const context = {copy: english.t, esc: String, status: () => "", networkActivityState: state,
+    networkActivitySource: () => state.events, networkActivityMatches: () => true,
+    emptyState: (title, detail) => title + " " + detail};
+  vm.runInNewContext(source.slice(source.indexOf("function networkActivityRowsMarkup"), source.indexOf("function networkSeveritySortLabel")), context);
+  assert.match(context.networkActivityRowsMarkup(), /Unavailable/);
+  assert.doesNotMatch(context.networkActivitySummaryMarkup(), /<strong>[05]<\/strong>/);
+  state.state = "OPERATING";
+  assert.match(context.networkActivityRowsMarkup(), /No recent connections/);
+  assert.match(context.networkActivitySummaryMarkup(), /<strong>5<\/strong>/);
+});
+
+test("changing the network risk order keeps the current history page and filters", () => {
+  const button = {setAttribute(name, value) {this[name] = value;}};
+  let renders = 0;
+  const context = {
+    app: {querySelector: selector => selector === "[data-network-severity-sort]" ? button : null,
+      querySelectorAll: () => []},
+    behavioral: {bind() {}}, networkSeveritySort: false, copy: () => "Risk /6",
+    renderNetworkActivityView: () => {renders++;},
+  };
+  const label = source.slice(source.indexOf("function networkSeveritySortLabel"), source.indexOf("function networkActivityLegendMarkup"));
+  const bind = source.slice(source.indexOf("function bindNetworkActivityContent"), source.indexOf("function networkActivityMarkup"));
+  vm.runInNewContext(label + bind, context);
+  context.bindNetworkActivityContent();
+  button.onclick();
+  assert.equal(button["aria-pressed"], "true");
+  assert.equal(button.textContent, "Risk /6 ↓");
+  assert.equal(renders, 1);
 });
